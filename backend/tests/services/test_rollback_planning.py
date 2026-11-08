@@ -91,6 +91,9 @@ def test_the_declined_and_dedupe_tables():
         "notification.": "A notification has already been delivered.",
         "risk.removed": "A deleted risk cannot be rebuilt — no snapshot is recorded.",
         "card.costs_updated": "Cost changes cannot be rolled back; edit the cost items instead.",
+        "card.licenses_updated": (
+            "Licensing changes cannot be rolled back; edit the licenses instead."
+        ),
         "diagram.updated": "The previous canvas is not snapshotted.",
         "diagram.deleted": "A deleted diagram cannot be rebuilt — no snapshot is recorded.",
     }

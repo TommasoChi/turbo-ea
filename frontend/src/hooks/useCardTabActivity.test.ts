@@ -71,6 +71,18 @@ describe("useCardTabActivity", () => {
     await waitFor(() => expect(result.current.hasUpdates("card")).toBe(true));
   });
 
+  it("counts card.licenses_updated as card-tab activity", async () => {
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({ [CARD_A]: { __first: isoMinus(300) }, __lru: [CARD_A] }),
+    );
+    vi.mocked(api.get).mockResolvedValueOnce([
+      { id: "1", event_type: "card.licenses_updated", created_at: isoMinus(60), user_id: USER_OTHER },
+    ]);
+    const { result } = renderHook(() => useCardTabActivity(CARD_A, USER_ME));
+    await waitFor(() => expect(result.current.hasUpdates("card")).toBe(true));
+  });
+
   it("shows a dot on the active tab when activity post-dates first visit", async () => {
     localStorage.setItem(
       STORAGE_KEY,

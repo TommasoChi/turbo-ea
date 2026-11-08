@@ -58,8 +58,12 @@ describe("eventMeta", () => {
     expect(eventMeta("card.costs_updated", (k) => k).label).toBe("history.events.costsUpdated");
   });
 
-  it("knows the 35 event types the backend emits on a card", () => {
-    expect(Object.keys(EVENT_META)).toHaveLength(35);
+  it("knows the licensing event, which has its own type so a rollback never replays it", () => {
+    expect(eventMeta("card.licenses_updated", (k) => k).label).toBe("history.events.licensesUpdated");
+  });
+
+  it("knows the 36 event types the backend emits on a card", () => {
+    expect(Object.keys(EVENT_META)).toHaveLength(36);
     expect(EVENT_META["tag.removed"]).toEqual({
       labelKey: "history.events.tagRemoved",
       icon: "label_off",

@@ -85,6 +85,8 @@ const KNOWN_PERMISSIONS = new Set([
   "inventory.export",
   "inventory.quality_seal",
   "inventory.view",
+  "licenses.edit",
+  "licenses.view",
   "notifications.manage",
   "ppm.manage",
   "ppm.view",

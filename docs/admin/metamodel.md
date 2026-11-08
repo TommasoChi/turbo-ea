@@ -292,6 +292,18 @@ Each item has a stable **key**, a **label** and optional **translations** of the
 
 Entering amounts on a card needs `costs.edit` (or a stakeholder role that may edit the card); changing the catalogue needs the metamodel administration permission.
 
+## License types
+
+**License types** are the catalogue of license kinds that Application and IT Component cards can carry (see the [Licensing section](../guide/card-details.md#licensing-section-application-and-it-component)), for example *Admin*, *End User*, *Prod* or *Dev*. Manage it under **Admin > Metamodel > License types**.
+
+Each type has a stable **key** (letters, digits and underscores, fixed once created), a **name** and optional **translations** of the name. Types are **archived**, not deleted: an archived type can no longer be added to a card, but counts already entered keep counting in the statuses and in the [Licensing Report](../guide/reports.md#licensing-report). Each type keeps a stable colour in the charts, following its order in the catalogue.
+
+Two permissions control licensing. `licenses.view` lets a role read the licenses of any card, and `licenses.edit` lets it change them and import them from the Licensing Report; a stakeholder on a card can also read it, and edit it when their role may edit the card. By default only administrators hold `licenses.edit`. Changing the catalogue needs the metamodel administration permission.
+
+### Moving from the Licensing Analysis extension
+
+Licensing is now part of Turbo EA. On upgrade, the data of the former *Licensing Analysis* extension moves automatically: the licensed and actual counts go into the current fiscal year of each card, every free-text category becomes a license type, the extension's `ext.licensing.view` and `ext.licensing.manage` grants are copied to `licenses.view` and `licenses.edit`, and the extension's four count fields are removed from the cards. The *Licensing model* field moves to its own **Licensing** section of the type, and is restored there if it had been deleted. That field is protected: it cannot be deleted, retyped, moved out of its section or stripped of its **Users** / **Installations** options (you can still rename it, translate it or add options), and the card layout editor does not list its section. A card's model is edited from the card's Licensing section. Values that could not be moved are listed in a report kept in the application settings. **Uninstall the extension** after upgrading (Admin → Extensions); its saved reports are not converted.
+
 ## Calculations
 
 Calculated fields use admin-defined formulas to automatically compute values when cards are saved. See [Calculations](calculations.md) for the full guide.

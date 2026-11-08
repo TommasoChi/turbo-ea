@@ -79,3 +79,18 @@ export function cardColor(name: string, categorical: readonly string[]): string 
   }
   return shade(categorical[h % MAX_GROUP_HUES], STEPS[(h >>> 4) % 3]);
 }
+
+/**
+ * A hue per catalogue key by position in `sort_order` (archived keys included,
+ * so a key keeps its colour across years and filters); the 9th and later fold
+ * into `other`.
+ */
+export function catalogueHues(
+  keysInSortOrder: string[],
+  categorical: readonly string[],
+  other: string,
+): Map<string, string> {
+  return new Map(
+    keysInSortOrder.map((k, i) => [k, i < MAX_GROUP_HUES ? categorical[i] : other]),
+  );
+}

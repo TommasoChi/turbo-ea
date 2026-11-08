@@ -634,7 +634,7 @@ def rewrite_process_element_row(kwargs: dict[str, Any], ctx: RemapContext) -> Re
 # Saved-report config keys that hold one card id, a list of card ids, a
 # {key: [card ids]} map, or tag ids. Every other key is a type key, a field
 # key, a display option or a date, and is carried over as it is.
-REPORT_CARD_ID_KEYS = ("center",)
+REPORT_CARD_ID_KEYS = ("center", "pickedCardId")
 REPORT_CARD_ID_LIST_KEYS = ("scopeIds", "rowScopeIds", "colScopeIds", "filterOrgs", "filterCtxs")
 REPORT_CARD_ID_MAP_KEYS = ("relationFilters",)
 REPORT_TAG_ID_LIST_KEYS = ("tagFilterIds",)

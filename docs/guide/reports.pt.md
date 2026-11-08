@@ -254,6 +254,36 @@ O Sankey aceita os mesmos filtros que o treemap: tipo de cartão, âmbito de car
 
 O botão de ecrã inteiro no treemap e no Sankey faz o gráfico ocupar todo o ecrã, em largura e altura, sem o deformar.
 
+## Relatório de Licenciamento
+
+![Relatório de Licenciamento](../assets/img/en/103_report_licensing.png)
+
+O **Relatório de Licenciamento** (**Relatórios → Licenciamento**) compara, para cada Aplicação ou Componente de TI, as licenças contratadas com as realmente usadas e assinala um excesso. Requer a permissão `licenses.view`. Os dados são introduzidos na [seção Licenciamento](card-details.md#seção-de-licenças-aplicação-e-componente-de-ti) de cada card ou importados do Excel.
+
+A barra de ferramentas escolhe o **tipo de card** (Aplicação ou Componente de TI, um de cada vez), a **métrica** (**Utilizadores** ou **Instalações**), o **tipo de licença** (todos, ou uma entrada do catálogo), o **agrupamento**, o **ano fiscal** e o âmbito dos cards. Só são listados os cards cujo campo **Modelo de licenciamento** inclui a métrica selecionada. Quatro blocos no topo contam os cards **Conformes**, **Perto do limite**, **Sobrelicenciados** ou **Sem dados reais** no ano selecionado.
+
+**Tendência** — Acima da vista, um gráfico mostra as quantidades licenciadas face às reais do ano atual, dos quatro anteriores e do ano **Forecast** (só licenciado), empilhadas por tipo de licença. Segue o filtro do tipo de licença, o âmbito e qualquer detalhe.
+
+### Vistas
+
+| Vista | O que mostra |
+|---|---|
+| **Utilização** | Uma barra horizontal por card: real dividido por licenciado, da maior para a menor. Verde abaixo de 80 %, laranja de 80 % a 100 %, vermelho acima de 100 %, com linhas de referência em 80 % e 100 %. Um card sem dados reais é uma barra cinzenta em zero. |
+| **Por tipo de licença** | Barras agrupadas de licenciado face a real para cada tipo de licença no ano selecionado. Sem card escolhido mostra os totais do âmbito. O seletor **Card** restringe-a a uma Aplicação ou Componente de TI; escolher uma **Plataforma** soma as Aplicações e Componentes de TI ligados a ela, cada um contado uma só vez. |
+| **Tabela** | Uma linha por card com licenciado, real e % para cada tipo de licença, os totais e o estado. O menu **Colunas** adiciona campos do card. Transferência para Excel ou impressão como no Relatório de Custos. |
+
+**Estado.** Cada tipo de licença é avaliado isoladamente, sem compensação entre tipos: está **sobrelicenciado** quando o real excede o licenciado e **perto do limite** a partir de 80 % do licenciado. Um card assume o seu pior estado. Um card sem quantidade real para a métrica selecionada está **Sem dados reais**. A barra de um card mostra o seu pior tipo de licença. O ano Forecast não tem estado.
+
+**Gestos** — Um **clique esquerdo** num card abre o seu painel lateral. Um **clique direito** num card (ou num grupo quando o agrupamento está ativo) detalha-o, com um trilho de navegação e um botão **Voltar**; a tendência acompanha o detalhe. A vista Por tipo de licença não tem detalhe.
+
+### Importação
+
+**Importar** na barra de ferramentas carrega quantidades de licenças a partir de um ficheiro Excel (requer `licenses.edit`). A primeira folha tem uma linha por quantidade, com as colunas **Component**, **Metric**, **License type**, **Year**, **Licensed** e **Actual**. O componente é identificado pelo nome exato (sem distinguir maiúsculas); o tipo de licença pela sua chave ou nome em inglês; o ano é o ano fiscal tal como nomeado na barra de ferramentas (por exemplo 2026). Uma célula vazia deixa o valor guardado inalterado, e não é possível definir uma quantidade real para o ano Forecast.
+
+A caixa de diálogo mostra primeiro uma pré-visualização: as linhas que serão aplicadas e as ignoradas, cada uma com o seu motivo (card não encontrado, tipo de licença desconhecido, ano fora do período, não é um número inteiro, célula duplicada). Nada é escrito até clicar em **Aplicar**. A importação nunca cria um tipo de licença nem edita o Modelo de licenciamento de um card.
+
+Os relatórios de licenciamento podem ser guardados como os outros relatórios (ver [Relatórios Guardados](#relatórios-salvos)).
+
 ## Relatório de Matriz
 
 ![Relatório de Matriz](../assets/img/pt/35_relatorio_matriz.png)

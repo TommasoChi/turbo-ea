@@ -5,6 +5,21 @@ All notable changes to Turbo EA are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.190.0] - 2026-11-06
+
+### Added
+
+- **A license type catalogue.** Administrators manage the kinds of license (Admin > Metamodel > License types), with translations and archiving.
+- **A Licensing section on Application and IT Component cards**, with licensed and actual counts per license type for each fiscal year, a status, and a Forecast year.
+- **A Licensing report** with a trend chart, a Utilisation view, a By license type view and a table, drill-down, and saved reports.
+- **Import license counts from Excel** in the Licensing report, with a preview of the rows applied and skipped.
+
+### Changed
+
+- **Licensing moved from the Licensing Analysis extension into the core.** Its data is migrated automatically and its four count fields are removed from the cards: uninstall the extension after upgrading.
+- **The Licensing Model field now has its own protected Licensing section.** It can no longer be deleted from the metamodel (deleting it also erased the values on the cards), it is no longer shown among a card's other fields, and the card's Licensing section edits it directly. A deleted field is restored on upgrade.
+- **New `licenses.view` and `licenses.edit` permissions**, copied from the extension's grants; by default only administrators edit.
+
 ## [2.189.0] - 2026-11-05
 
 ### Added

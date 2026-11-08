@@ -291,6 +291,18 @@ Ogni elemento ha una **chiave** stabile, un'**etichetta** e **traduzioni** facol
 
 Inserire importi su una card richiede `costs.edit` (o un ruolo di stakeholder che può modificare la card); modificare il catalogo richiede il permesso di amministrazione del metamodello.
 
+## Tipi di licenza
+
+I **tipi di licenza** sono il catalogo dei tipi di licenza che le schede Applicazione e Componente IT possono avere (vedi la [sezione Licenze](../guide/card-details.md#sezione-licenze-applicazione-e-componente-it)), ad esempio *Admin*, *Utente finale*, *Prod* o *Dev*. Si gestisce in **Admin > Metamodello > Tipi di licenza**.
+
+Ogni tipo ha una **chiave** stabile (lettere, cifre e trattini bassi, fissa dopo la creazione), un **nome** e **traduzioni** facoltative del nome. I tipi vengono **archiviati**, non eliminati: un tipo archiviato non può più essere aggiunto a una scheda, ma le quantità già inserite continuano a contare negli stati e nel [Report Licenze](../guide/reports.md#report-licenze). Ogni tipo mantiene un colore stabile nei grafici, in base al suo ordine nel catalogo.
+
+Due permessi controllano le licenze. `licenses.view` consente a un ruolo di leggere le licenze di qualsiasi scheda, e `licenses.edit` di modificarle e importarle dal Report Licenze; anche uno stakeholder di una scheda può leggerla e modificarla quando il suo ruolo può modificare la scheda. Per impostazione predefinita solo gli amministratori hanno `licenses.edit`. Modificare il catalogo richiede il permesso di amministrazione del metamodello.
+
+### Passaggio dall'estensione Licensing Analysis
+
+Le licenze ora fanno parte di Turbo EA. Durante l'aggiornamento i dati della precedente estensione *Licensing Analysis* vengono spostati automaticamente: le quantità in licenza ed effettive vanno nell'anno fiscale corrente di ogni scheda, ogni categoria a testo libero diventa un tipo di licenza, i permessi `ext.licensing.view` e `ext.licensing.manage` dell'estensione vengono copiati in `licenses.view` e `licenses.edit`, e i quattro campi di quantità dell'estensione vengono rimossi dalle schede. Il campo *Modello di licenza* passa a una propria sezione **Licenze** del tipo e viene ripristinato lì se era stato eliminato. Il campo è protetto: non può essere eliminato, cambiato di tipo, spostato fuori dalla sua sezione né privato delle opzioni **Utenti** / **Installazioni** (puoi comunque rinominarlo, tradurlo o aggiungere opzioni), e l'editor del layout delle schede non ne elenca la sezione. Il modello di una scheda si modifica dalla sezione Licenze della scheda. I valori che non è stato possibile spostare sono elencati in un report conservato nelle impostazioni dell'applicazione. **Disinstalla l'estensione** dopo l'aggiornamento (Admin → Estensioni); i suoi report salvati non vengono convertiti.
+
 ## Calcoli
 
 I campi calcolati utilizzano formule definite dall'amministratore per calcolare automaticamente i valori quando le card vengono salvate. Vedi [Calcoli](calculations.md) per la guida completa.

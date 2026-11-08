@@ -20,6 +20,7 @@ from app.models.comment import Comment
 from app.models.relation import Relation
 from app.models.relation_type import RelationType
 from app.models.risk import Risk, RiskCard
+from app.services.licensing_migration import licensing_section
 from app.services.workspace_io import (
     apply_bundle,
     build_bundle,
@@ -176,7 +177,11 @@ async def test_export_roundtrip_is_idempotent(db):
     """Export a seeded workspace, re-import it, and confirm no new cards or
     relations are created (upsert-by-key = all skip)."""
     user = await create_user(db, email="rt@test.com", role="admin")
-    await create_card_type(db, key="Application", label="Application")
+    # The protected licensingModel field is part of a real Application type; without it the
+    # re-import would restore it and report an update.
+    await create_card_type(
+        db, key="Application", label="Application", fields_schema=[licensing_section()]
+    )
     parent = await create_card(db, card_type="Application", name="Root App", user_id=user.id)
     await create_card(
         db, card_type="Application", name="Leaf App", parent_id=parent.id, user_id=user.id

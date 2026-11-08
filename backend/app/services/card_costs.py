@@ -14,18 +14,18 @@ from dataclasses import dataclass, field
 from datetime import date
 
 from sqlalchemy import select
-from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.card import Card
 from app.models.card_cost import CardCost
 from app.models.card_type import CardType
 from app.models.cost_item_type import CostItemType
+from app.services import item_catalogue, yearly_rows
 from app.services.cost_value import cost_value
 from app.services.event_bus import event_bus
 from app.services.fiscal_year import (
     FISCAL_YEAR_LOOKAHEAD,
-    FISCAL_YEAR_LOOKBACK,
+    FISCAL_YEAR_LOOKBACK,  # noqa: F401 (re-exported, the cost tests read it here)
     current_fiscal_year,
     get_fiscal_year_start,
 )
@@ -33,7 +33,7 @@ from app.services.fiscal_year import (
 COST_ITEM_TYPES: frozenset[str] = frozenset({"Application", "ITComponent"})
 # The card section shows current-4 .. current+1; writes accept FISCAL_YEAR_LOOKBACK (5) back,
 # and current-5 is readable only through GET /costs/{fy}.
-WINDOW_PAST = 4
+WINDOW_PAST = yearly_rows.WINDOW_PAST
 DERIVED_KEY = "costTotalAnnual"
 # Not "card.updated": rollback would replay its changes as card fields and no-op.
 COST_EVENT = "card.costs_updated"
@@ -90,26 +90,15 @@ def _shifted(items: dict, years: int) -> dict:
 async def _row(
     db: AsyncSession, card_id: uuid.UUID, fy: int, lock: bool = False
 ) -> CardCost | None:
-    stmt = select(CardCost).where(CardCost.card_id == card_id, CardCost.fiscal_year == fy)
-    if lock:
-        stmt = stmt.with_for_update().execution_options(populate_existing=True)
-    return (await db.execute(stmt)).scalar_one_or_none()
+    return await yearly_rows.row(db, CardCost, card_id, fy, lock)
 
 
 async def _fallback_row(db: AsyncSession, card_id: uuid.UUID, fy: int) -> CardCost | None:
-    return (
-        await db.execute(
-            select(CardCost)
-            .where(CardCost.card_id == card_id, CardCost.fiscal_year < fy)
-            .order_by(CardCost.fiscal_year.desc())
-            .limit(1)
-        )
-    ).scalar_one_or_none()
+    return await yearly_rows.fallback_row(db, CardCost, card_id, fy)
 
 
 async def archived_keys(db: AsyncSession) -> dict[str, bool]:
-    rows = await db.execute(select(CostItemType.key, CostItemType.archived))
-    return {k: a for k, a in rows.all()}
+    return await item_catalogue.archived_keys(db, CostItemType)
 
 
 def _lines(items: dict, archived: dict[str, bool]) -> list[CostLine]:
@@ -127,15 +116,8 @@ def _lines(items: dict, archived: dict[str, bool]) -> list[CostLine]:
 def resolve_year(
     row_items: dict | None, prev: tuple[int, dict] | None, fy: int, cur: int
 ) -> tuple[dict, bool, int | None]:
-    """``(items, confirmed, fallback_from)`` from a year's row and the latest earlier one.
-
-    A row (even an empty one) is confirmed; only the *current* year with no row falls back.
-    """
-    if row_items is not None:
-        return row_items, True, None
-    if fy == cur and prev is not None:
-        return _shifted(prev[1], fy - prev[0]), False, prev[0]
-    return {}, False, None
+    """``(items, confirmed, fallback_from)``; see ``yearly_rows.resolve_year``."""
+    return yearly_rows.resolve_year(row_items, prev, fy, cur, _shifted)
 
 
 def year_costs(
@@ -162,13 +144,10 @@ async def _resolve(
     db: AsyncSession, card_id: uuid.UUID, fy: int, start_month: int
 ) -> tuple[dict, bool, int | None]:
     """``(items, confirmed, fallback_from)`` for one year."""
-    row = await _row(db, card_id, fy)
-    cur = current_fiscal_year(start_month)
-    prev = None
-    if row is None and fy == cur:
-        p = await _fallback_row(db, card_id, fy)
-        prev = (p.fiscal_year, p.items or {}) if p is not None else None
-    return resolve_year(None if row is None else row.items or {}, prev, fy, cur)
+    # The hooks go through this module's ``_row`` / ``_fallback_row`` names.
+    return await yearly_rows.resolve(
+        db, CardCost, card_id, fy, start_month, _shifted, row_fn=_row, fallback_fn=_fallback_row
+    )
 
 
 async def get_year_row(
@@ -188,35 +167,19 @@ async def get_year_row(
 
 async def get_window(db: AsyncSession, card_id: uuid.UUID, start_month: int) -> list[YearCosts]:
     cur = current_fiscal_year(start_month)
-    return [
-        await get_year_row(db, card_id, y, start_month)
-        for y in range(cur - WINDOW_PAST, cur + FISCAL_YEAR_LOOKAHEAD + 1)
-    ]
+    return [await get_year_row(db, card_id, y, start_month) for y in yearly_rows.window_years(cur)]
 
 
 def _check_window(fy: int, start_month: int) -> None:
-    cur = current_fiscal_year(start_month)
-    if not cur - FISCAL_YEAR_LOOKBACK <= fy <= cur + FISCAL_YEAR_LOOKAHEAD:
+    if not yearly_rows.in_window(fy, start_month):
         raise CostError("year_out_of_range", f"Fiscal year {fy} is outside the editable window")
 
 
 async def _editable(db: AsyncSession, card_id: uuid.UUID, fy: int, start_month: int) -> CardCost:
-    """The year's row, locked FOR UPDATE; created (fallback set materialised) if missing.
-
-    The insert is ON CONFLICT DO NOTHING and the row is re-selected FOR UPDATE, so the
-    loser of a concurrent first edit re-reads the winner's row instead of failing.
-    """
-    row = await _row(db, card_id, fy, lock=True)
-    if row is None:
-        items, _, _ = await _resolve(db, card_id, fy, start_month)
-        await db.execute(
-            pg_insert(CardCost)
-            .values(card_id=card_id, fiscal_year=fy, items=items)
-            .on_conflict_do_nothing(index_elements=["card_id", "fiscal_year"])
-        )
-        row = await _row(db, card_id, fy, lock=True)
-    assert row is not None
-    return row
+    """The year's row, locked FOR UPDATE; created (fallback set materialised) if missing."""
+    return await yearly_rows.editable(
+        db, CardCost, card_id, fy, start_month, _shifted, row_fn=_row, fallback_fn=_fallback_row
+    )
 
 
 async def upsert_item(

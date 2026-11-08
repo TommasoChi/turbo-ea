@@ -551,7 +551,9 @@ async def _promote_recurring_tasks_loop() -> None:
 #   V2 (2.52.0) — the mandatory-field gate that pins incomplete cards to 0.
 #   V3 (2.59.0) — the stakeholders bucket became a single yes/no slot instead
 #                 of one slot per role defined on the card type.
-_DQ_RESCORE_FLAG = "dataQualityCanonicalRescoreDoneV3"
+#   V4 (2.190.0) — licensingModel became a built-in field and the licensing
+#                 extension's contributed fields left the schemas (migration 178).
+_DQ_RESCORE_FLAG = "dataQualityCanonicalRescoreDoneV4"
 
 
 async def _one_shot_upgrade_announcement() -> None:
@@ -1013,6 +1015,18 @@ async def _migrate_and_seed(extension_load_report) -> list[asyncio.Task]:
                 )
             else:
                 print(f"[seed_extras] Skipped: {result.get('reason', 'unknown')}")
+
+    # Licensing demo data: license types and yearly rows on a few demo cards.
+    if settings.SEED_DEMO:
+        from app.services.seed_demo_licensing import seed_licensing_demo_data
+
+        async with async_session() as db:
+            result = await seed_licensing_demo_data(db)
+            if not result.get("skipped"):
+                await db.commit()
+                print(f"[seed_licensing] Seeded licenses on {result['cards']} cards")
+            else:
+                print(f"[seed_licensing] Skipped: {result.get('reason', 'unknown')}")
 
     if settings.SEED_DEMO or settings.SEED_SECURITY:
         from app.services.seed_demo_security import seed_security_demo_data

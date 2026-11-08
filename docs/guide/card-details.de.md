@@ -131,6 +131,20 @@ Anwendungen und IT-Komponenten erfassen ihre Kosten als Liste von **Kostenelemen
 
 Das Feld **Jährliche Gesamtkosten** (`costTotalAnnual`) der Karte wird aus den Elementen des aktuellen Jahres abgeleitet und ist schreibgeschützt: Raster, Tabellenimport, Drag-Fill, API, MCP, ServiceNow und LeanIX können es nicht mehr setzen, und ein gesendeter Wert wird überschrieben. Eine Karte ohne Kostenelemente hat ein leeres Kostenfeld, nicht 0. Initiativen und Anbieter behalten ihre gewöhnlichen Kostenfelder.
 
+### Lizenzabschnitt (Anwendung und IT-Komponente)
+
+Der Abschnitt **Lizenzierung** erfasst Jahr für Jahr, wie viele Lizenzen die Karte vertraglich hat und wie viele tatsächlich genutzt werden. Er steht neben den Kosten und hat denselben **‹ ›**-Navigator über sechs Jahre: die vier vor dem aktuellen, das aktuelle und das **Forecast**-Jahr. Welche Kennzahlen die Karte erfasst (**Benutzer**, **Installationen**), ergibt sich aus ihrem **Lizenzmodell**, das oben im Abschnitt angezeigt wird. Wer die Karte bearbeiten darf, ändert es dort mit **Bearbeiten**: **Benutzer** und/oder **Installationen** anhaken, dann **Speichern**. Das Modell erscheint nicht unter den übrigen Feldern der Karte.
+
+![Lizenzabschnitt](../assets/img/en/104_card_licensing.png)
+
+- **Je Kennzahl und Lizenztyp** — Jede Kennzahl hat einen Block mit einer Kachel je Lizenztyp, die die **lizenzierte** Menge, die **tatsächliche** Menge, die **Auslastung in %** und einen Status zeigt: **Konform**, **Nahe am Limit** (ab 80 %), **Überlizenziert** (Ist über Lizenziert) oder **Keine Daten**. Ein gestapelter Balken summiert die Typen. Die Lizenztypen stammen aus dem Katalog, den ein Administrator unter [Metamodell → Lizenztypen](../admin/metamodel.md#lizenztypen) verwaltet.
+- **Hinzufügen und Bearbeiten** — Eine Menge wird in einem Dialog hinzugefügt, bearbeitet oder gelöscht. Bleibt **Ist** leer, bedeutet das „keine Daten“, was etwas anderes ist als 0.
+- **Forecast** — Das Forecast-Jahr nimmt nur die lizenzierte Menge auf. **In Forecast kopieren** kopiert die lizenzierten Mengen des angezeigten Jahres.
+
+**Ein neues Geschäftsjahr.** Hat eine Karte für das neue aktuelle Jahr noch keine Lizenzdaten, zeigt der Abschnitt die lizenzierten Mengen des Vorjahres als **nicht bestätigt**, ohne Ist-Menge, sodass ein neues Jahr nie den Verbrauch des letzten erbt. Sie bleiben so, bis jemand sie bestätigt oder eine Menge ändert.
+
+**Wer Lizenzen sehen und bearbeiten darf.** Lizenzen **ansehen** können Sie mit der Berechtigung `licenses.view` oder wenn Sie eine beliebige Stakeholder-Rolle auf der Karte haben. Lizenzen **bearbeiten** können Sie mit der Berechtigung `licenses.edit` oder wenn Sie eine Stakeholder-Rolle auf der Karte haben, die das Bearbeiten der Karte erlaubt. Standardmäßig besitzen nur Administratoren `licenses.edit`. Eine Änderung erscheint im Tab Verlauf als **Lizenzen aktualisiert**, nennt die betroffenen Lizenztypen, aber nicht die Mengen, und kann nicht zurückgerollt werden.
+
 ### Hierarchieabschnitt
 
 Für Kartentypen, die Hierarchie unterstützen (z.B. Organisation, Geschäftsfähigkeit, Anwendung):

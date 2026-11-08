@@ -340,6 +340,20 @@ describe("MetamodelAdmin", () => {
     expect(screen.getByTestId("category-row-Security")).toBeInTheDocument();
   });
 
+  it("opens the License types dialog from the Card Types tab", async () => {
+    const user = userEvent.setup();
+    const base = vi.mocked(api.get).getMockImplementation()!;
+    vi.mocked(api.get).mockImplementation((path: string, ...rest: unknown[]) =>
+      path.startsWith("/metamodel/license-types")
+        ? Promise.resolve([])
+        : (base as (p: string, ...r: unknown[]) => Promise<unknown>)(path, ...rest),
+    );
+    renderMetamodel();
+    await user.click(screen.getByRole("button", { name: /license types/i }));
+    expect(await screen.findByRole("heading", { name: "License types" })).toBeInTheDocument();
+    expect(vi.mocked(api.get)).toHaveBeenCalledWith("/metamodel/license-types", expect.anything());
+  });
+
   it("shows Show hidden types toggle", async () => {
     renderMetamodel();
     expect(screen.getByText("Show hidden types")).toBeInTheDocument();

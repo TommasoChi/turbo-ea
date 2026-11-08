@@ -22,6 +22,8 @@
 | **Score de confiance** | Une note de 0 à 100% indiquant la fiabilité d'une description générée par IA |
 | **Poste de coûts** | Une ligne du coût annuel d'une Application ou d'un Composant IT (par exemple l'hébergement), issue du catalogue sous Admin > Métamodèle > Postes de coûts. Le TCO d'une fiche est la somme de ses postes pour l'exercice |
 | **TCO (coût total de possession)** | Le coût annuel total d'une Application ou d'un Composant IT pour un exercice, toujours dérivé de ses postes de coûts et jamais saisi à la main |
+| **Type de licence** | Une sorte de licence (par exemple Admin ou Utilisateur final) du catalogue sous Admin > Métamodèle > Types de licence. Les fiches Application et Composant IT enregistrent des quantités sous licence et réelles par type de licence, indicateur et exercice |
+| **Utilisation** | Quantité réelle de licences divisée par la quantité sous licence, en pourcentage. Sous 80 %, un type de licence est conforme ; à partir de 80 %, il est proche du seuil ; au-dessus de 100 %, il est surlicencié |
 | **Ligne de coût** | Une entrée de budget ou de coût réel (CapEx/OpEx) dans une initiative PPM, utilisée pour suivre les dépenses financières |
 | **Qualité des données** | Un score de complétude de 0 à 100% basé sur les champs remplis et leurs poids configurés |
 | **Diagramme** | Un diagramme d'architecture visuel créé avec l'éditeur DrawIO intégré |

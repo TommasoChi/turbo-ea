@@ -254,6 +254,36 @@ Le Sankey reprend les mêmes filtres que le treemap : type de fiche, périmètre
 
 Le bouton plein écran du treemap et du Sankey fait occuper tout l'écran au graphique, en largeur et en hauteur, sans le déformer.
 
+## Rapport Licences
+
+![Rapport Licences](../assets/img/en/103_report_licensing.png)
+
+Le **Rapport Licences** (**Rapports → Licences**) compare, pour chaque Application ou Composant IT, les licences sous contrat à celles réellement utilisées, et signale un dépassement. Il nécessite la permission `licenses.view`. Les données sont saisies dans la [section Licences](card-details.md#section-licences-application-et-composant-it) de chaque fiche ou importées depuis Excel.
+
+La barre d'outils choisit le **type de fiche** (Application ou Composant IT, un à la fois), l'**indicateur** (**Utilisateurs** ou **Installations**), le **type de licence** (tous, ou une entrée du catalogue), le **regroupement**, l'**exercice** et le périmètre des fiches. Seules les fiches dont le champ **Modèle de licence** inclut l'indicateur sélectionné sont listées. Quatre vignettes en haut comptent les fiches **Conformes**, **Proches du seuil**, **Surlicenciées** ou **Sans donnée réelle** pour l'exercice sélectionné.
+
+**Tendance** — Au-dessus de la vue, un graphique compare les quantités sous licence et réelles pour l'exercice courant, les quatre précédents et l'exercice **Forecast** (sous licence uniquement), empilées par type de licence. Il suit le filtre de type de licence, le périmètre et tout forage.
+
+### Vues
+
+| Vue | Ce qu'elle montre |
+|---|---|
+| **Utilisation** | Une barre horizontale par fiche : réel divisé par sous licence, de la plus élevée à la plus basse. Vert sous 80 %, orange de 80 % à 100 %, rouge au-dessus de 100 %, avec des lignes de référence à 80 % et 100 %. Une fiche sans donnée réelle est une barre grise à zéro. |
+| **Par type de licence** | Barres groupées du sous licence face au réel pour chaque type de licence de l'exercice sélectionné. Sans fiche choisie, elle montre les totaux du périmètre. Le sélecteur **Fiche** la restreint à une Application ou un Composant IT ; choisir une **Plateforme** additionne les Applications et Composants IT qui lui sont liés, chacun compté une seule fois. |
+| **Tableau** | Une ligne par fiche avec sous licence, réel et % pour chaque type de licence, les totaux et le statut. Le menu **Colonnes** ajoute des champs de la fiche. Téléchargement vers Excel ou impression comme pour le Rapport Coûts. |
+
+**Statut.** Chaque type de licence est jugé séparément, sans compensation entre les types : il est **surlicencié** quand le réel dépasse le sous licence, et **proche du seuil** à partir de 80 % du sous licence. Une fiche prend son pire statut. Une fiche sans quantité réelle pour l'indicateur sélectionné est **Sans donnée réelle**. La barre d'une fiche montre son pire type de licence. L'exercice Forecast n'a pas de statut.
+
+**Gestes** — Un **clic gauche** sur une fiche ouvre son panneau latéral. Un **clic droit** sur une fiche (ou sur un groupe quand le regroupement est actif) la fore, avec un fil d'Ariane et un bouton **Retour** ; la tendance suit le forage. La vue Par type de licence n'a pas de forage.
+
+### Import
+
+**Importer** dans la barre d'outils charge des quantités de licences depuis un fichier Excel (nécessite `licenses.edit`). La première feuille comporte une ligne par quantité, avec les colonnes **Component**, **Metric**, **License type**, **Year**, **Licensed** et **Actual**. Le composant est identifié par son nom exact (sans tenir compte de la casse) ; le type de licence par sa clé ou son nom anglais ; l'année est l'exercice tel qu'il est nommé dans la barre d'outils (par exemple 2026). Une cellule vide laisse la valeur enregistrée inchangée, et une quantité réelle ne peut pas être définie pour l'exercice Forecast.
+
+La boîte de dialogue affiche d'abord un aperçu : les lignes qui seront appliquées et les lignes ignorées, chacune avec son motif (fiche introuvable, type de licence inconnu, année hors de la fenêtre, pas un nombre entier, cellule en double). Rien n'est écrit tant que vous ne cliquez pas sur **Appliquer**. L'import ne crée jamais de type de licence et ne modifie jamais le Modèle de licence d'une fiche.
+
+Les rapports de licences peuvent être enregistrés comme les autres rapports (voir [Rapports enregistrés](#rapports-sauvegardés)).
+
 ## Rapport Matrice
 
 ![Rapport Matrice](../assets/img/fr/35_rapport_matrice.png)

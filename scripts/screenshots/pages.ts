@@ -1104,6 +1104,44 @@ export const DOC_PAGES: PageDef[] = [
     },
   },
 
+  // ── Licensing ───────────────────────────────────────────────────────────
+  {
+    id: "103_report_licensing",
+    route: "/reports/licensing",
+    waitFor: ".echart-container",
+    actions: [{ type: "wait", ms: 1000 }],
+    filenames: {
+      en: "103_report_licensing",
+      de: "103_bericht_lizenzierung",
+      fr: "103_rapport_licences",
+      es: "103_informe_licencias",
+      it: "103_report_licenze",
+      pt: "103_relatorio_licenciamento",
+      zh: "103_report_licensing",
+      ru: "103_otchet_litsenzirovanie",
+    },
+  },
+  // The Licensing section of the demo's sample Application, scrolled into view.
+  {
+    id: "104_card_licensing",
+    route: "/cards/{{cardId:sampleApp}}",
+    waitFor: "#card-section-licensing",
+    actions: [
+      { type: "scroll", target: "#card-section-licensing", align: "start" },
+      { type: "wait", ms: 800 },
+    ],
+    filenames: {
+      en: "104_card_licensing",
+      de: "104_karte_lizenzierung",
+      fr: "104_fiche_licences",
+      es: "104_ficha_licencias",
+      it: "104_scheda_licenze",
+      pt: "104_cartao_licenciamento",
+      zh: "104_card_licensing",
+      ru: "104_kartochka_litsenzirovanie",
+    },
+  },
+
   // ── Admin Settings: ServiceNow ──────────────────────────────────────────
   {
     id: "31_admin_settings_servicenow",

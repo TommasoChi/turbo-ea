@@ -84,6 +84,7 @@ from app.services.calculation_engine import run_calculations_for_card
 from app.services.card_completeness import missing_mandatory
 from app.services.card_costs import COST_EVENT
 from app.services.card_flags import orphaned_condition, stale_condition
+from app.services.card_licenses import LICENSE_EVENT
 from app.services.card_logo_service import logo_updated_map
 from app.services.card_read_scope import (
     CardReadScope,
@@ -3112,7 +3113,7 @@ async def get_history(
     events = result.scalars().all()
     payloads = await scrub_event_payloads(db, read_scope, [e.data for e in events])
     payloads = await redact_cost_events(db, user, events, payloads)
-    if any(e.event_type == COST_EVENT for e in events):
+    if any(e.event_type in (COST_EVENT, LICENSE_EVENT) for e in events):
         card_name = (await db.execute(select(Card.name).where(Card.id == card_uuid))).scalar_one()
         payloads = await add_cost_summaries(db, card_name, events, payloads)
     return [

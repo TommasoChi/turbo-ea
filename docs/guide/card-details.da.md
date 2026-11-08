@@ -126,6 +126,20 @@ Applikationer og IT-komponenter registrerer deres omkostninger som en liste af *
 
 Kortets felt **Samlede årlige omkostninger** (`costTotalAnnual`) udledes af det nuværende års poster og er skrivebeskyttet: gitteret, regnearksimport, træk-udfyld, API'et, MCP, ServiceNow og LeanIX kan ikke længere sætte det, og en sendt værdi overskrives. Et kort uden omkostningsposter har et tomt omkostningsfelt, ikke 0. Initiativer og udbydere beholder deres almindelige omkostningsfelter.
 
+### Licenssektion (Applikation og IT-komponent)
+
+Sektionen **Licensering** registrerer år for år, hvor mange licenser kortet har under kontrakt, og hvor mange der reelt bruges. Den ligger ved siden af Omkostninger og har samme **‹ ›**-navigator over seks år: de fire før det nuværende, det nuværende og **Forecast**. Hvilke målinger kortet sporer (**Brugere**, **Installationer**), kommer fra kortets **Licensmodel**, som vises øverst i sektionen. Den, der kan redigere kortet, ændrer den med **Rediger**: markér **Brugere** og/eller **Installationer**, og vælg derefter **Gem**. Modellen vises ikke blandt kortets øvrige felter.
+
+![Licenssektion](../assets/img/en/104_card_licensing.png)
+
+- **Pr. måling og licenstype** — Hver måling har en blok med en flise pr. licenstype, der viser det **licenserede** antal, det **faktiske** antal, **udnyttelses-%** og en status: **Kompatibel**, **Tæt på grænsen** (fra 80 %), **Overlicenseret** (faktisk over licenseret) eller **Ingen data**. En stablet søjle summerer typerne. Licenstyperne kommer fra kataloget, som en administrator vedligeholder under [Metamodel → Licenstyper](../admin/metamodel.md#licenstyper).
+- **Tilføjelse og redigering** — Et antal tilføjes, redigeres eller slettes i en dialog. Hvis **Faktisk** er tom, betyder det «ingen data», hvilket er noget andet end 0.
+- **Forecast** — Forecast-året tager kun imod det licenserede antal. **Kopiér til Forecast** kopierer de licenserede antal for det år, du ser.
+
+**Et nyt regnskabsår.** Når et kort endnu ikke har licensdata for det nye nuværende år, viser sektionen det forrige års licenserede antal markeret som **ikke bekræftet**, uden faktisk antal, så et nyt år aldrig arver sidste års forbrug. De forbliver sådan, indtil nogen bekræfter dem eller redigerer et antal.
+
+**Hvem kan se og redigere licenser.** Du kan **se** dem med tilladelsen `licenses.view` eller hvis du har en vilkårlig interessentrolle på kortet. Du kan **redigere** dem med tilladelsen `licenses.edit` eller hvis du har en interessentrolle på kortet, der tillader redigering af kortet. Som standard har kun administratorer `licenses.edit`. En ændring vises under fanen Historik som **Licenser opdateret**, med de berørte licenstyper men ikke antallene, og den kan ikke rulles tilbage.
+
 ### Hierarki-sektion
 
 For korttyper der understøtter hierarki (f.eks. Organization, Business Capability, Application):

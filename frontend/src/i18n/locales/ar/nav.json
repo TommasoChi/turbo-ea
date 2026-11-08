@@ -8,6 +8,7 @@
   "reports.lifecycle": "دورة الحياة",
   "reports.dependencies": "التبعيات",
   "reports.cost": "التكلفة",
+  "reports.licensing": "التراخيص",
   "reports.matrix": "المصفوفة",
   "reports.dataQuality": "جودة البيانات",
   "reports.endOfLife": "نهاية العمر الافتراضي",

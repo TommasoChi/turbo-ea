@@ -132,6 +132,21 @@ class TestCreateSavedReport:
             )
             assert resp.status_code == 400, bad
 
+    async def test_licensing_report_type_accepted(self, client, db, reports_env):
+        admin = reports_env["admin"]
+        resp = await client.post(
+            "/api/v1/saved-reports",
+            json={
+                "name": "Licenses",
+                "report_type": "licensing",
+                "config": {"cardType": "Application", "metric": "users", "pickedCardId": None},
+                "visibility": "private",
+            },
+            headers=auth_headers(admin),
+        )
+        assert resp.status_code == 201
+        assert resp.json()["report_type"] == "licensing"
+
     async def test_flexible_portfolio_report_type_accepted(self, client, db, reports_env):
         admin = reports_env["admin"]
         resp = await client.post(

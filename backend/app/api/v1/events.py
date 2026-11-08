@@ -24,8 +24,8 @@ from app.services.card_read_scope import (
     event_read_filters,
     scrub_event_payloads,
 )
-from app.services.cost_event_redaction import all_cost_keys, redact_cost_events
-from app.services.cost_field_filter import redact_event_costs
+from app.services.cost_event_redaction import reader_drop_keys, redact_cost_events
+from app.services.cost_field_filter import strip_change_keys
 from app.services.event_bus import event_bus
 from app.services.permission_service import PermissionService
 
@@ -95,11 +95,9 @@ async def event_stream(request: Request, token: str = Query("")):
             raise HTTPException(status_code=401, detail="Account access has expired")
 
         is_events_admin = await PermissionService.has_app_permission(db, user, "admin.events")
-        # An audit reader without landscape-wide costs.view gets the events minus cost values
-        # (a stakeholder-only cost reader is treated as without: no per-card lookup mid-stream).
-        redact_keys: frozenset[str] | None = None
-        if not await PermissionService.has_app_permission(db, user, "costs.view"):
-            redact_keys = await all_cost_keys(db)
+        # A reader without landscape-wide costs.view / licenses.view gets the events minus those
+        # values (a stakeholder-only reader is treated as without: no per-card lookup mid-stream).
+        redact_keys = await reader_drop_keys(db, user)
         user_id = str(user.id)
     # Session closed: its connection is back in the pool before the stream opens.
 
@@ -108,8 +106,8 @@ async def event_stream(request: Request, token: str = Query("")):
             if await request.is_disconnected():
                 break
             if _event_visible_to(is_events_admin, message, user_id):
-                if redact_keys is not None and isinstance(message.get("data"), dict):
-                    message = {**message, "data": redact_event_costs(message["data"], redact_keys)}
+                if redact_keys and isinstance(message.get("data"), dict):
+                    message = {**message, "data": strip_change_keys(message["data"], redact_keys)}
                 yield f"data: {json.dumps(message, default=str)}\n\n"
 
     return StreamingResponse(

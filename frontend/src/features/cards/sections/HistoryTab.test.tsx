@@ -130,6 +130,29 @@ describe("HistoryTab — document link edits (#1166)", () => {
     expect(screen.queryByText("lic, sup")).not.toBeInTheDocument();
   });
 
+  it("names a licenses update by its summary and hides the raw license_types key list", async () => {
+    vi.mocked(api.get).mockResolvedValue([
+      {
+        id: "evt-6",
+        event_type: "card.licenses_updated",
+        created_at: "2026-09-30T10:00:00Z",
+        user_id: "u1",
+        user_display_name: "Vincent",
+        data: {
+          summary: "Licences FY26",
+          changes: { license_types: { old: ["a"], new: ["a", "b"] } },
+        },
+      },
+    ]);
+
+    renderTab();
+
+    expect(await screen.findByText("Licenses updated")).toBeInTheDocument();
+    expect(screen.getByText("Licences FY26")).toBeInTheDocument();
+    expect(screen.queryByText("license_types")).not.toBeInTheDocument();
+    expect(screen.queryByText("a, b")).not.toBeInTheDocument();
+  });
+
   it("falls back to the cost-items change row when a costs update has no summary", async () => {
     vi.mocked(api.get).mockResolvedValue([
       {
