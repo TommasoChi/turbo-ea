@@ -270,3 +270,40 @@ async def test_upgrade_refuses_incompatible_builtin_er_or_ownership_with_actiona
     conn = await db.connection()
     with pytest.raises(RuntimeError, match="(?i)(relDataObjectToDataObject|dataOwnership)"):
         await conn.run_sync(mig._upgrade_body)
+
+
+@pytest.mark.parametrize("existing_keys", [("Data", "Document"), ("Data",), ("Document",)])
+async def test_upgrade_preserves_existing_case_variant_subtypes_and_cards(db, existing_keys):
+    from app.models.card import Card
+    from tests.conftest import create_card
+
+    definitions = [
+        {"key": key, "label": key, "hidden_fields": [], "custom_metadata": {"keep": True}}
+        for key in existing_keys
+    ]
+    await create_card_type(db, key="DataObject", subtypes=definitions)
+    cards = [
+        await create_card(db, card_type="DataObject", name="Data card", subtype="Data"),
+        await create_card(db, card_type="DataObject", name="Document card", subtype="Document"),
+        await create_card(db, card_type="DataObject", name="Unclassified", subtype=None),
+    ]
+    card_ids = [card.id for card in cards]
+    conn = await db.connection()
+    await conn.run_sync(mig._upgrade_body)
+    await conn.run_sync(mig._upgrade_body)
+    db.expire_all()
+    obj = (await db.execute(select(CardType).where(CardType.key == "DataObject"))).scalar_one()
+    expected_missing = [
+        key
+        for key in ("data", "document")
+        if key.casefold() not in {x.casefold() for x in existing_keys}
+    ]
+    assert obj.subtypes == definitions + [
+        next(option for option in mig.SUBTYPES if option["key"] == key) for key in expected_missing
+    ]
+    restored = (await db.execute(select(Card).where(Card.id.in_(card_ids)))).scalars().all()
+    assert {card.name: card.subtype for card in restored} == {
+        "Data card": "Data",
+        "Document card": "Document",
+        "Unclassified": None,
+    }

@@ -15,6 +15,7 @@
 ## Global Constraints
 
 - **Migration revision number:** select the next available revision from updated `main` and check the current Alembic head. Ship metamodel defaults in the seed and a guarded migration. A fresh or reset database creates the schema, stamps the head and then seeds.
+- Preserve the configured DataObject subtype keys and existing card assignments on upgrade. Recognize `data` and `document` case-insensitively for diagram shapes. Return the stored keys from the API and use them for permission checks and writes.
 - Work on the dedicated BO Relationship branch based on updated `main`. Keep licensing and cost-report work separate.
 - No bulk/automatic import from the xlsx (per spec) — nothing in this plan reads that file.
 - No fake/demo data seeded (per spec).

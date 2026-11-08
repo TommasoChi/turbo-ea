@@ -141,7 +141,12 @@ def _upgrade_body(conn):
     )
     if row:
         subtypes = list(row["subtypes"] or [])
-        subtypes.extend(x for x in SUBTYPES if x["key"] not in {v.get("key") for v in subtypes})
+        existing_keys = {
+            key.casefold()
+            for option in subtypes
+            if isinstance(option, dict) and isinstance((key := option.get("key")), str)
+        }
+        subtypes.extend(x for x in SUBTYPES if x["key"].casefold() not in existing_keys)
         sections = list(row["fields_schema"] or [])
         if not any(f.get("key") == "isPaymentData" for s in sections for f in s.get("fields", [])):
             section = next((s for s in sections if s.get("section") == "Data Information"), None)
