@@ -6,6 +6,12 @@
 
 A new page under the **Application & Data** menu group, "BO Relationship": an automatic, macroscopic ER-style diagram of `DataObject` cards, showing which systems are master/slave of each data object and the relationships between data objects themselves.
 
+## Approved mockup
+
+[Open the interactive BO Relationship mockup](2026-10-28-data-relationship-design-assets/bo-relationship.html). Open the HTML in a browser to try the sample flows.
+
+The mockup shows the folded Document corner, the legend below the diagram, and the card that opens in the right panel on left-click. The Indicators group shows the GDPR and payment badges.
+
 ## Scope
 
 In scope:
