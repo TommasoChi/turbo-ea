@@ -44,7 +44,7 @@
 - Create: `backend/tests/services/test_alembic_<NEXT>_bo_relationship.py`.
 - Create: `backend/tests/api/test_bo_relationship_api.py`.
 - Modify: `frontend/src/features/cards/sections/RelationAttributesEditor.tsx` — add the `cardinality` reserved key and its inversion helper, next to `flowDirection`'s.
-- Modify: `frontend/src/features/cards/sections/RelationAttributesEditor.test.tsx`.
+- Modify the colocated tests for `RelationAttributesEditor.tsx` and `RelationsSection.tsx`.
 - Create: `frontend/src/features/boRelationship/BoRelationshipPage.tsx` — the page shell (toolbar, Save button, canvas, left panel, right panel wiring).
 - Create: `frontend/src/features/boRelationship/BoRelationshipPage.test.tsx`.
 - Create: `frontend/src/features/boRelationship/boRelationshipLayout.ts` — the pure dagre-layout-for-new-nodes helper (mirrors `frontend/src/features/reports/layeredDependencyLayout.ts`'s own pattern: a pure function taking nodes/edges, returning `{id: {x, y}}`, no React).
@@ -63,7 +63,7 @@
 
 **Interfaces:**
 - Add `DataObject.type` (Document/Data) and `isPaymentData` (Contains Payment Data) in Data Information. Add a nullable explicit `dataOwnership=master` designation on `relAppToDataObj`. Derive Slave and Unclassified without storing those roles. Keep the CRUD attributes and lineage relation intact. Seed `relDataObjectToDataObject` with the four per-relation cardinality options.
-- The planned shared layout uses a private `Diagram` of kind `boRelationship` and an empty `positions` map. Initialize it on existing and fresh workspaces. Before using `Diagram`, verify generic diagram routes cannot expose, modify, delete or publish it. If they cannot isolate it, use private module storage under the same API contract. Resolve workspace-transfer behavior before finalizing storage.
+- The planned shared layout uses a private `Diagram` of kind `boRelationship` and an empty `positions` map. Initialize it on existing and fresh workspaces. Exclude this kind from `/diagrams?kind=all` and the generic per-ID loader used by the existing editors and management routes. Include publish, delete and direct UUID tests. Resolve workspace-transfer behavior before finalizing storage. If positions transfer, remap the card UUID keys in `positions` in the workspace-transfer path.
 
 - [ ] **Step 1: Determine the real revision number and write the failing tests**
 
@@ -161,8 +161,8 @@ git commit -m "feat(bo-relationship): metamodel migration — fields, relation t
 - Consume the private layout storage and metamodel keys from Task 1. Keep the runtime layout constant independent of Alembic revision modules.
 - `GET /api/v1/bo-relationship` (`boRelationship.view`) returns `nodes`, `edges`, `positions` and `applications`. Each node has `id`, `name`, nullable `type`, `isPersonalData` and `isPaymentData`. Each ER edge has `id`, `source`, `target` and nullable `cardinality` in stored direction. Positions are keyed by readable node id.
 - `applications` is keyed by readable DataObject id, with entries `{master: {id, name} | null, slaves: [{id, name}], unclassified: [{id, name}]}`. Derive the viewer's grouping from readable links only. If no Master is visible, show the visible applications under Unclassified without indicating whether a hidden Master exists.
-- `PUT /api/v1/bo-relationship/objects/{object_id}/master` takes `{application_id: UUID | null}`. With module edit and applicable card and relation permissions, assign an existing readable link or clear the designation with null. Serialize assignment per BO and enforce uniqueness through every writer of the explicit marker. Return the same scoped grouping as GET and preserve CRUD flags.
-- `PUT /api/v1/bo-relationship/layout` (`boRelationship.edit`) accepts changed positions as `{positions: {UUID: {x, y}}}`. Validate finite coordinates and readable DataObject ids. Merge atomically and return only positions for readable DataObjects.
+- `PUT /api/v1/bo-relationship/objects/{object_id}/master` takes `{application_id: UUID | null}`. With module edit and applicable card and relation permissions, assign an existing readable link or clear the designation with null. Serialize assignment per BO and enforce uniqueness through every writer of the explicit marker. Apply the normal write scope to both the old and new links before changing them. Refuse an unauthorized transfer or clear without revealing the hidden application or changing its link. Return the same scoped grouping as GET and preserve CRUD flags.
+- `PUT /api/v1/bo-relationship/layout` (`boRelationship.edit`) accepts manual changes in `positions` and optional calculated proposals in `auto_positions`. Both map `UUID` to `{x, y}`. Validate finite coordinates and readable DataObject ids. Merge atomically and return only positions for readable DataObjects. Keep auto-generated proposals separate from manual moves. Persist an automatic proposal only while the node has no saved coordinates.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -258,11 +258,10 @@ git commit -m "feat(bo-relationship): add GET/PUT /bo-relationship endpoints"
 
 ---
 
-## Task 3: `cardinality` reserved relation-attribute key
+## Task 3: Direction-aware cardinality in the relation view and editor
 
 **Files:**
-- Modify: `frontend/src/features/cards/sections/RelationAttributesEditor.tsx`
-- Test: `frontend/src/features/cards/sections/RelationAttributesEditor.test.tsx`
+- Modify `RelationAttributesEditor.tsx` and `RelationsSection.tsx` under `frontend/src/features/cards/sections/`. Update both colocated tests.
 
 **Interfaces:**
 - Produces: `cardinalityBadge(relationType: RelationType, attributes: Record<string, unknown> | undefined, viewedFromSourceSide: boolean): { icon: string; value: string } | null` — same signature shape as the existing `flowDirectionBadge` (read its exact signature first and match it, not the sketch above verbatim, since the plan cannot re-derive TypeScript types it doesn't have in front of it). Returns `null` when the relation type carries no `cardinality` attribute, or none is set. When set and `viewedFromSourceSide` is false, `"1:n"` renders as `"n:1"` and vice versa; `"1:1"` and `"n:m"` render unchanged either way.
@@ -295,7 +294,7 @@ Expected: FAIL — `cardinalityBadge` not exported.
 
 - [ ] **Step 3: Implement**
 
-Add `cardinalityBadge` next to `flowDirectionBadge` in the same file, following its exact structure (the `hasField`/`options.find` lookups `flowDirectionBadge` already does), with an inversion map `{"1:n": "n:1", "n:1": "1:n"}` applied only when `!viewedFromSourceSide` and the stored value is a key in that map.
+Wire the helper into the relation badges and pass the viewed end through the existing relation editor. Invert asymmetric values when opening the target-side form and invert again before building the stored source-to-target payload. Add a relation-section test that opens a stored 1:n from the target, sees n:1, changes it to 1:n and sends n:1. Keep a single cardinality badge per relation and refresh the BO graph after a successful edit.
 
 - [ ] **Step 4: Run to verify they pass**
 
@@ -310,7 +309,7 @@ Expected: clean.
 - [ ] **Step 6: Commit**
 
 ```bash
-git add frontend/src/features/cards/sections/RelationAttributesEditor.tsx frontend/src/features/cards/sections/RelationAttributesEditor.test.tsx
+git add frontend/src/features/cards/sections/RelationAttributesEditor.tsx frontend/src/features/cards/sections/RelationAttributesEditor.test.tsx frontend/src/features/cards/sections/RelationsSection.tsx frontend/src/features/cards/sections/RelationsSection.test.tsx
 git commit -m "feat(bo-relationship): add the cardinality reserved relation-attribute key
 
 Same hardcoded-key pattern flowDirection already uses, not a new generic
@@ -320,7 +319,7 @@ relation, which is wrong from the target's side."
 
 ---
 
-## Task 4: Layout helper + the diagram page (read-only first)
+## Task 4: Layout, diagram and card panel actions
 
 **Files:**
 - Create: `frontend/src/features/boRelationship/boRelationshipLayout.ts`
@@ -329,7 +328,7 @@ relation, which is wrong from the target's side."
 - Create: `frontend/src/features/boRelationship/BoRelationshipPage.test.tsx`
 
 **Interfaces:**
-- Consumes: Task 2's `GET /bo-relationship` response shape; `CardDetailSidePanel` (`@/components/CardDetailSidePanel`, unchanged, reused verbatim); `cardinalityBadge` (Task 3).
+- Consume the Task 2 GET and Master contracts, `CardDetailSidePanel` and `cardinalityBadge`. Add the smallest BO-specific integration point needed to put the Master controls and relation-change refresh in the right-hand panel. Verify that a BO-readable card can actually open in the drawer under the agreed grants.
 - Produces: `computeLayout(nodes: {id: string}[], edges: {source: string; target: string}[], existingPositions: Record<string, {x: number; y: number}>): Record<string, {x: number; y: number}>` — returns `existingPositions` unchanged for any id already present in it, and runs dagre only for the ids that are not. `BoRelationshipPage`'s default export, no props (a route-level page).
 
 - [ ] **Step 1: Write the failing tests for `computeLayout`**
@@ -358,7 +357,7 @@ Expected: FAIL — module does not exist.
 
 - [ ] **Step 3: Implement `computeLayout`**
 
-Follow `frontend/src/features/reports/layeredDependencyLayout.ts`'s own use of `@dagrejs/dagre` (read it first for the exact dagre API calls this codebase already uses — `dagre.graphlib.Graph`, `setNode`/`setEdge`/`layout()` — and reuse that same call shape, not a new one): build a dagre graph from only the nodes missing a position, run `dagre.layout`, read back `node.x`/`node.y`, merge with `existingPositions`.
+Follow `frontend/src/features/reports/layeredDependencyLayout.ts`'s own use of `@dagrejs/dagre` (read it first for the exact dagre API calls this codebase already uses — `dagre.graphlib.Graph`, `setNode`/`setEdge`/`layout()` — and reuse that same call shape, not a new one): run dagre for the new nodes and their context. Keep saved coordinates fixed and place new nodes clear of their occupied space. Test adding a node to an already placed graph, with the existing coordinates preserved.
 
 - [ ] **Step 4: Run to verify they pass**
 
@@ -391,9 +390,9 @@ it("refreshes both panels after assigning, transferring or clearing the Master",
 Run: `cd frontend && npx vitest run BoRelationshipPage.test.tsx`
 Expected: FAIL — module does not exist.
 
-- [ ] **Step 7: Implement `BoRelationshipPage` (read-only: render + select + panels, no Save yet)**
+- [ ] **Step 7: Render the diagram and wire selection and Master controls.** Canvas Save arrives in Task 6.
 
-Render the nodes, ER edges and positions from Task 2. Use the agreed Document/Data shapes and neutral fallback. Add the GDPR/payment badges and their legend. Open the existing `CardDetailSidePanel` in non-modal mode so the Application lists remain usable. Render the scoped groups from GET. Wire assignment, transfer and clearing in the card panel and refresh both panels after a successful change.
+Render the nodes, ER edges and positions from Task 2. Use the agreed Document/Data shapes and neutral fallback. Preserve placed nodes and include anchored nodes when checking overlap for new ones. Use the shared relation edge styling. Add the GDPR/payment badges and their legend. Open the existing `CardDetailSidePanel` in non-modal mode so the Application lists remain usable. Render the scoped groups from GET. Wire assignment, transfer and clearing in the card panel and refresh both panels after a successful change.
 
 - [ ] **Step 8: Run to verify they pass**
 
@@ -408,13 +407,13 @@ Expected: clean.
 - [ ] **Step 10: Commit**
 
 ```bash
-git add frontend/src/features/boRelationship/
-git commit -m "feat(bo-relationship): read-only diagram page — nodes, edges, side panels"
+git add frontend/src/features/boRelationship/ frontend/src/components/CardDetailSidePanel.tsx frontend/src/components/CardDetailSidePanel.test.tsx
+git commit -m "feat(bo-relationship): diagram page — nodes, edges, side panels"
 ```
 
 ---
 
-## Task 5: Optional filter panel
+## Task 5: Filter panel for personal and payment data
 
 **Files:**
 - Modify: `frontend/src/features/boRelationship/BoRelationshipPage.tsx`
@@ -466,15 +465,15 @@ git commit -m "feat(bo-relationship): optional filter panel on isPersonalData/is
 
 **Files**
 - Modify `frontend/src/features/boRelationship/BoRelationshipPage.tsx` and its Vitest file.
-- Extend the Task 2 controller, schema, service and API tests with a scoped idempotent create operation. Reuse the existing card writer and relation orientation rules.
+- Extend the Task 2 controller, schema, service and API tests with a scoped idempotent create operation. Reuse the existing card and relation write services and the relation orientation rules. Extend the creation path with durable request identity and create-once semantics.
 
 **Interfaces**
-- Give each draft object a stable UUID. The planned `PUT /bo-relationship/objects/{draft_id}` accepts validated creation fields and returns the readable DataObject ID. Check module edit and normal card creation permission. Persist the draft identity with the creation so a retry after a lost response finds the same card. A name, another caller's draft or an unrelated card cannot establish a retry match.
-- Use the existing relation creation path for `relDataObjectToDataObject` with its type/source/target idempotency. Preserve the drawn direction and leave cardinality absent if unset. Reuse the positions endpoint for changed coordinates of persisted nodes.
+- Give each draft object a stable UUID for retries in the current editing session. If the spec requires recovery after refresh, also persist pending state and test reopening. The planned `PUT /bo-relationship/objects/{draft_id}` accepts validated creation fields and returns the readable DataObject ID. Check module edit and normal card creation permission. Store a durable creation receipt keyed by actor and draft UUID with the card ID and normalized request fingerprint. Claim that key atomically and commit the receipt with the card and creation event. Replay an identical request only while the original card is readable. Return 409 for a different creation payload and 404 for an unavailable original card. Keep enough receipt information to prevent recreating a deleted card on replay.
+- Use a create-once operation for ER links that shares the normal validation, authorization and orientation logic. Serialize concurrent requests for the same relation identity, including calls through other writers. On replay return the readable existing link as stored, preserving later changes to its attributes. Use the agreed rule for opposite-direction links. Leave cardinality absent if unset. Send only changed positions of persisted nodes.
 
-- [ ] **Step 1: Add regression tests.** A rejected relation after a successful create leaves one card in inventory, the failed link pending and the card out of the retry set. A lost create response followed by a retry produces one card and one creation event. A failed card blocks only dependent operations. A layout failure retains dirty positions while successful inventory writes stay saved. Unset cardinality stays unset and a view-only user cannot save.
+- [ ] **Step 1: Add regression tests.** A rejected relation after a successful create leaves one card in inventory, the failed link pending and the card out of the retry set. A lost create response followed by a retry produces one card and one creation event. Concurrent retries create a single link. A link retry after a manual cardinality edit preserves the edit. A failed card blocks only dependent operations. A layout failure retains dirty positions while successful inventory writes stay saved. Unset cardinality stays unset and a view-only user cannot save.
 - [ ] **Step 2: Run the new API and page tests.** Verify that they fail for the missing behavior.
-- [ ] **Step 3: Track pending work by draft ID.** On Save, create pending cards first and record each successful ID. Send links when both endpoints have persisted IDs. Keep failed and blocked work pending. Save eligible changed positions. Show the outcome of each item and retain a retry action. Skip completed items on the next Save.
+- [ ] **Step 3: Track pending work by draft ID.** Add the Add object toolbar action, the diagram-js connection tool and tracking for dragged positions. On Save, create pending cards first and record each successful ID. Send links when both endpoints have persisted IDs. Keep failed and blocked work pending. Save eligible changed positions. Show the outcome of each item and retain a retry action. Skip completed items on the next Save.
 - [ ] **Step 4: Run the API and page tests, typecheck and regenerate OpenAPI.** Verify Customer/Order with an injected link failure followed by a successful retry.
 - [ ] **Step 5: Commit the Save code and tests on the feature branch.**
 
@@ -530,8 +529,15 @@ git commit -m "feat(bo-relationship): menu entry under Application & Data, permi
 
 ---
 
+## Agent's calls
+
+- Use a non-modal right panel to keep both panels usable. Wire scoped grouping and refresh through the BO endpoints.
+- Load Application groups and facet flags in the graph response. Filter all linked cards and position ids through module read scope.
+- Save position deltas and test concurrent saves. Use stable draft IDs for lost-response retries.
+
 ## Review before execution
 
+- Decide how workspace import handles an incoming Master that conflicts with an existing designation. Preserve the target assignment until a permitted transfer is explicitly requested. Verify that imports, updates and restores cannot create two Masters.
 - Resolve the spec's product questions. Finish the exact shape and filter cases, default grants, cardinality policy and workspace-transfer behavior before starting the affected tasks.
 - Verify seed behavior on fresh and upgraded workspaces, safe layout storage and permission wiring. The initial read contract already covers the Application groups and filter facets.
 - Acceptance covers concurrent Master assignment, derived Slave/Unclassified roles under card visibility, durable partial saves without duplicates and disjoint layout updates without lost positions.

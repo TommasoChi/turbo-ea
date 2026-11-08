@@ -19,7 +19,7 @@ In scope:
   - **GDPR**: badge icon shown when `isPersonalData` = true (field already exists).
   - **Payment data** (PCI-DSS scope): badge icon shown when a new `isPaymentData` boolean = true.
   - `Categoria GDPR`, `Interessati`, `Retention`, `Tipo dato di pagamento` — **deferred**, not part of this pass; not needed for the diagram or its icons/shapes.
-  - `Application Master` (the xlsx sheet's own text column) — superseded by the master/slave relation attribute below; maps to a *relation*, not a card field. **No bulk/automatic import** of the xlsx's existing data — populated by hand per object, same as any other card.
+  - `Application Master` (the xlsx sheet's own text column) — represented by the Master designation on the Application link; maps to a *relation*, not a card field. **No bulk/automatic import** of the xlsx's existing data — populated by hand per object, same as any other card.
 - **Diagram interaction:**
   - Clicking a `DataObject` node opens the existing `CardDetailSidePanel` component (same one `CostReport.tsx` already uses) on the right, showing that card.
   - A new panel on the **left** lists the linked Applications under **Master**, **Slave**, or **Unclassified**. Show name, link and role. Apply card visibility to the applications and the derived grouping.
@@ -52,10 +52,16 @@ Out of scope (not asked, not assumed):
 - `diagram-js`/`diagram-js-direct-editing` and `@dagrejs/dagre` are both already project dependencies (`frontend/package.json`), used respectively by the diagram editors and the Layered Dependency View.
 - `CardDetailSidePanel` (`frontend/src/components/CardDetailSidePanel.tsx`) is the shared right-hand card drawer, already reused by `CostReport.tsx` (`cardId`/`open`/`onClose` props) — this spec reuses it verbatim.
 
+## Agent's calls
+
+- Derive visible Application groups from links the viewer can read. A hidden Master has the same visible result as an unset Master.
+- Save changed positions only. Preserve the other positions when two editors change different nodes, including when a filter hides part of the diagram.
+
 ## Open questions before implementation
 
-- **Canvas actions.** Confirm that creating links from the canvas is limited to DataObject-to-DataObject ER relations. The current plan manages Application links and their Master designation in the card panel.
-- **Cardinality.** Confirm whether the values describe the diagram or also enforce constraints on inventory relationships. If edited from the target card, `1:n` and `n:1` must be converted back to the stored source-to-target direction.
-- **Visuals and filters.** Pick Document and Data shapes and a neutral shape for existing cards with an unset type. Specify where to show GDPR and payment badges and their legend. Confirm whether additional metamodel filters belong in the first version.
-- **Layout.** Decide when auto-generated positions become shared and whether shared positions are included in workspace transfer. Opening the page as a viewer has no write side effects.
-- **Permissions.** Confirm the default role grants. The plan names `boRelationship.view` and `boRelationship.edit`. Card and relation permissions also apply to operations made through this page.
+- **Canvas actions.** Confirm that the canvas creates DataObjects and ER links only. The current plan handles Application links and the Master designation in the card panel. Decide whether removing a line from the canvas should be possible and, if so, whether it deletes the real ER relation.
+- **Cardinality.** Confirm whether the values describe the diagram or also enforce constraints on inventory relationships. The existing plan allows an unset value at creation. Decide whether A-to-B and B-to-A can be separate ER links or represent the same link viewed from two sides. If edited from the target card, `1:n` and `n:1` must be converted back to the stored source-to-target direction.
+- **Visuals and filters.** Pick Document and Data shapes and a neutral shape for existing cards with an unset type. Confirm whether GDPR and payment badges also appear on inventory cards and where the diagram legend belongs. Confirm whether additional metamodel filters belong in the first version.
+- **Layout.** Decide when auto-generated positions become shared, what happens if two editors move the same node, and whether shared positions are included in workspace transfer. Opening the page as a viewer has no write side effects.
+- **Retry lifetime.** Decide whether pending items must survive refresh or reopening the page. The agreed retry within the current editing session already requires deduplication after a lost server response.
+- **Permissions.** Confirm the default role grants. The plan names `boRelationship.view` and `boRelationship.edit`. Confirm whether a view-only user who has card edit rights elsewhere can use those rights in the right-hand panel. Card and relation permissions still apply.
