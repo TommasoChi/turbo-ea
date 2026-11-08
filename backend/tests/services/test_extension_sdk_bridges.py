@@ -1632,3 +1632,19 @@ async def test_read_organization_links_step_links_require_bpm_view(db):
             await context.core_query.read_organization_links([env["org"].id])
 
     assert raised.value.code == "permission_denied"
+
+
+async def test_diagram_artifact_bridge_hides_private_bo_diagram(db):
+    from app.models.diagram import Diagram
+    from app.services.extensions.sdk import ExtensionBridgeError
+
+    await create_role(db, key="admin", permissions={"*": True})
+    actor = await create_user(db, role="admin")
+    diagram = Diagram(name="Private", kind="boRelationship", data={"positions": {}})
+    db.add(diagram)
+    await db.flush()
+    context = build_request_context("technology-what-if", db, actor)
+    assert await context.diagrams.get_diagram(diagram.id) is None
+    with pytest.raises(ExtensionBridgeError):
+        await context.diagrams.rename_diagram(diagram.id, "Changed")
+    assert await context.diagrams.delete_diagram(diagram.id) is False

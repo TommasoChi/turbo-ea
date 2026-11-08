@@ -65,6 +65,8 @@
 
 ## Task 1: Seed and migration for the metamodel and layout
 
+**Implemented revision** `180` follows `179`. The existing Inventory and Draw.io creation flows require a DataObject subtype. Existing Draw.io drafts can be classified in the Sync panel.
+
 **Files:**
 - Create: `backend/alembic/versions/<NEXT>_bo_relationship.py`
 - Modify: `backend/app/services/seed.py`
@@ -76,7 +78,7 @@
 - Add the nullable explicit `dataOwnership=master` designation to `relAppToDataObj`. Derive Slave and Unclassified. Preserve CRUD and lineage. Seed `relDataObjectToDataObject` with its four cardinality options and one ER link per unordered BO pair.
 - The private `Diagram` of kind `boRelationship` stores the last accepted snapshot and positions. Initialize it with an empty positions map and no accepted snapshot. Exclude it from generic diagram routes and the diagrams SDK bridge, including list, direct UUID, favorites, card links, groups, publish, update and delete. Test each direct access path. Include the saved drawing and positions in workspace transfer. Task 10 remaps BO, Application and relation IDs in the snapshot and position keys.
 
-- [ ] **Step 1: Determine the real revision number and write the failing tests**
+- [x] **Step 1: Determine the real revision number and write the failing tests**
 
 Run `ls backend/alembic/versions/ | sort -V | tail -3` to find the actual latest revision, pick the next integer, and use it everywhere `<NEXT>` appears in this task (file name, `revision`, and `down_revision` of the migration you're about to write). Ledger it: `Task 1: Ruling: migration revision <N> (down_revision "<N-1>") — <N-1> was the latest at execution time — cost if wrong: a revision-chain conflict caught immediately by alembic on upgrade`.
 
@@ -135,26 +137,26 @@ async def test_seeds_exactly_one_bo_relationship_diagram(db):
 
 Note the test's `DataObject`/`relAppToDataObj` fixtures are **not pre-seeded** by the `db` fixture (`backend/tests/conftest.py`'s `db` fixture only builds empty schema via `create_all`, confirmed in migration 168's own plan) — if those two rows don't already exist at test setup, create them first with `create_card_type`/`create_relation_type` from `tests/conftest`, matching the existing `DataObject` section shape from `backend/app/services/seed.py:3598` before the migration's own additive patch runs.
 
-- [ ] **Step 2: Run to verify they fail**
+- [x] **Step 2: Run to verify they fail**
 
 Run: `cd backend && PYTHONUTF8=1 POSTGRES_HOST=localhost POSTGRES_PORT=5433 POSTGRES_USER=turboea POSTGRES_PASSWORD=turboea TEST_POSTGRES_DB=turboea_test venv/Scripts/python.exe -m pytest tests/services/test_alembic_<NEXT>_bo_relationship.py -v`
 Expected: FAIL — module not found (migration file doesn't exist yet).
 
-- [ ] **Step 3: Implement the migration**
+- [x] **Step 3: Implement the migration**
 
 Use the guarded patch pattern of migration 168. Append missing subtype keys and the payment field without overwriting admin customizations. Add relation metadata to the seed. Define operation-receipt storage and database uniqueness guards in SQLAlchemy metadata and the migration, so upgrade, fresh boot and reset install the same guarantees. Retain receipts after a card is deleted. Test upgrade, fresh bootstrap, subtype validation and visibility of existing unclassified BOs. Verify the generic diagram APIs cannot access the private snapshot.
 
-- [ ] **Step 4: Run to verify they pass**
+- [x] **Step 4: Run to verify they pass**
 
 Run: same command as Step 2.
 Expected: PASS.
 
-- [ ] **Step 5: Lint**
+- [x] **Step 5: Lint**
 
 Run: `cd backend && venv/Scripts/python.exe -m ruff check app/ alembic/versions/<NEXT>_bo_relationship.py tests/services/test_alembic_<NEXT>_bo_relationship.py && venv/Scripts/python.exe -m ruff format alembic/versions/<NEXT>_bo_relationship.py tests/services/test_alembic_<NEXT>_bo_relationship.py`
 Expected: clean.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add backend/alembic/versions/<NEXT>_bo_relationship.py backend/app/services/seed.py backend/tests/services/test_alembic_<NEXT>_bo_relationship.py
@@ -616,9 +618,9 @@ git commit -m "feat(bo-relationship): menu entry under Application & Data, permi
 
 | Role | Model | Reasoning effort |
 | --- | --- | --- |
-| Development | GPT-6 Terra | `medium` |
+| Development | GPT-6.1 Terra | `medium` |
 | Save and Sync | GPT-6.1 Sol | `medium` |
-| Integration testing | GPT-6 Terra | `medium` |
+| Integration testing | GPT-6.1 Terra | `medium` |
 | `simplify` | GPT-6 Sol | `medium` |
 | `ponytail-review` | GPT-6.1 Sol | `medium` |
 | `security-review` | GPT-6 Astra | `medium` |

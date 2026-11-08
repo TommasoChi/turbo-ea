@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { cardCreatePayload } from "./cardSync";
+import { cardCreatePayload, syncAllMessageKey } from "./cardSync";
 
 const pending = { type: "Application", name: "Draft App" };
 
@@ -38,4 +38,16 @@ describe("cardCreatePayload", () => {
       "type",
     ]);
   });
+});
+
+it("includes the pending subtype in the shared single and sync-all payload", () => {
+  expect(cardCreatePayload({ type: "DataObject", name: "Invoice", subtype: "document" })).toEqual({
+    type: "DataObject", name: "Invoice", subtype: "document",
+  });
+});
+
+it("reports subtype-blocked work after syncing eligible cards", () => {
+  expect(syncAllMessageKey([{ type: "DataObject", subtype: undefined }], [{ key: "data" }])).toBe("editor.subtypeRequired");
+  expect(syncAllMessageKey([{ type: "DataObject", subtype: "data" }], [{ key: "data" }])).toBe("editor.syncComplete");
+  expect(syncAllMessageKey([{ type: "Application" }], [])).toBe("editor.syncComplete");
 });

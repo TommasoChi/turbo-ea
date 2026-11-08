@@ -367,3 +367,20 @@ async def test_resolve_refs_reads_an_unescaped_slash_as_part_of_the_name(client,
     assert (results[3]["status"], results[3]["id"]) == ("resolved", str(billing.id))
     assert results[4]["status"] == "missing"
     assert results[4]["id"] is None
+
+
+async def test_bulk_create_rejects_unclassified_dataobject(client, db, bulk_env):
+    await create_card_type(db, key="DataObject", subtypes=[{"key": "data", "label": "Data"}])
+    response = await client.post(
+        "/api/v1/cards/bulk-create",
+        json={
+            "cards": [
+                {"row_index": 1, "type": "DataObject", "name": "Unclassified"},
+                {"row_index": 2, "type": "DataObject", "name": "Classified", "subtype": "data"},
+            ]
+        },
+        headers=auth_headers(bulk_env["admin"]),
+    )
+    assert response.status_code == 200
+    assert response.json()["failed"] == 1
+    assert response.json()["created"] == 1

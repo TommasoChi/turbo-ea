@@ -771,6 +771,14 @@ async def _recalc_changed_descendants(
 # ---------------------------------------------------------------------------
 
 
+def validate_dataobject_subtype(type_key: str, subtype: str | None, row: CardType | None) -> None:
+    """Require a declared subtype for a newly classified DataObject."""
+    if type_key != "DataObject":
+        return
+    if not subtype or not row or subtype not in {item.get("key") for item in (row.subtypes or [])}:
+        raise HTTPException(422, "DataObject subtype must be a declared option")
+
+
 async def create_card(
     db: AsyncSession,
     actor: WriteActor,
@@ -796,6 +804,10 @@ async def create_card(
     number its cards with one global scan per prefix instead of one per
     card; without it the reference is allocated exactly as before.
     """
+    card_type_row = (
+        await db.execute(select(CardType).where(CardType.key == type_key))
+    ).scalar_one_or_none()
+    validate_dataobject_subtype(type_key, subtype, card_type_row)
     await _validate_url_attributes(db, type_key, attributes or {})
     await _validate_percentage_attributes(db, type_key, attributes or {})
     await _validate_boolean_attributes(db, type_key, attributes or {})
@@ -826,9 +838,6 @@ async def create_card(
     await db.flush()
 
     # Assign the human-readable reference (auto-generated or manual) per type config.
-    card_type_row = (
-        await db.execute(select(CardType).where(CardType.key == type_key))
-    ).scalar_one_or_none()
     if reference_allocator is not None:
         await reference_allocator.assign(db, card, card_type_row)
     else:
@@ -898,6 +907,15 @@ async def update_card(
     # update (defensive: CardUpdate no longer carries it, but drop any stray).
     updates = dict(updates)
     updates.pop("reference", None)
+    if (
+        "subtype" in updates
+        and updates["subtype"] != card.subtype
+        and (updates["subtype"] or card.subtype)
+    ):
+        row = (
+            await db.execute(select(CardType).where(CardType.key == card.type))
+        ).scalar_one_or_none()
+        validate_dataobject_subtype(card.type, updates["subtype"], row)
 
     # Validate URL- and percentage-typed attributes
     if "attributes" in updates and updates["attributes"]:

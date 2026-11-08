@@ -10,7 +10,7 @@ import MenuItem from "@mui/material/MenuItem";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import MaterialSymbol from "@/components/MaterialSymbol";
-import { useTypeLabel } from "@/hooks/useResolveLabel";
+import { useSubtypeLabel, useTypeLabel } from "@/hooks/useResolveLabel";
 import { hasTypePermission } from "@/components/RequirePermission";
 import { useAuthContext } from "@/hooks/AuthContext";
 import type { CardType } from "@/types";
@@ -21,7 +21,7 @@ interface Props {
   /** Optional initial name — used when converting an existing DrawIO shape. */
   prefillName?: string;
   onClose: () => void;
-  onCreate: (data: { type: string; name: string; description?: string }) => void;
+  onCreate: (data: { type: string; name: string; description?: string; subtype?: string }) => void;
 }
 
 /**
@@ -38,9 +38,11 @@ export default function CreateOnDiagramDialog({
 }: Props) {
   const { t } = useTranslation(["diagrams", "common"]);
   const typeLabel = useTypeLabel();
+  const subtypeLabel = useSubtypeLabel();
   const { user } = useAuthContext();
   const [selectedType, setSelectedType] = useState("");
   const [name, setName] = useState("");
+  const [subtype, setSubtype] = useState("");
   const [description, setDescription] = useState("");
 
   // Seed the name when the dialog opens with a prefill (Convert-to-Card flow).
@@ -54,7 +56,8 @@ export default function CreateOnDiagramDialog({
     (t) => !t.is_hidden && hasTypePermission(user, "inventory.create", t.key)
   );
   const typeInfo = visibleTypes.find((t) => t.key === selectedType);
-  const valid = selectedType && name.trim().length > 0;
+  const valid = selectedType && name.trim().length > 0 &&
+    (selectedType !== "DataObject" || typeInfo?.subtypes?.some((st) => st.key === subtype));
 
   const handleCreate = () => {
     if (!valid) return;
@@ -62,15 +65,18 @@ export default function CreateOnDiagramDialog({
       type: selectedType,
       name: name.trim(),
       description: description.trim() || undefined,
+      ...(selectedType === "DataObject" ? { subtype } : {}),
     });
     // Reset form
     setSelectedType("");
+    setSubtype("");
     setName("");
     setDescription("");
   };
 
   const handleClose = () => {
     setSelectedType("");
+    setSubtype("");
     setName("");
     setDescription("");
     onClose();
@@ -89,7 +95,7 @@ export default function CreateOnDiagramDialog({
           size="small"
           fullWidth
           value={selectedType}
-          onChange={(e) => setSelectedType(e.target.value)}
+          onChange={(e) => { setSelectedType(e.target.value); setSubtype(""); }}
         >
           {visibleTypes.map((tp) => (
             <MenuItem key={tp.key} value={tp.key}>
@@ -108,6 +114,15 @@ export default function CreateOnDiagramDialog({
             </MenuItem>
           ))}
         </TextField>
+
+        {selectedType === "DataObject" && (
+          <TextField select required label={t("common:labels.subtype")} size="small" fullWidth
+            value={subtype} onChange={(e) => setSubtype(e.target.value)}>
+            {(typeInfo?.subtypes || []).map((st) => (
+              <MenuItem key={st.key} value={st.key}>{subtypeLabel(st)}</MenuItem>
+            ))}
+          </TextField>
+        )}
 
         <TextField
           label={t("common:labels.name")}

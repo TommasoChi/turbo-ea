@@ -1126,3 +1126,63 @@ class TestOrphanedAndStaleFilters:
     async def test_composes_with_the_type_filter(self, client, db, related):
         _, names = await self._names(client, related["admin"], "type=ITComponent&orphaned=true")
         assert names == []
+
+
+@pytest.mark.parametrize("subtype", [None, "unknown"])
+async def test_dataobject_create_requires_declared_subtype(client, db, cards_env, subtype):
+    await create_card_type(db, key="DataObject", subtypes=[{"key": "data", "label": "Data"}])
+    response = await client.post(
+        "/api/v1/cards",
+        json={"type": "DataObject", "name": "Object", "subtype": subtype},
+        headers=auth_headers(cards_env["admin"]),
+    )
+    assert response.status_code == 422
+
+
+async def test_dataobject_subtype_can_classify_legacy_but_cannot_be_cleared(client, db, cards_env):
+    await create_card_type(db, key="DataObject", subtypes=[{"key": "data", "label": "Data"}])
+    card = await create_card(db, card_type="DataObject", name="Legacy")
+    url = f"/api/v1/cards/{card.id}"
+    headers = auth_headers(cards_env["admin"])
+    assert (await client.patch(url, json={"name": "Renamed"}, headers=headers)).status_code == 200
+    assert (await client.patch(url, json={"subtype": "data"}, headers=headers)).status_code == 200
+    assert (await client.patch(url, json={"subtype": None}, headers=headers)).status_code == 422
+
+
+async def test_bulk_update_cannot_clear_assigned_dataobject_subtype(client, db, cards_env):
+    await create_card_type(db, key="DataObject", subtypes=[{"key": "data", "label": "Data"}])
+    classified = await create_card(db, card_type="DataObject", name="Classified", subtype="data")
+    legacy = await create_card(db, card_type="DataObject", name="Legacy")
+    headers = auth_headers(cards_env["admin"])
+    response = await client.patch(
+        "/api/v1/cards/bulk",
+        json={"ids": [str(classified.id)], "updates": {"subtype": None}},
+        headers=headers,
+    )
+    assert response.status_code == 422
+    response = await client.patch(
+        "/api/v1/cards/bulk",
+        json={"ids": [str(legacy.id)], "updates": {"description": "Updated"}},
+        headers=headers,
+    )
+    assert response.status_code == 200
+
+
+async def test_retired_subtype_echo_does_not_block_unrelated_single_or_bulk_edit(
+    client, db, cards_env
+):
+    await create_card_type(db, key="DataObject", subtypes=[{"key": "data", "label": "Data"}])
+    card = await create_card(db, card_type="DataObject", name="Legacy", subtype="retired")
+    headers = auth_headers(cards_env["admin"])
+    response = await client.patch(
+        f"/api/v1/cards/{card.id}",
+        json={"subtype": "retired", "description": "Single"},
+        headers=headers,
+    )
+    assert response.status_code == 200
+    response = await client.patch(
+        "/api/v1/cards/bulk",
+        json={"ids": [str(card.id)], "updates": {"subtype": "retired", "description": "Bulk"}},
+        headers=headers,
+    )
+    assert response.status_code == 200

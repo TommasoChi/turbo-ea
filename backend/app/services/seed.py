@@ -3661,7 +3661,7 @@ TYPES = [
         "category": "Application & Data",
         "has_hierarchy": True,
         "has_successors": True,
-        "subtypes": [],
+        "subtypes": [{"key": "data", "label": "Data"}, {"key": "document", "label": "Document"}],
         "sort_order": 9,
         "fields_schema": [
             {
@@ -3678,6 +3678,12 @@ TYPES = [
                     "ar": "معلومات البيانات",
                 },
                 "fields": [
+                    {
+                        "key": "isPaymentData",
+                        "label": "Contains Payment Data",
+                        "type": "boolean",
+                        "weight": 1,
+                    },
                     {
                         "key": "dataSensitivity",
                         "label": "Data Sensitivity",
@@ -5152,7 +5158,15 @@ RELATIONS = [
         "target_type_key": "DataObject",
         "cardinality": "n:m",
         "sort_order": 20,
-        "attributes_schema": CRUD_RELATION_ATTRIBUTES,
+        "attributes_schema": [
+            *CRUD_RELATION_ATTRIBUTES,
+            {
+                "key": "dataOwnership",
+                "label": "Data Ownership",
+                "type": "single_select",
+                "options": [{"key": "master", "label": "Master"}],
+            },
+        ],
         "translations": {
             "label": {
                 "de": "CRUD",
@@ -5984,6 +5998,24 @@ RELATIONS = [
     _successor_relation("relPlatformSuccessor", "Platform", 43),
     _successor_relation("relProcessSuccessor", "BusinessProcess", 44),
     _successor_relation("relInterfaceSuccessor", "Interface", 45),
+    {
+        "key": "relDataObjectToDataObject",
+        "label": "relates to",
+        "reverse_label": "relates to",
+        "source_type_key": "DataObject",
+        "target_type_key": "DataObject",
+        "cardinality": "n:m",
+        "attributes_schema": [
+            {
+                "key": "cardinality",
+                "label": "Cardinality",
+                "type": "single_select",
+                "options": [
+                    {"key": value, "label": value} for value in ("1:1", "1:n", "n:1", "n:m")
+                ],
+            }
+        ],
+    },
     _successor_relation("relDataObjectSuccessor", "DataObject", 46),
     _successor_relation("relBusinessContextSuccessor", "BusinessContext", 49),
 ]
@@ -6980,5 +7012,22 @@ async def seed_metamodel(db: AsyncSession) -> None:
     from app.services.dashboard_service import seed_dashboards
 
     await seed_dashboards(db)
+
+    from app.models.diagram import Diagram
+    from app.services.bo_relationship_constants import (
+        BO_RELATIONSHIP_DIAGRAM_ID,
+        BO_RELATIONSHIP_KIND,
+    )
+
+    existing_bo = await db.execute(select(Diagram.id).where(Diagram.kind == BO_RELATIONSHIP_KIND))
+    if existing_bo.first() is None:
+        db.add(
+            Diagram(
+                id=BO_RELATIONSHIP_DIAGRAM_ID,
+                name="BO Relationship",
+                kind=BO_RELATIONSHIP_KIND,
+                data={"positions": {}},
+            )
+        )
 
     await db.commit()

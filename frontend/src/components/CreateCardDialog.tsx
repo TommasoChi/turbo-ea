@@ -403,7 +403,7 @@ export default function CreateCardDialog({
   };
 
   const handleSubmit = async () => {
-    if (!selectedType || !name.trim()) return;
+    if (!selectedType || !name.trim() || (selectedType === "DataObject" && !typeConfig?.subtypes?.some((st) => st.key === subtype))) return;
     setLoading(true);
     setError("");
     setNameConflict(null);
@@ -753,7 +753,7 @@ export default function CreateCardDialog({
 
         {/* Subtype selector */}
         {hasSubtypes && (
-          <FormControl fullWidth sx={{ mb: 2 }}>
+          <FormControl fullWidth required={selectedType === "DataObject"} sx={{ mb: 2 }}>
             <InputLabel id={subtypeLabelId}>{t("common:labels.subtype")}</InputLabel>
             <Select
               labelId={subtypeLabelId}
@@ -761,9 +761,9 @@ export default function CreateCardDialog({
               label={t("common:labels.subtype")}
               onChange={(e) => setSubtype(e.target.value)}
             >
-              <MenuItem value="">
+              {selectedType !== "DataObject" && <MenuItem value="">
                 <em>{t("common:labels.none")}</em>
-              </MenuItem>
+              </MenuItem>}
               {typeConfig!.subtypes!.map((st) => (
                 <MenuItem key={st.key} value={st.key}>
                   {stLabel(st)}
@@ -1069,7 +1069,7 @@ export default function CreateCardDialog({
             <Button
               variant="contained"
               onClick={handleSubmit}
-              disabled={!selectedType || !typeAllowed || !name.trim() || loading}
+              disabled={!selectedType || !typeAllowed || !name.trim() || loading || (selectedType === "DataObject" && !typeConfig?.subtypes?.some((st) => st.key === subtype))}
               startIcon={
                 loading ? <CircularProgress size={18} color="inherit" /> : undefined
               }

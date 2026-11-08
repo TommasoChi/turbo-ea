@@ -868,12 +868,15 @@ async def bulk_create_cards(
         ).all()
     }
 
-    async def _bulk_assign_reference(card: Card, row) -> None:
-        if row.type not in _ref_types:
-            _ref_types[row.type] = (
-                await db.execute(select(CardType).where(CardType.key == row.type))
+    async def _bulk_type(type_key: str) -> CardType | None:
+        if type_key not in _ref_types:
+            _ref_types[type_key] = (
+                await db.execute(select(CardType).where(CardType.key == type_key))
             ).scalar_one_or_none()
-        await allocator.assign(db, card, _ref_types[row.type])
+        return _ref_types[type_key]
+
+    async def _bulk_assign_reference(card: Card, row) -> None:
+        await allocator.assign(db, card, await _bulk_type(row.type))
 
     for row_idx in order:
         r = rows_by_index[row_idx]
@@ -949,6 +952,11 @@ async def bulk_create_cards(
             await _validate_hierarchy_label(
                 db, r.type, r.parent_label, None, has_parent=resolved_parent is not None
             )
+
+            if r.type == "DataObject":
+                card_write_service.validate_dataobject_subtype(
+                    r.type, r.subtype, await _bulk_type(r.type)
+                )
 
             card = Card(
                 type=r.type,
@@ -1750,6 +1758,16 @@ async def bulk_update(
         )
     updates = body.updates.model_dump(exclude_unset=True)
     strict_attrs = updates.pop("strict_attributes", False)
+    if "subtype" in updates and any(
+        card.type == "DataObject"
+        and updates["subtype"] != card.subtype
+        and (updates["subtype"] or card.subtype)
+        for card in sheets
+    ):
+        data_type = (
+            await db.execute(select(CardType).where(CardType.key == "DataObject"))
+        ).scalar_one_or_none()
+        card_write_service.validate_dataobject_subtype("DataObject", updates["subtype"], data_type)
     # The human-readable reference is per-card and uniqueness-gated; it is never
     # editable in bulk (auto refs are write-once, manual refs must stay unique).
     updates.pop("reference", None)
