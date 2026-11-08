@@ -1,6 +1,6 @@
 # BO Relationship (ER-lite diagram for Business Objects)
 
-**Spec status:** draft. Save and ownership rules agreed on 2026-11-08. Remaining decisions are listed below.
+**Spec status:** draft. Agreed Save, ownership, ER direction, editor permissions, Draw.io-style sync, shared positions and BO subtypes are recorded below.
 
 ## Goal
 
@@ -10,12 +10,12 @@ A new page under the **Application & Data** menu group, "BO Relationship": an au
 
 In scope:
 - New page, menu entry under **Application & Data** → **BO Relationship**.
-- **New ER relation type, DataObject ↔ DataObject.** It is separate from the existing lineage relation `relDataObjectSuccessor`. It carries per-relation cardinality (`1:1` / `1:n` / `n:1` / `n:m`), stored in the direction of the relation.
+- **New ER relation type, DataObject ↔ DataObject.** It is separate from the lineage relation `relDataObjectSuccessor`. A-to-B and B-to-A are views of the same ER link. Store one relation per unordered BO pair and keep its original direction for the cardinality value (`1:1` / `1:n` / `n:1` / `n:m`).
 - **At most one Master per Business Object.** Choose one linked Application as the authoritative source for the whole `DataObject`. Anagrafica clienti, Consensi privacy and Dati di spedizione equipment are separate BOs and can each have a different Master.
   - Record the Master designation on the existing `relAppToDataObj` link. The other linked Applications display as **Slave** when a Master is assigned. CRUD flags remain independent of ownership.
   - With no Master, show all linked Applications under **Unclassified** (Da classificare). Choosing a new Master replaces the old designation in one operation. The former Master becomes Slave. Clearing the designation or removing the Master link returns the remaining Applications to Unclassified.
-- **Card icons/shapes on `DataObject`**, shown on the card and listed in a legend. Source: `analisi-documenti/Projetti/Turbo-ea-prod/Business Application Management_V.0.2.xlsx`, sheet `Dati`.
-  - **Type (Document vs Data)**: not a badge icon, a **different node shape** in the diagram — new field (not in today's `DataObject.fields_schema`, confirmed: today's fields are only `dataSensitivity`, `dataOwner`, `isPersonalData`).
+- **Diagram shapes and badges for `DataObject`**, explained in a legend. Source: `analisi-documenti/Projetti/Turbo-ea-prod/Business Application Management_V.0.2.xlsx`, sheet `Dati`.
+  - **Required BO subtype.** Add the native `DataObject` subtypes **Data** (`data`) and **Document** (`document`) to the metamodel. Both are BOs. Require a subtype when creating a BO. Use a distinct shape for each subtype. Existing BOs without a subtype stay readable and can be classified explicitly.
   - **GDPR**: badge icon shown when `isPersonalData` = true (field already exists).
   - **Payment data** (PCI-DSS scope): badge icon shown when a new `isPaymentData` boolean = true.
   - `Categoria GDPR`, `Interessati`, `Retention`, `Tipo dato di pagamento` — **deferred**, not part of this pass; not needed for the diagram or its icons/shapes.
@@ -23,17 +23,19 @@ In scope:
 - **Diagram interaction:**
   - Clicking a `DataObject` node opens the existing `CardDetailSidePanel` component (same one `CostReport.tsx` already uses) on the right, showing that card.
   - A new panel on the **left** lists the linked Applications under **Master**, **Slave**, or **Unclassified**. Show name, link and role. Apply card visibility to the applications and the derived grouping.
-  - **Editing an existing relation** happens on the card in the right panel. The Master can be assigned, transferred or cleared there. Cardinality changes to an existing ER relation also happen there.
-  - **Adding a new object or relation** requires an explicit **Save**. Save persists new cards first, then eligible relations, then changed positions. Each successful operation stays saved if another operation fails, following Draw.io's inventory sync behavior.
+  - **Creating links from the diagram.** An editor can draw BO-to-BO ER links or connect an existing Application to a BO with the Application card picker. For the Application link, show the Master and Slave roles. Choosing Master assigns or transfers the sole Master. Slave is available when another Application is Master, including a Master staged earlier in the same save. When there is no Master, the editor can save the Application link as Unclassified.
+  - The card panel can also edit existing links, including changing cardinality and assigning, transferring or clearing the Master. Access to write actions inside the BO page requires its edit permission.
+  - **Explicit Save.** Save persists new cards first, then eligible ER and Application links and their requested roles, then the accepted diagram changes and positions. Each successful operation stays saved if a later operation fails, following Draw.io's inventory sync behavior.
   - **Partial success is visible and retryable.** If `Ordine` is created but its link to `Cliente` fails, the card stays in the inventory and the editor identifies the link as pending. Retrying submits only pending work and recovers the identity of an already created card if its response was lost. The retry creates no duplicate card or relation.
 - **Diagram library:** reuse `diagram-js` (+ `diagram-js-direct-editing`), already a project dependency and already used by `DiagramEditor`/`DiagramViewer` for ArchiMate/BPMN diagrams. No new dependency.
 - **Layout and overlap avoidance:** reuse `@dagrejs/dagre`, already a project dependency (`frontend/src/features/reports/layeredDependencyLayout.ts` already uses it for the Layered Dependency View) to compute node positions and edge routing with minimal overlap.
-- **Layout persistence (hybrid, confirmed):** dagre computes the automatic layout only for nodes that have no stored position yet (first appearance, or a newly added object). Once computed (or once a user drags a node), the position is **saved**, same pattern as the existing `DiagramEditor`-backed diagrams — not recomputed from scratch on every page load.
-- **Cardinality direction (the per-instance mirroring problem).** A plain text/select attribute on a `Relation` would show the *same* raw value ("1:n") no matter which side's card the user opens the relation on — confirmed as a real risk. **Verified precedent, and it is narrower than first assumed**: `frontend/src/features/cards/sections/RelationAttributesEditor.tsx` has no generic "direction-aware field type" — it special-cases one hardcoded attribute **key**, `flowDirection` (a `single_select`), with its own inversion logic (provider/consumer, forward/reverse wording) written specifically for that key (see `flowDirectionBadge` and the `field.key !== "flowDirection"` branches). **Decision: follow the same pattern, not a new generic mechanism** — add a second reserved key, `cardinality` (`single_select`, options `1:1`/`1:n`/`n:1`/`n:m`), to the new DataObject↔DataObject relation type's `attributes_schema`, and write a dedicated inversion helper for it (analogous to `flowDirectionBadge`, swapping `1:n`↔`n:1` and leaving `1:1`/`n:m` unchanged) in the same file. One directional value is stored (source→target), the dedicated helper flips it when read from the target card. Reuse the existing relation model and add the attribute with the new ER relation type.
+- **Shared positions.** Keep saved positions fixed. Compute local proposals for nodes without a saved position and share manual moves or accepted proposals only on explicit Save.
+- **Cardinality direction.** Use a dedicated helper for the reserved `cardinality` attribute. Swap `1:n` and `n:1` when reading or editing from the opposite end. `1:1` and `n:m` are symmetric. Saving from the opposite end converts the value back to the original stored direction.
 
-- **Diagram scope and filtering.** Show readable `DataObject` cards by default, including isolated nodes. A filter panel reuses `FilterSidebarSection`. Personal data (`isPersonalData`) and payment data (`isPaymentData`) are available in the first pass. `Categoria GDPR` remains deferred. Whether to offer additional metamodel fields as filters is open.
+- **Inventory check and sync, following Draw.io.** On each load, open the last saved diagram and compare it with readable inventory data. Flag relevant changes without applying them automatically. Recheck on demand. An editor can choose **Sync** to apply inventory changes to the open diagram, keeping manual positions. The next **Save** shares the refreshed diagram and any position changes. Include renamed, changed-subtype, archived or deleted BOs and changed or removed links. Detect additions too because the BO view covers the readable inventory. Compare a fresh view on the first load if no saved diagram exists.
+- **Diagram scope and filtering.** Include readable `DataObject` cards, including isolated nodes. Reuse `FilterSidebarSection` for personal data (`isPersonalData`) and payment data (`isPaymentData`) in the first pass. `Categoria GDPR` remains deferred. Additional metamodel filters are open.
 - **Ownership granularity is the Business Object.** Each card represents one BO and has its own optional Master. Attributes within the same BO, such as first name and surname within Anagrafica clienti, share that designation.
-- **Access control.** Two explicit permissions gate this page — view and edit — independent of (and in addition to) the underlying `CardWriteService` permission checks that already gate creating/editing the `DataObject`/`Application` cards and their relations. The page-level permission controls who can *open* BO Relationship and *use its Save button*; `CardWriteService` still enforces field- and card-type-level write rules underneath, same as every other card write path in the app.
+- **Access control.** Administrators can view and edit BO Relationship. Other users are view-only by default. The `boRelationship.view` and `boRelationship.edit` permissions allow later role and group configuration. Save, Sync and write actions in the page and its card panel require edit permission plus the applicable underlying card or relation permissions.
 
 Out of scope (not asked, not assumed):
 - Any card type other than `DataObject` and `Application` as diagram participants (e.g. no `BusinessCapability` node layer here — that concept belongs to the cost-report Sankey's group_by, a different feature on the same branch).
@@ -44,24 +46,25 @@ Out of scope (not asked, not assumed):
 
 ## Current state (verified, not assumed)
 
-- `DataObject` card type exists (`backend/app/services/seed.py:3598`), category `"Application & Data"`, `fields_schema` today: `dataSensitivity` (single_select), `dataOwner` (text), `isPersonalData` (boolean). No `Type` (Document/Data) field, no payment-data field.
+- The `DataObject` card type exists in Application & Data. Its current seed has no Data/Document subtypes and no payment-data field.
 - `relAppToDataObj` relation type exists (`source_type_key: "Application"`, `target_type_key: "DataObject"`, `cardinality: "n:m"` at the type level, `attributes_schema`: `crudCreate`/`crudRead`/`crudUpdate`/`crudDelete` booleans). No master/slave attribute today.
 - `relDataObjectSuccessor` is an existing `DataObject` ↔ `DataObject` lineage relation. The new ER relation is a separate metamodel type.
 - `Relation.attributes` is a free-form JSONB column (`backend/app/models/relation.py`), already the mechanism CRUD uses — the new master/slave and cardinality attributes use the same column, no schema change beyond each relation type's own `attributes_schema` definition.
 - `RelationType.cardinality` (`backend/app/models/relation_type.py`) is a fixed type-level column (`"1:1"`/`"1:n"`/`"n:m"`), separate from the per-instance cardinality value this spec adds — the type-level column stays at its default and is not what drives the diagram's displayed value.
 - `diagram-js`/`diagram-js-direct-editing` and `@dagrejs/dagre` are both already project dependencies (`frontend/package.json`), used respectively by the diagram editors and the Layered Dependency View.
-- `CardDetailSidePanel` (`frontend/src/components/CardDetailSidePanel.tsx`) is the shared right-hand card drawer, already reused by `CostReport.tsx` (`cardId`/`open`/`onClose` props) — this spec reuses it verbatim.
+- Reuse the existing `CardDetailSidePanel` with a BO-specific edit gate and a refresh hook after supported changes.
 
 ## Agent's calls
 
 - Derive visible Application groups from links the viewer can read. A hidden Master has the same visible result as an unset Master.
 - Save changed positions only. Preserve the other positions when two editors change different nodes, including when a filter hides part of the diagram.
+- Display a neutral shape for an existing BO without a subtype and allow explicit classification. The migration does not infer Data or Document from the name.
+- Keep Applications in the selected BO's side panel. The diagram's link action can pick them and assign the role.
 
 ## Open questions before implementation
 
-- **Canvas actions.** Confirm that the canvas creates DataObjects and ER links only. The current plan handles Application links and the Master designation in the card panel. Decide whether removing a line from the canvas should be possible and, if so, whether it deletes the real ER relation.
-- **Cardinality.** Confirm whether the values describe the diagram or also enforce constraints on inventory relationships. The existing plan allows an unset value at creation. Decide whether A-to-B and B-to-A can be separate ER links or represent the same link viewed from two sides. If edited from the target card, `1:n` and `n:1` must be converted back to the stored source-to-target direction.
-- **Visuals and filters.** Pick Document and Data shapes and a neutral shape for existing cards with an unset type. Confirm whether GDPR and payment badges also appear on inventory cards and where the diagram legend belongs. Confirm whether additional metamodel filters belong in the first version.
-- **Layout.** Decide when auto-generated positions become shared, what happens if two editors move the same node, and whether shared positions are included in workspace transfer. Opening the page as a viewer has no write side effects.
+- **Canvas removal.** Decide whether removing a line should be available and, if so, whether it deletes the inventory relation.
+- **Cardinality validation.** Decide whether cardinality is descriptive or also enforces constraints on inventory relationships. The current plan allows an unset value when creating a link.
+- **Visuals and filters.** Choose the shapes and legend placement. Confirm whether GDPR and payment badges also appear on inventory cards and whether to offer more filters in the first version.
+- **Layout.** Decide what happens if two editors move the same node and whether the saved diagram state and shared positions are included in workspace transfer.
 - **Retry lifetime.** Decide whether pending items must survive refresh or reopening the page. The agreed retry within the current editing session already requires deduplication after a lost server response.
-- **Permissions.** Confirm the default role grants. The plan names `boRelationship.view` and `boRelationship.edit`. Confirm whether a view-only user who has card edit rights elsewhere can use those rights in the right-hand panel. Card and relation permissions still apply.

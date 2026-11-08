@@ -4,9 +4,9 @@
 
 **Goal:** A new "BO Relationship" page under Application & Data: an automatic ER-lite diagram of `DataObject` cards and their relationships, with a master/slave view of the Applications behind each one.
 
-**Architecture:** Read the graph from live DataObject cards and ER relations. Use one private, shared layout for positions. Reuse diagram-js and dagre on the page. Store the explicit Master designation on an Application link and derive the other display roles. Save pending cards, links and positions independently with resumable outcomes.
+**Architecture:** Keep a private saved BO diagram snapshot and shared positions. Compare with live, scoped inventory on load. Reuse diagram-js and dagre. Store one Master designation on an Application link and derive other roles. Save cards, links, accepted diagram updates and positions with resumable outcomes.
 
-**Plan status:** draft. Save and ownership reflect the agreed behavior. Resolve the product questions in the spec before executing the affected tasks.
+**Plan status:** draft. The spec records the agreed ER identity, canvas linking and roles, initial permissions, Draw.io-style sync, Save-only positions and required BO subtypes.
 
 **Tech Stack:** FastAPI + SQLAlchemy (backend), React + `diagram-js` + `@dagrejs/dagre` (frontend) — both already project dependencies.
 
@@ -20,7 +20,7 @@
 - No fake/demo data seeded (per spec).
 - New frontend strings go in `frontend/src/i18n/locales/en/reports.json` or `cards.json` (whichever a given task's component naturally belongs to) and `backend/app/services/seed.py`'s own `translations` dicts for metamodel labels — run `/translate` before the PR (`.claude/rules/i18n-locales.md`).
 - Regenerate `docs/api/openapi.json` via `scripts/dump_openapi.py` after any new/changed route.
-- Register `boRelationship.view` and `boRelationship.edit` in `backend/app/core/permissions.py` with the agreed default grants. Declare the lazy page gate in `frontend/src/lib/routePermissions.ts` and register the API in `backend/app/api/v1/router.py`.
+- Register `boRelationship.view` and `boRelationship.edit` in `backend/app/core/permissions.py`. Administrators start with both and other users with view only. Keep permission-based extension for later roles and groups. Declare the page gate in `frontend/src/lib/routePermissions.ts` and register the API in `backend/app/api/v1/router.py`.
 - Define request and response models in `backend/app/schemas/`. Apply `CardReadScope` in module mode to every BO and Application in a response, including ids in layout maps. Enforce the normal card and relation permissions on writes.
 - Include a targeted local VAPT pass for the new API and permissions, user manual and translations, the version and changelog, and the repository review and CI checks.
 
@@ -29,7 +29,11 @@
 - A `DataObject` with no relations to any other `DataObject` and no related `Application`: must render as an isolated node on the canvas (not silently dropped) and show empty Master/Slave lists in the left panel when clicked, not an error — Task 4's test `test_an_unrelated_dataobject_renders_isolated_with_empty_master_slave_lists`.
 - A BO without a Master shows linked Applications under Unclassified. Assigning a Master puts every other linked Application under Slave. Transferring Master moves the former Master to Slave. Clearing the assignment or removing the Master link returns the remaining Applications to Unclassified. CRUD flags stay independent.
 - Saving a newly added `DataObject`↔`DataObject` relation whose `cardinality` was left unset (user drew the edge but didn't open the relation's attribute editor): must save with `cardinality` absent/null, not crash and not silently default to a specific value that looks chosen — Task 6's test `test_an_edge_saved_without_a_cardinality_value_persists_with_none`.
-- A user without `boRelationship.edit` opens the page: the diagram renders (view permission is separate from edit) but the Save button and the add-node/add-edge actions are unavailable — Task 7's test `test_a_view_only_user_sees_the_diagram_but_cannot_save`.
+- A non-admin can view the diagram by default. Without edit permission, Save, Sync and all write actions in the canvas and drawer are unavailable. Test equivalent direct API requests.
+- Create both native DataObject subtypes. Reject normal creation with a missing or unknown subtype. Keep existing unclassified BOs visible.
+- Drawing or retrying B-to-A after A-to-B keeps one ER relation. Read its cardinality in the viewed direction.
+- From the diagram, pick an Application and create a link with a requested role. Master transfers the single designation. Slave requires another Master. Without a Master the link is Unclassified.
+- On each load, check the current inventory. Sync applies changes to the editor draft. Only Save shares the accepted diagram and positions.
 - Two editors saving changes to different nodes both retain their changes. Send changed positions only and merge them with a serialized or atomic database update. A filtered view preserves positions outside the view.
 - A card create followed by a rejected relation is a partial save. The next attempt reuses the card ID and retries the link. A lost create response followed by a retry still produces one card.
 - Concurrent Master assignments leave at most one persisted designation. Test replacement, clearing, removal, denied writes and an out-of-scope Master.
@@ -38,7 +42,7 @@
 
 ## File Structure
 
-- Create: `backend/alembic/versions/<NEXT>_bo_relationship.py` — `DataObject.type`/`isPaymentData` fields, `relAppToDataObj.attributes_schema` gains `dataOwnership`, new relation type `relDataObjectToDataObject` (`attributes_schema`: `cardinality`), seeds the singleton `Diagram` row.
+- Create `backend/alembic/versions/<NEXT>_bo_relationship.py` for native DataObject subtypes, the payment field, ownership and ER metadata, and private diagram initialization.
 - Create `backend/app/schemas/bo_relationship.py`, `backend/app/services/bo_relationship.py` and `backend/app/api/v1/bo_relationship.py` for the contracts, service and controller.
 - Modify `backend/app/api/v1/router.py`, `backend/app/core/permissions.py` and `backend/app/services/seed.py`. Verify layout initialization on both fresh and upgraded workspaces.
 - Create: `backend/tests/services/test_alembic_<NEXT>_bo_relationship.py`.
@@ -62,8 +66,9 @@
 - Test: `backend/tests/services/test_alembic_<NEXT>_bo_relationship.py`
 
 **Interfaces:**
-- Add `DataObject.type` (Document/Data) and `isPaymentData` (Contains Payment Data) in Data Information. Add a nullable explicit `dataOwnership=master` designation on `relAppToDataObj`. Derive Slave and Unclassified without storing those roles. Keep the CRUD attributes and lineage relation intact. Seed `relDataObjectToDataObject` with the four per-relation cardinality options.
-- The planned shared layout uses a private `Diagram` of kind `boRelationship` and an empty `positions` map. Initialize it on existing and fresh workspaces. Exclude this kind from `/diagrams?kind=all` and the generic per-ID loader used by the existing editors and management routes. Include publish, delete and direct UUID tests. Resolve workspace-transfer behavior before finalizing storage. If positions transfer, remap the card UUID keys in `positions` in the workspace-transfer path.
+- Add the native `data` and `document` options to `CardType.subtypes` for DataObject and `isPaymentData` to its Data Information fields. Keep `Card.type` equal to `DataObject`. Validate the subtype on normal creation paths. Preserve legacy unclassified BOs and allow explicit classification.
+- Add the nullable explicit `dataOwnership=master` designation to `relAppToDataObj`. Derive Slave and Unclassified. Preserve CRUD and lineage. Seed `relDataObjectToDataObject` with its four cardinality options and one ER link per unordered BO pair.
+- The private `Diagram` of kind `boRelationship` stores the last accepted snapshot and positions. Initialize it with an empty positions map and no accepted snapshot. Exclude it from `/diagrams?kind=all` and the generic per-ID loader. Test publish, delete and direct UUID access. If the diagram transfers between workspaces, remap BO, Application and relation IDs in the snapshot and position keys.
 
 - [ ] **Step 1: Determine the real revision number and write the failing tests**
 
@@ -94,7 +99,9 @@ async def test_adds_dataobject_fields_and_relation_attribute_and_relation_type(d
 
     data_object = (await db.execute(select(CardType).where(CardType.key == "DataObject"))).scalar_one()
     keys = {f["key"] for section in data_object.fields_schema for f in section.get("fields", [])}
-    assert {"type", "isPaymentData"} <= keys
+    assert "isPaymentData" in keys
+    assert "type" not in keys
+    assert {"data", "document"} <= {option["key"] for option in data_object.subtypes}
 
     rel_app_to_data = (
         await db.execute(select(RelationType).where(RelationType.key == "relAppToDataObj"))
@@ -129,7 +136,7 @@ Expected: FAIL — module not found (migration file doesn't exist yet).
 
 - [ ] **Step 3: Implement the migration**
 
-Use the guarded patch pattern of migration 168. Add absent fields and the relation type without overwriting admin customizations. Add metamodel defaults to the seed and test both upgrade and fresh bootstrap. Provide private layout initialization and test that generic diagram APIs cannot access it.
+Use the guarded patch pattern of migration 168. Append missing subtype keys and the payment field without overwriting admin customizations. Add the relation metadata to the seed. Test upgrade, fresh bootstrap, subtype validation and visibility of existing unclassified BOs. Verify the generic diagram APIs cannot access the private snapshot.
 
 - [ ] **Step 4: Run to verify they pass**
 
@@ -150,7 +157,7 @@ git commit -m "feat(bo-relationship): metamodel migration — fields, relation t
 
 ---
 
-## Task 2: Read the graph, assign Master and persist shared layout
+## Task 2: Read the saved graph, assign Master and persist the shared diagram
 
 **Files:**
 - Create: `backend/app/api/v1/bo_relationship.py`
@@ -159,10 +166,10 @@ git commit -m "feat(bo-relationship): metamodel migration — fields, relation t
 
 **Interfaces:**
 - Consume the private layout storage and metamodel keys from Task 1. Keep the runtime layout constant independent of Alembic revision modules.
-- `GET /api/v1/bo-relationship` (`boRelationship.view`) returns `nodes`, `edges`, `positions` and `applications`. Each node has `id`, `name`, nullable `type`, `isPersonalData` and `isPaymentData`. Each ER edge has `id`, `source`, `target` and nullable `cardinality` in stored direction. Positions are keyed by readable node id.
+- `GET /api/v1/bo-relationship` (`boRelationship.view`) returns readable saved `nodes`, `edges`, `positions` and `applications`. Before the first Save, supply a readable inventory baseline. Each node has `id`, `name`, nullable `subtype`, `isPersonalData` and `isPaymentData`. Each ER edge has `id`, `source`, `target` and nullable `cardinality` in stored direction. Scope snapshot and position data on every read, including after a visibility change.
 - `applications` is keyed by readable DataObject id, with entries `{master: {id, name} | null, slaves: [{id, name}], unclassified: [{id, name}]}`. Derive the viewer's grouping from readable links only. If no Master is visible, show the visible applications under Unclassified without indicating whether a hidden Master exists.
 - `PUT /api/v1/bo-relationship/objects/{object_id}/master` takes `{application_id: UUID | null}`. With module edit and applicable card and relation permissions, assign an existing readable link or clear the designation with null. Serialize assignment per BO and enforce uniqueness through every writer of the explicit marker. Apply the normal write scope to both the old and new links before changing them. Refuse an unauthorized transfer or clear without revealing the hidden application or changing its link. Return the same scoped grouping as GET and preserve CRUD flags.
-- `PUT /api/v1/bo-relationship/layout` (`boRelationship.edit`) accepts manual changes in `positions` and optional calculated proposals in `auto_positions`. Both map `UUID` to `{x, y}`. Validate finite coordinates and readable DataObject ids. Merge atomically and return only positions for readable DataObjects. Keep auto-generated proposals separate from manual moves. Persist an automatic proposal only while the node has no saved coordinates.
+- `PUT /api/v1/bo-relationship/layout` (`boRelationship.edit`) accepts changed manual positions, optional `auto_positions` and accepted changes from Task 8. Resolve accepted values against inventory and merge them with other saved state. Validate finite coordinates and readable BO IDs. Persist automatic proposals only for nodes without saved coordinates. Publish changes only on Save.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -294,7 +301,7 @@ Expected: FAIL — `cardinalityBadge` not exported.
 
 - [ ] **Step 3: Implement**
 
-Wire the helper into the relation badges and pass the viewed end through the existing relation editor. Invert asymmetric values when opening the target-side form and invert again before building the stored source-to-target payload. Add a relation-section test that opens a stored 1:n from the target, sees n:1, changes it to 1:n and sends n:1. Keep a single cardinality badge per relation and refresh the BO graph after a successful edit.
+Wire the helper into relation badges and the editor. Invert asymmetric values when opening the target-side form and again when building the stored payload. Test a stored A-to-B 1:n as n:1 from B, then edit and reread from both cards. Reverse creation finds the existing ER relation.
 
 - [ ] **Step 4: Run to verify they pass**
 
@@ -392,7 +399,7 @@ Expected: FAIL — module does not exist.
 
 - [ ] **Step 7: Render the diagram and wire selection and Master controls.** Canvas Save arrives in Task 6.
 
-Render the nodes, ER edges and positions from Task 2. Use the agreed Document/Data shapes and neutral fallback. Preserve placed nodes and include anchored nodes when checking overlap for new ones. Use the shared relation edge styling. Add the GDPR/payment badges and their legend. Open the existing `CardDetailSidePanel` in non-modal mode so the Application lists remain usable. Render the scoped groups from GET. Wire assignment, transfer and clearing in the card panel and refresh both panels after a successful change.
+Render saved nodes, ER edges and positions. Use native subtype keys for Data and Document shapes and a neutral legacy fallback. Keep anchored nodes fixed. Show scoped Application groups and reuse the card drawer with a BO edit gate. Refresh after supported edits while preserving unsaved canvas state. Wire inventory check and acceptance in Task 8.
 
 - [ ] **Step 8: Run to verify they pass**
 
@@ -468,12 +475,13 @@ git commit -m "feat(bo-relationship): optional filter panel on isPersonalData/is
 - Extend the Task 2 controller, schema, service and API tests with a scoped idempotent create operation. Reuse the existing card and relation write services and the relation orientation rules. Extend the creation path with durable request identity and create-once semantics.
 
 **Interfaces**
-- Give each draft object a stable UUID for retries in the current editing session. If the spec requires recovery after refresh, also persist pending state and test reopening. The planned `PUT /bo-relationship/objects/{draft_id}` accepts validated creation fields and returns the readable DataObject ID. Check module edit and normal card creation permission. Store a durable creation receipt keyed by actor and draft UUID with the card ID and normalized request fingerprint. Claim that key atomically and commit the receipt with the card and creation event. Replay an identical request only while the original card is readable. Return 409 for a different creation payload and 404 for an unavailable original card. Keep enough receipt information to prevent recreating a deleted card on replay.
-- Use a create-once operation for ER links that shares the normal validation, authorization and orientation logic. Serialize concurrent requests for the same relation identity, including calls through other writers. On replay return the readable existing link as stored, preserving later changes to its attributes. Use the agreed rule for opposite-direction links. Leave cardinality absent if unset. Send only changed positions of persisted nodes.
+- Give each draft object a stable UUID in the active session. `PUT /bo-relationship/objects/{draft_id}` requires a valid DataObject subtype. Check module edit and normal subtype-scoped creation permission. Claim a durable receipt keyed by actor and draft UUID, with the card ID and creation fingerprint. Commit receipt, card and event together. Replay identical requests for readable cards. Return 409 for different payloads and 404 for unavailable originals. Retain the receipt to prevent recreating a deleted card. Persist the pending queue across refresh only if the spec calls for it.
+- Serialize ER lookups and creation by unordered BO pair across write paths, including simultaneous A-to-B and B-to-A requests. Keep the first stored direction and preserve attributes on replay. Leave cardinality absent if unset.
+- Add a diagram action to choose an existing Application with `CardPicker` and connect it to a BO. On Save, validate endpoints and role. When Master is chosen, persist the link and transfer together. Slave requires another Master, including one persisted earlier in the same Save. Offer Unclassified for an Application link when there is no Master. Preserve CRUD flags and keep unresolved dependent operations pending.
 
-- [ ] **Step 1: Add regression tests.** A rejected relation after a successful create leaves one card in inventory, the failed link pending and the card out of the retry set. A lost create response followed by a retry produces one card and one creation event. Concurrent retries create a single link. A link retry after a manual cardinality edit preserves the edit. A failed card blocks only dependent operations. A layout failure retains dirty positions while successful inventory writes stay saved. Unset cardinality stays unset and a view-only user cannot save.
+- [ ] **Step 1: Add regression tests.** Cover partial success and a lost card response, reverse and concurrent ER creation, link retry after a cardinality edit, Application Master transfer, Slave with and without a Master, permission denial, required subtype and failure to save positions.
 - [ ] **Step 2: Run the new API and page tests.** Verify that they fail for the missing behavior.
-- [ ] **Step 3: Track pending work by draft ID.** Add the Add object toolbar action, the diagram-js connection tool and tracking for dragged positions. On Save, create pending cards first and record each successful ID. Send links when both endpoints have persisted IDs. Keep failed and blocked work pending. Save eligible changed positions. Show the outcome of each item and retain a retry action. Skip completed items on the next Save.
+- [ ] **Step 3: Track pending work by draft ID.** Stage BO cards, ER links, Application links and roles, manual moves and accepted inventory changes. On Save, create pending cards first, then eligible links and Master assignments, then persist the successfully added items, accepted inventory changes and position deltas in the diagram. Retain successes and retry unresolved items.
 - [ ] **Step 4: Run the API and page tests, typecheck and regenerate OpenAPI.** Verify Customer/Order with an injected link failure followed by a successful retry.
 - [ ] **Step 5: Commit the Save code and tests on the feature branch.**
 
@@ -487,7 +495,7 @@ git commit -m "feat(bo-relationship): optional filter panel on isPersonalData/is
 
 **Interfaces:**
 - Consumes: Task 4's `BoRelationshipPage`.
-- Produces: nothing consumed by a later task (last task in this plan).
+- Produce the lazy page and initial Administrator/edit and viewer-only grants for Task 8.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -508,7 +516,7 @@ Expected: PASS already if Task 6 covers it (skip Steps 3-4 of this task's TDD cy
 
 - [ ] **Step 3: Add the route and menu entry**
 
-Add the lazy route in `App.tsx`. Declare `boRelationship.view` in `ROUTE_PERMISSIONS` and use its gate for navigation. Verify that a view-only user sees the page without Save or creation actions and that direct navigation requires view access.
+Add the lazy route and declare `boRelationship.view` in `ROUTE_PERMISSIONS`. Use the same gate for navigation. Test initial Administrator and viewer grants on new and upgraded workspaces and deny direct navigation without view access.
 
 - [ ] **Step 4: Run the full frontend reports+cards+boRelationship suite**
 
@@ -529,15 +537,32 @@ git commit -m "feat(bo-relationship): menu entry under Application & Data, permi
 
 ---
 
+## Task 8: Draw.io-style inventory check and Sync
+
+**Files**
+- Extend the BO schemas, service, controller and API tests from Task 2.
+- Update `BoRelationshipPage.tsx` and its tests. Follow the initial check, manual recheck and accept pattern in `frontend/src/features/diagrams/DiagramEditor.tsx` and `staleCheck.ts`.
+
+**Interfaces**
+- `GET /api/v1/bo-relationship/changes` (`boRelationship.view`) compares the saved snapshot with scoped live inventory. Return the readable additions, updates and removals for BOs and links. Include names, subtypes, flags, cardinality and ownership. Visibility loss must not be reported as deletion or disclose a hidden item.
+- Sync applies chosen changes in the open editor. Save sends accepted item identifiers and their comparison revision with position deltas. Resolve the accepted values server-side, preserve untouched saved state and require a recheck for any item that changed again.
+
+- [ ] **Step 1: Test the normal flow.** Save a BO at a manually chosen position, rename it and change its subtype in inventory, then reload. Verify the old snapshot and a change notice. Sync updates the name and shape in the draft and preserves the position. Save and reopen as another user. Cover added, archived and removed BOs and changed ER and Application links.
+- [ ] **Step 2: Test authorization and failures.** An initial check has no writes. Hidden items produce no notice. A failed check preserves the drawing. A viewer cannot persist Sync. A change made after acceptance asks the editor to recheck.
+- [ ] **Step 3: Implement the check and Sync.** Run the scoped comparison after load and from the manual check action. Use the request cancellation pattern. Update the editor only on Sync and share accepted changes and positions only on Save.
+- [ ] **Step 4: Run the API and page tests, typecheck and regenerate OpenAPI.** Run the targeted VAPT cases and document the check, Sync and Save sequence in the user manual.
+
+---
+
 ## Agent's calls
 
 - Use a non-modal right panel to keep both panels usable. Wire scoped grouping and refresh through the BO endpoints.
-- Load Application groups and facet flags in the graph response. Filter all linked cards and position ids through module read scope.
+- Load scoped Application groups and facet flags with the snapshot and compare live inventory separately. Keep the Application list in the side panel and select Applications from the diagram's link action.
 - Save position deltas and test concurrent saves. Use stable draft IDs for lost-response retries.
 
 ## Review before execution
 
 - Decide how workspace import handles an incoming Master that conflicts with an existing designation. Preserve the target assignment until a permitted transfer is explicitly requested. Verify that imports, updates and restores cannot create two Masters.
-- Resolve the spec's product questions. Finish the exact shape and filter cases, default grants, cardinality policy and workspace-transfer behavior before starting the affected tasks.
+- Resolve the remaining product questions in the spec, including cardinality validation, removal, same-node conflicts, workspace transfer, retry lifetime, badge placement and optional facets.
 - Verify seed behavior on fresh and upgraded workspaces, safe layout storage and permission wiring. The initial read contract already covers the Application groups and filter facets.
-- Acceptance covers concurrent Master assignment, derived Slave/Unclassified roles under card visibility, durable partial saves without duplicates and disjoint layout updates without lost positions.
+- Acceptance covers subtype validation, reverse ER deduplication, Application links and ownership from the diagram, default role access, load/check/Sync/Save, safe retries and concurrent disjoint layout changes.
