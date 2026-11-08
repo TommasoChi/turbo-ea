@@ -28,7 +28,8 @@
 
 - A `DataObject` with no relations to any other `DataObject` and no related `Application`: must render as an isolated node on the canvas (not silently dropped) and show empty Master/Slave lists in the left panel when clicked, not an error — Task 4's test `test_an_unrelated_dataobject_renders_isolated_with_empty_master_slave_lists`.
 - A BO without a Master shows linked Applications under Unclassified. Assigning a Master puts every other linked Application under Slave. Transferring Master moves the former Master to Slave. Clearing the assignment or removing the Master link returns the remaining Applications to Unclassified. CRUD flags stay independent.
-- Saving a newly added `DataObject`↔`DataObject` relation whose `cardinality` was left unset (user drew the edge but didn't open the relation's attribute editor): must save with `cardinality` absent/null, not crash and not silently default to a specific value that looks chosen — Task 6's test `test_an_edge_saved_without_a_cardinality_value_persists_with_none`.
+- Cardinality is optional and descriptive. An unset value stays absent, and two different ER links from the same BO can both carry `1:1`. The one-link rule still applies to each unordered BO pair.
+- For a persisted ER edge, cancelling the delete confirmation restores the edge. Confirming adds it to the pending inventory sync queue. Save can share the drawing without the line while the inventory relation still exists. Sync deletes only the selected relation. Removing a draft, filtering or applying an inventory delta never calls the delete endpoint.
 - A non-admin can view the diagram by default. Without edit permission, Save, Sync and all write actions in the canvas and drawer are unavailable. Test equivalent direct API requests.
 - Create both native DataObject subtypes. Reject normal creation with a missing or unknown subtype. Keep existing unclassified BOs visible.
 - Drawing or retrying B-to-A after A-to-B keeps one ER relation. Read its cardinality in the viewed direction.
@@ -469,7 +470,7 @@ git commit -m "feat(bo-relationship): optional filter panel on isPersonalData/is
 
 ---
 
-## Task 6: Explicit, retryable Save for objects, links and positions
+## Task 6: Retryable Save and confirmed relation removal
 
 **Files**
 - Modify `frontend/src/features/boRelationship/BoRelationshipPage.tsx` and its Vitest file.
@@ -477,12 +478,16 @@ git commit -m "feat(bo-relationship): optional filter panel on isPersonalData/is
 
 **Interfaces**
 - Give each draft object a stable UUID in the active session. `PUT /bo-relationship/objects/{draft_id}` requires a valid DataObject subtype. Check module edit and normal subtype-scoped creation permission. Claim a durable receipt keyed by actor and draft UUID, with the card ID and creation fingerprint. Commit receipt, card and event together. Replay identical requests for readable cards. Return 409 for different payloads and 404 for unavailable originals. Retain the receipt to prevent recreating a deleted card. Persist the pending queue across refresh only if the spec calls for it.
-- Serialize ER lookups and creation by unordered BO pair across write paths, including simultaneous A-to-B and B-to-A requests. Keep the first stored direction and preserve attributes on replay. Leave cardinality absent if unset.
+- Serialize ER lookups and creation by unordered BO pair across write paths, including simultaneous A-to-B and B-to-A requests. Keep the first stored direction and preserve attributes on replay. Leave cardinality absent if unset. Validate the four label values when present and impose no relationship-count limit based on them.
 - Add a diagram action to choose an existing Application with `CardPicker` and connect it to a BO. Stage an operation ID and send `PUT /api/v1/bo-relationship/application-link-drafts/{draft_id}` with `object_id`, `application_id` and `role` (master, slave or unclassified). Require BO edit and normal link permissions. Persist the link and any Master transfer with a durable operation receipt in one transaction. A retry returns the prior result under current read scope without reapplying a transfer that has since changed. Slave requires a visible, committed Master, including one saved earlier in the batch. If that Master fails, keep its dependent links pending. Offer Unclassified for links without a visible Master. Preserve CRUD flags.
 
-- [ ] **Step 1: Add regression tests.** Cover partial success and a lost card response, reverse and concurrent ER creation, link retry after a cardinality edit, Application Master transfer, retry after a later Master change, Slave with and without a Master, a failed Master with a dependent Slave, permission denial, required subtype and failure to save positions.
+- Reuse Draw.io's edge removal flow. Remove unsaved edges from the draft. For a persisted ER edge, show a confirmation naming the readable endpoints and relation. Cancel restores the edge. Confirm queues the relation id for outgoing sync. Cancelling a queued removal restores the edge.
+- On individual removal sync or **Sync all**, call `DELETE /api/v1/bo-relationship/relations/{relation_id}` with the stored relation id. The route requires module edit, normal relation management authorization, readable endpoints and the BO ER relation type. Reuse normal inventory deletion and event handling. Keep failed removals pending. Deduplicate by relation id. Record an authorized deletion receipt with the relation type and endpoints in the transaction that deletes the link and publishes its event. Recheck current permissions on replay. Distinguish a lost response from an unrelated or inaccessible ID without leaking the latter or publishing a second deletion event.
+- Persist confirmed visual removals and restorations as scoped edge deltas in the saved snapshot. Save can omit the edge while the pending inventory deletion remains in the outgoing queue. Keep a successful deletion receipt or a verified inventory removal as an accepted delta until Save succeeds. Test reopen after Save before Sync and after Sync followed by Save. On reopen without a recovered deletion queue, the checker can offer the still-existing inventory relation as an incoming addition. Within the same session, suppress that suggestion while the outgoing removal is pending. Suppress removal prompts and outgoing writes when applying filters, dropping a node or accepting an inventory removal from Task 8.
+
+- [ ] **Step 1: Add regression tests.** Cover partial success and a lost card response, reverse and concurrent ER creation, link retry after a cardinality edit, Application Master transfer, retry after a later Master change, Slave with and without a Master, a failed Master with a dependent Slave, permission denial, required subtype and failure to save positions. Verify optional cardinality and the absence of a count limit. Exercise remove, cancel, confirm, Save, sync and retry from the normal diagram actions. Test a lost DELETE response, replay after permission revocation and no duplicate event.
 - [ ] **Step 2: Run the new API and page tests.** Verify that they fail for the missing behavior.
-- [ ] **Step 3: Track pending work by draft ID.** Stage BO cards, ER links, Application links and roles, manual moves and accepted inventory changes. On Save, create pending cards first, then eligible links and Master assignments, then persist the successfully added items, accepted inventory changes and position deltas in the diagram. Retain successes and retry unresolved items.
+- [ ] **Step 3: Track pending work by draft ID.** Stage BO cards, ER links, Application links and roles, manual moves and accepted inventory changes. On Save, create pending cards first, then eligible links and Master assignments, then persist the successfully added items, accepted inventory changes and position deltas in the diagram. Retain successes and retry unresolved items. Keep the outgoing deletion queue independent of the Save action.
 - [ ] **Step 4: Run the API and page tests, typecheck and regenerate OpenAPI.** Verify Customer/Order with an injected link failure followed by a successful retry.
 - [ ] **Step 5: Commit the Save code and tests on the feature branch.**
 
@@ -551,7 +556,7 @@ git commit -m "feat(bo-relationship): menu entry under Application & Data, permi
 
 - [ ] **Step 1: Test the normal flow.** Save a BO at a manually chosen position, rename it and change its subtype in inventory, then reload. Verify the old snapshot and a change notice. Sync updates the name and shape in the draft and preserves the position. Save and reopen as another user. Test a first layout-only Save and concurrent first saves from editors with different scopes. Cover added, archived and removed BOs and changed ER and Application links.
 - [ ] **Step 2: Test authorization and failures.** An initial check has no writes. Test permission revocation separately from a readable item being removed or archived. Hidden items produce no notice and a restricted editor's Save preserves them. A failed check preserves the drawing. A viewer cannot persist Sync. A change made after acceptance asks the editor to recheck.
-- [ ] **Step 3: Implement the check and Sync.** Run the scoped comparison after load and from the manual check action. Use the request cancellation pattern. Update the editor only on Sync and share accepted changes and positions only on Save.
+- [ ] **Step 3: Implement the check and Sync.** Keep incoming inventory changes distinct from outgoing, confirmed deletions in Task 6. Run the scoped comparison after load and from the manual check action. Use the request cancellation pattern. Update the editor only on Sync and share accepted changes and positions only on Save.
 - [ ] **Step 4: Run the API and page tests, typecheck and regenerate OpenAPI.** Run the targeted VAPT cases and document the check, Sync and Save sequence in the user manual.
 
 ---
@@ -565,6 +570,6 @@ git commit -m "feat(bo-relationship): menu entry under Application & Data, permi
 ## Review before execution
 
 - Decide how workspace import handles an incoming Master that conflicts with an existing designation. Preserve the target assignment until a permitted transfer is explicitly requested. Verify that imports, updates and restores cannot create two Masters.
-- Resolve the remaining product questions in the spec, including cardinality validation, removal, same-node conflicts, workspace transfer, retry lifetime, badge placement and optional facets.
+- Resolve the remaining product questions in the spec, including same-node conflicts, workspace transfer, retry lifetime, badge placement and optional facets.
 - Verify seed behavior on fresh and upgraded workspaces, safe layout storage and permission wiring. The initial read contract already covers the Application groups and filter facets.
 - Acceptance covers subtype validation, reverse ER deduplication, Application links and ownership from the diagram, default role access, load/check/Sync/Save, safe retries and concurrent disjoint layout changes.
