@@ -42,6 +42,10 @@ class RelationResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class RelationCreateResponse(RelationResponse):
+    reused: bool
+
+
 # ----------------------------------------------------------------------------
 # Bulk-import schemas — see `backend/app/schemas/card.py` for the equivalent
 # card-side schemas. Source/target refs accept either a resolved `id` (when

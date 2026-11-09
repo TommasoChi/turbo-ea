@@ -25,6 +25,7 @@ from app.models.card_type import CardType
 from app.models.relation import Relation
 from app.models.relation_type import RelationType
 from app.models.tag import CardTag, Tag, TagGroup
+from app.services.bo_relationship_constants import APPLICATION_RELATION, OWNERSHIP_KEY
 from app.services.card_read_scope import CardReadScope
 
 
@@ -106,6 +107,9 @@ async def build_portfolio_payload(
     app_relations: dict[str, list[dict]] = {str(a.id): [] for a in apps}
     for r in rels:
         sid, tid = str(r.source_id), str(r.target_id)
+        attributes = r.attributes or {}
+        if r.type == APPLICATION_RELATION:
+            attributes = {key: value for key, value in attributes.items() if key != OWNERSHIP_KEY}
         if sid in app_id_set and tid in related_map:
             app_relations[sid].append(
                 {
@@ -114,7 +118,7 @@ async def build_portfolio_payload(
                     "related_id": tid,
                     "related_name": related_map[tid]["name"],
                     "related_type": related_map[tid]["type"],
-                    "attributes": r.attributes or {},
+                    "attributes": attributes,
                 }
             )
         if tid in app_id_set and sid in related_map:
@@ -125,7 +129,7 @@ async def build_portfolio_payload(
                     "related_id": sid,
                     "related_name": related_map[sid]["name"],
                     "related_type": related_map[sid]["type"],
-                    "attributes": r.attributes or {},
+                    "attributes": attributes,
                 }
             )
 
@@ -185,6 +189,9 @@ async def build_portfolio_payload(
         elif rt.target_type_key == type_key:
             other = rt.source_type_key
         if other and read_scope.type_readable(other, mode="module"):
+            schema = rt.attributes_schema or []
+            if rt.key == APPLICATION_RELATION:
+                schema = [field for field in schema if field.get("key") != OWNERSHIP_KEY]
             rel_type_defs.append(
                 {
                     "key": rt.key,
@@ -194,7 +201,7 @@ async def build_portfolio_payload(
                     "target_type_key": rt.target_type_key,
                     "other_type_key": other,
                     "translations": rt.translations or {},
-                    "attributes_schema": rt.attributes_schema or [],
+                    "attributes_schema": schema,
                 }
             )
 

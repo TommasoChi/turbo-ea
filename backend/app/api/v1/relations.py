@@ -21,6 +21,7 @@ from app.schemas.relation import (
     RelationBulkResponse,
     RelationBulkResult,
     RelationCreate,
+    RelationCreateResponse,
     RelationResponse,
     RelationUpdate,
 )
@@ -280,7 +281,7 @@ async def list_relations(
     ]
 
 
-@router.post("", response_model=RelationResponse, status_code=201)
+@router.post("", response_model=RelationCreateResponse, status_code=201)
 async def create_relation(
     body: RelationCreate,
     db: AsyncSession = Depends(get_db),
@@ -298,7 +299,7 @@ async def create_relation(
     # Idempotent upsert on (type, source, target) — discussion #905 — via the
     # shared card write service, so every write path merges instead of
     # duplicating.
-    rel, _, _ = await card_write_service.upsert_relation(
+    rel, reused, _ = await card_write_service.upsert_relation(
         db,
         card_write_service.WriteActor.from_user(user),
         type_key=body.type,
@@ -316,7 +317,8 @@ async def create_relation(
     )
     rel = result.scalar_one()
     redact = await _relation_cost_redaction(db, user, [rel])
-    return _rel_to_response(rel, strip_cost_keys=redact.get(rel.id, frozenset()))
+    response = _rel_to_response(rel, strip_cost_keys=redact.get(rel.id, frozenset()))
+    return RelationCreateResponse(**response.model_dump(), reused=reused)
 
 
 @router.patch("/{rel_id}", response_model=RelationResponse)
@@ -681,6 +683,9 @@ async def apply_relation_operations(
                 source_id, target_id = resolved_app_link
 
             rel = await card_write_service.find_relation(db, op.type, source_id, target_id)
+            attributes = card_write_service.orient_er_attributes(
+                op.type, rel, source_id, op.attributes
+            )
 
             if op.action == "delete":
                 if rel is None:
@@ -699,13 +704,13 @@ async def apply_relation_operations(
                         type_key=op.type,
                         source_id=source_id,
                         target_id=target_id,
-                        attributes=op.attributes,
+                        attributes=attributes,
                         description=op.description,
                     )
                     await db.flush()
                     op_events.append(await _pending_event(db, "relation.created", rel))
                 elif changed := card_write_service.merge_relation_fields(
-                    rel, attributes=op.attributes, description=op.description
+                    rel, attributes=attributes, description=op.description
                 ):
                     op_events.append(
                         await _pending_event(db, "relation.updated", rel, {"fields": changed})

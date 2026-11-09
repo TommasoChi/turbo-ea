@@ -40,7 +40,7 @@ from datetime import datetime
 from typing import Any
 
 from fastapi import BackgroundTasks, HTTPException
-from sqlalchemy import exists, func, select
+from sqlalchemy import and_, exists, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.card import Card
@@ -49,7 +49,7 @@ from app.models.ppm_cost_line import PpmBudgetLine, PpmCostLine
 from app.models.relation import Relation
 from app.models.relation_type import RelationType
 from app.services import card_approval, card_lifecycle, card_reference, notification_service
-from app.services.bo_relationship_constants import APPLICATION_RELATION, OWNERSHIP_KEY
+from app.services.bo_relationship_constants import APPLICATION_RELATION, ER_RELATION, OWNERSHIP_KEY
 from app.services.calculation_engine import run_calculations_for_card
 from app.services.card_costs import COST_ITEM_TYPES, DERIVED_KEY, recompute_derived
 from app.services.card_uniqueness import check_sibling_name_unique
@@ -1406,9 +1406,30 @@ async def find_relation(
     stmt = select(Relation).where(
         Relation.type == type_key, Relation.source_id == source_id, Relation.target_id == target_id
     )
+    if type_key == ER_RELATION:
+        stmt = select(Relation).where(
+            Relation.type == type_key,
+            or_(
+                and_(Relation.source_id == source_id, Relation.target_id == target_id),
+                and_(Relation.source_id == target_id, Relation.target_id == source_id),
+            ),
+        )
     if type_key == APPLICATION_RELATION:
         stmt = stmt.with_for_update().execution_options(populate_existing=True)
     return await db.scalar(stmt)
+
+
+def orient_er_attributes(
+    type_key: str, rel: Relation | None, source_id: uuid.UUID, attributes: dict | None
+) -> dict | None:
+    if type_key != ER_RELATION or rel is None or rel.source_id == source_id or attributes is None:
+        return attributes
+    result = dict(attributes)
+    if result.get("cardinality") == "1:n":
+        result["cardinality"] = "n:1"
+    elif result.get("cardinality") == "n:1":
+        result["cardinality"] = "1:n"
+    return result
 
 
 async def lock_bo_master(db: AsyncSession, object_id: uuid.UUID) -> None:
@@ -1497,6 +1518,9 @@ async def upsert_relation(
     if type_key == APPLICATION_RELATION:
         await lock_bo_master(db, target_id)
     rel = await find_relation(db, type_key, source_id, target_id)
+    attributes = orient_er_attributes(type_key, rel, source_id, attributes)
+    if rel is not None:
+        source_id, target_id = rel.source_id, rel.target_id
     reused = rel is not None
     changed: list[str] = []
 

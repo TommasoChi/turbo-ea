@@ -46,6 +46,7 @@ const mm = vi.hoisted(() => ({ relationTypes: [] as Record<string, unknown>[] })
 
 const ORG_TYPE = { key: "Organization", label: "Organization", color: "#2889ff", subtypes: [] };
 const OBJ_TYPE = { key: "Objective", label: "Objective", color: "#c7527d", subtypes: [] };
+const DATA_TYPE = { key: "DataObject", label: "Data Object", color: "#999", subtypes: [{ key: "Document", label: "Document" }, { key: "data", label: "Data" }] };
 const APP_TYPE = { key: "Application", label: "Application", color: "#0f7eb5", subtypes: [] };
 
 const appToOrg = {
@@ -85,12 +86,14 @@ vi.mock("@/hooks/useMetamodel", () => ({
     getType: (key: string) =>
       key === "Organization"
         ? ORG_TYPE
+        : key === "DataObject"
+          ? DATA_TYPE
         : key === "Application"
           ? APP_TYPE
           : key === "Objective"
             ? OBJ_TYPE
             : undefined,
-    types: [APP_TYPE, ORG_TYPE, OBJ_TYPE],
+    types: [APP_TYPE, ORG_TYPE, OBJ_TYPE, DATA_TYPE],
     relationTypes: mm.relationTypes,
   }),
 }));
@@ -231,6 +234,44 @@ describe("RelationsSection add dialog", () => {
     // Already linked, so not on offer — picking it would have been a no-op.
     expect(within(dialog).queryByText("Finance")).not.toBeInTheDocument();
     expect(within(dialog).getByText(/1 already linked/i)).toBeInTheDocument();
+  });
+
+  it("excludes ER peers linked on the opposite side", async () => {
+    mm.relationTypes = [{ ...orgToOrg, key: "relDataObjectToDataObject" }];
+    const row = { ...relation("er", "Finance", "relDataObjectToDataObject"), source_id: "org-1", target_id: FS, source: { id: "org-1", type: "Organization", name: "Finance" }, target: { id: FS, type: "Organization", name: "Current" } };
+    mockApi([row], [{ id: "org-1", name: "Finance" }, { id: "org-9", name: "Other" }]);
+    await openSection("Organization");
+    await userEvent.click((await screen.findAllByRole("button", { name: /Add Organization/i }))[0]);
+    const dialog = await screen.findByRole("dialog");
+    expect(await within(dialog).findByText("Other")).toBeInTheDocument();
+    expect(within(dialog).queryByText("Finance")).not.toBeInTheDocument();
+  });
+
+  it("does not offer undo when the server reuses an existing relation", async () => {
+    mockApi([], [{ id: "org-a", name: "Legal" }]);
+    vi.mocked(api.post).mockResolvedValue({ id: "existing", type: "appToOrg", source_id: FS, target_id: "org-a", reused: true } as never);
+    const dialog = await openAddDialog();
+    await userEvent.click(await within(dialog).findByText("Legal"));
+    await waitFor(() => expect(api.post).toHaveBeenCalled());
+    expect(within(dialog).queryByText(/1 added/i)).not.toBeInTheDocument();
+    expect(dialog.querySelector(".MuiChip-deleteIcon")).toBeNull();
+  });
+
+  it("requires a declared subtype when quick-creating a DataObject", async () => {
+    mm.relationTypes = [{ ...appToOrg, key: "relAppToDataObj", target_type_key: "DataObject" }];
+    mockApi([], []);
+    vi.mocked(api.post).mockImplementation(async (url: string) => url === "/cards"
+      ? { id: "new-bo", type: "DataObject", name: "Invoice", subtype: "Document" } as never
+      : { id: "rel-new", type: "relAppToDataObj", source_id: FS, target_id: "new-bo" } as never);
+    await openSection();
+    await userEvent.click(await screen.findByRole("button", { name: /Add Data Object/i }));
+    const dialog = await screen.findByRole("dialog");
+    await userEvent.type(within(dialog).getByPlaceholderText(/Create new/i), "Invoice");
+    expect(within(dialog).getByRole("button", { name: /Create & Add/i })).toBeDisabled();
+    await userEvent.click(within(dialog).getByRole("combobox", { name: "Subtype" }));
+    await userEvent.click(screen.getByRole("option", { name: "Document" }));
+    await userEvent.click(within(dialog).getByRole("button", { name: /Create & Add/i }));
+    await waitFor(() => expect(api.post).toHaveBeenCalledWith("/cards", { type: "DataObject", name: "Invoice", subtype: "Document" }));
   });
 
   it("adds several in a row, chipped and undoable, reconciling once on close", async () => {
@@ -536,6 +577,47 @@ describe("RelationsSection attribute row", () => {
     // The unset row advertises itself as an empty slot instead.
     const unset = screen.getByRole("button", { name: "Edit details" });
     expect(unset).toHaveStyle({ borderStyle: "dashed" });
+  });
+
+  it("displays and saves ER cardinality from the target side", async () => {
+    const er = { ...orgToOrg, key: "relDataObjectToDataObject", attributes_schema: [{ key: "cardinality", label: "Cardinality", type: "single_select", options: ["1:1", "1:n", "n:1", "n:m"].map((key) => ({ key, label: key })) }] };
+    mm.relationTypes = [er];
+    const row = { ...relation("er", "Other", er.key), source_id: "org-er", target_id: FS, source: { id: "org-er", type: "Organization", name: "Other" }, target: { id: FS, type: "Organization", name: "Current" }, attributes: { cardinality: "1:n" } };
+    mockApi([row], []);
+    vi.mocked(api.patch).mockResolvedValue({ ...row, attributes: { cardinality: "n:1" } } as never);
+    render(<RelationsSection fsId={FS} cardTypeKey="Organization" initialExpanded canManageRelations />);
+    expect(await screen.findByText("n:1")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Edit details" }));
+    await userEvent.click(screen.getByRole("combobox", { name: "Cardinality" }));
+    await userEvent.click(screen.getByRole("option", { name: "1:n" }));
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(api.patch).toHaveBeenCalledWith("/relations/er", { attributes: { cardinality: "n:1" } }));
+    expect(await screen.findByText("1:n")).toBeInTheDocument();
+    cleanup();
+    const saved = { ...row, attributes: { cardinality: "n:1" } };
+    mockApi([saved], []);
+    vi.mocked(api.patch).mockResolvedValue({ ...saved, attributes: {} } as never);
+    render(<RelationsSection fsId="org-er" cardTypeKey="Organization" initialExpanded canManageRelations />);
+    expect(await screen.findByText("n:1")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Edit details" }));
+    await userEvent.click(screen.getByRole("combobox", { name: "Cardinality" }));
+    await userEvent.click(screen.getByRole("option", { name: "Not specified" }));
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(api.patch).toHaveBeenLastCalledWith("/relations/er", { attributes: {} }));
+    expect(screen.queryByText("n:1")).not.toBeInTheDocument();
+  });
+
+  it("strips the reserved ownership marker when editing CRUD", async () => {
+    mm.relationTypes = [{ ...appToOrg, key: "relAppToDataObj", attributes_schema: [{ key: "dataOwnership", label: "Ownership", type: "boolean" }, { key: "crudRead", label: "Read", type: "boolean" }] }];
+    const row = { ...relation("master", "Finance", "relAppToDataObj"), attributes: { dataOwnership: "master", crudRead: true } };
+    mockApi([row], []);
+    vi.mocked(api.patch).mockResolvedValue(row as never);
+    await openSection();
+    await screen.findByText("Finance");
+    await userEvent.click(screen.getByRole("button", { name: "Read" }));
+    expect(screen.queryByText("Ownership")).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(api.patch).toHaveBeenCalledWith("/relations/master", { attributes: { crudRead: true } }));
   });
 
   it("offers no attribute editing to a read-only user", async () => {

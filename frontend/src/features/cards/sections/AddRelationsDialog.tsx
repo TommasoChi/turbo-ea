@@ -1,3 +1,4 @@
+import { BO_ER_RELATION_TYPE } from "@/lib/relationAttributes";
 import { useEffect, useMemo, useRef, useState } from "react";
 import Alert from "@mui/material/Alert";
 import Box from "@mui/material/Box";
@@ -11,6 +12,7 @@ import DialogTitle from "@mui/material/DialogTitle";
 import IconButton from "@mui/material/IconButton";
 import List from "@mui/material/List";
 import ListItemButton from "@mui/material/ListItemButton";
+import MenuItem from "@mui/material/MenuItem";
 import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 import useMediaQuery from "@mui/material/useMediaQuery";
@@ -24,7 +26,7 @@ import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { useMetamodel } from "@/hooks/useMetamodel";
 import { hasTypePermission } from "@/components/RequirePermission";
 import { useAuthContext } from "@/hooks/AuthContext";
-import { useTypeLabel, useRelationLabel } from "@/hooks/useResolveLabel";
+import { useTypeLabel, useRelationLabel, useSubtypeLabel } from "@/hooks/useResolveLabel";
 import {
   bestRankBySubtree,
   buildChildIndex,
@@ -35,11 +37,14 @@ import { cardSearchRank, compareByRank } from "@/lib/searchRank";
 import type { Card, Relation, RelationType } from "@/types";
 import RelationAttributesEditor, {
   hasEditableRelationAttributes,
+  genericRelationAttributes,
+  orientCardinality,
   type RelationAttributes,
 } from "./RelationAttributesEditor";
 
 interface Added {
   relId: string;
+  viewedFromSource: boolean;
   cardId: string;
   name: string;
   relationTypeKey: string;
@@ -129,6 +134,7 @@ export default function AddRelationsDialog({
   const fullScreen = useMediaQuery(theme.breakpoints.down("sm"));
   const { getType } = useMetamodel();
   const typeLabel = useTypeLabel();
+  const subtypeLabel = useSubtypeLabel();
   const relLabel = useRelationLabel();
 
   const [search, setSearch] = useState("");
@@ -136,6 +142,7 @@ export default function AddRelationsDialog({
   const [added, setAdded] = useState<Added[]>([]);
   const [attributes, setAttributes] = useState<RelationAttributes>({});
   const [createName, setCreateName] = useState("");
+  const [createSubtype, setCreateSubtype] = useState("");
   /**
    * Cards created from this dialog. Tree mode never re-queries (its search is
    * pinned to ""), so a card created here would otherwise never appear in the
@@ -164,6 +171,7 @@ export default function AddRelationsDialog({
     setAdded([]);
     setAttributes({});
     setCreateName("");
+    setCreateSubtype("");
     setCreated([]);
     setError("");
   }, [open]);
@@ -198,7 +206,12 @@ export default function AddRelationsDialog({
   // this dialog serves does not list it. (SuccessorsSection excludes both
   // ends — lineage is the one self-pair where a mutual link is nonsense.)
   const linkedForType = useMemo(
-    () => relations.filter((r) => onSide(r, rtKey, fsId, isSource)),
+    () => relations.filter((r) => {
+      if (rtKey === BO_ER_RELATION_TYPE) {
+        return r.type === rtKey && (r.source_id === fsId || r.target_id === fsId);
+      }
+      return onSide(r, rtKey, fsId, isSource);
+    }),
     [relations, rtKey, fsId, isSource],
   );
 
@@ -374,23 +387,28 @@ export default function AddRelationsDialog({
         source_id: isSource ? fsId : card.id,
         target_id: isSource ? card.id : fsId,
       };
-      if (Object.keys(attributes).length > 0) payload.attributes = attributes;
-      const created = await api.post<Relation>("/relations", payload);
+      const clean = orientCardinality(genericRelationAttributes(rt, attributes), rt.key !== BO_ER_RELATION_TYPE || isSource);
+      if (Object.keys(clean).length > 0) payload.attributes = clean;
+      const created = await api.post<Relation & { reused?: boolean }>("/relations", payload);
+      const sourceId = created.source_id ?? (isSource ? fsId : card.id);
+      const targetId = created.target_id ?? (isSource ? card.id : fsId);
       // Name the row from the card that was picked rather than trusting the
       // response to carry its refs — the picked card is authoritative and
       // local, so a row can never render as "Unknown".
       const ref = { id: card.id, type: card.type, name: card.name };
       onAdded({
         ...created,
-        source_id: created.source_id ?? (isSource ? fsId : card.id),
-        target_id: created.target_id ?? (isSource ? card.id : fsId),
-        source: isSource ? created.source : (created.source ?? ref),
-        target: isSource ? (created.target ?? ref) : created.target,
+        source_id: sourceId,
+        target_id: targetId,
+        source: sourceId === card.id ? (created.source ?? ref) : created.source,
+        target: targetId === card.id ? (created.target ?? ref) : created.target,
       });
-      setAdded((prev) => [
-        { relId: created.id, cardId: card.id, name: card.name, relationTypeKey: rt.key },
-        ...prev,
-      ]);
+      if (!created.reused) {
+        setAdded((prev) => [
+          { relId: created.id, viewedFromSource: sourceId === fsId, cardId: card.id, name: card.name, relationTypeKey: rt.key },
+          ...prev,
+        ]);
+      }
       if (!allowsMany) onClose(added.length + 1);
     } catch (e) {
       setError(e instanceof Error ? e.message : t("relations.errors.create"));
@@ -406,6 +424,8 @@ export default function AddRelationsDialog({
    * otherwise looked like it simply hadn't saved.
    */
   const applyAttributes = async (next: RelationAttributes) => {
+    if (!rt) return;
+    next = genericRelationAttributes(rt, next);
     setAttributes(next);
     if (added.length === 0) return;
     setBusy(true);
@@ -413,7 +433,7 @@ export default function AddRelationsDialog({
     try {
       for (const a of added) {
         const updated = await api.patch<Relation>(`/relations/${a.relId}`, {
-          attributes: next,
+          attributes: orientCardinality(next, rt.key !== BO_ER_RELATION_TYPE || a.viewedFromSource),
         });
         onUpdated(updated);
       }
@@ -441,13 +461,14 @@ export default function AddRelationsDialog({
 
   const createAndAdd = async () => {
     const name = createName.trim() || search.trim();
-    if (!name || !otherTypeKey) return;
+    if (!name || !otherTypeKey || (otherTypeKey === "DataObject" && !createSubtype)) return;
     setBusy(true);
     setError("");
     try {
       const card = await api.post<Card>("/cards", {
         type: otherTypeKey,
         name,
+        ...(otherTypeKey === "DataObject" ? { subtype: createSubtype } : {}),
       });
       // Tree mode's query is pinned to "", so nothing refetches — fold the new
       // card into the browsed set by hand. It is parentless, so it lands at the
@@ -653,10 +674,17 @@ export default function AddRelationsDialog({
               onKeyDown={(e) => e.key === "Enter" && createAndAdd()}
               placeholder={t("relations.createNew", { type: otherLabel })}
             />
+            {otherTypeKey === "DataObject" && (
+              <TextField select size="small" label={t("common:labels.subtype")} value={createSubtype} onChange={(e) => setCreateSubtype(e.target.value)} sx={{ minWidth: 130 }}>
+                {(otherType?.subtypes ?? []).map((subtype) => (
+                  <MenuItem key={subtype.key} value={subtype.key}>{subtypeLabel(subtype)}</MenuItem>
+                ))}
+              </TextField>
+            )}
             <Button
               size="small"
               onClick={createAndAdd}
-              disabled={busy || !(createName.trim() || search.trim())}
+              disabled={busy || !(createName.trim() || search.trim()) || (otherTypeKey === "DataObject" && !createSubtype)}
               startIcon={<MaterialSymbol icon="add" size={16} />}
             >
               {t("relations.createAndAdd")}

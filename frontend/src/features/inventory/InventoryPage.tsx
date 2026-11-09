@@ -144,6 +144,7 @@ import OptionChip from "@/components/OptionChip";
 import { readableTextColor } from "@/lib/color";
 import { booleanOption, facetOptions, facetValues, isGroupableField } from "@/lib/fieldFacets";
 import { orderByOptions } from "@/lib/optionOrder";
+import { BO_ER_RELATION_TYPE } from "@/lib/relationAttributes";
 import { useAuth } from "@/hooks/useAuth";
 import { useThemeMode } from "@/hooks/useThemeMode";
 import { useIsRtl } from "@/hooks/useIsRtl";
@@ -152,7 +153,9 @@ import { useCurrency } from "@/hooks/useCurrency";
 import { useCalculatedFields } from "@/hooks/useCalculatedFields";
 import { FieldEditor } from "@/features/cards/sections/cardDetailUtils";
 import RelationAttributesEditor, {
+  genericRelationAttributes,
   hasEditableRelationAttributes,
+  orientCardinality,
   type RelationAttributes,
 } from "@/features/cards/sections/RelationAttributesEditor";
 import { useLatestRequest } from "@/hooks/useLatestRequest";
@@ -2600,13 +2603,15 @@ export default function InventoryPage() {
           return;
         }
         const { relType, isSource } = currentMassField.relInfo;
+        const isBoEr = relType.key === BO_ER_RELATION_TYPE;
+        const cleanAttributes = genericRelationAttributes(relType, massEditRelAttrs);
         // Attributes ride on Add only, and only for a type that has editable
         // ones; an empty set keeps the historic "skip what is already linked".
         const relAttrs =
           massEditRelMode === "add" &&
           hasEditableRelationAttributes(relType) &&
-          Object.keys(massEditRelAttrs).length > 0
-            ? massEditRelAttrs
+          Object.keys(cleanAttributes).length > 0
+            ? cleanAttributes
             : null;
         // Pre-fetch all relations of this type to determine what already exists,
         // so "add" is idempotent and "remove" can locate the relation IDs to delete.
@@ -2617,6 +2622,11 @@ export default function InventoryPage() {
 
         const ops: Promise<unknown>[] = [];
         const opSourceIds: string[] = [];
+        const otherEnd = (relation: Relation, cardId: string) => {
+          if ((isSource || isBoEr) && relation.source_id === cardId) return relation.target_id;
+          if ((!isSource || isBoEr) && relation.target_id === cardId) return relation.source_id;
+          return null;
+        };
 
         if (massEditRelMode === "add") {
           // For each selected card × each target, create a relation if not already present.
@@ -2632,23 +2642,25 @@ export default function InventoryPage() {
           for (const sourceId of selectedIds) {
             const existingByOther = new Map<string, Relation>();
             for (const r of allRels) {
-              const a = isSource ? r.source_id : r.target_id;
-              const b = isSource ? r.target_id : r.source_id;
-              if (a === sourceId) existingByOther.set(b, r);
+              const peerId = otherEnd(r, sourceId);
+              if (peerId !== null) existingByOther.set(peerId, r);
             }
             for (const tg of massEditRelTargets) {
               const existing = existingByOther.get(tg.id);
               if (existing && !relAttrs) continue;
               if (tg.id === sourceId) continue; // can't link to self
+              const storedSource = existing?.source_id ?? (isSource ? sourceId : tg.id);
               const body: Record<string, unknown> = {
                 type: relType.key,
-                source_id: isSource ? sourceId : tg.id,
-                target_id: isSource ? tg.id : sourceId,
+                source_id: storedSource,
+                target_id: existing?.target_id ?? (isSource ? tg.id : sourceId),
               };
               if (relAttrs) {
-                body.attributes = existing
-                  ? { ...((existing.attributes as RelationAttributes | undefined) ?? {}), ...relAttrs }
-                  : relAttrs;
+                const chosen = orientCardinality(relAttrs, !isBoEr || storedSource === sourceId);
+                body.attributes = genericRelationAttributes(relType, {
+                  ...existing?.attributes,
+                  ...chosen,
+                });
               }
               ops.push(api.post("/relations", body));
               opSourceIds.push(sourceId);
@@ -2658,10 +2670,8 @@ export default function InventoryPage() {
           // remove: find relations of this type whose other-end is in the chosen targets
           for (const sourceId of selectedIds) {
             for (const r of allRels) {
-              const a = isSource ? r.source_id : r.target_id;
-              const b = isSource ? r.target_id : r.source_id;
-              if (a !== sourceId) continue;
-              if (!targetIdSet.has(b)) continue;
+              const peerId = otherEnd(r, sourceId);
+              if (peerId === null || !targetIdSet.has(peerId)) continue;
               ops.push(api.delete(`/relations/${r.id}`));
               opSourceIds.push(sourceId);
             }

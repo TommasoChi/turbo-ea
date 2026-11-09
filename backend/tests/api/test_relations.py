@@ -72,6 +72,58 @@ async def rel_env(db):
 
 
 class TestCreateRelation:
+    async def test_er_reverse_create_reuses_row_and_orients_cardinality(self, client, db, rel_env):
+        admin = rel_env["admin"]
+        await create_card_type(db, key="DataObject", label="Data Object")
+        await create_relation_type(
+            db,
+            key="relDataObjectToDataObject",
+            label="relates",
+            source_type_key="DataObject",
+            target_type_key="DataObject",
+        )
+        a = await create_card(db, card_type="DataObject", name="A", user_id=admin.id)
+        b = await create_card(db, card_type="DataObject", name="B", user_id=admin.id)
+        headers = auth_headers(admin)
+        first = await client.post(
+            "/api/v1/relations",
+            headers=headers,
+            json={
+                "type": "relDataObjectToDataObject",
+                "source_id": str(a.id),
+                "target_id": str(b.id),
+                "attributes": {"cardinality": "1:n"},
+            },
+        )
+        assert first.status_code in (200, 201)
+        assert first.json()["reused"] is False
+        reverse = await client.post(
+            "/api/v1/relations",
+            headers=headers,
+            json={
+                "type": "relDataObjectToDataObject",
+                "source_id": str(b.id),
+                "target_id": str(a.id),
+                "attributes": {"cardinality": "1:n"},
+            },
+        )
+        assert reverse.status_code in (200, 201)
+        assert reverse.json()["reused"] is True
+        assert reverse.json()["id"] == first.json()["id"]
+        assert reverse.json()["source_id"] == str(a.id)
+        assert reverse.json()["attributes"]["cardinality"] == "n:1"
+        omitted = await client.post(
+            "/api/v1/relations",
+            headers=headers,
+            json={
+                "type": "relDataObjectToDataObject",
+                "source_id": str(b.id),
+                "target_id": str(a.id),
+            },
+        )
+        assert omitted.json()["id"] == first.json()["id"]
+        assert omitted.json()["attributes"]["cardinality"] == "n:1"
+
     async def test_admin_can_create(self, client, db, rel_env):
         admin = rel_env["admin"]
         resp = await client.post(

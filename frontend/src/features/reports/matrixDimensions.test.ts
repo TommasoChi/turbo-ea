@@ -49,6 +49,18 @@ const selects = relationType("relSelects", [
 ]);
 
 describe("buildDimensions", () => {
+  it("keeps the BO ownership marker out of Matrix dimensions", () => {
+    const ownership = { key: "dataOwnership", label: "Ownership", type: "single_select" } as const;
+    const appLink = relationType("relAppToDataObj", [
+      ownership,
+      { key: "crudRead", type: "boolean" },
+    ]);
+    const custom = relationType("custom", [ownership]);
+
+    expect(buildDimensions([appLink]).map((d) => d.field.key)).toEqual(["crudRead"]);
+    expect(buildDimensions([custom]).map((d) => d.field.key)).toEqual(["dataOwnership"]);
+  });
+
   it("classifies each field from its declared type", () => {
     const rt = relationType("relMixed", [
       { key: "flag", label: "Flag", type: "boolean" },

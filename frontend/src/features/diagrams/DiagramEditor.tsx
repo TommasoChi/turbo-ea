@@ -112,7 +112,7 @@ import type {
   RemovedRelationTombstone,
 } from "./drawio-shapes";
 import { edgeIncoming, groupRelationsByOtherCard, pruneDeletedRelations } from "./expandChildren";
-import { relationCreatePayload } from "./relationSync";
+import { relationCreatePayload, storedRelationReversed } from "./relationSync";
 import { cardCreatePayload, canSyncPendingCard, syncAllMessageKey } from "./cardSync";
 import ExpandMenu from "./ExpandMenu";
 import type { ExpandMenuPick, ExpandMenuTarget } from "./ExpandMenu";
@@ -2530,7 +2530,7 @@ export default function DiagramEditor() {
         markEdgeSynced(
           frame,
           edgeCellId,
-          rel.reversed,
+          storedRelationReversed(rel, created),
           created.id,
           hideRelationLabelsRef.current,
         );
@@ -2606,7 +2606,7 @@ export default function DiagramEditor() {
           markEdgeSynced(
             frame,
             r.edgeCellId,
-            r.reversed,
+            storedRelationReversed(r, created),
             created.id,
             hideRelationLabelsRef.current,
           );

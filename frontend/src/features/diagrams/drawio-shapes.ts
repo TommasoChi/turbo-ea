@@ -1088,6 +1088,8 @@ export function markEdgeSynced(
     const obj = edge.value;
     if (obj?.removeAttribute) obj.removeAttribute("pending");
     if (relationId && obj?.setAttribute) obj.setAttribute("relationId", relationId);
+    if (incoming) obj?.setAttribute?.("reversed", "1");
+    else obj?.removeAttribute?.("reversed");
     // Read the flow back off the edge rather than taking it as an argument —
     // stampEdgeAsRelation already stamped it, so the two cannot disagree.
     const flow = readFlowDirection(obj?.getAttribute?.("flowDirection"));

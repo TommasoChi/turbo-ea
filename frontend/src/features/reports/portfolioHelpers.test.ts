@@ -109,6 +109,22 @@ function baseFilters(over: Partial<FilterState> = {}): FilterState {
 /* ----- extractRelSubtypes ----- */
 
 describe("extractRelSubtypes", () => {
+  it("excludes the BO ownership marker from generic relation filters", () => {
+    const ownership = { ...usageTypeField, key: "dataOwnership" };
+    const appLink = {
+      ...orgUsesApp,
+      key: "relAppToDataObj",
+      source_type_key: "Application",
+      target_type_key: "DataObject",
+      attributes_schema: [ownership],
+    };
+
+    expect(extractRelSubtypes([appLink], "Application")).toEqual([]);
+    expect(
+      extractRelSubtypes([{ ...appLink, key: "custom" }], "Application")[0]?.field,
+    ).toEqual(ownership);
+  });
+
   it("returns single_select attributes for relation types touching the card type", () => {
     const out = extractRelSubtypes([orgUsesApp, plainRelType], "Application");
     expect(out).toHaveLength(1);

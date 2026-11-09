@@ -13544,6 +13544,94 @@
         "title": "RelationCreate",
         "type": "object"
       },
+      "RelationCreateResponse": {
+        "properties": {
+          "attributes": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Attributes"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "reused": {
+            "title": "Reused",
+            "type": "boolean"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CardRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source_id": {
+            "title": "Source Id",
+            "type": "string"
+          },
+          "target": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CardRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "target_id": {
+            "title": "Target Id",
+            "type": "string"
+          },
+          "type": {
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "source_id",
+          "target_id",
+          "reused"
+        ],
+        "title": "RelationCreateResponse",
+        "type": "object"
+      },
       "RelationRefInput": {
         "description": "Either a resolved UUID or a name+path tuple. Exactly one of `id` or\n(`type` + `name`) must be supplied.",
         "properties": {
@@ -38653,7 +38741,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/RelationResponse"
+                  "$ref": "#/components/schemas/RelationCreateResponse"
                 }
               }
             },

@@ -282,13 +282,16 @@ git commit -m "feat(bo-relationship): add GET/PUT /bo-relationship endpoints"
 
 ## Task 3: Direction-aware cardinality in the relation view and editor
 
+**API contract** `POST /relations` returns `reused` so the editor can distinguish a new link from an existing one. A reverse ER request reuses the existing link and keeps its stored direction.
+
 **Files:**
-- Modify `RelationAttributesEditor.tsx` and `RelationsSection.tsx` under `frontend/src/features/cards/sections/`. Update both colocated tests.
+- Modify the card relations section and picker, the Draw.io relation picker and sync, the inventory bulk editor, and the report attribute filters. Add regression tests alongside the affected code.
+- Update the single and bulk relation upsert paths and regenerate OpenAPI for the single-create response.
 
 **Interfaces:**
 - Produces: `cardinalityBadge(relationType: RelationType, attributes: Record<string, unknown> | undefined, viewedFromSourceSide: boolean): { icon: string; value: string } | null` — same signature shape as the existing `flowDirectionBadge` (read its exact signature first and match it, not the sketch above verbatim, since the plan cannot re-derive TypeScript types it doesn't have in front of it). Returns `null` when the relation type carries no `cardinality` attribute, or none is set. When set and `viewedFromSourceSide` is false, `"1:n"` renders as `"n:1"` and vice versa; `"1:1"` and `"n:m"` render unchanged either way.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```tsx
 // Add to RelationAttributesEditor.test.tsx — read the file's existing
@@ -309,35 +312,28 @@ it("leaves 1:1 and n:m unchanged from either side", () => {});
 it("returns null when the relation type has no cardinality attribute", () => {});
 ```
 
-- [ ] **Step 2: Run to verify they fail**
+- [x] **Step 2: Run to verify they fail**
 
 Run: `cd frontend && npx vitest run RelationAttributesEditor.test.tsx -t "cardinality"`
 Expected: FAIL — `cardinalityBadge` not exported.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 Wire the helper into relation badges and the editor. Treat `dataOwnership` as a reserved ownership marker. Omit it from generic relation attribute controls and from every generic relation draft and request payload, including edits that replace the attribute map. Display the ownership role through the BO grouping and Master action. Test editing CRUD on an existing Master link and verify the sent payload excludes the marker. Invert asymmetric values when opening the target-side form and again when building the stored payload. Test a stored A-to-B 1:n as n:1 from B, then edit and reread from both cards. Reverse creation finds the existing ER relation.
 
-- [ ] **Step 4: Run to verify they pass**
+- [x] **Step 4: Run to verify they pass**
 
 Run: `cd frontend && npx vitest run RelationAttributesEditor.test.tsx`
 Expected: PASS, including every pre-existing test in the file.
 
-- [ ] **Step 5: Lint & typecheck**
+- [x] **Step 5: Lint & typecheck**
 
 Run: `cd frontend && npx eslint --fix src/features/cards/sections/RelationAttributesEditor.tsx src/features/cards/sections/RelationAttributesEditor.test.tsx && npx tsc --noEmit`
 Expected: clean.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
-```bash
-git add frontend/src/features/cards/sections/RelationAttributesEditor.tsx frontend/src/features/cards/sections/RelationAttributesEditor.test.tsx frontend/src/features/cards/sections/RelationsSection.tsx frontend/src/features/cards/sections/RelationsSection.test.tsx
-git commit -m "feat(bo-relationship): add the cardinality reserved relation-attribute key
-
-Same hardcoded-key pattern flowDirection already uses, not a new generic
-field type: a plain stored value would show '1:n' from both ends of the
-relation, which is wrong from the target's side."
-```
+Commit the frontend, backend, tests, and regenerated OpenAPI together as `feat(bo): show directional cardinality`.
 
 ---
 

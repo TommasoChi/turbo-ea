@@ -1,3 +1,4 @@
+import { BO_ER_RELATION_TYPE } from "@/lib/relationAttributes";
 import { useState, useEffect, useCallback, useMemo } from "react";
 
 import Box from "@mui/material/Box";
@@ -46,6 +47,9 @@ import AddRelationsDialog from "./AddRelationsDialog";
 import DescendantRelationsDrawer from "./DescendantRelationsDrawer";
 import RelationAttributesEditor, {
   flowDirectionBadge,
+  cardinalityBadge,
+  genericRelationAttributes,
+  orientCardinality,
   relationAttributeBadges,
   hasEditableRelationAttributes,
   type RelationAttributes,
@@ -99,6 +103,7 @@ function RelationAttrsPopover({
   rt,
   relation,
   onSaved,
+  fsId,
 }: {
   anchorEl: HTMLElement | null;
   open: boolean;
@@ -106,27 +111,29 @@ function RelationAttrsPopover({
   rt: RelationType;
   relation: Relation;
   onSaved: (updated: Relation) => void;
+  fsId: string;
 }) {
   const { t } = useTranslation(["cards", "common"]);
+  const viewedFromSource = rt.key !== BO_ER_RELATION_TYPE || relation.source_id === fsId;
   const [draft, setDraft] = useState<RelationAttributes>(
-    (relation.attributes as RelationAttributes) ?? {},
+    orientCardinality(genericRelationAttributes(rt, (relation.attributes as RelationAttributes) ?? {}), viewedFromSource),
   );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
     if (open) {
-      setDraft((relation.attributes as RelationAttributes) ?? {});
+      setDraft(orientCardinality(genericRelationAttributes(rt, (relation.attributes as RelationAttributes) ?? {}), viewedFromSource));
       setError("");
     }
-  }, [open, relation.attributes]);
+  }, [open, relation.attributes, rt, viewedFromSource]);
 
   const handleSave = async () => {
     setSaving(true);
     setError("");
     try {
       const updated = await api.patch<Relation>(`/relations/${relation.id}`, {
-        attributes: draft,
+        attributes: orientCardinality(genericRelationAttributes(rt, draft), viewedFromSource),
       });
       onSaved(updated);
       onClose();
@@ -306,7 +313,8 @@ function RelationGroup({
     // Generic value badges for non-directional single-selects (e.g. usageType,
     // criticality) — a relation can carry several, so render one chip each.
     const attrBadges = relationAttributeBadges(rt, attrs);
-    const attrSet = !!flowBadge || attrBadges.length > 0;
+    const cardinality = cardinalityBadge(rt, attrs, r.source_id === fsId);
+    const attrSet = !!flowBadge || !!cardinality || attrBadges.length > 0;
     const editTooltip = flowBadge
       ? t(FLOW_DIRECTION_TOOLTIP_KEYS[flowBadge.value])
       : attrBadges.length > 0
@@ -325,6 +333,7 @@ function RelationGroup({
         key={r.id}
         secondaryAction={
           <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+            {cardinality && <Chip size="small" label={cardinality.value} />}
             {attrBadges.map((b) => (
               // The shared pill, so this row and the Hierarchy section's link
               // type render identically — they are the same kind of value.
@@ -509,12 +518,12 @@ function RelationGroup({
             sx={{ height: 20, fontSize: "0.65rem" }}
           />
         )}
-        <Chip
+        {rt.key !== BO_ER_RELATION_TYPE && <Chip
           size="small"
           label={rt.cardinality}
           variant="outlined"
           sx={{ height: 20, fontSize: "0.65rem" }}
-        />
+        />}
         {/* Descendant roll-up (#863): one chip, full list in a drawer. Hidden
             entirely at 0 so leaf cards look exactly as they did before.
             Deliberately text-only — this header row already carries the
@@ -622,6 +631,7 @@ function RelationGroup({
           open={Boolean(attrsAnchor)}
           onClose={closeAttrs}
           rt={rt}
+          fsId={fsId}
           relation={attrsRelation}
           onSaved={onRelationUpdated}
         />
@@ -779,7 +789,7 @@ function RelationsSection({
   // on (type, source, target) and returns the *existing* row (#905), so a
   // stale exclusion would otherwise produce a duplicate React key.
   const handleRelationAdded = useCallback((created: Relation) => {
-    setRawRelations((prev) => (prev.some((r) => r.id === created.id) ? prev : [...prev, created]));
+    setRawRelations((prev) => (prev.some((r) => r.id === created.id) ? prev.map((r) => r.id === created.id ? { ...r, ...created, source: created.source ?? r.source, target: created.target ?? r.target } : r) : [...prev, created]));
   }, []);
 
   /** Undoing an add from its chip — drop the row without a full refetch. */

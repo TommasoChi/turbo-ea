@@ -13,9 +13,11 @@ import LinkifiedText from "@/components/LinkifiedText";
 import Box from "@mui/material/Box";
 import Chip from "@mui/material/Chip";
 import MaterialSymbol from "@/components/MaterialSymbol";
+import { BO_ER_RELATION_TYPE } from "@/lib/relationAttributes";
 import { useRelationLabel } from "@/hooks/useResolveLabel";
 import RelationAttributesEditor, {
   hasEditableRelationAttributes,
+  genericRelationAttributes,
   type RelationAttributes,
 } from "@/features/cards/sections/RelationAttributesEditor";
 import type { RelationType } from "@/types";
@@ -97,9 +99,12 @@ export default function RelationPickerDialog({
     }
   };
 
+  const reverseHeader = picked?.rt.key === BO_ER_RELATION_TYPE && picked.direction === "reversed";
+
   const handleConfirm = () => {
     if (!picked) return;
-    onSelect(picked.rt, picked.direction, Object.keys(attrs).length > 0 ? attrs : undefined);
+    const clean = genericRelationAttributes(picked.rt, attrs);
+    onSelect(picked.rt, picked.direction, Object.keys(clean).length > 0 ? clean : undefined);
   };
 
   return (
@@ -115,14 +120,14 @@ export default function RelationPickerDialog({
         <Box sx={{ display: "flex", alignItems: "center", gap: 1, px: 2, py: 1.5 }}>
           <Chip
             size="small"
-            label={endpoints.sourceName}
-            sx={{ bgcolor: endpoints.sourceColor + "22", fontWeight: 600, maxWidth: 140 }}
+            label={reverseHeader ? endpoints.targetName : endpoints.sourceName}
+            sx={{ bgcolor: (reverseHeader ? endpoints.targetColor : endpoints.sourceColor) + "22", fontWeight: 600, maxWidth: 140 }}
           />
           <MaterialSymbol icon="arrow_forward" size={16} color="#999" />
           <Chip
             size="small"
-            label={endpoints.targetName}
-            sx={{ bgcolor: endpoints.targetColor + "22", fontWeight: 600, maxWidth: 140 }}
+            label={reverseHeader ? endpoints.sourceName : endpoints.targetName}
+            sx={{ bgcolor: (reverseHeader ? endpoints.sourceColor : endpoints.targetColor) + "22", fontWeight: 600, maxWidth: 140 }}
           />
         </Box>
 
