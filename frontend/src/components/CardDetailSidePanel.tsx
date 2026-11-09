@@ -1,4 +1,4 @@
-import { useState, useEffect, type KeyboardEvent } from "react";
+import { useState, useEffect, useRef, type KeyboardEvent } from "react";
 import { useNavigate } from "react-router";
 import Box from "@mui/material/Box";
 import Drawer from "@mui/material/Drawer";
@@ -15,6 +15,9 @@ import CardLogoAvatar from "@/components/CardLogoAvatar";
 import ApprovalStatusBadge from "@/components/ApprovalStatusBadge";
 import LifecycleBadge from "@/components/LifecycleBadge";
 import AiSuggestPanel, { type AiApplyPayload } from "@/components/AiSuggestPanel";
+import { hasTypePermission } from "@/components/RequirePermission";
+import { useOptionalAuthUser } from "@/hooks/AuthContext";
+import { useAbortableEffect } from "@/hooks/useLatestRequest";
 import { useMetamodel } from "@/hooks/useMetamodel";
 import { useTypeLabel } from "@/hooks/useResolveLabel";
 import { useCardSubtypeLabel } from "@/hooks/useCardSubtypeLabel";
@@ -64,16 +67,36 @@ interface Props {
    * keeps the modal drawer.
    */
   nonModal?: boolean;
+  /** Load only the BO-scoped card and effective permissions. */
+  boScoped?: boolean;
+  onSaved?: () => void;
+  refreshKey?: number;
+  docked?: boolean;
 }
 
-export default function CardDetailSidePanel({ cardId, open, onClose, nonModal = false }: Props) {
+export default function CardDetailSidePanel({
+  cardId,
+  open,
+  onClose,
+  nonModal = false,
+  boScoped = false,
+  onSaved,
+  refreshKey,
+  docked = false,
+}: Props) {
   const navigate = useNavigate();
   const { t } = useTranslation("common");
+  const { t: reportT } = useTranslation("reports");
+  const user = useOptionalAuthUser();
   const { getType } = useMetamodel();
   const typeLabel = useTypeLabel();
   const resolveSubtypeLabel = useCardSubtypeLabel();
 
-  const [card, setCard] = useState<Card | null>(null);
+  const [loadedCard, setCard] = useState<Card | null>(null);
+  const card = loadedCard?.id === cardId ? loadedCard : null;
+  const [saveVersion, setSaveVersion] = useState(0);
+  const activeCardId = useRef(cardId);
+  activeCardId.current = cardId;
   const [error, setError] = useState("");
   const [perms, setPerms] =
     useState<CardEffectivePermissions["effective"]>(DEFAULT_PERMISSIONS);
@@ -91,7 +114,7 @@ export default function CardDetailSidePanel({ cardId, open, onClose, nonModal = 
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState("");
 
-  // Reset state and fetch when cardId changes
+  // A refresh of the same card keeps its expanded sections and scroll state.
   useEffect(() => {
     if (!cardId || !open) return;
     setCard(null);
@@ -100,22 +123,45 @@ export default function CardDetailSidePanel({ cardId, open, onClose, nonModal = 
     setAiResponse(null);
     setAiError("");
     setAiLoading(false);
-    api
-      .get<Card>(`/cards/${cardId}`)
-      .then(setCard)
-      .catch((e) => setError(e.message));
-    api
-      .get<CardEffectivePermissions>(`/cards/${cardId}/my-permissions`)
-      .then((res) => setPerms(res.effective))
-      .catch(() => {});
-  }, [cardId, open]);
+  }, [cardId, open, boScoped]);
+
+  useAbortableEffect(async ({ signal, isCurrent }) => {
+    if (!cardId || !open) return;
+    if (boScoped) {
+      try {
+        const detail = await api.get<{ card: Card; permissions: CardEffectivePermissions["effective"] }>(
+          `/bo-relationship/objects/${cardId}/detail`, { signal },
+        );
+        if (!isCurrent()) return;
+        setCard(detail.card);
+        setPerms(detail.permissions);
+        setError("");
+      } catch (e) {
+        if (!isCurrent()) return;
+        setCard(null);
+        setError(e instanceof Error ? e.message : String(e));
+      }
+    } else {
+      await Promise.all([
+        api.get<Card>(`/cards/${cardId}`)
+          .then((value) => { if (isCurrent()) setCard(value); })
+          .catch((e) => { if (isCurrent()) setError(e.message); }),
+        api.get<CardEffectivePermissions>(`/cards/${cardId}/my-permissions`)
+          .then((res) => { if (isCurrent()) setPerms(res.effective); })
+          .catch(() => {}),
+      ]);
+    }
+  }, [cardId, open, boScoped, refreshKey, saveVersion]);
 
   const typeConfig = card ? getType(card.type) : null;
   // Resolve the subtype key (e.g. "aiModel") to its translated metamodel label
   // (e.g. "AI Model"), mirroring CardDetail.tsx's header.
   const subtypeLabel = card ? resolveSubtypeLabel(card.type, card.subtype) : "";
   const isArchived = card?.status === "ARCHIVED";
-  const aiEnabled = aiSuggestEnabledFor(aiStatus, card?.type);
+  const aiEnabled = !boScoped && aiSuggestEnabledFor(aiStatus, card?.type);
+  const canOpenFullCard = !boScoped || (
+    card && hasTypePermission(user, "inventory.view", card.type)
+  );
 
   const handleAiSuggest = async () => {
     if (!card) return;
@@ -173,7 +219,7 @@ export default function CardDetailSidePanel({ cardId, open, onClose, nonModal = 
             mb: 1,
           }}
         >
-          <IconButton size="small" onClick={onClose}>
+          <IconButton size="small" onClick={onClose} aria-label={t("actions.close")}>
             <MaterialSymbol icon="close" size={20} />
           </IconButton>
           {card && typeConfig && (
@@ -225,7 +271,7 @@ export default function CardDetailSidePanel({ cardId, open, onClose, nonModal = 
             >
               <DataQualityPill
                 value={card.data_quality}
-                cardId={card.id}
+                cardId={boScoped ? undefined : card.id}
                 cardType={card.type}
                 animate={gamification}
                 gain={scoreGain}
@@ -236,7 +282,7 @@ export default function CardDetailSidePanel({ cardId, open, onClose, nonModal = 
               <ApprovalStatusBadge status={card.approval_status} />
             </Box>
           )}
-          <Tooltip title={t("cards:sidePanel.openFullPage")}>
+          {canOpenFullCard && <Tooltip title={t("cards:sidePanel.openFullPage")}>
             <IconButton
               size="small"
               onClick={() => {
@@ -245,7 +291,7 @@ export default function CardDetailSidePanel({ cardId, open, onClose, nonModal = 
             >
               <MaterialSymbol icon="open_in_new" size={20} />
             </IconButton>
-          </Tooltip>
+          </Tooltip>}
         </Box>
       </Box>
 
@@ -270,7 +316,14 @@ export default function CardDetailSidePanel({ cardId, open, onClose, nonModal = 
             key={card.id}
             card={card}
             perms={perms}
-            onCardUpdate={setCard}
+            onCardUpdate={(updated) => {
+              if (updated.id === activeCardId.current) {
+                if (boScoped) setSaveVersion((version) => version + 1);
+                else setCard(updated);
+              }
+              onSaved?.();
+            }}
+            boScoped={boScoped}
             onSaveOrigin={reportSaveOrigin}
             showBpmTabs={false}
             onAiSuggest={
@@ -279,8 +332,13 @@ export default function CardDetailSidePanel({ cardId, open, onClose, nonModal = 
                 : undefined
             }
             aiBusy={aiLoading}
-            beforeTabs={
-              (aiLoading || aiError || aiResponse) && (
+            beforeTabs={boScoped ? (
+              <Box sx={{ mb: 2 }}>
+                <Typography variant="subtitle2">{reportT("boRelationship.indicators")}</Typography>
+                {card.attributes?.isPersonalData === true && <Chip size="small" label={reportT("boRelationship.personalData")} />}
+                {card.attributes?.isPaymentData === true && <Chip size="small" label={reportT("boRelationship.paymentData")} />}
+              </Box>
+            ) : (aiLoading || aiError || aiResponse) && (
                 <AiSuggestPanel
                   response={aiResponse}
                   loading={aiLoading}
@@ -312,6 +370,22 @@ export default function CardDetailSidePanel({ cardId, open, onClose, nonModal = 
     width: { xs: "100%", sm: 560, md: 640 },
     overflow: "auto",
   };
+
+  if (docked) {
+    return open ? (
+      <Box
+        role="region"
+        aria-label={reportT("boRelationship.cardDetails")}
+        onKeyDown={(e) => { if (e.key === "Escape" && !e.defaultPrevented) onClose(); }}
+        sx={{
+          width: 480, maxWidth: "45%", flexShrink: 0, overflow: "auto",
+          borderLeft: 1, borderColor: "divider", maxHeight: 700,
+        }}
+      >
+        {content}
+      </Box>
+    ) : null;
+  }
 
   if (nonModal) {
     // MUI's own non-modal drawer, not a temporary one with its backdrop hidden:

@@ -100,6 +100,7 @@ export interface UseCardTabActivity {
 export function useCardTabActivity(
   cardId: string,
   currentUserId?: string,
+  enabled = true,
 ): UseCardTabActivity {
   const [latestActivity, setLatestActivity] = useState<Record<string, string>>({});
 
@@ -108,6 +109,7 @@ export function useCardTabActivity(
   // duration of the visit — clicking a dotted tab does NOT clear it until
   // the user actually leaves the card.
   const snapshot = useMemo(() => {
+    if (!enabled) return {};
     const store = readStore();
     const entry = getCardEntry(store, cardId);
     if (!entry[FIRST_VISIT_KEY]) {
@@ -117,7 +119,7 @@ export function useCardTabActivity(
       writeStore(store);
     }
     return { ...entry };
-  }, [cardId]);
+  }, [cardId, enabled]);
 
   // Tabs the user opens during this visit. Flushed to lastSeen on unmount
   // or beforeunload so the next visit starts fresh.
@@ -127,6 +129,7 @@ export function useCardTabActivity(
   // navigation and cardId changes mid-instance. Each effect captures its
   // own cardId, so a cardId change cleanly flushes to the prior card.
   useEffect(() => {
+    if (!enabled) return;
     const target = cardId;
     const pending = pendingRef.current;
     const flush = () => {
@@ -147,11 +150,12 @@ export function useCardTabActivity(
       // Start fresh for the next cardId.
       pendingRef.current = new Set();
     };
-  }, [cardId]);
+  }, [cardId, enabled]);
 
   useEffect(() => {
     let cancelled = false;
     setLatestActivity({});
+    if (!enabled) return;
     api
       .get<EventEntry[]>(
         `/cards/${cardId}/history?page=1&page_size=${HISTORY_PAGE_SIZE}`,
@@ -178,7 +182,7 @@ export function useCardTabActivity(
     return () => {
       cancelled = true;
     };
-  }, [cardId, currentUserId]);
+  }, [cardId, currentUserId, enabled]);
 
   const hasUpdates = useCallback(
     (tabKey: string): boolean => {
@@ -197,8 +201,8 @@ export function useCardTabActivity(
   );
 
   const noteVisit = useCallback((tabKey: string) => {
-    pendingRef.current.add(tabKey);
-  }, []);
+    if (enabled) pendingRef.current.add(tabKey);
+  }, [enabled]);
 
   return { hasUpdates, noteVisit };
 }

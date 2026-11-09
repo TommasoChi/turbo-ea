@@ -80,6 +80,7 @@ from app.services import (
     card_write_service,
     notification_service,
 )
+from app.services.bo_relationship_constants import BO_TYPE
 from app.services.calculation_engine import run_calculations_for_card
 from app.services.card_completeness import missing_mandatory
 from app.services.card_costs import COST_EVENT
@@ -1155,6 +1156,26 @@ async def card_detail_response(db: AsyncSession, user: User, card: Card) -> Card
     response.created_by_name = names.get(card.created_by)
     response.updated_by_name = names.get(card.updated_by)
     return response
+
+
+async def redact_bo_card_references(
+    db: AsyncSession,
+    user: User,
+    card: Card,
+    response: CardResponse,
+    read_scope: CardReadScope | None = None,
+) -> None:
+    """Apply the same BO visibility rules to both read and write responses."""
+    if response.stakeholders and not await PermissionService.has_app_permission(
+        db, user, "admin.users"
+    ):
+        for stakeholder in response.stakeholders:
+            stakeholder.user_email = None
+    if card.parent_id:
+        scope = read_scope or await CardReadScope.load(db, user, include_subtype_denials=True)
+        if card.parent_id not in await scope.readable_card_ids(db, {card.parent_id}, mode="module"):
+            response.parent_id = None
+            response.parent_label = None
 
 
 async def _user_display_names(
@@ -2563,7 +2584,10 @@ async def update_card(
         )
         card = result.scalar_one()
 
-    return await _card_response_with_cost_check(db, user, card)
+    response = await _card_response_with_cost_check(db, user, card)
+    if card.type == BO_TYPE:
+        await redact_bo_card_references(db, user, card, response)
+    return response
 
 
 @router.get("/{card_id}/archive-impact", response_model=ArchiveImpactResponse)

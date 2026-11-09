@@ -505,6 +505,32 @@ async def test_bo_detail_shapes_stakeholder_pii_for_module_readers(client, db, e
     assert owner.email not in result.text
 
 
+async def test_normal_card_save_does_not_return_bo_hidden_references_or_pii(client, db, env):
+    parent = await create_card(db, name="Hidden parent", subtype="Restricted")
+    node = await create_card(
+        db, card_type="DataObject", subtype="Data", name="Customer", parent_id=parent.id
+    )
+    owner = await create_user(db, display_name="Owner", email="owner@private.test")
+    await create_stakeholder_role_def(db, card_type_key="DataObject", key="data_owner")
+    db.add(Stakeholder(card_id=node.id, user_id=owner.id, role="data_owner"))
+    await db.flush()
+
+    result = await client.patch(
+        f"/api/v1/cards/{node.id}",
+        json={"description": "Updated from the BO panel"},
+        headers=env["partial"],
+    )
+
+    assert result.status_code == 200
+    body = result.json()
+    assert body["description"] == "Updated from the BO panel"
+    assert body["parent_id"] is None
+    assert body["parent_label"] is None
+    (stakeholder,) = body["stakeholders"]
+    assert stakeholder["user_display_name"] == "Owner"
+    assert stakeholder["user_email"] is None
+
+
 async def test_generic_relation_api_hides_links_to_denied_application_subtypes(client, db, env):
     node = await bo(db)
     app = await create_card(db, name="Hidden", subtype="Restricted")

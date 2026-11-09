@@ -281,3 +281,44 @@ describe("CardDetailSidePanel — gamified data quality", () => {
     expect(screen.queryByTestId("flight")).not.toBeInTheDocument();
   });
 });
+
+it("loads BO detail and permissions only from the scoped endpoint", async () => {
+  vi.mocked(api.get).mockImplementation((path: string) => path === "/bo-relationship/objects/c1/detail"
+    ? Promise.resolve({ card: CARD, permissions: { can_view: true, can_edit: false } })
+    : Promise.reject(new Error("unexpected inventory read")));
+  render(<MemoryRouter><CardDetailSidePanel cardId="c1" open onClose={() => {}} nonModal boScoped /></MemoryRouter>);
+  expect(await screen.findByTestId("card-content")).toHaveTextContent("SAP ERP");
+  expect(api.get).toHaveBeenCalledWith("/bo-relationship/objects/c1/detail", expect.anything());
+  expect(vi.mocked(api.get).mock.calls.some(([path]) => path.startsWith("/cards/"))).toBe(false);
+});
+
+it("does not replace the current card with a late BO detail response", async () => {
+  let resolveFirst!: (value: unknown) => void;
+  vi.mocked(api.get).mockImplementation((path: string) => path.includes("/c1/")
+    ? new Promise((resolve) => { resolveFirst = resolve; })
+    : Promise.resolve({ card: { ...CARD, id: "c2", name: "Second" }, permissions: { can_view: true, can_edit: false } }));
+  const view = render(<MemoryRouter><CardDetailSidePanel cardId="c1" open onClose={() => {}} boScoped /></MemoryRouter>);
+  view.rerender(<MemoryRouter><CardDetailSidePanel cardId="c2" open onClose={() => {}} boScoped /></MemoryRouter>);
+  expect(await screen.findByTestId("card-content")).toHaveTextContent("Second");
+  resolveFirst({ card: CARD, permissions: { can_view: true } });
+  await waitFor(() => expect(screen.getByTestId("card-content")).toHaveTextContent("Second"));
+});
+
+it("reloads scoped detail after a BO card save instead of showing the write response", async () => {
+  let detailCalls = 0;
+  vi.mocked(api.get).mockImplementation(() => {
+    detailCalls += 1;
+    return Promise.resolve({ card: { ...CARD, name: detailCalls === 1 ? "Original" : "Scoped result" }, permissions: { can_view: true, can_edit: true } });
+  });
+  render(<MemoryRouter><CardDetailSidePanel cardId="c1" open onClose={() => {}} boScoped /></MemoryRouter>);
+  expect(await screen.findByTestId("card-content")).toHaveTextContent("Original");
+  await userEvent.click(screen.getByRole("button", { name: "Save" }));
+  await waitFor(() => expect(screen.getByTestId("card-content")).toHaveTextContent("Scoped result"));
+});
+
+it("does not offer inventory navigation from the scoped panel", async () => {
+  vi.mocked(api.get).mockResolvedValue({ card: CARD, permissions: { can_view: true } });
+  render(<MemoryRouter><CardDetailSidePanel cardId="c1" open onClose={() => {}} boScoped /></MemoryRouter>);
+  await screen.findByTestId("card-content");
+  expect(screen.queryByRole("button", { name: "Open full page" })).not.toBeInTheDocument();
+});

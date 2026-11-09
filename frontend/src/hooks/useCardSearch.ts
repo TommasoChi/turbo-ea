@@ -2,6 +2,12 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "@/api/client";
 import type { Card, CardListResponse } from "@/types";
 
+type SearchItem = Pick<Card, "id" | "name" | "type" | "parent_id" | "alias">;
+
+export type CardSearchSource = (
+  params: URLSearchParams,
+) => Promise<{ items: SearchItem[]; total: number }>;
+
 interface Options {
   /** Card type keys to filter by. Empty array = no type filter (returns all types). */
   types: string[];
@@ -11,10 +17,12 @@ interface Options {
   enabled: boolean;
   /** Page size. Defaults to 1000 — fits the vast majority of installs in a single round-trip. */
   pageSize?: number;
+  /** An alternative server-scoped catalogue. The default is the inventory. */
+  searchSource?: CardSearchSource;
 }
 
-interface State {
-  items: Card[];
+interface State<Item = SearchItem> {
+  items: Item[];
   total: number;
   loading: boolean;
   /** True when items.length < total — i.e. there's at least one more page to fetch. */
@@ -36,8 +44,10 @@ interface State {
  *     sentinel — guards against concurrent calls via an inflight ref.
  *   - Total comes from the backend so the UI can show "Showing X of Y".
  */
-export function useCardSearch({ types, search, enabled, pageSize = 1000 }: Options): State {
-  const [items, setItems] = useState<Card[]>([]);
+export function useCardSearch(options: Options & { searchSource?: undefined }): State<Card>;
+export function useCardSearch(options: Options): State;
+export function useCardSearch({ types, search, enabled, pageSize = 1000, searchSource }: Options): State {
+  const [items, setItems] = useState<SearchItem[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
   const [page, setPage] = useState(1);
@@ -67,7 +77,9 @@ export function useCardSearch({ types, search, enabled, pageSize = 1000 }: Optio
         });
         if (typeKey) params.set("type", typeKey);
         if (trimmedSearch) params.set("search", trimmedSearch);
-        const response = await api.get<CardListResponse>(`/cards?${params.toString()}`);
+        const response = searchSource
+          ? await searchSource(params)
+          : await api.get<CardListResponse>(`/cards?${params.toString()}`);
         if (token !== requestToken.current) return; // stale
         const respItems = response.items ?? [];
         setTotal(response.total ?? respItems.length);
@@ -94,7 +106,7 @@ export function useCardSearch({ types, search, enabled, pageSize = 1000 }: Optio
         }
       }
     },
-    [typeKey, trimmedSearch, pageSize],
+    [typeKey, trimmedSearch, pageSize, searchSource],
   );
 
   // Reset + refetch page 1 when filters change.

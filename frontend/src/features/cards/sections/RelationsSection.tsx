@@ -187,6 +187,7 @@ function RelationGroup({
   rels,
   fsId,
   canManageRelations,
+  existingBoRelationsOnly,
   onReload,
   onRequestAdd,
   onRelationUpdated,
@@ -199,6 +200,7 @@ function RelationGroup({
   rels: Relation[];
   fsId: string;
   canManageRelations: boolean;
+  existingBoRelationsOnly: boolean;
   onReload: () => void;
   /** Opens the section's add dialog with this relation type pre-selected. */
   onRequestAdd: () => void;
@@ -364,7 +366,7 @@ function RelationGroup({
                 </IconButton>
               </Tooltip>
             )}
-            {canManageRelations && (
+            {canManageRelations && !existingBoRelationsOnly && (
               <IconButton
                 size="small"
                 onClick={() => handleDelete(r.id)}
@@ -379,7 +381,7 @@ function RelationGroup({
       >
         <ClickableCardName
           name={other?.name || t("relations.unknown")}
-          to={other ? `/cards/${other.id}` : undefined}
+          to={other && !existingBoRelationsOnly ? `/cards/${other.id}` : undefined}
           dotColor={oType?.color}
         />
         {alsoVerbs && (
@@ -563,7 +565,7 @@ function RelationGroup({
         {/* The verb too: two sides of a self-referencing type are two adjacent
             groups of the same card type, and "Add Organization" alone would
             name both. Same shape as the dialog's title. */}
-        {canManageRelations && (
+        {canManageRelations && !existingBoRelationsOnly && (
           <Tooltip title={t("relations.addSpecific", {
             type: `${typeLabel(otherType) || otherTypeKey} · ${verb}`,
           })}>
@@ -656,6 +658,7 @@ function RelationsSection({
   cardSubtype = null,
   refreshKey = 0,
   canManageRelations = true,
+  existingBoRelationsOnly = false,
   initialExpanded = false,
   onCardUpdate,
   expandOn,
@@ -669,6 +672,8 @@ function RelationsSection({
   cardSubtype?: string | null;
   refreshKey?: number;
   canManageRelations?: boolean;
+  /** BO panel reads ER links and edits their attributes. Diagram changes are staged separately. */
+  existingBoRelationsOnly?: boolean;
   initialExpanded?: boolean;
   /** Re-fetch the card itself. A mandatory relation is a data-quality slot,
    *  so adding or removing one moves the score in the header pill — which the
@@ -717,7 +722,8 @@ function RelationsSection({
       listRequest.run(async ({ signal, isCurrent }) => {
         try {
           // Stryker disable next-line ObjectLiteral: the signal only cancels the request on the wire; the stale-reply guard, which is what the tests pin, is isCurrent()
-          const rows = await api.get<Relation[]>(`/relations?card_id=${fsId}`, { signal });
+          const filter = existingBoRelationsOnly ? `&type=${BO_ER_RELATION_TYPE}` : "";
+          const rows = await api.get<Relation[]>(`/relations?card_id=${fsId}${filter}`, { signal });
           if (!isCurrent()) return;
           setRawRelations(rows);
           setLoadError("");
@@ -727,7 +733,7 @@ function RelationsSection({
           setLoadError(e instanceof Error ? e.message : t("common:errors.generic"));
         }
       }),
-    [listRequest, fsId, t],
+    [listRequest, fsId, t, existingBoRelationsOnly],
   );
 
   /** Reload the relation list *and* the card, after a relation mutation. */
@@ -761,7 +767,7 @@ function RelationsSection({
   const isHierarchical = getType(cardTypeKey)?.has_hierarchy ?? false;
 
   useEffect(() => {
-    if (!expanded || !isHierarchical) return;
+    if (!expanded || !isHierarchical || existingBoRelationsOnly) return;
     let cancelled = false;
     api
       .get<DescendantRelationSummaryEntry[]>(`/cards/${fsId}/descendant-relations/summary`)
@@ -778,7 +784,7 @@ function RelationsSection({
     return () => {
       cancelled = true;
     };
-  }, [expanded, isHierarchical, fsId, refreshKey]);
+  }, [expanded, isHierarchical, fsId, refreshKey, existingBoRelationsOnly]);
 
   // Optimistic append. `POST /relations` returns the row with its `source` /
   // `target` refs eagerly loaded, so it renders identically to a refetched one
@@ -810,7 +816,8 @@ function RelationsSection({
           : r,
       ),
     );
-  }, []);
+    if (existingBoRelationsOnly) onCardUpdate?.();
+  }, [existingBoRelationsOnly, onCardUpdate]);
 
   // All relevant (non-hidden) relation types for this card type
   // Successor relations are excluded — they are handled by SuccessorsSection
@@ -830,15 +837,16 @@ function RelationsSection({
         relationTypes.filter(
           (rt) =>
             !rt.is_hidden &&
+            (!existingBoRelationsOnly || rt.key === BO_ER_RELATION_TYPE) &&
             !successorKeys.has(rt.key) &&
             (rt.source_type_key === cardTypeKey || rt.target_type_key === cardTypeKey) &&
-            visibleTypeKeys.has(
+            (existingBoRelationsOnly || visibleTypeKeys.has(
               rt.source_type_key === cardTypeKey ? rt.target_type_key : rt.source_type_key,
-            ),
+            )),
         ),
         cardTypeKey,
       ),
-    [relationTypes, successorKeys, cardTypeKey, visibleTypeKeys],
+    [relationTypes, successorKeys, cardTypeKey, visibleTypeKeys, existingBoRelationsOnly],
   );
 
   // Cards this card reaches through MORE THAN ONE relation type. Each type is
@@ -914,7 +922,7 @@ function RelationsSection({
   // A data-quality jump opens the Add dialog its group's `+` opens, once the
   // relations and the relation types are in. A side this card does not have
   // (the metamodel changed since the score) leaves the jump an expand only.
-  useEditRequest(editOn, canManageRelations && loaded && sides.length > 0, ({ relation }) => {
+  useEditRequest(editOn, !existingBoRelationsOnly && canManageRelations && loaded && sides.length > 0, ({ relation }) => {
     const side = sides.find(
       ({ rt, isSource }) => rt.key === relation?.type && isSource === (relation.side === "source"),
     );
@@ -972,6 +980,7 @@ function RelationsSection({
             rels={rels}
             fsId={fsId}
             canManageRelations={canManageRelations}
+            existingBoRelationsOnly={existingBoRelationsOnly}
             onReload={reloadAll}
             onRequestAdd={() => openAddDialog({ rt, isSource })}
             onRelationUpdated={handleRelationUpdated}
@@ -993,6 +1002,7 @@ function RelationsSection({
               rels={rels}
               fsId={fsId}
               canManageRelations={canManageRelations}
+              existingBoRelationsOnly={existingBoRelationsOnly}
               onReload={reloadAll}
               onRequestAdd={() => openAddDialog({ rt, isSource })}
               onRelationUpdated={handleRelationUpdated}
@@ -1010,7 +1020,7 @@ function RelationsSection({
 
         {/* Relation types with no group of their own have no `+` to click, so
             they are reached from here: pick the type, then the same dialog. */}
-        {!loadError && canManageRelations && hiddenSides.length > 0 && (
+        {!loadError && canManageRelations && !existingBoRelationsOnly && hiddenSides.length > 0 && (
           <Box sx={{ display: "flex", justifyContent: "flex-end", mt: 1 }}>
             <Button
               size="small"
@@ -1042,7 +1052,7 @@ function RelationsSection({
         )}
       </AccordionDetails>
 
-      {canManageRelations && (
+      {canManageRelations && !existingBoRelationsOnly && (
         <AddRelationsDialog
           open={addOpen}
           onClose={handleAddClosed}

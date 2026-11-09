@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import require_permission
-from app.api.v1.cards import card_detail_response
+from app.api.v1.cards import card_detail_response, redact_bo_card_references
 from app.database import get_db
 from app.models.user import User
 from app.schemas.bo_relationship import (
@@ -64,12 +64,7 @@ async def get_object_detail(
     read_scope = await service.bo_read_scope(db, user)
     card = await service.get_bo_card(db, read_scope, object_id, detail=True)
     response = await card_detail_response(db, user, card)
-    if not await PermissionService.has_app_permission(db, user, "admin.users"):
-        for stakeholder in response.stakeholders:
-            stakeholder.user_email = None
-    if card.parent_id and not await service.bo_parent_readable(db, read_scope, card.parent_id):
-        response.parent_id = None
-        response.parent_label = None
+    await redact_bo_card_references(db, user, card, response, read_scope)
     effective = (await PermissionService.get_effective_card_permissions(db, user, object_id))[
         "effective"
     ]

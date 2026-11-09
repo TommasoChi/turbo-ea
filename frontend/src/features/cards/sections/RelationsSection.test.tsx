@@ -607,6 +607,38 @@ describe("RelationsSection attribute row", () => {
     expect(screen.queryByText("n:1")).not.toBeInTheDocument();
   });
 
+  it("keeps existing ER attributes editable in the BO panel without structural actions", async () => {
+    const er = {
+      ...orgToOrg,
+      key: "relDataObjectToDataObject",
+      attributes_schema: [{ key: "cardinality", label: "Cardinality", type: "single_select", options: [{ key: "1:n", label: "1:n" }] }],
+    };
+    mm.relationTypes = [er, orgToOrg];
+    const row = {
+      ...relation("er", "Linked BO", er.key),
+      attributes: { cardinality: "1:n" },
+    };
+    mockApi([row, relation("other", "Other relation", orgToOrg.key)], []);
+    render(
+      <RelationsSection
+        fsId={FS}
+        cardTypeKey="Organization"
+        canManageRelations
+        existingBoRelationsOnly
+        initialExpanded
+      />,
+    );
+    expect(await screen.findByText("Linked BO")).toBeInTheDocument();
+    expect(api.get).toHaveBeenCalledWith(
+      `/relations?card_id=${FS}&type=relDataObjectToDataObject`,
+      expect.anything(),
+    );
+    expect(screen.getByRole("button", { name: "Edit details" })).toBeInTheDocument();
+    expect(screen.queryByText("Other relation")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Remove" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Add/ })).not.toBeInTheDocument();
+  });
+
   it("strips the reserved ownership marker when editing CRUD", async () => {
     mm.relationTypes = [{ ...appToOrg, key: "relAppToDataObj", attributes_schema: [{ key: "dataOwnership", label: "Ownership", type: "boolean" }, { key: "crudRead", label: "Read", type: "boolean" }] }];
     const row = { ...relation("master", "Finance", "relAppToDataObj"), attributes: { dataOwnership: "master", crudRead: true } };

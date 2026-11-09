@@ -339,6 +339,8 @@ Commit the frontend, backend, tests, and regenerated OpenAPI together as `feat(b
 
 ## Task 4: Layout, diagram and card panel actions
 
+**Verified behavior.** The primary mouse button and keyboard activation open the same scoped card in the right-hand panel. A Chromium smoke test with fixture API responses verified switching BOs and zooming with the panel open. The route and menu are wired in Task 7.
+
 **Files:**
 - Create: `frontend/src/features/boRelationship/boRelationshipLayout.ts`
 - Create: `frontend/src/features/boRelationship/boRelationshipLayout.test.ts`
@@ -350,7 +352,7 @@ Commit the frontend, backend, tests, and regenerated OpenAPI together as `feat(b
 - Consume the Task 2 graph, detail, Application search and Master contracts. Reuse `CardDetailSidePanel` with a non-modal BO adapter that uses the scoped detail loader for the card and permissions. Use existing module-scoped reads for the enabled tabs. Gate or omit sections that need a stronger grant. Preserve the ordinary card write checks. Reuse `CardPicker` and its paged-search hook with the BO Application endpoint. Preserve the default loaders in other pages.
 - Produces: `computeLayout(nodes: {id: string}[], edges: {source: string; target: string}[], existingPositions: Record<string, {x: number; y: number}>): Record<string, {x: number; y: number}>` — returns `existingPositions` unchanged for any id already present in it, and runs dagre only for the ids that are not. `BoRelationshipPage`'s default export, no props (a route-level page).
 
-- [ ] **Step 1: Write the failing tests for `computeLayout`**
+- [x] **Step 1: Write the failing tests for `computeLayout`**
 
 ```ts
 // boRelationshipLayout.test.ts
@@ -369,21 +371,21 @@ test("computes a position for a node with none", () => {
 });
 ```
 
-- [ ] **Step 2: Run to verify they fail**
+- [x] **Step 2: Run to verify they fail**
 
 Run: `cd frontend && npx vitest run boRelationshipLayout.test.ts`
 Expected: FAIL — module does not exist.
 
-- [ ] **Step 3: Implement `computeLayout`**
+- [x] **Step 3: Implement `computeLayout`**
 
 Follow `frontend/src/features/reports/layeredDependencyLayout.ts`'s own use of `@dagrejs/dagre` (read it first for the exact dagre API calls this codebase already uses — `dagre.graphlib.Graph`, `setNode`/`setEdge`/`layout()` — and reuse that same call shape, not a new one): run dagre for the new nodes and their context. Keep saved coordinates fixed and place new nodes clear of their occupied space. Test adding a node to an already placed graph, with the existing coordinates preserved.
 
-- [ ] **Step 4: Run to verify they pass**
+- [x] **Step 4: Run to verify they pass**
 
 Run: `cd frontend && npx vitest run boRelationshipLayout.test.ts`
 Expected: PASS.
 
-- [ ] **Step 5: Write the failing tests for `BoRelationshipPage` (read-only behavior)**
+- [x] **Step 5: Write the failing tests for `BoRelationshipPage` (read-only behavior)**
 
 ```tsx
 // BoRelationshipPage.test.tsx — mock @/api/client the way CostReport.test.tsx
@@ -405,31 +407,28 @@ it("an unrelated DataObject renders isolated with empty master/slave lists", asy
 it("refreshes both panels after assigning, transferring or clearing the Master", async () => {});
 ```
 
-- [ ] **Step 6: Run to verify they fail**
+- [x] **Step 6: Run to verify they fail**
 
 Run: `cd frontend && npx vitest run BoRelationshipPage.test.tsx`
 Expected: FAIL — module does not exist.
 
-- [ ] **Step 7: Render the diagram and wire selection and Master controls.** Canvas Save arrives in Task 6.
+- [x] **Step 7: Render the diagram and wire selection and Master controls.** Canvas Save arrives in Task 6.
 
 Render saved nodes, ER edges and positions. Use the rounded Data shape, folded-corner Document shape and neutral legacy fallback. Put the legend below the diagram. Keep anchored nodes fixed. Render GDPR and payment badges from the snapshot flags and explain them in the diagram legend. Show scoped Application groups. A left-click on a BO opens its existing card drawer on the right without routing away. Use the same activation for the keyboard. Group the personal/payment badges under Indicators there. Hide Master controls when the API capability is false and gate all BO edits. Keep the card panel's existing save workflow for its own edits. Recheck the canvas after a successful edit and preserve unsaved canvas state. Wire inventory check and acceptance in Task 8.
 
-- [ ] **Step 8: Run to verify they pass**
+- [x] **Step 8: Run to verify they pass**
 
 Run: `cd frontend && npx vitest run boRelationshipLayout.test.ts BoRelationshipPage.test.tsx`
 Expected: PASS.
 
-- [ ] **Step 9: Lint & typecheck**
+- [x] **Step 9: Lint & typecheck**
 
 Run: `cd frontend && npx eslint --fix src/features/boRelationship/ && npx tsc --noEmit`
 Expected: clean.
 
-- [ ] **Step 10: Commit**
+- [x] **Step 10: Commit**
 
-```bash
-git add frontend/src/features/boRelationship/ frontend/src/components/CardDetailSidePanel.tsx frontend/src/components/CardDetailSidePanel.test.tsx
-git commit -m "feat(bo-relationship): diagram page — nodes, edges, side panels"
-```
+Commit the BO page, scoped card and picker changes, and regressions together as `feat(bo): add relationship diagram and panels`.
 
 ---
 

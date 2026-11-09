@@ -264,15 +264,6 @@ async def get_bo_card(
     return card
 
 
-async def bo_parent_readable(db: AsyncSession, scope: CardReadScope, parent_id: uuid.UUID) -> bool:
-    return (
-        await db.scalar(
-            select(Card.id).where(Card.id == parent_id, *scope.where(Card, mode="module"))
-        )
-        is not None
-    )
-
-
 async def search_bo_applications(
     db: AsyncSession, user: User, search: str | None, page: int, page_size: int
 ) -> BoApplicationPage:

@@ -93,6 +93,7 @@ import type {
 
 interface Props {
   card: Card;
+  boScoped?: boolean;
   perms: CardEffectivePermissions["effective"];
   onCardUpdate: (card: Card) => void;
   /** Show BPM tabs (Process Flow, Assessments) for BusinessProcess cards (default true) */
@@ -132,6 +133,7 @@ const FOCUS_SCROLL_DELAY_MS = 250;
 
 export default function CardDetailContent({
   card,
+  boScoped = false,
   perms,
   onCardUpdate,
   showBpmTabs = true,
@@ -167,7 +169,7 @@ export default function CardDetailContent({
   const canViewRisks = can("risks.view");
 
   useEffect(() => {
-    if (!grcEnabled) {
+    if (boScoped || !grcEnabled) {
       setRisksCount(0);
       setComplianceCount(0);
       return;
@@ -202,7 +204,7 @@ export default function CardDetailContent({
     return () => {
       cancelled = true;
     };
-  }, [card.id, grcEnabled, canViewRisks, canViewCompliance]);
+  }, [card.id, grcEnabled, canViewRisks, canViewCompliance, boScoped]);
 
   // Card-scoped ADR count. Same `null = loading` convention as above, but ADRs
   // are not GRC-gated so this lives in its own effect. Unlike Risks the tab
@@ -212,7 +214,7 @@ export default function CardDetailContent({
   const canViewAdr = can("adr.view");
 
   useEffect(() => {
-    if (!canViewAdr) {
+    if (boScoped || !canViewAdr) {
       setAdrCount(0);
       return;
     }
@@ -229,7 +231,7 @@ export default function CardDetailContent({
     return () => {
       cancelled = true;
     };
-  }, [card.id, canViewAdr]);
+  }, [card.id, canViewAdr, boScoped]);
 
   // The tab the user asked for: a key, or an index from an older deep link.
   const [requestedTab, setRequestedTab] = useState<number | string>(initialTab);
@@ -384,11 +386,13 @@ export default function CardDetailContent({
   );
   const refreshCard = useCallback(
     async (anchor: string) => {
-      const updated = await api.get<Card>(`/cards/${card.id}`);
+      const updated = boScoped
+        ? (await api.get<{ card: Card }>(`/bo-relationship/objects/${card.id}/detail`)).card
+        : await api.get<Card>(`/cards/${card.id}`);
       onSaveOriginRef.current?.(anchor);
       onCardUpdate(updated);
     },
-    [card.id, onCardUpdate],
+    [card.id, onCardUpdate, boScoped],
   );
   // The End of Life section: no origin, the gain plays at the pill.
   const handleUpdate = useCallback(
@@ -457,6 +461,7 @@ export default function CardDetailContent({
 
   const renderSection = (key: string) => {
     if (secHidden(key)) return null;
+    if (boScoped && !["description", "lifecycle", "tags", "relations"].includes(key) && !key.startsWith("custom:")) return null;
     const exp = secExpanded(key, sectionDefaultExpanded(key));
 
     if (key === "description") {
@@ -596,7 +601,8 @@ export default function CardDetailContent({
             cardTypeKey={card.type}
             cardSubtype={card.subtype}
             refreshKey={relRefresh}
-            canManageRelations={perms.can_manage_relations}
+            canManageRelations={perms.can_manage_relations && (!boScoped || can("relations.manage"))}
+            existingBoRelationsOnly={boScoped}
             initialExpanded={exp}
             onCardUpdate={refreshFrom(sectionAnchor("relations"))}
             expandOn={expandOn(sectionAnchor("relations"))}
@@ -633,7 +639,7 @@ export default function CardDetailContent({
     return null;
   };
 
-  const tabKeys = cardTabKeys({
+  const tabKeys = (boScoped ? ["card", ...(can("comments.view") ? ["comments"] : [])] : cardTabKeys({
     cardType: card.type,
     showBpmTabs,
     showPpmTab,
@@ -646,12 +652,12 @@ export default function CardDetailContent({
     canViewAdr,
     adrCount,
     canManageAdrLinks: perms.can_manage_adr_links,
-  });
+  })) as CardTabKey[];
 
   // Extension-contributed tabs render at the very end of the strip,
   // filtered by card type (appliesTo) and app-level permission.
   const uiExtensions = useExtensionUI();
-  const extensionTabs = visibleExtensionTabs(uiExtensions, card.type, (permission) =>
+  const extensionTabs = boScoped ? [] : visibleExtensionTabs(uiExtensions, card.type, (permission) =>
     hasPermission(user?.permissions, permission),
   );
   // A tab that vanished (a count settled at 0) or never existed opens the
@@ -661,7 +667,7 @@ export default function CardDetailContent({
     ...extensionTabs.map((x) => x.value),
   ]);
 
-  const { hasUpdates, noteVisit } = useCardTabActivity(card.id, user?.id);
+  const { hasUpdates, noteVisit } = useCardTabActivity(card.id, user?.id, !boScoped);
 
   // Note which tabs the user has opened during this visit. The dots stay
   // visible for the whole visit — noteVisit buffers the timestamps and the
@@ -691,7 +697,7 @@ export default function CardDetailContent({
       {/* Headless extension field-visibility providers (render null). Stable
           list + stable key per extension so each provider's hooks keep order.
           Each runs inside ExtensionBoundary so a crash can't blank the card. */}
-      {fieldVisibilityProviders.map(({ extKey, provider: Provider }) => (
+      {!boScoped && fieldVisibilityProviders.map(({ extKey, provider: Provider }) => (
         <ExtensionBoundary key={`fv-${extKey}`} extensionKey={extKey}>
           <Provider card={card} report={reportHiddenFields} />
         </ExtensionBoundary>
@@ -724,10 +730,12 @@ export default function CardDetailContent({
           "&& > *": { margin: 0 },
         }}
       >
-        <ExtensionSlot
-          name="card.detail.header"
-          context={{ cardId: card.id, cardType: card.type }}
-        />
+        {!boScoped && (
+          <ExtensionSlot
+            name="card.detail.header"
+            context={{ cardId: card.id, cardType: card.type }}
+          />
+        )}
       </Box>
 
       {beforeTabs}
@@ -764,7 +772,7 @@ export default function CardDetailContent({
             </Alert>
           )}
           {sectionOrder.map(renderSection)}
-          {showLdvSection && (
+          {showLdvSection && !boScoped && (
             <ErrorBoundary label="Dependencies" inline>
               <LayeredDependencySection cardId={card.id} />
             </ErrorBoundary>
