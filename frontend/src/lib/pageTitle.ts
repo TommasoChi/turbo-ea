@@ -78,6 +78,7 @@ export const ROUTE_TITLES: RouteTitle[] = [
   { path: "/application-architecture/diagram", titleKey: "applicationDiagram" },
   { path: "/technology-architecture/diagram", titleKey: "technologyDiagram" },
   { path: "/application-architecture/data-flow", titleKey: "dataFlow" },
+  { path: "/application-architecture/bo-relationship", titleKey: "boRelationship" },
 
   // --- Personal -----------------------------------------------------------
   { path: "/todos", titleKey: "todos" },

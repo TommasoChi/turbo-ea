@@ -85,6 +85,7 @@ const ValueStreamPage = lazy(() => import("@/features/value-chain/ValueStreamPag
 const ArchimateSandboxPage = lazy(() => import("@/features/archimate/ArchimateSandboxPage"));
 const ArchimateEditorPage = lazy(() => import("@/features/archimate/ArchimateEditorPage"));
 const ComingSoonPage = lazy(() => import("@/features/application-architecture/ComingSoonPage"));
+const BoRelationshipPage = lazy(() => import("@/features/boRelationship/BoRelationshipPage"));
 
 /** Preserve the :id when redirecting /ea-delivery/risks/:id → /grc/risks/:id. */
 function LegacyRiskDetailRedirect() {
@@ -222,6 +223,7 @@ function AppRoutes() {
                     duplicated by an installed extension); no functionality
                     behind Data Flow yet. */}
                 <Route path="/application-architecture/data-flow" element={<ComingSoonPage titleKey="dataFlow" />} />
+                <Route path="/application-architecture/bo-relationship" element={<BoRelationshipPage />} />
                 {/* EA Delivery: page dissolved in 1.10.0. Initiatives workspace
                     moved to /reports/ea-delivery; risks moved to /grc?tab=risk.
                     Editor routes for SoAW and ADR keep their /ea-delivery/ paths

@@ -61,6 +61,7 @@ const KNOWN_PERMISSIONS = new Set([
   "bpm.value_chain",
   "bpm.view",
   "bpm.withdraw_flows",
+  "boRelationship.view",
   "bookmarks.manage",
   "comments.create",
   "comments.manage",
@@ -143,6 +144,12 @@ describe("permissionForPath", () => {
 });
 
 describe("canAccessPath", () => {
+  it("denies direct BO Relationship access without view permission", () => {
+    const path = "/application-architecture/bo-relationship";
+    expect(canAccessPath({}, path)).toBe(false);
+    expect(canAccessPath({ "boRelationship.edit": true }, path)).toBe(false);
+    expect(canAccessPath({ "boRelationship.view": true }, path)).toBe(true);
+  });
   it("is fail-closed on missing permissions", () => {
     expect(canAccessPath(undefined, "/ppm")).toBe(false);
     expect(canAccessPath({}, "/ppm")).toBe(false);

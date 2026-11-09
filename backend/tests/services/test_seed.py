@@ -34,6 +34,12 @@ async def test_bo_relationship_role_defaults_preserve_explicit_overrides(db):
     assert not bpm_admin.permissions.get("boRelationship.edit")
 
 
+async def test_bo_relationship_seed_keeps_existing_wildcard_role(db):
+    member = await create_role(db, key="member", permissions={"*": True})
+    await seed_metamodel(db)
+    assert member.permissions == {"*": True}
+
+
 # ---------------------------------------------------------------------------
 # Card types
 # ---------------------------------------------------------------------------

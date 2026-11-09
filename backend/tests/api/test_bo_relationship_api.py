@@ -6,6 +6,12 @@ from sqlalchemy import delete, event, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.relations import apply_relation_operations
+from app.core.permissions import (
+    ADMIN_PERMISSIONS,
+    BPM_ADMIN_PERMISSIONS,
+    MEMBER_PERMISSIONS,
+    VIEWER_PERMISSIONS,
+)
 from app.models.bo_operation_receipt import BoOperationReceipt
 from app.models.card import Card
 from app.models.card_type import CardType
@@ -88,6 +94,25 @@ async def env(db):
 
 async def bo(db, name="Customer"):
     return await create_card(db, card_type="DataObject", subtype="Data", name=name)
+
+
+@pytest.mark.parametrize(
+    ("role_key", "permissions", "view_status", "edit_status"),
+    [
+        ("admin", ADMIN_PERMISSIONS, 200, 200),
+        ("bpm_admin", BPM_ADMIN_PERMISSIONS, 200, 403),
+        ("member", MEMBER_PERMISSIONS, 200, 403),
+        ("viewer", VIEWER_PERMISSIONS, 200, 403),
+        ("custom", {"inventory.view": True}, 403, 403),
+    ],
+)
+async def test_default_role_permissions_gate_bo_view_and_save(
+    client, db, role_key, permissions, view_status, edit_status
+):
+    await create_role(db, key=role_key, permissions=permissions)
+    headers = auth_headers(await create_user(db, role=role_key))
+    assert (await client.get(BASE, headers=headers)).status_code == view_status
+    assert (await client.put(f"{BASE}/layout", headers=headers, json={})).status_code == edit_status
 
 
 async def test_draft_object_recovers_lost_response_and_does_not_recreate_deleted_card(

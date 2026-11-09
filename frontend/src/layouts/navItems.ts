@@ -94,6 +94,7 @@ export const NAV_ITEM_DEFS: NavItemDef[] = [
     children: [
       { labelKey: "dataFlow", icon: "device_hub", path: "/application-architecture/data-flow" },
       { labelKey: "applicationDiagram", icon: "schema", path: "/application-architecture/diagram" },
+      { labelKey: "boRelationship", icon: "account_tree", path: "/application-architecture/bo-relationship" },
     ],
   },
   // Technology Architecture: new top-level dropdown, mirroring Business

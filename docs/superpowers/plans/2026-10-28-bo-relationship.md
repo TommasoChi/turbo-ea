@@ -507,15 +507,18 @@ Save publishes completed draft operations once using their receipts. It reports 
 
 ## Task 7: Menu entry and permission wiring
 
+The menu and the direct route share the `boRelationship.view` gate. Revision 181 adds missing view grants to seeded roles without overwriting explicit choices. Admin keeps its wildcard grant.
+
 **Files:**
 - Modify `frontend/src/App.tsx`, `frontend/src/lib/routePermissions.ts` and the built-in Application & Data navigation.
 - Modify: `frontend/src/features/boRelationship/BoRelationshipPage.test.tsx` (view-permission test, if not already covered by Task 2's backend test).
+- Add the guarded role backfill and regression tests in Alembic revision 181. Keep the equivalent seed guard for direct seeding.
 
 **Interfaces:**
 - Consumes: Task 4's `BoRelationshipPage`.
 - Produce the lazy page and initial Administrator/edit and viewer-only grants for Task 8.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```tsx
 it("a view-only user sees the diagram but cannot save", async () => {
@@ -525,33 +528,30 @@ it("a view-only user sees the diagram but cannot save", async () => {
 });
 ```
 
-(This may already be fully covered by Task 6's Step 1 "disabled without boRelationship.edit" test — if so, this task's own test is redundant and should be skipped, with a one-line note in the ledger saying why, rather than duplicated.)
+Task 6 already covers the view-only diagram. Task 7 adds regression tests for the menu, the direct route, the seeded roles and the migration.
 
-- [ ] **Step 2: Run to verify it fails (or confirm it's already covered)**
+- [x] **Step 2: Run to verify it fails (or confirm it's already covered)**
 
 Run: `cd frontend && npx vitest run BoRelationshipPage.test.tsx`
 Expected: PASS already if Task 6 covers it (skip Steps 3-4 of this task's TDD cycle for this specific test, ledger why); otherwise FAIL and continue.
 
-- [ ] **Step 3: Add the route and menu entry**
+- [x] **Step 3: Add the route and menu entry**
 
 Add the lazy route and declare `boRelationship.view` in `ROUTE_PERMISSIONS`. Use the same gate for navigation. Seed the initial grants for new workspaces and apply a guarded role migration for existing workspaces. Add view where absent and preserve explicit overrides. Verify that the Administrator starts with edit and other default roles with view only. Deny direct navigation without view access.
 
-- [ ] **Step 4: Run the full frontend reports+cards+boRelationship suite**
+- [x] **Step 4: Run the frontend route, menu, cards and BO regressions**
 
-Run: `cd frontend && npx vitest run src/features/boRelationship src/features/cards/sections/RelationAttributesEditor.test.tsx`
+Run: `cd frontend && npx vitest run src/App.test.tsx src/layouts/AppLayout.test.tsx src/lib/routePermissions.test.ts src/lazyRoutes.sourceScan.test.tsx src/features/boRelationship src/features/cards/sections/RelationAttributesEditor.test.tsx`
 Expected: every file passes.
 
-- [ ] **Step 5: Lint & typecheck**
+- [x] **Step 5: Lint & typecheck**
 
 Run: `cd frontend && npx eslint --fix src/features/boRelationship/ && npx tsc --noEmit`
 Expected: clean.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
-```bash
-git add -A
-git commit -m "feat(bo-relationship): menu entry under Application & Data, permission-gated"
-```
+Commit the route, menu, role backfill and tests as `feat(bo): add permission-gated navigation`.
 
 ---
 

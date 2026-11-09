@@ -128,6 +128,7 @@ export const ROUTE_PERMISSIONS: RoutePermission[] = [
   // rather than left ungated, so the group does not show for a user who
   // cannot see Diagrams at all.
   { path: "/application-architecture/data-flow", permission: "diagrams.view" },
+  { path: "/application-architecture/bo-relationship", permission: "boRelationship.view" },
 
   // --- Surveys ------------------------------------------------------------
   { path: "/surveys/:surveyId/respond/:cardId", permission: "surveys.respond" },

@@ -6548,10 +6548,15 @@ async def seed_metamodel(db: AsyncSession) -> None:
         existing = existing_roles.get(r["key"])
         if existing is None:
             db.add(Role(**r))
-        elif r["permissions"].get("boRelationship.view") and "boRelationship.view" not in (
-            existing.permissions or {}
+            continue
+        permissions = existing.permissions
+        if (
+            r["permissions"].get("boRelationship.view")
+            and isinstance(permissions, dict)
+            and not permissions.get("*")
+            and "boRelationship.view" not in permissions
         ):
-            existing.permissions = {**(existing.permissions or {}), "boRelationship.view": True}
+            existing.permissions = {**permissions, "boRelationship.view": True}
 
     # ── Seed stakeholder role definitions ──────────────────────────────────
     # Flush first so that any newly-inserted card_types rows are
