@@ -16,6 +16,7 @@ from app.schemas.bo_relationship import (
     BoApplicationPage,
     BoDetail,
     BoDraftComparison,
+    BoDraftComparisonResult,
     BoEdge,
     BoGraph,
     BoInventoryChanges,
@@ -49,14 +50,14 @@ async def get_changes(
     return await service.compare_bo_inventory(db, user)
 
 
-@router.post("/changes/draft", response_model=BoInventoryChanges)
+@router.post("/changes/draft", response_model=BoDraftComparisonResult)
 async def compare_draft(
     body: BoDraftComparison,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require_permission("boRelationship.edit")),
 ):
     await PermissionService.require_permission(db, user, "boRelationship.view")
-    return await service.compare_bo_inventory(db, user, set(body.removed_relation_ids))
+    return await service.compare_bo_draft(db, user, body)
 
 
 @router.put("/layout", response_model=BoLayoutResult)

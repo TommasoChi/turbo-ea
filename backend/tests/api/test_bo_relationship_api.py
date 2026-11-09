@@ -33,6 +33,7 @@ from app.schemas.bo_relationship import (
     BoRelationDraft,
 )
 from app.schemas.relation import RelationBulkOperation
+from app.services import bo_relationship as bo_service
 from app.services.bo_relationship import (
     ErDeleteEvidence,
     inventory_item_revision,
@@ -1457,3 +1458,157 @@ async def test_unavailable_accepted_addition_does_not_block_position_save(
     assert response.status_code == 200
     assert response.json()["inventory_conflicts"] == [{"kind": "node", "id": str(added.id)}]
     assert response.json()["positions"] == {str(anchor.id): {"x": 23, "y": 45}}
+
+
+async def test_draft_validation_reports_scoped_receipts_and_is_read_only(client, db, env):
+    a, b = await bo(db, "A"), await bo(db, "B")
+    app = await create_card(db, card_type="Application", name="App")
+    hidden = await create_card(db, card_type="Application", subtype="Restricted", name="Secret")
+    edge = await create_relation(db, type_key=ER, source_id=a.id, target_id=b.id)
+    actor = await db.scalar(select(User).where(User.role == "partial"))
+    other = await db.scalar(select(User).where(User.role == "admin"))
+    saved, published, unavailable, foreign, pending = [uuid.uuid4() for _ in range(5)]
+    for owner, draft, kind, result in [
+        (actor, saved, "node", a.id),
+        (actor, published, "edge", edge.id),
+        (actor, published, "layout_edge", edge.id),
+        (actor, unavailable, "node", uuid.uuid4()),
+        (other, foreign, "node", b.id),
+    ]:
+        db.add(
+            BoOperationReceipt(
+                actor_id=owner.id,
+                draft_id=draft,
+                kind=kind,
+                result_id=result,
+                fingerprint="private",
+            )
+        )
+    await db.flush()
+    before = len(list(await db.scalars(select(BoOperationReceipt))))
+    operations = [
+        {"kind": kind, "id": str(id_)}
+        for kind, id_ in [
+            ("node", saved),
+            ("edge", published),
+            ("node", unavailable),
+            ("node", foreign),
+            ("node", pending),
+        ]
+    ]
+    response = await client.post(
+        f"{BASE}/changes/draft",
+        headers=env["partial"],
+        json={
+            "draft_operations": operations,
+            "object_ids": [str(a.id), str(uuid.uuid4())],
+            "application_ids": [str(app.id), str(hidden.id)],
+        },
+    )
+    assert response.status_code == 200
+    result = response.json()
+    by_id = {item["id"]: item for item in result["draft_results"]}
+    assert by_id[str(saved)]["status"] == "saved" and by_id[str(saved)]["value"]["id"] == str(a.id)
+    assert by_id[str(published)]["status"] == "published" and by_id[str(published)]["value"][
+        "id"
+    ] == str(edge.id)
+    assert (
+        by_id[str(unavailable)]["status"] == "unavailable"
+        and by_id[str(unavailable)]["value"] is None
+    )
+    assert by_id[str(foreign)]["status"] == by_id[str(pending)]["status"] == "pending"
+    assert result["object_ids"] == [str(a.id)]
+    assert result["applications"] == [{"id": str(app.id), "name": "App"}]
+    assert "private" not in str(result) and str(hidden.id) not in str(result)
+    assert len(list(await db.scalars(select(BoOperationReceipt)))) == before
+
+
+async def test_draft_validation_keeps_an_operation_written_during_inventory_read(
+    client, db, env, monkeypatch
+):
+    actor = await db.scalar(select(User).where(User.role == "editor"))
+    draft_id = uuid.uuid4()
+    load_inventory = bo_service.load_bo_inventory
+
+    async def inventory_then_write(session, scope):
+        inventory = await load_inventory(session, scope)
+        # Simulate a receipt and its result becoming visible after the read.
+        card = await bo(session)
+        session.add(
+            BoOperationReceipt(
+                actor_id=actor.id,
+                draft_id=draft_id,
+                kind="node",
+                result_id=card.id,
+                fingerprint="test",
+            )
+        )
+        await session.flush()
+        return inventory
+
+    monkeypatch.setattr(bo_service, "load_bo_inventory", inventory_then_write)
+    response = await client.post(
+        f"{BASE}/changes/draft",
+        headers=env["editor"],
+        json={"draft_operations": [{"kind": "node", "id": str(draft_id)}]},
+    )
+    assert response.status_code == 200
+    assert response.json()["draft_results"] == [
+        {"kind": "node", "id": str(draft_id), "status": "pending", "value": None}
+    ]
+
+
+async def test_draft_validation_hides_revoked_or_deleted_relation_results(client, db, env):
+    a, b = await bo(db, "A"), await bo(db, "B")
+    app = await create_card(db, card_type="Application", subtype="Restricted", name="Secret")
+    edge = await create_relation(db, type_key=ER, source_id=a.id, target_id=b.id)
+    link = await create_relation(db, type_key=APP_LINK, source_id=app.id, target_id=a.id)
+    actor = await db.scalar(select(User).where(User.role == "partial"))
+    erased, restricted = uuid.uuid4(), uuid.uuid4()
+    db.add_all(
+        [
+            BoOperationReceipt(
+                actor_id=actor.id,
+                draft_id=erased,
+                result_id=edge.id,
+                kind="edge",
+                fingerprint="private",
+            ),
+            BoOperationReceipt(
+                actor_id=actor.id,
+                draft_id=restricted,
+                result_id=link.id,
+                kind="application_link",
+                fingerprint="private",
+            ),
+        ]
+    )
+    await db.delete(edge)
+    await db.flush()
+    body = {
+        "draft_operations": [
+            {"kind": "edge", "id": str(erased)},
+            {"kind": "application_link", "id": str(restricted)},
+        ]
+    }
+    result = await client.post(f"{BASE}/changes/draft", headers=env["partial"], json=body)
+    assert result.status_code == 200
+    assert [item["status"] for item in result.json()["draft_results"]] == [
+        "unavailable",
+        "unavailable",
+    ]
+    assert all(item["value"] is None for item in result.json()["draft_results"])
+    assert str(app.id) not in str(result.json())
+
+
+@pytest.mark.parametrize("field", ["draft_operations", "object_ids", "application_ids"])
+async def test_draft_validation_bounds_input(client, env, field):
+    item = (
+        {"kind": "node", "id": str(uuid.uuid4())}
+        if field == "draft_operations"
+        else str(uuid.uuid4())
+    )
+    result = await client.post(
+        f"{BASE}/changes/draft", headers=env["editor"], json={field: [item] * 5001}
+    )
+    assert result.status_code == 422

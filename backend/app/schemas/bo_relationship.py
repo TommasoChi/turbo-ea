@@ -161,7 +161,22 @@ class BoInventoryChanges(BaseModel):
     changes: list[BoInventoryChange]
 
 
+class BoDraftResult(BoInventoryItem):
+    status: Literal["pending", "unavailable", "saved", "published"]
+    value: BoNode | BoEdge | BoApplicationLink | None
+
+
+class BoDraftComparisonResult(BoInventoryChanges):
+    draft_results: list[BoDraftResult] = Field(default_factory=list)
+    object_ids: list[UUID] = Field(default_factory=list)
+    applications: list[BoApplication] = Field(default_factory=list)
+
+
 class BoDraftComparison(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     removed_relation_ids: list[UUID] = Field(default_factory=list, max_length=5000)
+
+    draft_operations: list[BoInventoryItem] = Field(default_factory=list, max_length=5000)
+    object_ids: list[UUID] = Field(default_factory=list, max_length=5000)
+    application_ids: list[UUID] = Field(default_factory=list, max_length=5000)

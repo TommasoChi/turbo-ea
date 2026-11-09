@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import uuid
-from collections.abc import Mapping
+from collections.abc import Collection, Mapping
 from dataclasses import dataclass, replace
 from typing import Literal, TypeVar, cast
 
@@ -31,6 +31,9 @@ from app.schemas.bo_relationship import (
     BoApplicationLink,
     BoApplicationPage,
     BoCapabilities,
+    BoDraftComparison,
+    BoDraftComparisonResult,
+    BoDraftResult,
     BoEdge,
     BoGraph,
     BoInventoryChange,
@@ -81,6 +84,7 @@ class BoInventory:
     applications: set[uuid.UUID]
     edge_ids: set[uuid.UUID]
     application_link_ids: set[uuid.UUID]
+    active_applications: dict[uuid.UUID, BoApplication]
 
 
 class ErDeleteEvidence(BaseModel):
@@ -212,7 +216,7 @@ async def load_bo_inventory(db: AsyncSession, scope: CardReadScope) -> BoInvento
                         application=active_apps[source],
                         is_master=attrs.get(OWNERSHIP_KEY) == MASTER,
                     )
-    return BoInventory(snapshot, objects, applications, edge_ids, application_link_ids)
+    return BoInventory(snapshot, objects, applications, edge_ids, application_link_ids, active_apps)
 
 
 def _group_links(links: list[BoApplicationLink]) -> BoApplicationGroup:
@@ -404,10 +408,15 @@ def inventory_item_revision(
 
 
 async def compare_bo_inventory(
-    db: AsyncSession, user: User, removed_relation_ids: set[uuid.UUID] | None = None
+    db: AsyncSession,
+    user: User,
+    removed_relation_ids: set[uuid.UUID] | None = None,
+    *,
+    inventory: BoInventory | None = None,
 ) -> BoInventoryChanges:
-    scope = await bo_read_scope(db, user)
-    inventory = await load_bo_inventory(db, scope)
+    if inventory is None:
+        scope = await bo_read_scope(db, user)
+        inventory = await load_bo_inventory(db, scope)
     diagram = await _bo_diagram(db)
     snapshot = BoSnapshot.model_validate(diagram.data or {}) if diagram else BoSnapshot()
     if snapshot.snapshot_revision is None:
@@ -623,6 +632,67 @@ def _apply_inventory_changes(
     return conflicts
 
 
+async def _draft_receipt_results(
+    db: AsyncSession, actor_id: uuid.UUID, operations: Collection[tuple[str, uuid.UUID]]
+) -> dict[tuple[str, uuid.UUID], uuid.UUID]:
+    if not operations:
+        return {}
+    kinds = {kind for kind, _ in operations}
+    rows = await db.execute(
+        select(
+            BoOperationReceipt.kind, BoOperationReceipt.draft_id, BoOperationReceipt.result_id
+        ).where(
+            BoOperationReceipt.actor_id == actor_id,
+            BoOperationReceipt.kind.in_(kinds | {f"layout_{kind}" for kind in kinds}),
+            BoOperationReceipt.draft_id.in_({id_ for _, id_ in operations}),
+        )
+    )
+    return {(kind, id_): result for kind, id_, result in rows}
+
+
+async def compare_bo_draft(
+    db: AsyncSession, user: User, body: BoDraftComparison
+) -> BoDraftComparisonResult:
+    requested = {(item.kind, item.id): item for item in body.draft_operations}
+    # A receipt committed during this read can be retried safely as pending.
+    # Read receipts first so a new receipt cannot outpace its inventory result.
+    results = await _draft_receipt_results(db, user.id, requested.keys())
+    scope = await bo_read_scope(db, user)
+    inventory = await load_bo_inventory(db, scope)
+    changes = await compare_bo_inventory(
+        db, user, set(body.removed_relation_ids), inventory=inventory
+    )
+    live: dict[str, Mapping[uuid.UUID, BoNode | BoEdge | BoApplicationLink]] = {
+        "node": inventory.active.nodes,
+        "edge": inventory.active.edges,
+        "application_link": inventory.active.application_links,
+    }
+    drafts = []
+    for (kind, id_), item in requested.items():
+        result_id = results.get((kind, id_))
+        value = live[kind].get(result_id) if result_id else None
+        status: Literal["pending", "unavailable", "saved", "published"] = (
+            "pending"
+            if result_id is None
+            else "unavailable"
+            if value is None
+            else "published"
+            if (f"layout_{kind}", id_) in results
+            else "saved"
+        )
+        drafts.append(BoDraftResult(**item.model_dump(), status=status, value=value))
+    return BoDraftComparisonResult(
+        changes=changes.changes,
+        draft_results=drafts,
+        object_ids=[id_ for id_ in dict.fromkeys(body.object_ids) if id_ in inventory.active.nodes],
+        applications=[
+            inventory.active_applications[id_]
+            for id_ in dict.fromkeys(body.application_ids)
+            if id_ in inventory.active_applications
+        ],
+    )
+
+
 def _normalize_saved_masters(snapshot: BoSnapshot, promoted: dict[uuid.UUID, uuid.UUID]) -> None:
     # Accepting both sides of a transfer must be independent of input order.
     if promoted:
@@ -642,19 +712,7 @@ async def _load_saved_drafts(
     drafts: list[BoInventoryItem],
 ) -> list[SavedDraft]:
     requested = {(item.kind, item.id): item for item in drafts}
-    if not requested:
-        return []
-    kinds = {kind for kind, _ in requested}
-    rows = await db.execute(
-        select(
-            BoOperationReceipt.kind, BoOperationReceipt.draft_id, BoOperationReceipt.result_id
-        ).where(
-            BoOperationReceipt.actor_id == user.id,
-            BoOperationReceipt.kind.in_(kinds | {f"layout_{kind}" for kind in kinds}),
-            BoOperationReceipt.draft_id.in_({draft_id for _, draft_id in requested}),
-        )
-    )
-    results = {(kind, draft_id): result_id for kind, draft_id, result_id in rows}
+    results = await _draft_receipt_results(db, user.id, requested.keys())
     live_items: dict[str, Mapping[uuid.UUID, BaseModel]] = {
         "node": live.nodes,
         "edge": live.edges,

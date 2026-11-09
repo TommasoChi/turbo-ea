@@ -1,5 +1,5 @@
-import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
-import { MemoryRouter } from "react-router";
+import { render, screen, fireEvent, waitFor, within, act } from "@testing-library/react";
+import { MemoryRouter, useLocation } from "react-router";
 import { vi, it, expect, beforeEach } from "vitest";
 import { api } from "@/api/client";
 import { useOptionalAuthUser } from "@/hooks/AuthContext";
@@ -7,7 +7,7 @@ import type { User } from "@/types";
 import BoRelationshipPage from "./BoRelationshipPage";
 import type Diagram from "./BoRelationshipDiagram";
 
-vi.mock("@/api/client", () => ({ api: { get: vi.fn(), put: vi.fn(), delete: vi.fn() }, isAbortError: () => false }));
+vi.mock("@/api/client", () => ({ api: { get: vi.fn(), post: vi.fn(), put: vi.fn(), delete: vi.fn() }, isAbortError: () => false }));
 vi.mock("@/hooks/AuthContext", () => ({ useOptionalAuthUser: vi.fn() }));
 vi.mock("@/hooks/useMetamodel", () => ({
   useMetamodel: () => ({
@@ -676,4 +676,241 @@ it.each([true, false])("retains a manual move after a conflicting removal only i
   const save = screen.getByRole("button", { name: "common:actions.save" });
   if (visible) expect(save).toBeEnabled();
   else expect(save).toBeDisabled();
+});
+
+it("offers a local moved drawing on reopen without changing the shared canvas", async () => {
+  localStorage.clear();
+  vi.mocked(useOptionalAuthUser).mockReturnValue({ id: "editor", permissions: { "*": true } } as User);
+  let shared = { ...baseGraph, nodes: [customer, order], positions: { ...baseGraph.positions, b: { x: 30, y: 40 } } };
+  vi.mocked(api.get).mockImplementation(async (path) => path === "/bo-relationship" ? shared : { changes: [] });
+  vi.mocked(api.post).mockResolvedValue({ changes: [], draft_results: [], object_ids: ["a"], applications: [] });
+  const view = render(<MemoryRouter><BoRelationshipPage /></MemoryRouter>);
+  await screen.findByRole("button", { name: "Customer" });
+  await screen.findByRole("button", { name: "Move first BO" });
+  vi.useFakeTimers();
+  fireEvent.click(screen.getByRole("button", { name: "Move first BO" }));
+  await act(async () => { vi.advanceTimersByTime(5100); });
+  view.unmount();
+  vi.useRealTimers();
+  shared = { ...shared, snapshot_revision: "another-editor", positions: { ...shared.positions, b: { x: 60, y: 80 } } };
+  render(<MemoryRouter><BoRelationshipPage /></MemoryRouter>);
+  await screen.findByRole("button", { name: "Customer" });
+  expect(screen.getByTestId("canvas")).toHaveAttribute("data-positions", JSON.stringify(shared.positions));
+  fireEvent.click(await screen.findByRole("button", { name: "boRelationship.restoreDraft" }));
+  expect(screen.getByTestId("canvas")).toHaveAttribute("data-positions", JSON.stringify({ a: { x: 96, y: 48 }, b: { x: 60, y: 80 } }));
+  expect(api.put).not.toHaveBeenCalled();
+});
+
+it("discards a recovered drawing without changing the shared canvas", async () => {
+  localStorage.clear();
+  vi.mocked(useOptionalAuthUser).mockReturnValue({ id: "editor", permissions: { "*": true } } as User);
+  vi.mocked(api.get).mockImplementation(async (path) => path === "/bo-relationship" ? baseGraph : { changes: [] });
+  vi.mocked(api.post).mockResolvedValue({ changes: [], draft_results: [], object_ids: ["a"], applications: [] });
+  const view = render(<MemoryRouter><BoRelationshipPage /></MemoryRouter>);
+  await screen.findByRole("button", { name: "Customer" });
+  await screen.findByRole("button", { name: "Move first BO" });
+  vi.useFakeTimers();
+  fireEvent.click(screen.getByRole("button", { name: "Move first BO" }));
+  await act(async () => { vi.advanceTimersByTime(5100); });
+  view.unmount();
+  vi.useRealTimers();
+  render(<MemoryRouter><BoRelationshipPage /></MemoryRouter>);
+  fireEvent.click(await screen.findByRole("button", { name: "boRelationship.discardDraft" }));
+  expect(screen.getByTestId("canvas")).toHaveAttribute("data-positions", JSON.stringify(baseGraph.positions));
+  expect(localStorage.length).toBe(0);
+});
+
+it("does not offer a moved object when access has been revoked", async () => {
+  localStorage.clear();
+  vi.mocked(useOptionalAuthUser).mockReturnValue({ id: "editor", permissions: { "*": true } } as User);
+  vi.mocked(api.get).mockImplementation(async (path) => path === "/bo-relationship" ? baseGraph : { changes: [] });
+  vi.mocked(api.post).mockResolvedValue({ changes: [], draft_results: [], object_ids: [], applications: [] });
+  const view = render(<MemoryRouter><BoRelationshipPage /></MemoryRouter>);
+  await screen.findByRole("button", { name: "Customer" });
+  await screen.findByRole("button", { name: "Move first BO" });
+  vi.useFakeTimers();
+  fireEvent.click(screen.getByRole("button", { name: "Move first BO" }));
+  await act(async () => { vi.advanceTimersByTime(5100); });
+  view.unmount();
+  vi.useRealTimers();
+  render(<MemoryRouter><BoRelationshipPage /></MemoryRouter>);
+  await waitFor(() => expect(api.post).toHaveBeenCalled());
+  expect(screen.queryByRole("button", { name: "boRelationship.restoreDraft" })).not.toBeInTheDocument();
+});
+
+it("restores a staged object with its original operation ID without publishing", async () => {
+  localStorage.clear();
+  vi.mocked(useOptionalAuthUser).mockReturnValue({ id: "editor", permissions: { "*": true } } as User);
+  vi.mocked(api.get).mockImplementation(async (path) => path === "/bo-relationship" ? baseGraph : { changes: [] });
+  const view = render(<MemoryRouter><BoRelationshipPage /></MemoryRouter>);
+  await screen.findByRole("button", { name: "Customer" });
+  await waitFor(() => expect(screen.getByRole("button", { name: "boRelationship.newObject" })).toBeEnabled());
+  fireEvent.click(screen.getByRole("button", { name: "boRelationship.newObject" }));
+  const dialog = screen.getByRole("dialog");
+  fireEvent.change(within(dialog).getByLabelText("boRelationship.objectName"), { target: { value: "Order" } });
+  fireEvent.change(within(dialog).getByLabelText("boRelationship.subtype"), { target: { value: "Data" } });
+  vi.useFakeTimers();
+  fireEvent.click(within(dialog).getByRole("button", { name: "boRelationship.stageObject" }));
+  await act(async () => { vi.advanceTimersByTime(5100); });
+  const stored = JSON.parse(localStorage.getItem("turbo-ea-bo-relationship-draft-v1-editor")!);
+  const id = stored.draft.objects[0].id;
+  view.unmount();
+  vi.useRealTimers();
+  vi.mocked(api.post).mockResolvedValue({ changes: [], draft_results: [{ kind: "node", id, status: "pending", value: null }], object_ids: [], applications: [] });
+  render(<MemoryRouter><BoRelationshipPage /></MemoryRouter>);
+  expect(await screen.findByRole("button", { name: "Customer" })).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Order" })).not.toBeInTheDocument();
+  fireEvent.click(await screen.findByRole("button", { name: "boRelationship.restoreDraft" }));
+  expect(screen.getByRole("button", { name: "Order" })).toBeInTheDocument();
+  expect(api.put).not.toHaveBeenCalled();
+  expect(api.post).toHaveBeenCalledWith("/bo-relationship/changes/draft", expect.objectContaining({ draft_operations: [{ kind: "node", id }] }));
+});
+
+it("restores a hidden line without restoring its outgoing removal queue", async () => {
+  localStorage.clear();
+  vi.mocked(useOptionalAuthUser).mockReturnValue({ id: "editor", permissions: { "*": true } } as User);
+  const graph = { ...baseGraph, nodes: [customer, order], edges: [orderEdge], positions: { a: { x: 10, y: 20 }, b: { x: 30, y: 40 } } };
+  vi.mocked(api.get).mockImplementation(async (path) => path === "/bo-relationship" ? graph : { changes: [] });
+  vi.mocked(api.post).mockResolvedValue({ changes: [{ kind: "edge", id: "ab", revision: "r", change: "added", before: null, after: orderEdge }], draft_results: [], object_ids: [], applications: [] });
+  const view = render(<MemoryRouter><BoRelationshipPage /></MemoryRouter>);
+  fireEvent.click(await screen.findByRole("button", { name: "Remove line a" }));
+  vi.useFakeTimers();
+  fireEvent.click(screen.getByRole("button", { name: "boRelationship.queueRemoval" }));
+  const pendingUnload = new Event("beforeunload", { cancelable: true });
+  window.dispatchEvent(pendingUnload);
+  expect(pendingUnload.defaultPrevented).toBe(true);
+  await act(async () => { vi.advanceTimersByTime(5100); });
+  view.unmount();
+  vi.useRealTimers();
+  render(<MemoryRouter><BoRelationshipPage /></MemoryRouter>);
+  fireEvent.click(await screen.findByRole("button", { name: "boRelationship.restoreDraft" }));
+  expect(screen.getByTestId("canvas")).toHaveAttribute("data-edges", "");
+  expect(screen.queryByText("boRelationship.pendingRemovals")).not.toBeInTheDocument();
+  const restoredUnload = new Event("beforeunload", { cancelable: true });
+  window.dispatchEvent(restoredUnload);
+  expect(restoredUnload.defaultPrevented).toBe(false);
+  expect(screen.getByRole("button", { name: "boRelationship.acceptChange" })).toBeInTheDocument();
+  expect(api.delete).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: "boRelationship.acceptChange" }));
+  expect(screen.getByTestId("canvas")).toHaveAttribute("data-edges", "ab");
+  vi.mocked(api.put).mockResolvedValue({ ...graph, inventory_conflicts: [], unavailable_drafts: [] });
+  fireEvent.click(screen.getByRole("button", { name: "common:actions.save" }));
+  await waitFor(() => expect(api.put).toHaveBeenCalledTimes(1));
+  expect(api.delete).not.toHaveBeenCalled();
+});
+
+function LocationMarker() { return <span data-testid="location">{useLocation().pathname}</span>; }
+
+const recoveryStorageKey = "turbo-ea-bo-relationship-draft-v1-editor";
+
+it.each(["saved", "unavailable"])("recovers a partially saved BO without reviving a removed ER (%s)", async (status) => {
+  localStorage.clear();
+  vi.mocked(useOptionalAuthUser).mockReturnValue({ id: "editor", permissions: { "*": true } } as User);
+  const positions = { ...baseGraph.positions, b: { x: 95, y: 55 } };
+  localStorage.setItem(recoveryStorageKey, JSON.stringify({
+    version: 1,
+    revision: baseGraph.snapshot_revision,
+    original: { positions: {}, edges: [] },
+    draft: {
+      objects: [{ id: "draft-order", input: { name: "Order", subtype: "Data", isPersonalData: false, isPaymentData: false } }],
+      relations: [{ id: "draft-edge", input: { source: "a", target: "draft-order", cardinality: null } }],
+      applications: [],
+      moves: { "draft-order": positions.b },
+      removed: [orderEdge.id],
+      restored: [],
+    },
+    accepted: [],
+  }));
+  vi.mocked(api.get).mockImplementation(async (path) => path === "/bo-relationship" ? baseGraph : { changes: [] });
+  vi.mocked(api.post).mockResolvedValue({
+    changes: [],
+    draft_results: [
+      { kind: "node", id: "draft-order", status: "saved", value: order },
+      { kind: "edge", id: "draft-edge", status, value: status === "saved" ? orderEdge : null },
+    ],
+    object_ids: ["a"],
+    applications: [],
+  });
+  vi.mocked(api.put).mockResolvedValue({
+    ...baseGraph, nodes: [customer, order], positions, inventory_conflicts: [], unavailable_drafts: [],
+  });
+  await openPage();
+  fireEvent.click(await screen.findByRole("button", { name: "boRelationship.restoreDraft" }));
+  expect(screen.getByRole("button", { name: "Order" })).toBeInTheDocument();
+  expect(screen.getByTestId("canvas")).toHaveAttribute("data-positions", JSON.stringify(positions));
+  expect(screen.getByTestId("canvas")).toHaveAttribute("data-edges", "");
+  expect(screen.queryByText("boRelationship.pendingRemovals")).not.toBeInTheDocument();
+  expect(api.put).not.toHaveBeenCalled();
+
+  fireEvent.click(screen.getByRole("button", { name: "common:actions.save" }));
+  await waitFor(() => expect(api.put).toHaveBeenCalledWith("/bo-relationship/layout", expect.objectContaining({
+    positions: { b: positions.b },
+    saved_drafts: [
+      { kind: "node", id: "draft-order" },
+      ...(status === "saved" ? [{ kind: "edge", id: "draft-edge" }] : []),
+    ],
+    removed_relation_ids: status === "saved" ? [orderEdge.id] : [],
+  })));
+  await waitFor(() => expect(localStorage.getItem(recoveryStorageKey)).toBeNull());
+  expect(api.put).toHaveBeenCalledTimes(1);
+  expect(api.delete).not.toHaveBeenCalled();
+});
+
+it("keeps an unverified local draft and lets the editor retry a failed comparison", async () => {
+  localStorage.clear();
+  vi.mocked(useOptionalAuthUser).mockReturnValue({ id: "editor", permissions: { "*": true } } as User);
+  const stored = JSON.stringify({
+    version: 1,
+    revision: baseGraph.snapshot_revision,
+    original: { positions: baseGraph.positions, edges: [] },
+    draft: { objects: [], relations: [], applications: [], moves: { a: { x: 96, y: 48 } }, removed: [], restored: [] },
+    accepted: [],
+  });
+  localStorage.setItem(recoveryStorageKey, stored);
+  vi.mocked(api.get).mockImplementation(async (path) => path === "/bo-relationship" ? baseGraph : { changes: [] });
+  vi.mocked(api.post).mockRejectedValueOnce(new Error("offline"))
+    .mockResolvedValue({ changes: [], draft_results: [], object_ids: ["a"], applications: [] });
+  await openPage();
+  expect(await screen.findByText("boRelationship.draftValidationFailed")).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "common:actions.save" })).toBeDisabled();
+  expect(localStorage.getItem(recoveryStorageKey)).toBe(stored);
+  fireEvent.click(screen.getByRole("button", { name: "boRelationship.retryDraft" }));
+  fireEvent.click(await screen.findByRole("button", { name: "boRelationship.restoreDraft" }));
+  expect(screen.getByTestId("canvas")).toHaveAttribute("data-positions", JSON.stringify({ a: { x: 96, y: 48 } }));
+  expect(api.put).not.toHaveBeenCalled();
+  localStorage.clear();
+});
+
+it("leaves normal editing and Save usable when browser storage is disabled", async () => {
+  vi.mocked(useOptionalAuthUser).mockReturnValue({ id: "editor", permissions: { "*": true } } as User);
+  vi.mocked(api.get).mockImplementation(async (path) => path === "/bo-relationship" ? baseGraph : { changes: [] });
+  vi.mocked(api.put).mockResolvedValue({ ...baseGraph, positions: { a: { x: 96, y: 48 } } });
+  const read = vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => { throw new Error("Storage blocked"); });
+  const write = vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => { throw new Error("Storage blocked"); });
+  try {
+    await openPage();
+    fireEvent.click(await screen.findByRole("button", { name: "Move first BO" }));
+    fireEvent.click(screen.getByRole("button", { name: "common:actions.save" }));
+    await waitFor(() => expect(api.put).toHaveBeenCalledWith("/bo-relationship/layout", expect.objectContaining({
+      positions: { a: { x: 96, y: 48 } },
+    })));
+  } finally {
+    read.mockRestore();
+    write.mockRestore();
+  }
+});
+
+it.each([true, false])("Save and Exit navigates only when save succeeds (%s)", async (success) => {
+  signInAsEditor();
+  vi.mocked(api.get).mockImplementation(async (path) => path === "/bo-relationship" ? baseGraph : { changes: [] });
+  if (success) vi.mocked(api.put).mockResolvedValue({ ...baseGraph, positions: { a: { x: 96, y: 48 } } });
+  else vi.mocked(api.put).mockRejectedValue(new Error("layout failed"));
+  render(<MemoryRouter initialEntries={["/bo-relationship"]}><BoRelationshipPage /><LocationMarker /></MemoryRouter>);
+  fireEvent.click(await screen.findByRole("button", { name: "Move first BO" }));
+  fireEvent.click(screen.getByRole("button", { name: "boRelationship.saveAndExit" }));
+  if (success) await waitFor(() => expect(screen.getByTestId("location")).toHaveTextContent(/^\/$/));
+  else {
+    expect(await screen.findByText(/layout failed/)).toBeInTheDocument();
+    expect(screen.getByTestId("location")).toHaveTextContent("/bo-relationship");
+  }
 });

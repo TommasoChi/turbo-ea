@@ -164,6 +164,14 @@ Open **BO Relationship** from **Application & Data**. The canvas starts from the
 
 The inventory check and this Sync flow read from inventory. Confirmed line removals waiting to be deleted from inventory appear separately and still require their own Sync action.
 
+### Recovering a BO Relationship draft
+
+The editor keeps a draft in your browser and refreshes it about every five seconds while you work. When you reopen BO Relationship in the same browser with the same account, the canvas shows the last shared drawing. If you have a recoverable draft, choose **Restore** to bring your edits back to the canvas or **Discard** to clear the draft. Other users see your changes after a successful **Save** or **Save and Exit**.
+
+A line you removed can remain absent from the restored drawing. The inventory removal queue starts empty on reopening. If the relation still exists and you can see it, you can bring the line back through **Inventory changes**. To delete a relation from inventory, confirm a new removal in the current session and use its removal sync action.
+
+**Save and Exit** keeps the editor open if any edits still need attention. If inventory removals are pending, the editor warns you before leaving.
+
 ## Sharing a diagram outside Turbo EA
 
 A diagram can be published as a **read-only link that opens without signing in**, so it can be embedded in a wiki page such as Confluence.

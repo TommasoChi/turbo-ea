@@ -1191,6 +1191,32 @@
       "BoDraftComparison": {
         "additionalProperties": false,
         "properties": {
+          "application_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "maxItems": 5000,
+            "title": "Application Ids",
+            "type": "array"
+          },
+          "draft_operations": {
+            "items": {
+              "$ref": "#/components/schemas/BoInventoryItem"
+            },
+            "maxItems": 5000,
+            "title": "Draft Operations",
+            "type": "array"
+          },
+          "object_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "maxItems": 5000,
+            "title": "Object Ids",
+            "type": "array"
+          },
           "removed_relation_ids": {
             "items": {
               "format": "uuid",
@@ -1202,6 +1228,98 @@
           }
         },
         "title": "BoDraftComparison",
+        "type": "object"
+      },
+      "BoDraftComparisonResult": {
+        "properties": {
+          "applications": {
+            "items": {
+              "$ref": "#/components/schemas/BoApplication"
+            },
+            "title": "Applications",
+            "type": "array"
+          },
+          "changes": {
+            "items": {
+              "$ref": "#/components/schemas/BoInventoryChange"
+            },
+            "title": "Changes",
+            "type": "array"
+          },
+          "draft_results": {
+            "items": {
+              "$ref": "#/components/schemas/BoDraftResult"
+            },
+            "title": "Draft Results",
+            "type": "array"
+          },
+          "object_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Object Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "changes"
+        ],
+        "title": "BoDraftComparisonResult",
+        "type": "object"
+      },
+      "BoDraftResult": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "node",
+              "edge",
+              "application_link"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "pending",
+              "unavailable",
+              "saved",
+              "published"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BoNode"
+              },
+              {
+                "$ref": "#/components/schemas/BoEdge"
+              },
+              {
+                "$ref": "#/components/schemas/BoApplicationLink"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          }
+        },
+        "required": [
+          "kind",
+          "id",
+          "status",
+          "value"
+        ],
+        "title": "BoDraftResult",
         "type": "object"
       },
       "BoEdge": {
@@ -23218,7 +23336,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/BoInventoryChanges"
+                  "$ref": "#/components/schemas/BoDraftComparisonResult"
                 }
               }
             },

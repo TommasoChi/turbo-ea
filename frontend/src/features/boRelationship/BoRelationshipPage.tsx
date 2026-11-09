@@ -4,6 +4,7 @@ import {
   DialogTitle, Stack, Typography,
 } from "@mui/material";
 import { useTranslation } from "react-i18next";
+import { useNavigate } from "react-router";
 import { api } from "@/api/client";
 import CardDetailSidePanel from "@/components/CardDetailSidePanel";
 import { FilterCheckboxList, FilterSectionHeader } from "@/components/FilterSidebarSection";
@@ -16,6 +17,7 @@ import {
   BoApplicationLinkDialog, BoNewObjectDialog, BoObjectLinkDialog,
 } from "./BoRelationshipEditDialogs";
 import { useBoDrawing } from "./useBoDrawing";
+import { useBoRecovery } from "./useBoRecovery";
 import type { InventoryChange } from "./useBoDrawing";
 
 export interface BoNode {
@@ -43,6 +45,7 @@ export interface BoGraph {
 
 export default function BoRelationshipPage() {
   const { t } = useTranslation("reports");
+  const navigate = useNavigate();
   const user = useOptionalAuthUser();
   const canOpenApplications = hasTypePermission(user, "inventory.view", "Application");
   const canEdit = hasPermission(user?.permissions, "boRelationship.edit");
@@ -65,12 +68,15 @@ export default function BoRelationshipPage() {
   const [checking, setChecking] = useState(false);
   const { run: runChangeCheck } = useLatestRequest();
   const graphLoaded = data !== undefined;
+  const removedRef = useRef<string[]>([]);
   const checkChanges = useCallback(() => {
     setChecking(true);
     void runChangeCheck(async ({ signal, isCurrent }) => {
       try {
         const result = await api.get<{ changes: InventoryChange[] }>("/bo-relationship/changes", { signal });
-        if (isCurrent()) { setChanges(result.changes ?? []); setCheckError(""); }
+        const removed = removedRef.current;
+        const extra = removed.length ? await api.post<{ changes: InventoryChange[] }>("/bo-relationship/changes/draft", { removed_relation_ids: removed }) : { changes: [] };
+        if (isCurrent()) { setChanges([...result.changes ?? [], ...extra.changes.filter((item) => !result.changes.some((change) => change.kind === item.kind && change.id === item.id))]); setRecoveryChanges([]); setCheckError(""); }
       } catch (error) {
         if (isCurrent()) setCheckError(error instanceof Error ? error.message : String(error));
       } finally {
@@ -98,10 +104,19 @@ export default function BoRelationshipPage() {
       }
     }
   });
-  const pendingChanges = changes.filter((change) =>
+  removedRef.current = drawing.removedIds;
+  const recovery = useBoRecovery(data, user?.id, canEdit, drawing.draft, drawing.accepted, drawing.restoreDraft, drawing.busy, { create: canCreateObjects, relations: canEditRelations, applications: canLinkApplications, scope: JSON.stringify(user?.permissions ?? {}) });
+  const [recoveryChanges, setRecoveryChanges] = useState<InventoryChange[]>([]);
+  const combinedChanges = [...changes, ...recoveryChanges.filter((item) => !changes.some((change) => change.kind === item.kind && change.id === item.id))];
+  useEffect(() => {
+    if (!drawing.removals.length && !drawing.draft.objects.length && !drawing.draft.relations.length && !drawing.draft.applications.length) return;
+    const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ""; };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [drawing.removals.length, drawing.draft.objects.length, drawing.draft.relations.length, drawing.draft.applications.length]);
+  const pendingChanges = combinedChanges.filter((change) =>
     !drawing.accepted.some((item) => item.kind === change.kind && item.id === change.id && item.revision === change.revision)
-    && !(change.kind === "edge" && (drawing.removedIds.includes(change.id)
-      || drawing.removals.some(({ edge }) => edge.id === change.id))));
+    && !(change.kind === "edge" && drawing.removals.some(({ edge }) => edge.id === change.id)));
   // Independent facets combine with AND, as in the approved diagram mockup.
   const visibleNodes = useMemo(() => drawing.nodes.filter((node) =>
     (!personalData || node.isPersonalData) && (!paymentData || node.isPaymentData),
@@ -112,7 +127,7 @@ export default function BoRelationshipPage() {
   ), [drawing.edges, visibleIds]);
   const activeSelection = selected && visibleIds.has(selected) ? selected : null;
   const selectedNode = visibleNodes.find(({ id }) => id === activeSelection);
-  const busy = drawing.busy || masterBusy;
+  const busy = drawing.busy || masterBusy || recovery.blocked;
   useEffect(() => {
     if (data && selected && !visibleIds.has(selected)) setSelected(null);
   }, [data, selected, visibleIds]);
@@ -211,6 +226,8 @@ export default function BoRelationshipPage() {
             )}
           </Box>
           <Box sx={{ flex: 1, minWidth: 0 }}>
+            {recovery.failed && <Alert severity="warning" action={<><Button onClick={recovery.retry}>{t("boRelationship.retryDraft")}</Button><Button onClick={recovery.discard}>{t("boRelationship.discardDraft")}</Button></>}>{t("boRelationship.draftValidationFailed")}</Alert>}
+            {recovery.candidate && <Alert severity="info" action={<><Button onClick={() => { setRecoveryChanges(recovery.candidate?.changes ?? []); recovery.apply(); }}>{t("boRelationship.restoreDraft")}</Button><Button onClick={recovery.discard}>{t("boRelationship.discardDraft")}</Button></>}>{t("boRelationship.draftFound")}</Alert>}
             <Button disabled={checking} onClick={checkChanges}>{t("boRelationship.checkUpdates")}</Button>
             {checkError && <Alert severity="error">{t("boRelationship.checkFailed")} {checkError}</Alert>}
             {pendingChanges.length > 0 && (
@@ -251,10 +268,15 @@ export default function BoRelationshipPage() {
                   </Button>
                 )}
                 <Button variant="contained" disabled={busy || !drawing.hasChanges} onClick={() => {
-                  if (!masterLock.current) void drawing.save();
+                  if (!masterLock.current) void drawing.save().then((ok) => { if (ok) recovery.clear(); });
                 }}>
                   {t("common:actions.save")}
                 </Button>
+                <Button disabled={busy} onClick={() => void (async () => {
+                  if (drawing.removals.length && !window.confirm(t("boRelationship.discardRemovalsWarning"))) return;
+                  const ok = drawing.hasChanges ? await drawing.save() : true;
+                  if (ok) { recovery.clear(); navigate("/"); }
+                })()}>{t("boRelationship.saveAndExit")}</Button>
               </Stack>
             )}
             {canEdit && drawing.issues.length > 0 && (

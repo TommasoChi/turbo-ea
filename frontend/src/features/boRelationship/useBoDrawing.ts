@@ -14,7 +14,7 @@ export type BoRole = "master" | "slave" | "unclassified";
 export type BoApplicationInput = { objectId: string; application: BoApplication; role: BoRole };
 export type BoSavedApplication = { id: string; object_id: string; application: BoApplication; is_master: boolean };
 type Draft<Input, Saved> = { id: string; input: Input; saved?: Saved };
-type DrawingDraft = {
+export type DrawingDraft = {
   objects: Draft<BoObjectInput, BoNode>[];
   relations: Draft<BoLinkInput, BoEdge>[];
   applications: Draft<BoApplicationInput, BoSavedApplication>[];
@@ -103,10 +103,19 @@ export function useBoDrawing(initialGraph: BoGraph | undefined, onSaved: OnSave)
     return { nodes, edges, positions };
   }, [accepted, draft, graph, removals, syncAnchors]);
 
+  const restoreDraft = (recovered: DrawingDraft, recoveredAccepted: InventoryChange[]) => {
+    setDraft(recovered);
+    setAccepted(recoveredAccepted);
+    setRemovals([]);
+    setIssues([]);
+  };
+
   const acceptChanges = (changes: InventoryChange[]) => {
     if (lock.current) return;
-    const outgoing = new Set([...draft.removed, ...removals.map(({ edge }) => edge.id)]);
+    const outgoing = new Set(removals.map(({ edge }) => edge.id));
     const allowed = changes.filter((item) => item.kind !== "edge" || !outgoing.has(item.id));
+    const restoredIds = new Set(allowed.filter((item) => item.kind === "edge" && item.after).map(({ id }) => id));
+    setDraft((current) => ({ ...current, removed: current.removed.filter((id) => !restoredIds.has(id)) }));
     setSyncAnchors((current) => ({ ...current, ...drawing.positions }));
     setAccepted((current) => {
       const merged = new Map(current.map((item) => [`${item.kind}:${item.id}`, item]));
@@ -219,7 +228,7 @@ export function useBoDrawing(initialGraph: BoGraph | undefined, onSaved: OnSave)
   };
 
   const save = async () => {
-    if (!graph || lock.current) return;
+    if (!graph || lock.current) return false;
     lock.current = true;
     setBusy(true);
     const next = {
@@ -392,10 +401,11 @@ export function useBoDrawing(initialGraph: BoGraph | undefined, onSaved: OnSave)
       lock.current = false;
       setBusy(false);
     }
+    return failures.length === 0;
   };
 
   return {
-    graph, ...drawing, applications, accepted, acceptChanges, removedIds: draft.removed, busy, issues, removals, save, syncRemovals,
+    graph, ...drawing, draft, restoreDraft, applications, accepted, acceptChanges, removedIds: draft.removed, busy, issues, removals, save, syncRemovals,
     hasChanges: !!(accepted.length || draft.objects.length || draft.relations.length || draft.applications.length
       || draft.removed.length || draft.restored.length || Object.keys(draft.moves).length
       || drawing.nodes.some(({ id }) => !graph?.positions[id])),
