@@ -32,12 +32,20 @@ from __future__ import annotations
 
 import html
 import re
+import uuid
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from typing import Any
 
 import defusedxml.ElementTree as ET  # noqa: N817
 
+from app.services.bo_relationship_constants import (
+    APPLICATION_RELATION,
+    APPLICATION_TYPE,
+    BO_RELATIONSHIP_KIND,
+    BO_TYPE,
+    ER_RELATION,
+)
 from app.services.drawio_refs import extract_card_refs
 
 CARDS = "cards"
@@ -153,6 +161,8 @@ class RemapContext:
     live_card_ids: set[str] = field(default_factory=set)
     relations_by_ends: dict[tuple[str, str, str], str] = field(default_factory=dict)
     diagram_card_hints: dict[str, set[str]] = field(default_factory=dict)
+    card_types: dict[str, str] = field(default_factory=dict)
+    relation_details: dict[str, tuple[str, str, str]] = field(default_factory=dict)
 
 
 RowRewriter = Callable[[dict[str, Any], RemapContext], RewriteTally]
@@ -540,10 +550,89 @@ def rewrite_diagram_data(
 
 
 def rewrite_diagram_row(kwargs: dict[str, Any], ctx: RemapContext) -> RewriteTally:
+    if kwargs.get("kind") == BO_RELATIONSHIP_KIND:
+        return rewrite_bo_snapshot(kwargs, ctx)
     diagram_id = kwargs.get("id")
     return rewrite_diagram_data(
         kwargs.get("data"), str(diagram_id) if diagram_id is not None else None, ctx
     )
+
+
+def rewrite_bo_snapshot(kwargs: dict[str, Any], ctx: RemapContext) -> RewriteTally:
+    """Keep only references verified against destination inventory."""
+    source = kwargs.get("data") or {}
+    result: dict[str, Any] = {"nodes": {}, "edges": {}, "positions": {}, "application_links": {}}
+    tally = RewriteTally()
+
+    def card(value, expected):
+        mapped = ctx.ids.lookup(CARDS, value)
+        return mapped if mapped and ctx.card_types.get(mapped) == expected else None
+
+    def missing():
+        tally.bump(UNRESOLVED)
+        tally.note("BO diagram reference not found on destination")
+
+    for old, node in (source.get("nodes") or {}).items():
+        target = card(old, BO_TYPE)
+        if not target or str(node.get("id")) != str(old):
+            missing()
+            continue
+        result["nodes"][target] = {**node, "id": target}
+        tally.bump(REMAPPED)
+    # A position or link can be saved before its node is accepted into the drawing.
+    for old, pos in (source.get("positions") or {}).items():
+        target = card(old, BO_TYPE)
+        if target:
+            result["positions"][target] = pos
+        else:
+            missing()
+    for old, edge in (source.get("edges") or {}).items():
+        rid = ctx.ids.lookup(RELATIONS, old)
+        src, dst = card(edge.get("source"), BO_TYPE), card(edge.get("target"), BO_TYPE)
+        details = ctx.relation_details.get(rid or "")
+        if (
+            not rid
+            or not src
+            or not dst
+            or not details
+            or details[0] != ER_RELATION
+            or {details[1], details[2]} != {src, dst}
+        ):
+            missing()
+            continue
+        cardinality = edge.get("cardinality")
+        if details[1] != src:
+            cardinality = {"1:n": "n:1", "n:1": "1:n"}.get(cardinality, cardinality)
+        result["edges"][rid] = {
+            **edge,
+            "id": rid,
+            "source": details[1],
+            "target": details[2],
+            "cardinality": cardinality,
+        }
+        tally.bump(REMAPPED)
+    for old, link in (source.get("application_links") or {}).items():
+        rid = ctx.ids.lookup(RELATIONS, old)
+        obj = card(link.get("object_id"), BO_TYPE)
+        app = card((link.get("application") or {}).get("id"), APPLICATION_TYPE)
+        if (
+            not rid
+            or not obj
+            or not app
+            or ctx.relation_details.get(rid) != (APPLICATION_RELATION, app, obj)
+        ):
+            missing()
+            continue
+        result["application_links"][rid] = {
+            **link,
+            "id": rid,
+            "object_id": obj,
+            "application": {**link["application"], "id": app},
+        }
+        tally.bump(REMAPPED)
+    result["snapshot_revision"] = str(uuid.uuid4())
+    kwargs["data"] = result
+    return tally
 
 
 # ---------------------------------------------------------------------------

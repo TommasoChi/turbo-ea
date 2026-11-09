@@ -12,6 +12,7 @@ with it.
 
 from __future__ import annotations
 
+import json
 import uuid
 
 import pytest
@@ -125,6 +126,342 @@ def _section(result, sheet: str):
 
 
 # ── diagrams ───────────────────────────────────────────────────────────────
+
+
+async def test_bo_diagram_roundtrip_initializes_placeholder_with_remapped_positions(db):
+    from app.services.bo_relationship_constants import (
+        BO_RELATIONSHIP_DIAGRAM_ID,
+        BO_RELATIONSHIP_KIND,
+    )
+
+    user = await create_user(db, email="bo-transfer@test.com", role="admin")
+    await create_card_type(db, key="DataObject", label="Business Object")
+    await create_card_type(db, key="Application", label="Application")
+    a = await create_card(db, card_type="DataObject", name="Customer", user_id=user.id)
+    b = await create_card(db, card_type="DataObject", name="Order", user_id=user.id)
+    await create_relation_type(
+        db,
+        key="relDataObjectToDataObject",
+        label="relates",
+        source_type_key="DataObject",
+        target_type_key="DataObject",
+    )
+    rel = await create_relation(
+        db, type_key="relDataObjectToDataObject", source_id=a.id, target_id=b.id
+    )
+    app = await create_card(db, card_type="Application", name="App", user_id=user.id)
+    await create_relation_type(
+        db,
+        key="relAppToDataObj",
+        label="uses",
+        source_type_key="Application",
+        target_type_key="DataObject",
+    )
+    link = await create_relation(db, type_key="relAppToDataObj", source_id=app.id, target_id=a.id)
+    old_ids = {a.id, b.id, rel.id, app.id, link.id}
+    data = {
+        "snapshot_revision": str(uuid.uuid4()),
+        "nodes": {
+            str(c.id): {
+                "id": str(c.id),
+                "name": c.name,
+                "subtype": None,
+                "isPersonalData": False,
+                "isPaymentData": False,
+            }
+            for c in (a, b)
+        },
+        "edges": {
+            str(rel.id): {
+                "id": str(rel.id),
+                "source": str(a.id),
+                "target": str(b.id),
+                "cardinality": "1:n",
+            }
+        },
+        "positions": {str(a.id): {"x": 12.5, "y": -44}, str(b.id): {"x": 91, "y": 38}},
+        "application_links": {
+            str(link.id): {
+                "id": str(link.id),
+                "object_id": str(a.id),
+                "application": {"id": str(app.id), "name": "App"},
+                "is_master": False,
+            }
+        },
+        "draft_ids": [str(uuid.uuid4())],
+        "deletion_queue": [str(uuid.uuid4())],
+    }
+    db.add(
+        Diagram(
+            id=BO_RELATIONSHIP_DIAGRAM_ID,
+            name="BO Relationship",
+            kind=BO_RELATIONSHIP_KIND,
+            data=data,
+        )
+    )
+    await db.flush()
+    raw = await build_bundle(db)
+    exported = json.loads(parse_bundle(raw).rows("Diagrams")[0]["data__meta"])
+    assert "snapshot_revision" not in exported
+    assert "draft_ids" not in exported and "deletion_queue" not in exported
+    await _wipe(db)
+    db.add(
+        Diagram(id=BO_RELATIONSHIP_DIAGRAM_ID, name="BO Relationship", kind=BO_RELATIONSHIP_KIND)
+    )
+    await db.flush()
+    from app.services.workspace_io.applier import apply_selected
+
+    unresolved = await apply_selected(
+        db, parse_bundle(raw), user, sheets={"Diagrams"}, dry_run=False
+    )
+    assert _section(unresolved, "Diagrams").references["unresolved"] > 0
+    placeholder = (
+        await db.execute(select(Diagram).where(Diagram.kind == BO_RELATIONSHIP_KIND))
+    ).scalar_one()
+    assert not (placeholder.data or {}).get("snapshot_revision")
+    result = await apply_bundle(db, parse_bundle(raw), user)
+    assert result.total_failed == 0, result.as_dict()
+    new_a = await _by_name(db, "Customer", "DataObject")
+    new_b = await _by_name(db, "Order", "DataObject")
+    new_rel = (
+        await db.execute(select(Relation).where(Relation.type == "relDataObjectToDataObject"))
+    ).scalar_one()
+    new_app = await _by_name(db, "App")
+    new_link = (
+        await db.execute(select(Relation).where(Relation.type == "relAppToDataObj"))
+    ).scalar_one()
+    assert {new_a.id, new_b.id, new_rel.id, new_app.id, new_link.id}.isdisjoint(old_ids)
+    restored = (
+        await db.execute(select(Diagram).where(Diagram.kind == BO_RELATIONSHIP_KIND))
+    ).scalar_one()
+    assert restored.data["positions"] == {
+        str(new_a.id): {"x": 12.5, "y": -44},
+        str(new_b.id): {"x": 91, "y": 38},
+    }
+    assert restored.data["edges"][str(new_rel.id)]["source"] == str(new_a.id)
+    assert restored.data["edges"][str(new_rel.id)]["target"] == str(new_b.id)
+    assert restored.data["application_links"][str(new_link.id)] == {
+        "id": str(new_link.id),
+        "object_id": str(new_a.id),
+        "application": {"id": str(new_app.id), "name": "App"},
+        "is_master": False,
+    }
+    assert "draft_ids" not in restored.data and "deletion_queue" not in restored.data
+    edited = {**restored.data, "positions": {str(new_a.id): {"x": 777, "y": 888}}}
+    restored.data = edited
+    await db.flush()
+    await apply_bundle(db, parse_bundle(raw), user)
+    assert restored.data == edited
+    empty = {
+        "snapshot_revision": str(uuid.uuid4()),
+        "nodes": {},
+        "edges": {},
+        "positions": {},
+        "application_links": {},
+    }
+    restored.data = empty
+    await db.flush()
+    empty_raw = await build_bundle(db)
+    await apply_bundle(db, parse_bundle(raw), user)
+    assert restored.data == empty
+    legacy = parse_bundle(raw)
+    legacy.sheets["Diagrams"] = []
+    await apply_bundle(db, legacy, user)
+    assert restored.data == empty
+    restored.data = {}
+    await db.flush()
+    await apply_bundle(db, parse_bundle(empty_raw), user)
+    assert restored.data["snapshot_revision"]
+    assert restored.data["nodes"] == {}
+
+
+async def test_bo_positions_without_snapshot_nodes_are_preserved_or_retried(db):
+    from app.services.bo_relationship_constants import (
+        BO_RELATIONSHIP_DIAGRAM_ID,
+        BO_RELATIONSHIP_KIND,
+    )
+    from app.services.workspace_io.applier import apply_selected
+
+    user = await create_user(db, email="bo-position@test.com", role="admin")
+    await create_card_type(db, key="DataObject", label="Business Object")
+    card = await create_card(db, card_type="DataObject", name="A", user_id=user.id)
+    db.add(
+        Diagram(
+            id=BO_RELATIONSHIP_DIAGRAM_ID,
+            name="BO Relationship",
+            kind=BO_RELATIONSHIP_KIND,
+            data={
+                "snapshot_revision": str(uuid.uuid4()),
+                "nodes": {},
+                "edges": {},
+                "positions": {str(card.id): {"x": 123, "y": -9}},
+                "application_links": {},
+            },
+        )
+    )
+    await db.flush()
+    raw = await build_bundle(db)
+    await _wipe(db)
+    db.add(
+        Diagram(id=BO_RELATIONSHIP_DIAGRAM_ID, name="BO Relationship", kind=BO_RELATIONSHIP_KIND)
+    )
+    await db.flush()
+    result = await apply_selected(db, parse_bundle(raw), user, sheets={"Diagrams"}, dry_run=False)
+    diagram = (
+        await db.execute(select(Diagram).where(Diagram.kind == BO_RELATIONSHIP_KIND))
+    ).scalar_one()
+    assert _section(result, "Diagrams").references["unresolved"] > 0
+    assert not (diagram.data or {}).get("snapshot_revision")
+    await apply_bundle(db, parse_bundle(raw), user)
+    new_card = await _by_name(db, "A", "DataObject")
+    assert new_card.id != card.id
+    assert diagram.data["positions"] == {str(new_card.id): {"x": 123, "y": -9}}
+    assert diagram.data["nodes"] == {}
+
+
+@pytest.mark.parametrize("archived", [False, True])
+async def test_bo_diagrams_only_resolves_renamed_or_archived_card(db, archived):
+    from app.services.bo_relationship_constants import (
+        BO_RELATIONSHIP_DIAGRAM_ID,
+        BO_RELATIONSHIP_KIND,
+    )
+    from app.services.workspace_io.applier import apply_selected
+
+    user = await create_user(db, email="bo-match@test.com", role="admin")
+    await create_card_type(db, key="DataObject", label="Business Object")
+    card = await create_card(
+        db,
+        card_type="DataObject",
+        name="Original",
+        user_id=user.id,
+        status="ARCHIVED" if archived else "ACTIVE",
+    )
+    card.external_id = "bo-match"
+    db.add(
+        Diagram(
+            id=BO_RELATIONSHIP_DIAGRAM_ID,
+            name="BO Relationship",
+            kind=BO_RELATIONSHIP_KIND,
+            data={
+                "snapshot_revision": str(uuid.uuid4()),
+                "nodes": {
+                    str(card.id): {
+                        "id": str(card.id),
+                        "name": "Original",
+                        "subtype": None,
+                        "isPersonalData": False,
+                        "isPaymentData": False,
+                    }
+                },
+                "edges": {},
+                "positions": {str(card.id): {"x": 31, "y": 42}},
+                "application_links": {},
+            },
+        )
+    )
+    await db.flush()
+    raw = await build_bundle(db, include_archived=True)
+    await _wipe(db)
+    target = await create_card(
+        db,
+        card_type="DataObject",
+        name="Original" if archived else "Renamed",
+        user_id=user.id,
+        status="ARCHIVED" if archived else "ACTIVE",
+    )
+    target.external_id = "bo-match"
+    db.add(
+        Diagram(id=BO_RELATIONSHIP_DIAGRAM_ID, name="BO Relationship", kind=BO_RELATIONSHIP_KIND)
+    )
+    await db.flush()
+    await apply_selected(db, parse_bundle(raw), user, sheets={"Diagrams"}, dry_run=False)
+    diagram = (
+        await db.execute(select(Diagram).where(Diagram.kind == BO_RELATIONSHIP_KIND))
+    ).scalar_one()
+    assert diagram.data["positions"] == {str(target.id): {"x": 31, "y": 42}}
+
+
+@pytest.mark.parametrize("selected", [False, True])
+async def test_bo_diagram_uses_reverse_existing_er_relation(db, selected):
+    from app.services.bo_relationship_constants import (
+        BO_RELATIONSHIP_DIAGRAM_ID,
+        BO_RELATIONSHIP_KIND,
+    )
+    from app.services.workspace_io.applier import apply_selected
+
+    user = await create_user(db, email="bo-reverse@test.com", role="admin")
+    await create_card_type(db, key="DataObject", label="Business Object")
+    await create_relation_type(
+        db,
+        key="relDataObjectToDataObject",
+        label="relates",
+        source_type_key="DataObject",
+        target_type_key="DataObject",
+    )
+    a = await create_card(db, card_type="DataObject", name="A", user_id=user.id)
+    b = await create_card(db, card_type="DataObject", name="B", user_id=user.id)
+    rel = await create_relation(
+        db, type_key="relDataObjectToDataObject", source_id=a.id, target_id=b.id
+    )
+    data = {
+        "snapshot_revision": str(uuid.uuid4()),
+        "nodes": {
+            str(c.id): {
+                "id": str(c.id),
+                "name": c.name,
+                "subtype": None,
+                "isPersonalData": False,
+                "isPaymentData": False,
+            }
+            for c in (a, b)
+        },
+        "edges": {
+            str(rel.id): {
+                "id": str(rel.id),
+                "source": str(a.id),
+                "target": str(b.id),
+                "cardinality": "1:n",
+            }
+        },
+        "positions": {},
+        "application_links": {},
+    }
+    db.add(
+        Diagram(
+            id=BO_RELATIONSHIP_DIAGRAM_ID,
+            name="BO Relationship",
+            kind=BO_RELATIONSHIP_KIND,
+            data=data,
+        )
+    )
+    await db.flush()
+    raw = await build_bundle(db)
+    await _wipe(db)
+    a2 = await create_card(db, card_type="DataObject", name="A", user_id=user.id)
+    b2 = await create_card(db, card_type="DataObject", name="B", user_id=user.id)
+    reverse = await create_relation(
+        db, type_key="relDataObjectToDataObject", source_id=b2.id, target_id=a2.id
+    )
+    db.add(
+        Diagram(id=BO_RELATIONSHIP_DIAGRAM_ID, name="BO Relationship", kind=BO_RELATIONSHIP_KIND)
+    )
+    await db.flush()
+    if selected:
+        await apply_selected(db, parse_bundle(raw), user, sheets={"Diagrams"}, dry_run=False)
+    else:
+        await apply_bundle(db, parse_bundle(raw), user)
+    assert len((await db.execute(select(Relation))).scalars().all()) == 1
+    restored = (
+        await db.execute(select(Diagram).where(Diagram.kind == BO_RELATIONSHIP_KIND))
+    ).scalar_one()
+    assert restored.data["edges"] == {
+        str(reverse.id): {
+            "id": str(reverse.id),
+            "source": str(b2.id),
+            "target": str(a2.id),
+            "cardinality": "n:1",
+        }
+    }
 
 
 async def test_diagram_ids_follow_cards_to_new_primary_keys(db):

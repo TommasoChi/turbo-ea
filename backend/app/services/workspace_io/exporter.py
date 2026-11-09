@@ -363,11 +363,18 @@ async def build_bundle(db: AsyncSession, *, include_archived: bool = False) -> b
         bundle_io.write_sheet(wb, ent_sec.sheet, header, rows, assets)
         section_counts[ent_sec.sheet] = len(rows)
 
+    # The private singleton never participates in shared diagram associations.
+    from app.models.diagram import Diagram
+    from app.services.bo_relationship_constants import BO_RELATIONSHIP_KIND
+
+    private_diagrams = set(
+        (await db.execute(select(Diagram.id).where(Diagram.kind == BO_RELATIONSHIP_KIND))).scalars()
+    )
     # Diagram↔card links (bespoke association, like CardTags).
     dc_rows: list[dict] = []
     for row in (await db.execute(select(diagram_cards))).all():
         card = full_card_map.get(row.card_id)
-        if card is None:
+        if card is None or row.diagram_id in private_diagrams:
             continue
         dc_rows.append(
             {
@@ -390,6 +397,7 @@ async def build_bundle(db: AsyncSession, *, include_archived: bool = False) -> b
     gm_rows = [
         {"diagram_id": str(row.diagram_id), "group_id": str(row.group_id)}
         for row in (await db.execute(select(diagram_group_members))).all()
+        if row.diagram_id not in private_diagrams
     ]
     bundle_io.write_sheet(
         wb, SHEET_DIAGRAM_GROUP_MEMBERS, ["diagram_id", "group_id"], gm_rows, assets

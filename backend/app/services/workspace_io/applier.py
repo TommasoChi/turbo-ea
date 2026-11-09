@@ -52,6 +52,9 @@ from app.models.user import User
 from app.services import card_reference, card_type_categories
 from app.services.bo_relationship_constants import (
     APPLICATION_RELATION,
+    APPLICATION_TYPE,
+    BO_RELATIONSHIP_KIND,
+    BO_TYPE,
     ER_RELATION,
     MASTER,
     OWNERSHIP_KEY,
@@ -375,6 +378,14 @@ def _card_end(
     return res.card_id if res.status == "resolved" else None
 
 
+def _matching_relation(existing: dict, key: tuple):
+    """BO ER pairs are unordered; all other relations remain directed."""
+    found = existing.get(key)
+    if found is None and key[0] == ER_RELATION:
+        found = existing.get((key[0], key[2], key[1]))
+    return found
+
+
 def _relation_key(
     row: dict[str, Any], ids: rm.IdMap, resolver: CardResolver, rt_by_key: dict[str, Any]
 ) -> tuple[str, uuid.UUID, uuid.UUID] | None:
@@ -423,10 +434,49 @@ async def _load_remap_context(
     card_rows = bundle.rows(schema.SHEET_CARDS)
     sheets = {sec.sheet for sec in wanted_sections}
     wants_diagrams = "Diagrams" in sheets
+    wants_bo = wants_diagrams and any(
+        row.get("kind") == BO_RELATIONSHIP_KIND for row in bundle.rows("Diagrams")
+    )
 
     def _resolve(ctype: str, ref: str) -> uuid.UUID | None:
         res = resolver.resolve(ctype, ref)
         return res.card_id if res.status == "resolved" else None
+
+    if wants_bo:
+        type_by_id = {
+            str(cid): ctype for cid, ctype in (await db.execute(select(Card.id, Card.type))).all()
+        }
+        ctx.card_types = type_by_id
+        bo_card_rows = [row for row in card_rows if row.get("type") in (BO_TYPE, APPLICATION_TYPE)]
+        archived_types = {
+            str(row.get("type")) for row in bo_card_rows if row.get("status") == "ARCHIVED"
+        }
+        archived = (
+            await CardResolver.load(db, archived_types, status="ARCHIVED")
+            if archived_types
+            else None
+        )
+        for row in bo_card_rows:
+            source_id = row.get(schema.SOURCE_ID_COLUMN)
+            if rm.canonical_uuid(source_id) is None or id_map.lookup(rm.CARDS, source_id):
+                continue
+            type_key = str(row.get("type") or "")
+            match = _card_by_source_id(type_by_id, type_key, source_id)
+            if match is None and row.get("external_id"):
+                hit = await _card_by_external_id(db, type_key, str(row["external_id"]))
+                match = str(hit[0]) if hit else None
+            if match is None and archived is not None and row.get("status") == "ARCHIVED":
+                found = await _archived_card_match(
+                    db,
+                    archived,
+                    type_key,
+                    _card_row_ref(row),
+                    row.get("reference"),
+                    row.get("external_id"),
+                )
+                match = str(found) if found else None
+            if match is not None:
+                id_map.record(rm.CARDS, source_id, match)
 
     rm.backfill(
         card_rows,
@@ -463,12 +513,16 @@ async def _load_remap_context(
     ctx.relations_by_ends = {
         (rel.type, str(rel.source_id), str(rel.target_id)): str(rel.id) for rel in rel_rows
     }
+    if wants_bo:
+        ctx.relation_details = {
+            str(rel.id): (rel.type, str(rel.source_id), str(rel.target_id)) for rel in rel_rows
+        }
 
     def _resolve_relation(row: dict[str, Any]) -> uuid.UUID | None:
         key = _relation_key(row, id_map, resolver, rt_by_key)
         if key is None:
             return None
-        rel_id = ctx.relations_by_ends.get((key[0], str(key[1]), str(key[2])))
+        rel_id = _matching_relation(ctx.relations_by_ends, (key[0], str(key[1]), str(key[2])))
         return uuid.UUID(rel_id) if rel_id else None
 
     rm.backfill(bundle.rows(schema.SHEET_RELATIONS), id_map, rm.RELATIONS, _resolve_relation)
@@ -499,7 +553,9 @@ async def _apply_diagram_cards(
     if not rows:
         return
     existing = {(r.diagram_id, r.card_id) for r in (await db.execute(select(diagram_cards))).all()}
-    existing_diagrams = set((await db.execute(select(Diagram.id))).scalars().all())
+    existing_diagrams = set(
+        (await db.execute(select(Diagram.id).where(Diagram.kind != BO_RELATIONSHIP_KIND))).scalars()
+    )
     for row in rows:
         diagram_id = row.get("diagram_id")
         ctype = row.get("card_type")
@@ -529,7 +585,9 @@ async def _apply_diagram_group_members(db, bundle: WorkspaceBundle, sr: SectionR
     existing = {
         (r.diagram_id, r.group_id) for r in (await db.execute(select(diagram_group_members))).all()
     }
-    existing_diagrams = set((await db.execute(select(Diagram.id))).scalars().all())
+    existing_diagrams = set(
+        (await db.execute(select(Diagram.id).where(Diagram.kind != BO_RELATIONSHIP_KIND))).scalars()
+    )
     existing_groups = set((await db.execute(select(DiagramGroup.id))).scalars().all())
     for row in rows:
         diagram_id = row.get("diagram_id")
@@ -1373,9 +1431,7 @@ async def _apply_relations(
     for row, data, resolved in resolved_rows:
         rtype, source_id, target_id = resolved
         key = (rtype, source_id, target_id)
-        existing_id = existing.get(key)
-        if existing_id is None and rtype == ER_RELATION:
-            existing_id = existing.get((rtype, target_id, source_id))
+        existing_id = _matching_relation(existing, key)
         if existing_id is not None:
             ids.record(rm.RELATIONS, row.get(schema.SOURCE_ID_COLUMN), existing_id)
             sr.skip("already_present")

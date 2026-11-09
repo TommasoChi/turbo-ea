@@ -10,6 +10,13 @@ import uuid
 
 import pytest
 
+from app.services.bo_relationship_constants import (
+    APPLICATION_RELATION,
+    APPLICATION_TYPE,
+    BO_RELATIONSHIP_KIND,
+    BO_TYPE,
+    ER_RELATION,
+)
 from app.services.compliance_scanner import compute_finding_key
 from app.services.workspace_io import remap as rm
 
@@ -36,6 +43,54 @@ def _ids() -> rm.IdMap:
 
 def _ctx(**kw) -> rm.RemapContext:
     return rm.RemapContext(ids=kw.pop("ids", _ids()), **kw)
+
+
+def test_bo_snapshot_keeps_verified_links_before_their_nodes_are_accepted():
+    old_link, new_link = str(uuid.uuid4()), str(uuid.uuid4())
+    ids = _ids()
+    ids.record(rm.CARDS, OLD_C, NEW_C)
+    ids.record(rm.RELATIONS, old_link, new_link)
+    ctx = _ctx(
+        ids=ids,
+        card_types={NEW_A: BO_TYPE, NEW_B: BO_TYPE, NEW_C: APPLICATION_TYPE},
+        relation_details={
+            NEW_REL: (ER_RELATION, NEW_A, NEW_B),
+            new_link: (APPLICATION_RELATION, NEW_C, NEW_A),
+        },
+    )
+    row = {
+        "kind": BO_RELATIONSHIP_KIND,
+        "data": {
+            "nodes": {},
+            "edges": {
+                OLD_REL: {"id": OLD_REL, "source": OLD_A, "target": OLD_B, "cardinality": "1:n"}
+            },
+            "application_links": {
+                old_link: {
+                    "id": old_link,
+                    "object_id": OLD_A,
+                    "application": {"id": OLD_C, "name": "CRM"},
+                    "is_master": True,
+                }
+            },
+            "positions": {},
+        },
+    }
+    tally = rm.rewrite_diagram_row(row, ctx)
+
+    assert row["data"]["nodes"] == {}
+    assert row["data"]["edges"] == {
+        NEW_REL: {"id": NEW_REL, "source": NEW_A, "target": NEW_B, "cardinality": "1:n"}
+    }
+    assert row["data"]["application_links"] == {
+        new_link: {
+            "id": new_link,
+            "object_id": NEW_A,
+            "application": {"id": NEW_C, "name": "CRM"},
+            "is_master": True,
+        }
+    }
+    assert tally.counts == {rm.REMAPPED: 2}
 
 
 # ── canonical_uuid / IdMap ──────────────────────────────────────────────────
