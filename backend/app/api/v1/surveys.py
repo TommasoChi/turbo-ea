@@ -628,6 +628,7 @@ async def apply_responses(
             db, user_id=user.id, event_type="card.updated"
         )
 
+    await survey_apply.lock_survey_er_pairs(db, survey, body.response_ids)
     for rid_str in body.response_ids:
         rid = uuid.UUID(rid_str)
         resp_result = await db.execute(

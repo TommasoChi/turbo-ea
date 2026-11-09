@@ -1,9 +1,11 @@
 import asyncio
+import uuid
 
 import pytest
-from sqlalchemy import delete, select
+from sqlalchemy import delete, event, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.v1.relations import apply_relation_operations
 from app.models.bo_operation_receipt import BoOperationReceipt
 from app.models.card import Card
 from app.models.card_type import CardType
@@ -16,15 +18,23 @@ from app.models.role import Role
 from app.models.stakeholder import Stakeholder
 from app.models.user import User
 from app.models.user_favorite import UserFavorite
-from app.schemas.bo_relationship import BoApplication, BoEdge, BoInventoryItem, BoLayoutUpdate
-from app.services.bo_relationship import (
+from app.schemas.bo_relationship import (
+    BoApplication,
     BoApplicationLink,
+    BoEdge,
+    BoInventoryItem,
+    BoLayoutUpdate,
+    BoRelationDraft,
+)
+from app.schemas.relation import RelationBulkOperation
+from app.services.bo_relationship import (
     ErDeleteEvidence,
     inventory_item_revision,
     save_bo_layout,
 )
 from app.services.bo_relationship import set_bo_master as assign_master
 from app.services.bo_relationship_constants import BO_RELATIONSHIP_KIND, ER_DELETE_RECEIPT
+from app.services.bo_relationship_writes import create_er_draft
 from app.services.permission_service import PermissionService
 from tests.conftest import (
     auth_headers,
@@ -78,6 +88,399 @@ async def env(db):
 
 async def bo(db, name="Customer"):
     return await create_card(db, card_type="DataObject", subtype="Data", name=name)
+
+
+async def test_draft_object_recovers_lost_response_and_does_not_recreate_deleted_card(
+    client, db, env
+):
+    url = f"{BASE}/objects/{uuid.uuid4()}"
+    body = {"name": "Order", "subtype": "Data"}
+    assert (await client.put(url, json=body, headers=env["viewer"])).status_code == 403
+    assert (await client.put(url, json=body, headers=env["editor"])).status_code == 403
+    assert (await client.put(url, json={"name": "Order"}, headers=env["admin"])).status_code == 422
+
+    first = await client.put(url, json=body, headers=env["admin"])
+    assert first.status_code == 200
+    original = first.json()
+    assert original == {
+        "id": original["id"],
+        "name": "Order",
+        "subtype": "Data",
+        "isPersonalData": False,
+        "isPaymentData": False,
+    }
+    replay = await client.put(url, json=body, headers=env["admin"])
+    assert replay.json() == original
+    card_id = uuid.UUID(original["id"])
+    assert list(await db.scalars(select(Card.id).where(Card.type == "DataObject"))) == [card_id]
+    assert (
+        len(
+            list(
+                await db.scalars(
+                    select(Event).where(
+                        Event.event_type == "card.created", Event.card_id == card_id
+                    )
+                )
+            )
+        )
+        == 1
+    )
+    assert (
+        await client.put(url, json={**body, "name": "Different"}, headers=env["admin"])
+    ).status_code == 409
+    await db.execute(delete(Card).where(Card.id == card_id))
+    assert (await client.put(url, json=body, headers=env["admin"])).status_code == 404
+    assert not list(await db.scalars(select(Card.id).where(Card.type == "DataObject")))
+
+
+async def test_object_draft_checks_subtype_grants_and_current_read_scope(client, db, env):
+    card_type = await db.scalar(select(CardType).where(CardType.key == "DataObject"))
+    card_type.fields_schema = [{"fields": [{"key": "isPersonalData", "type": "boolean"}]}]
+    card_type.role_permissions = {
+        "editor": {
+            "inventory.create": {"value": True, "subtypes": ["Data"]},
+            "inventory.view": {"value": False, "subtypes": ["Document"]},
+        }
+    }
+    await db.flush()
+    PermissionService.invalidate_type_permission_cache()
+    url = f"{BASE}/objects/{uuid.uuid4()}"
+    body = {"name": "Order", "subtype": "Data", "isPersonalData": True, "isPaymentData": True}
+    denied = await client.put(url, json={**body, "subtype": "Document"}, headers=env["editor"])
+    assert denied.status_code == 403
+    created = await client.put(url, json=body, headers=env["editor"])
+    assert created.status_code == 200
+    assert created.json()["isPersonalData"] is True
+    assert created.json()["isPaymentData"] is False
+    card = await db.get(Card, uuid.UUID(created.json()["id"]))
+    assert card.attributes == {"isPersonalData": True}
+    card.subtype = "Document"
+    await db.flush()
+    assert (await client.put(url, json=body, headers=env["editor"])).status_code == 404
+    invalid_subtype = await client.put(
+        f"{BASE}/objects/{uuid.uuid4()}",
+        json={**body, "subtype": "Unknown"},
+        headers=env["admin"],
+    )
+    assert invalid_subtype.status_code == 422
+
+
+async def test_er_draft_reuses_reverse_link_and_preserves_subsequent_attribute_edit(
+    client, db, env
+):
+    a, b, c = await bo(db), await bo(db, "Order"), await bo(db, "Address")
+    url = f"{BASE}/relation-drafts/{uuid.uuid4()}"
+    body = {"source_id": str(a.id), "target_id": str(b.id), "cardinality": "1:n"}
+    assert (await client.put(url, json=body, headers=env["editor"])).status_code == 403
+    assert (
+        await client.put(url, json={**body, "cardinality": "2:5"}, headers=env["admin"])
+    ).status_code == 422
+    assert (
+        await client.put(url, json={**body, "target_id": str(a.id)}, headers=env["admin"])
+    ).status_code == 422
+    first = await client.put(url, json=body, headers=env["admin"])
+    assert first.status_code == 200
+    edge = first.json()
+    assert edge["cardinality"] == "1:n"
+    reverse = await client.put(
+        f"{BASE}/relation-drafts/{uuid.uuid4()}",
+        json={"source_id": str(b.id), "target_id": str(a.id), "cardinality": "1:1"},
+        headers=env["admin"],
+    )
+    assert reverse.status_code == 200
+    assert reverse.json() == edge
+    edit = await client.patch(
+        f"/api/v1/relations/{edge['id']}",
+        json={"attributes": {"cardinality": "n:m"}},
+        headers=env["admin"],
+    )
+    assert edit.status_code == 200
+    replay = await client.put(url, json=body, headers=env["admin"])
+    assert replay.status_code == 200
+    assert replay.json() == {**edge, "cardinality": "n:m"}
+    for src, tgt in ((a, c), (b, c)):
+        response = await client.put(
+            f"{BASE}/relation-drafts/{uuid.uuid4()}",
+            json={"source_id": str(src.id), "target_id": str(tgt.id)},
+            headers=env["admin"],
+        )
+        assert response.status_code == 200
+        assert response.json()["cardinality"] is None
+        assert (await db.get(Relation, uuid.UUID(response.json()["id"]))).attributes == {}
+    assert len(list(await db.scalars(select(Relation.id).where(Relation.type == ER)))) == 3
+    assert (
+        await client.delete(f"{BASE}/relations/{edge['id']}", headers=env["admin"])
+    ).status_code == 204
+    assert (await client.put(url, json=body, headers=env["admin"])).status_code == 404
+
+
+async def test_reverse_bulk_create_waits_for_uncommitted_er_draft(test_engine):
+    async with AsyncSession(test_engine, expire_on_commit=False) as setup, setup.begin():
+        admin = await create_role(setup, key="bo-er-concurrent-admin")
+        actor = await create_user(setup, role=admin.key)
+        card_type = await create_card_type(setup, key="DataObject")
+        relation_type = await create_relation_type(
+            setup, key=ER, source_type_key="DataObject", target_type_key="DataObject"
+        )
+        a, b = await bo(setup), await bo(setup, "Order")
+
+    try:
+        second_reached_write = asyncio.Event()
+
+        def observe_write(_conn, _cursor, statement, _params, _context, _executemany):
+            if "pg_advisory_xact_lock" in statement or "INSERT INTO relations" in statement:
+                second_reached_write.set()
+
+        async def reverse_bulk_create():
+            async with AsyncSession(test_engine) as session, session.begin():
+                connection = await session.connection()
+                event.listen(connection.sync_connection, "before_cursor_execute", observe_write)
+                return await apply_relation_operations(
+                    session,
+                    [
+                        RelationBulkOperation(
+                            row_index=0, type=ER, source={"id": str(b.id)}, target={"id": str(a.id)}
+                        )
+                    ],
+                    actor_id=actor.id,
+                    dry_run=False,
+                )
+
+        async with AsyncSession(test_engine, expire_on_commit=False) as first_writer:
+            first = await create_er_draft(
+                first_writer,
+                actor,
+                uuid.uuid4(),
+                BoRelationDraft(source_id=a.id, target_id=b.id, cardinality="1:n"),
+            )
+            second = asyncio.create_task(reverse_bulk_create())
+            try:
+                await asyncio.wait_for(second_reached_write.wait(), timeout=5)
+                await first_writer.commit()
+                results, upserted, deleted, failed = await asyncio.wait_for(second, timeout=10)
+            finally:
+                if not second.done():
+                    second.cancel()
+                    await asyncio.gather(second, return_exceptions=True)
+
+        assert (upserted, deleted, failed) == (1, 0, 0)
+        assert results[0].relation_id == str(first.id)
+        async with AsyncSession(test_engine) as verify:
+            rows = list(await verify.scalars(select(Relation).where(Relation.type == ER)))
+            assert [(row.id, row.source_id, row.target_id, row.attributes) for row in rows] == [
+                (first.id, a.id, b.id, {"cardinality": "1:n"})
+            ]
+    finally:
+        async with AsyncSession(test_engine) as cleanup, cleanup.begin():
+            await cleanup.execute(
+                delete(BoOperationReceipt).where(BoOperationReceipt.actor_id == actor.id)
+            )
+            await cleanup.execute(delete(Event).where(Event.user_id == actor.id))
+            await cleanup.execute(
+                delete(MutationBatch).where(MutationBatch.actor_user_id == actor.id)
+            )
+            await cleanup.execute(delete(Card).where(Card.id.in_([a.id, b.id])))
+            await cleanup.execute(delete(RelationType).where(RelationType.id == relation_type.id))
+            await cleanup.execute(delete(CardType).where(CardType.id == card_type.id))
+            await cleanup.execute(delete(User).where(User.id == actor.id))
+            await cleanup.execute(delete(Role).where(Role.id == admin.id))
+        PermissionService.invalidate_role_cache(admin.key)
+        PermissionService.invalidate_type_permission_cache()
+
+
+async def test_application_drafts_wait_for_visible_master_and_do_not_replay_transfer(
+    client, db, env
+):
+    node = await bo(db)
+    a, b = await create_card(db, name="Alpha"), await create_card(db, name="Beta")
+    slave_url = f"{BASE}/application-link-drafts/{uuid.uuid4()}"
+    slave = {"object_id": str(node.id), "application_id": str(b.id), "role": "slave"}
+    # The API fixture reuses one session. Roll back this failed request the
+    # way the production dependency does when its per-request session closes.
+    async with db.begin_nested() as failed_request:
+        pending = await client.put(slave_url, json=slave, headers=env["admin"])
+        assert pending.status_code == 409
+        assert pending.json()["detail"] == "A visible Master is required"
+        await failed_request.rollback()
+    assert (await client.put(slave_url, json=slave, headers=env["editor"])).status_code == 403
+    assert (
+        await client.put(slave_url, json={**slave, "role": "invalid"}, headers=env["admin"])
+    ).status_code == 422
+    assert not list(await db.scalars(select(Relation.id).where(Relation.type == APP_LINK)))
+
+    first_url = f"{BASE}/application-link-drafts/{uuid.uuid4()}"
+    first_body = {**slave, "application_id": str(a.id), "role": "master"}
+    first = await client.put(first_url, json=first_body, headers=env["admin"])
+    assert first.status_code == 200
+    assert first.json()["is_master"] is True
+    assert (await client.put(slave_url, json=slave, headers=env["admin"])).status_code == 200
+    assert (
+        await client.patch(
+            f"/api/v1/relations/{first.json()['id']}",
+            json={"attributes": {"read": True}},
+            headers=env["admin"],
+        )
+    ).status_code == 200
+    later = await client.put(
+        f"{BASE}/application-link-drafts/{uuid.uuid4()}",
+        json={**slave, "role": "master"},
+        headers=env["admin"],
+    )
+    assert later.status_code == 200
+    assert later.json()["is_master"] is True
+    original = await db.get(Relation, uuid.UUID(first.json()["id"]))
+    assert original.attributes == {"read": True}
+    replay = await client.put(first_url, json=first_body, headers=env["admin"])
+    assert replay.status_code == 200
+    assert replay.json() == {**first.json(), "is_master": False}
+    assert list(
+        await db.scalars(
+            select(Relation.id).where(
+                Relation.type == APP_LINK, Relation.attributes["dataOwnership"].astext == "master"
+            )
+        )
+    ) == [uuid.UUID(later.json()["id"])]
+
+
+async def test_layout_publishes_successful_drafts_after_snapshot_exists(client, db, env):
+    a = await bo(db)
+    assert (await client.put(f"{BASE}/layout", json={}, headers=env["admin"])).status_code == 200
+    node_draft, edge_draft, app_draft = (str(uuid.uuid4()) for _ in range(3))
+    node = await client.put(
+        f"{BASE}/objects/{node_draft}",
+        json={"name": "Order", "subtype": "Data"},
+        headers=env["admin"],
+    )
+    assert node.status_code == 200
+    b = node.json()["id"]
+    edge = await client.put(
+        f"{BASE}/relation-drafts/{edge_draft}",
+        json={"source_id": str(a.id), "target_id": b},
+        headers=env["admin"],
+    )
+    assert edge.status_code == 200
+    app = await create_card(db, name="Alpha")
+    app_link = await client.put(
+        f"{BASE}/application-link-drafts/{app_draft}",
+        json={"object_id": b, "application_id": str(app.id), "role": "master"},
+        headers=env["admin"],
+    )
+    assert app_link.status_code == 200
+    unrelated = await bo(db, "Other")
+    drafts = [
+        {"kind": "node", "id": node_draft},
+        {"kind": "edge", "id": edge_draft},
+        {"kind": "application_link", "id": app_draft},
+    ]
+    saved = await client.put(
+        f"{BASE}/layout",
+        json={"saved_drafts": drafts, "positions": {b: {"x": 12, "y": 24}}},
+        headers=env["admin"],
+    )
+    assert saved.status_code == 200
+    reopened = (await client.get(BASE, headers=env["viewer"])).json()
+    assert {node["id"] for node in reopened["nodes"]} == {str(a.id), b}
+    assert str(unrelated.id) not in reopened["positions"]
+    assert reopened["positions"] == {b: {"x": 12, "y": 24}}
+    assert reopened["edges"] == [edge.json()]
+    assert reopened["applications"][b]["master"] == {"id": str(app.id), "name": "Alpha"}
+
+    removed = await client.put(
+        f"{BASE}/layout",
+        json={"removed_relation_ids": [edge.json()["id"]]},
+        headers=env["editor"],
+    )
+    assert removed.status_code == 200
+    assert removed.json()["edges"] == []
+    replay = await client.put(f"{BASE}/layout", json={"saved_drafts": drafts}, headers=env["admin"])
+    assert replay.status_code == 200
+    assert replay.json()["edges"] == []
+    assert await db.get(Relation, uuid.UUID(edge.json()["id"])) is not None
+
+
+async def test_er_delete_replays_only_for_authorized_actor_without_reemitting_events(
+    client, db, env
+):
+    a, b = await bo(db), await bo(db, "Order")
+    er = await create_relation(db, type_key=ER, source_id=a.id, target_id=b.id)
+    await create_relation_type(
+        db, key="other-link", source_type_key="DataObject", target_type_key="DataObject"
+    )
+    other = await create_relation(db, type_key="other-link", source_id=a.id, target_id=b.id)
+    url = f"{BASE}/relations/{er.id}"
+    assert (
+        await client.delete(f"{BASE}/relations/invalid-id", headers=env["admin"])
+    ).status_code == 422
+    assert (await client.delete(url, headers=env["viewer"])).status_code == 403
+    assert (await client.delete(url, headers=env["editor"])).status_code == 403
+    assert (
+        await client.delete(f"{BASE}/relations/{other.id}", headers=env["admin"])
+    ).status_code == 404
+    assert (await client.delete(url, headers=env["partial"])).status_code == 204
+    assert (await client.delete(url, headers=env["partial"])).status_code == 204
+    assert (await client.delete(url, headers=env["admin"])).status_code == 404
+    assert await db.scalar(select(Relation.id).where(Relation.id == er.id)) is None
+    assert await db.scalar(select(Relation.id).where(Relation.id == other.id)) == other.id
+    assert set(
+        await db.scalars(select(Event.card_id).where(Event.event_type == "relation.deleted"))
+    ) == {a.id, b.id}
+    assert (
+        len(list(await db.scalars(select(Event.id).where(Event.event_type == "relation.deleted"))))
+        == 2
+    )
+
+    card_type = await db.scalar(select(CardType).where(CardType.key == "DataObject"))
+    card_type.role_permissions = {
+        "partial": {"inventory.view": {"value": False, "subtypes": ["Document"]}}
+    }
+    a.subtype = "Document"
+    await db.flush()
+    PermissionService.invalidate_type_permission_cache()
+    assert (await client.delete(url, headers=env["partial"])).status_code == 404
+
+    role = await db.scalar(select(Role).where(Role.key == "partial"))
+    role.permissions = {**role.permissions, "relations.manage": False}
+    await db.flush()
+    PermissionService.invalidate_role_cache("partial")
+    assert (await client.delete(url, headers=env["partial"])).status_code == 403
+
+
+async def test_unavailable_draft_results_do_not_block_unrelated_layout_positions(client, db, env):
+    customer = await bo(db)
+    assert (await client.put(f"{BASE}/layout", json={}, headers=env["admin"])).status_code == 200
+    draft_id, link_draft_id = str(uuid.uuid4()), str(uuid.uuid4())
+    node = await client.put(
+        f"{BASE}/objects/{draft_id}",
+        json={"name": "Order", "subtype": "Data"},
+        headers=env["admin"],
+    )
+    assert node.status_code == 200
+    order_id = node.json()["id"]
+    edge = await client.put(
+        f"{BASE}/relation-drafts/{link_draft_id}",
+        json={"source_id": str(customer.id), "target_id": order_id},
+        headers=env["admin"],
+    )
+    assert edge.status_code == 200
+    await db.execute(delete(Card).where(Card.id == uuid.UUID(order_id)))
+    drafts = [{"kind": "node", "id": draft_id}, {"kind": "edge", "id": link_draft_id}]
+    payload = {
+        "saved_drafts": drafts,
+        "positions": {order_id: {"x": 50, "y": 60}, str(customer.id): {"x": 10, "y": 20}},
+    }
+    assert (
+        await client.put(f"{BASE}/layout", json=payload, headers=env["editor"])
+    ).status_code == 404
+    result = await client.put(f"{BASE}/layout", json=payload, headers=env["admin"])
+    assert result.status_code == 200
+    saved = result.json()
+    assert {(item["kind"], item["id"]) for item in saved["unavailable_drafts"]} == {
+        ("node", draft_id),
+        ("edge", link_draft_id),
+    }
+    assert saved["positions"] == {str(customer.id): {"x": 10, "y": 20}}
+    assert [node["id"] for node in saved["nodes"]] == [str(customer.id)]
+    assert saved["edges"] == []
 
 
 async def test_first_read_uses_live_graph_with_stored_subtype_and_direction(client, db, env):
@@ -144,15 +547,70 @@ async def test_explicit_disjoint_removals_merge_without_inventory_delete(client,
     initial = await client.put(f"{BASE}/layout", json={}, headers=env["editor"])
     assert initial.status_code == 200
     revision = initial.json()["snapshot_revision"]
-    for rel in (first, second):
+    for rel, editor in ((first, "editor"), (second, "partial")):
         result = await client.put(
             f"{BASE}/layout",
             json={"snapshot_revision": revision, "removed_relation_ids": [str(rel.id)]},
-            headers=env["editor"],
+            headers=env[editor],
         )
         assert result.status_code == 200
     assert result.json()["edges"] == []
     assert await db.get(Relation, first.id) and await db.get(Relation, second.id)
+    assert (await client.get(BASE, headers=env["viewer"])).json()["edges"] == []
+
+    assert (
+        await client.delete(f"{BASE}/relations/{second.id}", headers=env["partial"])
+    ).status_code == 204
+    assert list(await db.scalars(select(Relation.id).where(Relation.type == ER))) == [first.id]
+    after_sync = await client.put(
+        f"{BASE}/layout",
+        json={"removed_relation_ids": [str(second.id)]},
+        headers=env["partial"],
+    )
+    assert after_sync.status_code == 200
+    assert (await client.get(BASE, headers=env["viewer"])).json()["edges"] == []
+
+
+@pytest.mark.parametrize(
+    ("delta", "editor"),
+    [("removed_relation_ids", "partial"), ("restored_relation_ids", "admin")],
+)
+async def test_unavailable_visual_delta_does_not_block_unrelated_positions(
+    client, db, env, delta, editor
+):
+    a, b = await bo(db), await bo(db, "Order")
+    edge = await create_relation(db, type_key=ER, source_id=a.id, target_id=b.id)
+    initial = await client.put(f"{BASE}/layout", json={}, headers=env["admin"])
+    assert initial.status_code == 200
+    revision = initial.json()["snapshot_revision"]
+    removed = await client.put(
+        f"{BASE}/layout",
+        json={"snapshot_revision": revision, "removed_relation_ids": [str(edge.id)]},
+        headers=env["admin"],
+    )
+    assert removed.status_code == 200
+    assert (
+        await client.delete(f"{BASE}/relations/{edge.id}", headers=env["admin"])
+    ).status_code == 204
+
+    payload = {
+        "snapshot_revision": revision,
+        delta: [str(edge.id)],
+        "positions": {str(a.id): {"x": 10, "y": 20}},
+    }
+    strict = await client.put(f"{BASE}/layout", json=payload, headers=env[editor])
+    assert strict.status_code == 404
+    updated = await client.put(
+        f"{BASE}/layout",
+        json={**payload, "skip_unavailable_relations": True},
+        headers=env[editor],
+    )
+    assert updated.status_code == 200
+    assert updated.json()["inventory_conflicts"] == [{"kind": "edge", "id": str(edge.id)}]
+    assert updated.json()["edges"] == []
+    reopened = (await client.get(BASE, headers=env["viewer"])).json()
+    assert reopened["positions"] == {str(a.id): {"x": 10, "y": 20}}
+    assert reopened["edges"] == []
 
 
 async def test_layout_rejects_nonfinite_coordinates_and_non_bo_ids(client, db, env):
@@ -196,6 +654,24 @@ async def test_partial_master_permission_does_not_depend_on_designation(client, 
     )
     assert response.status_code == 403
     assert response.json()["detail"] == "Insufficient permissions"
+    draft_response = await client.put(
+        f"{BASE}/application-link-drafts/{uuid.uuid4()}",
+        json={"object_id": str(node.id), "application_id": str(visible.id), "role": "master"},
+        headers=env["partial"],
+    )
+    assert draft_response.status_code == 403
+    assert draft_response.json() == response.json()
+    if master != "visible":
+        other = await create_card(db, name="New link")
+        async with db.begin_nested() as failed_request:
+            slave = await client.put(
+                f"{BASE}/application-link-drafts/{uuid.uuid4()}",
+                json={"object_id": str(node.id), "application_id": str(other.id), "role": "slave"},
+                headers=env["partial"],
+            )
+            assert slave.status_code == 409
+            assert slave.json()["detail"] == "A visible Master is required"
+            await failed_request.rollback()
 
 
 async def test_master_transfers_and_clears_without_changing_crud(client, db, env):

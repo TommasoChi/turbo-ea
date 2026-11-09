@@ -27,6 +27,7 @@ from app.models.relation_type import RelationType
 from app.models.stakeholder import Stakeholder
 from app.models.tag import CardTag, Tag, TagGroup
 from app.models.user import User
+from app.services.bo_relationship_constants import BO_TYPE, ER_RELATION
 from app.services.migration import apply as ap
 from tests.conftest import (
     create_card,
@@ -820,6 +821,44 @@ async def test_a_relation_already_present_takes_the_new_attributes(db, env, ends
     assert present.attributes == {"a": 1, "k": 1}
     assert staged.target_id == again.target_id == present.id
     assert len((await db.execute(select(Relation))).scalars().all()) == 1
+
+
+@pytest.mark.parametrize("action", ["create", "update"])
+async def test_reverse_er_migration_merges_in_the_stored_orientation(db, env, action):
+    await create_card_type(db, key=BO_TYPE, label="Business Object")
+    await create_relation_type(
+        db, key=ER_RELATION, source_type_key=BO_TYPE, target_type_key=BO_TYPE
+    )
+    first = await create_card(db, card_type=BO_TYPE, name="First")
+    second = await create_card(db, card_type=BO_TYPE, name="Second")
+    await identity(db, "first", first.id)
+    await identity(db, "second", second.id)
+    present = await create_relation(
+        db,
+        type_key=ER_RELATION,
+        source_id=first.id,
+        target_id=second.id,
+        attributes={"cardinality": "1:1", "custom": "keep"},
+    )
+    staged = await stage(
+        db,
+        env,
+        "relation",
+        "reverse",
+        action=action,
+        target_id=present.id if action == "update" else None,
+        data={
+            "tea_type": ER_RELATION,
+            "from_entity_id": "second",
+            "to_entity_id": "first",
+            "attributes": {"cardinality": "1:n"},
+        },
+    )
+    assert await ap._apply_relation_pass(db, env.m, env.admin) == zero(updated=1)
+    assert staged.target_id == present.id
+    (stored,) = (await db.scalars(select(Relation))).all()
+    assert (stored.id, stored.source_id, stored.target_id) == (present.id, first.id, second.id)
+    assert stored.attributes == {"cardinality": "n:1", "custom": "keep"}
 
 
 async def test_only_a_relation_of_the_same_type_and_ends_is_reused(db, env, ends):

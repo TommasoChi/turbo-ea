@@ -19,6 +19,7 @@ from app.models.card_type import CardType
 from app.models.relation import Relation
 from app.models.tag import CardTag, Tag, TagGroup
 from app.services import event_bus as event_bus_module
+from app.services.bo_relationship_constants import BO_TYPE, ER_RELATION
 from app.services.permission_service import PermissionService
 from app.services.workspace_io import applier, schema
 from app.services.workspace_io.bundle import WorkspaceBundle
@@ -395,6 +396,44 @@ async def test_relations_resolve_both_ends_and_land_in_their_type_direction(db, 
         "relation 'app_to_itc': endpoint(s) unresolved ('Billing' -> 'Ghost')",
         "relation '': endpoint(s) unresolved ('Billing' -> 'Server')",
     ]
+
+
+async def test_reverse_er_restore_maps_to_the_existing_relation(db):
+    await create_card_type(db, key=BO_TYPE, label="Business Object")
+    await create_relation_type(
+        db, key=ER_RELATION, source_type_key=BO_TYPE, target_type_key=BO_TYPE
+    )
+    first = await create_card(db, card_type=BO_TYPE, name="First")
+    second = await create_card(db, card_type=BO_TYPE, name="Second")
+    present = await create_relation(
+        db,
+        type_key=ER_RELATION,
+        source_id=first.id,
+        target_id=second.id,
+        attributes={"cardinality": "1:n", "custom": "keep"},
+    )
+    imported_id = str(uuid.uuid4())
+    rows = [
+        {
+            "type": ER_RELATION,
+            "source_type": BO_TYPE,
+            "source_ref": "Second",
+            "target_type": BO_TYPE,
+            "target_ref": "First",
+            "source_id": imported_id,
+            "attributes": '{"cardinality": "1:1"}',
+        }
+    ]
+    ids = applier.rm.IdMap()
+    sr = applier.SectionResult(sheet=schema.SHEET_RELATIONS)
+    await applier._apply_relations(
+        db, bundle({schema.SHEET_RELATIONS: rows}), sr, False, id_map=ids
+    )
+    (stored,) = (await db.scalars(select(Relation))).all()
+    assert (stored.id, stored.source_id, stored.target_id) == (present.id, first.id, second.id)
+    assert stored.attributes == {"cardinality": "1:n", "custom": "keep"}
+    assert ids.relations == {imported_id: str(present.id)}
+    assert sr.skip_reasons == {"already_present": 1}
 
 
 # ── orchestration ───────────────────────────────────────────────────────────

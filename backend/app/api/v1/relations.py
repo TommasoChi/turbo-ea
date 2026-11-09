@@ -26,7 +26,7 @@ from app.schemas.relation import (
     RelationUpdate,
 )
 from app.services import card_write_service
-from app.services.bo_relationship_constants import APPLICATION_RELATION, OWNERSHIP_KEY
+from app.services.bo_relationship_constants import APPLICATION_RELATION, ER_RELATION, OWNERSHIP_KEY
 from app.services.calculation_engine import run_calculations_for_card
 from app.services.card_read_scope import CardReadScope
 from app.services.card_resolver import CardResolver
@@ -412,29 +412,10 @@ async def delete_relation(
     rel = result.scalar_one_or_none()
     if not rel or not await _relation_readable(db, user, rel):
         raise HTTPException(404, "Relation not found")
-    source_card = await db.get(Card, rel.source_id)
-    target_card = await db.get(Card, rel.target_id)
-    await _emit_relation_events(
-        db,
-        event_type="relation.deleted",
-        rel=rel,
-        source_card=source_card,
-        target_card=target_card,
-        actor_id=user.id,
-    )
-    await db.delete(rel)
-    # Flush before rescoring so the mandatory-relation check does not still
-    # see the row that was just removed.
-    await db.flush()
-
-    # Run calculated fields for both source and target cards, then rescore.
-    if source_card:
-        await run_calculations_for_card(db, source_card)
-        source_card.data_quality = await calc_data_quality(db, source_card)
-    if target_card:
-        await run_calculations_for_card(db, target_card)
-        target_card.data_quality = await calc_data_quality(db, target_card)
-
+    rel = await card_write_service.lock_relation_for_delete(db, rel)
+    if rel is None:
+        raise HTTPException(404, "Relation not found")
+    await card_write_service.delete_relation(db, user.id, rel)
     await db.commit()
 
 
@@ -617,26 +598,25 @@ async def apply_relation_operations(
         type_keys.add(rt.target_type_key)
     resolver = await CardResolver.load(db, type_keys, read_scope=read_scope, mode="module")
     check_ids = read_scope is not None and not read_scope.is_unrestricted(mode="module")
-    # Match the BO Master transfer's lock order before taking any relation
-    # row locks. Resolve once and keep the normal per-op error handling.
-    resolved_app_links: dict[int, tuple[uuid.UUID, uuid.UUID]] = {}
-    app_rt = rt_by_key.get(APPLICATION_RELATION)
-    if app_rt is not None:
-        for index, op in enumerate(operations):
-            if op.type != APPLICATION_RELATION:
-                continue
-            try:
-                src = _resolve_ref_input(op.source, app_rt, endpoint="source", resolver=resolver)
-                tgt = _resolve_ref_input(op.target, app_rt, endpoint="target", resolver=resolver)
-            except HTTPException:
-                continue
-            if read_scope is not None and {src, tgt} != await read_scope.readable_card_ids(
-                db, {src, tgt}, mode="module"
-            ):
-                continue
-            resolved_app_links[index] = await orient_endpoints(db, app_rt, src, tgt)
-        for object_id in sorted({target for _, target in resolved_app_links.values()}):
-            await card_write_service.lock_bo_master(db, object_id)
+    # Take all BO advisory locks in a stable order before any row locks.
+    resolved_bo_links: dict[int, tuple[uuid.UUID, uuid.UUID]] = {}
+    for index, op in enumerate(operations):
+        bo_rt = rt_by_key.get(op.type)
+        if op.type not in (APPLICATION_RELATION, ER_RELATION) or bo_rt is None:
+            continue
+        try:
+            src = _resolve_ref_input(op.source, bo_rt, endpoint="source", resolver=resolver)
+            tgt = _resolve_ref_input(op.target, bo_rt, endpoint="target", resolver=resolver)
+        except HTTPException:
+            continue
+        if read_scope is not None and {src, tgt} != await read_scope.readable_card_ids(
+            db, {src, tgt}, mode="module"
+        ):
+            continue
+        resolved_bo_links[index] = await orient_endpoints(db, bo_rt, src, tgt)
+    await card_write_service.lock_bo_relation_writes(
+        db, ((operations[index].type, *ends) for index, ends in resolved_bo_links.items())
+    )
 
     results: list[RelationBulkResult] = []
     upserted = 0
@@ -676,11 +656,11 @@ async def apply_relation_operations(
             # Name refs are type-checked above; id refs are not, so turn a pair
             # sent the other way round before the lookup, the delete and the
             # cardinality guards all key on it (#1140).
-            resolved_app_link = resolved_app_links.get(index)
-            if resolved_app_link is None:
+            resolved_bo_link = resolved_bo_links.get(index)
+            if resolved_bo_link is None:
                 source_id, target_id = await orient_endpoints(db, rt_def, source_id, target_id)
             else:
-                source_id, target_id = resolved_app_link
+                source_id, target_id = resolved_bo_link
 
             rel = await card_write_service.find_relation(db, op.type, source_id, target_id)
             attributes = card_write_service.orient_er_attributes(
@@ -698,7 +678,8 @@ async def apply_relation_operations(
                     op_result = RelationBulkResult(row_index=op.row_index, status="deleted")
             else:
                 if rel is None:
-                    await _require_cardinality_room(db, rt_def, source_id, target_id)
+                    if op.type != ER_RELATION:
+                        await _require_cardinality_room(db, rt_def, source_id, target_id)
                     rel = card_write_service.add_relation(
                         db,
                         type_key=op.type,

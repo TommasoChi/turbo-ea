@@ -33,8 +33,10 @@ Contract notes:
 
 from __future__ import annotations
 
+import hashlib
 import math
 import uuid
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
@@ -1434,10 +1436,57 @@ def orient_er_attributes(
 
 async def lock_bo_master(db: AsyncSession, object_id: uuid.UUID) -> None:
     """Serialize decisions and edits on Application links for one BO."""
-    # Independent of card rows so relation writers can retain their lock
-    # order. A key collision only serializes two unrelated BOs.
-    lock_key = int.from_bytes(object_id.bytes[:8], "big", signed=True)
-    await db.execute(select(func.pg_advisory_xact_lock(lock_key)))
+    await lock_bo_relation_writes(db, [(APPLICATION_RELATION, object_id, object_id)])
+
+
+async def lock_bo_relation_writes(
+    db: AsyncSession, pairs: Iterable[tuple[str, uuid.UUID, uuid.UUID]]
+) -> None:
+    """Lock unordered ER pairs and BO ownership, in one order across batches."""
+    keys: set[int] = set()
+    for type_key, source, target in pairs:
+        if type_key == APPLICATION_RELATION:
+            lock_bytes = target.bytes
+        elif type_key == ER_RELATION:
+            first, second = sorted((source, target))
+            lock_bytes = hashlib.sha256(b"bo-er" + first.bytes + second.bytes).digest()
+        else:
+            continue
+        keys.add(int.from_bytes(lock_bytes[:8], "big", signed=True))
+    for key in sorted(keys):
+        await db.execute(select(func.pg_advisory_xact_lock(key)))
+
+
+async def lock_relation_for_delete(db: AsyncSession, rel: Relation) -> Relation | None:
+    """Re-read the row after the BO lock, allowing a concurrent delete to win."""
+    await lock_bo_relation_writes(db, [(rel.type, rel.source_id, rel.target_id)])
+    return await db.scalar(
+        select(Relation)
+        .where(Relation.id == rel.id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+
+
+async def delete_relation(db: AsyncSession, actor_id: uuid.UUID, rel: Relation) -> None:
+    """Delete a relation and publish both endpoint events in the current transaction."""
+    source_card = await db.get(Card, rel.source_id)
+    target_card = await db.get(Card, rel.target_id)
+    await _emit_relation_events(
+        db,
+        event_type="relation.deleted",
+        rel=rel,
+        source_card=source_card,
+        target_card=target_card,
+        actor_id=actor_id,
+    )
+    await db.delete(rel)
+    # Flush before rescoring so a mandatory relation check sees the deletion.
+    await db.flush()
+    for card in (source_card, target_card):
+        if card:
+            await run_calculations_for_card(db, card)
+            card.data_quality = await calc_data_quality(db, card)
 
 
 def relation_attributes_for_write(
@@ -1504,6 +1553,7 @@ async def upsert_relation(
     attributes: dict | None = None,
     description: str | None = None,
     dry_run: bool = False,
+    create_only: bool = False,
 ) -> tuple[Relation, bool, list[str]]:
     """Idempotent single-relation upsert on ``(type, source, target)`` —
     the ``POST /relations`` semantics (#905): reuse an existing row and merge
@@ -1515,9 +1565,10 @@ async def upsert_relation(
     (``relation_orientation``), so a request sent the other way round merges
     into the existing row instead of forking a backwards one (#1140)."""
     source_id, target_id = await orient_endpoints(db, type_key, source_id, target_id)
-    if type_key == APPLICATION_RELATION:
-        await lock_bo_master(db, target_id)
+    await lock_bo_relation_writes(db, [(type_key, source_id, target_id)])
     rel = await find_relation(db, type_key, source_id, target_id)
+    if rel is not None and create_only:
+        return rel, True, []
     attributes = orient_er_attributes(type_key, rel, source_id, attributes)
     if rel is not None:
         source_id, target_id = rel.source_id, rel.target_id

@@ -11,14 +11,21 @@ from app.database import get_db
 from app.models.user import User
 from app.schemas.bo_relationship import (
     BoApplicationGroup,
+    BoApplicationLink,
+    BoApplicationLinkDraft,
     BoApplicationPage,
     BoDetail,
+    BoEdge,
     BoGraph,
     BoLayoutResult,
     BoLayoutUpdate,
     BoMasterUpdate,
+    BoNode,
+    BoObjectDraft,
+    BoRelationDraft,
 )
 from app.services import bo_relationship as service
+from app.services import bo_relationship_writes as writes
 from app.services.permission_service import PermissionService
 
 router = APIRouter(prefix="/bo-relationship", tags=["bo-relationship"])
@@ -41,6 +48,52 @@ async def save_layout(
     result = await service.save_bo_layout(db, user, body)
     await db.commit()
     return result
+
+
+@router.put("/objects/{draft_id}", response_model=BoNode)
+async def create_object_draft(
+    draft_id: uuid.UUID,
+    body: BoObjectDraft,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_permission("boRelationship.edit")),
+):
+    node = await writes.create_object_draft(db, user, draft_id, body)
+    await db.commit()
+    return node
+
+
+@router.put("/relation-drafts/{draft_id}", response_model=BoEdge)
+async def create_relation_draft(
+    draft_id: uuid.UUID,
+    body: BoRelationDraft,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_permission("boRelationship.edit")),
+):
+    edge = await writes.create_er_draft(db, user, draft_id, body)
+    await db.commit()
+    return edge
+
+
+@router.put("/application-link-drafts/{draft_id}", response_model=BoApplicationLink)
+async def create_application_link_draft(
+    draft_id: uuid.UUID,
+    body: BoApplicationLinkDraft,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_permission("boRelationship.edit")),
+):
+    link = await writes.create_application_link_draft(db, user, draft_id, body)
+    await db.commit()
+    return link
+
+
+@router.delete("/relations/{relation_id}", status_code=204)
+async def delete_er_relation(
+    relation_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_permission("boRelationship.edit")),
+):
+    await writes.delete_er_relation(db, user, relation_id)
+    await db.commit()
 
 
 @router.put("/objects/{object_id}/master", response_model=BoApplicationGroup)

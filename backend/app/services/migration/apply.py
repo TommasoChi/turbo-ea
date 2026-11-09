@@ -57,7 +57,13 @@ from app.models.stakeholder import Stakeholder
 from app.models.tag import CardTag, Tag, TagGroup
 from app.models.user import User
 from app.services import card_type_categories
+from app.services.bo_relationship_constants import ER_RELATION
 from app.services.card_costs import recompute_derived
+from app.services.card_write_service import (
+    find_relation,
+    lock_bo_relation_writes,
+    orient_er_attributes,
+)
 from app.services.event_bus import event_bus
 from app.services.relation_orientation import orient_endpoints
 
@@ -718,6 +724,14 @@ async def _apply_relation_pass(
         .scalars()
         .all()
     )
+
+    def record_error(staged: StagedRecord, exc: Exception) -> None:
+        logger.exception("migration apply: relation %s failed", staged.source_id)
+        counts["errors"] += 1
+        staged.status = "error"
+        staged.error_message = str(exc)[:1000]
+
+    resolved_rows: list[tuple[StagedRecord, str, uuid.UUID, uuid.UUID]] = []
     for staged in rows:
         if staged.action == "conflict":
             counts["conflicts"] += 1
@@ -739,35 +753,44 @@ async def _apply_relation_pass(
                 staged.status = "applied"
                 staged.error_message = "Endpoint card not resolved in identity map"
                 continue
-            if staged.action == "create":
+            type_key = payload.get("tea_type", "")
+            if staged.action == "create" or type_key == ER_RELATION:
                 # The source platform's from/to is its own convention; store
                 # the relation the way the Turbo EA type runs (#1140), and
                 # reuse the row when that turned it onto one already present.
                 src_uuid, tgt_uuid = await orient_endpoints(
                     db, payload["tea_type"], src_uuid, tgt_uuid
                 )
-                present = (
-                    await db.execute(
-                        select(Relation).where(
-                            Relation.type == payload["tea_type"],
-                            Relation.source_id == src_uuid,
-                            Relation.target_id == tgt_uuid,
-                        )
-                    )
-                ).scalar_one_or_none()
+            resolved_rows.append((staged, type_key, src_uuid, tgt_uuid))
+        except Exception as exc:  # noqa: BLE001
+            record_error(staged, exc)
+
+    await lock_bo_relation_writes(
+        db,
+        (
+            (type_key, source, target)
+            for staged, type_key, source, target in resolved_rows
+            if staged.action in ("create", "update")
+        ),
+    )
+    for staged, type_key, src_uuid, tgt_uuid in resolved_rows:
+        try:
+            attributes = (staged.source_data or {}).get("attributes") or {}
+            if staged.action == "create":
+                present = await find_relation(db, type_key, src_uuid, tgt_uuid)
                 if present is not None:
                     present.attributes = {
                         **(present.attributes or {}),
-                        **(payload.get("attributes") or {}),
+                        **(orient_er_attributes(type_key, present, src_uuid, attributes) or {}),
                     }
                     staged.target_id = present.id
                     counts["updated"] += 1
                 else:
                     rel = Relation(
-                        type=payload["tea_type"],
+                        type=type_key,
                         source_id=src_uuid,
                         target_id=tgt_uuid,
-                        attributes=payload.get("attributes") or {},
+                        attributes=attributes,
                     )
                     db.add(rel)
                     await db.flush()
@@ -781,18 +804,16 @@ async def _apply_relation_pass(
                 ).scalar_one_or_none()
                 if existing_rel is None:
                     raise ValueError("target relation no longer exists")
-                rel = existing_rel
-                merged = {**(rel.attributes or {}), **(payload.get("attributes") or {})}
-                rel.attributes = merged
+                existing_rel.attributes = {
+                    **(existing_rel.attributes or {}),
+                    **(orient_er_attributes(type_key, existing_rel, src_uuid, attributes) or {}),
+                }
                 counts["updated"] += 1
             else:  # skip
                 counts["skipped"] += 1
             staged.status = "applied"
         except Exception as exc:  # noqa: BLE001
-            logger.exception("migration apply: relation %s failed", staged.source_id)
-            counts["errors"] += 1
-            staged.status = "error"
-            staged.error_message = str(exc)[:1000]
+            record_error(staged, exc)
     await db.flush()
     return counts
 

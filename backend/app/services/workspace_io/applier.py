@@ -50,9 +50,14 @@ from app.models.stakeholder_role_definition import StakeholderRoleDefinition
 from app.models.tag import CardTag, Tag, TagGroup
 from app.models.user import User
 from app.services import card_reference, card_type_categories
-from app.services.bo_relationship_constants import APPLICATION_RELATION, MASTER, OWNERSHIP_KEY
+from app.services.bo_relationship_constants import (
+    APPLICATION_RELATION,
+    ER_RELATION,
+    MASTER,
+    OWNERSHIP_KEY,
+)
 from app.services.card_resolver import CardResolver
-from app.services.card_write_service import lock_bo_master
+from app.services.card_write_service import lock_bo_relation_writes
 from app.services.email_backends.runtime import apply_email_settings_to_runtime
 from app.services.licensing_migration import move_model_field
 from app.services.relation_orientation import oriented
@@ -1360,9 +1365,7 @@ async def _apply_relations(
             continue
         resolved_rows.append((row, data, resolved))
 
-    bo_ids = {target for _, _, (key, _, target) in resolved_rows if key == APPLICATION_RELATION}
-    for bo_id in sorted(bo_ids):
-        await lock_bo_master(db, bo_id)
+    await lock_bo_relation_writes(db, (key for _, _, key in resolved_rows))
     existing = {
         (rel.type, rel.source_id, rel.target_id): rel.id
         for rel in (await db.execute(select(Relation))).scalars().all()
@@ -1370,8 +1373,11 @@ async def _apply_relations(
     for row, data, resolved in resolved_rows:
         rtype, source_id, target_id = resolved
         key = (rtype, source_id, target_id)
-        if key in existing:
-            ids.record(rm.RELATIONS, row.get(schema.SOURCE_ID_COLUMN), existing[key])
+        existing_id = existing.get(key)
+        if existing_id is None and rtype == ER_RELATION:
+            existing_id = existing.get((rtype, target_id, source_id))
+        if existing_id is not None:
+            ids.record(rm.RELATIONS, row.get(schema.SOURCE_ID_COLUMN), existing_id)
             sr.skip("already_present")
             continue
         attributes = data.get("attributes") or {}

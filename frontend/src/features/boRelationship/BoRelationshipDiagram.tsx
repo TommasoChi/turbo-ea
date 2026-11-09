@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Box, Button, Stack } from "@mui/material";
 import { useTranslation } from "react-i18next";
 import Diagram from "diagram-js";
@@ -7,6 +7,10 @@ import type EventBus from "diagram-js/lib/core/EventBus";
 import type Canvas from "diagram-js/lib/core/Canvas";
 import type ElementFactory from "diagram-js/lib/core/ElementFactory";
 import type ElementRegistry from "diagram-js/lib/core/ElementRegistry";
+import type GraphicsFactory from "diagram-js/lib/core/GraphicsFactory";
+import DraggingModule from "diagram-js/lib/features/dragging";
+import type Dragging from "diagram-js/lib/features/dragging/Dragging";
+import InteractionEventsModule from "diagram-js/lib/features/interaction-events";
 import type { Element, Shape, Connection } from "diagram-js/lib/model/Types";
 import { append, attr, create } from "tiny-svg";
 import { ARCHIMATE_LAYER_COLORS, ARCHIMATE_TEXT_COLOR } from "@/theme/tokens";
@@ -88,27 +92,78 @@ interface Props {
   edges: BoEdge[];
   positions: Record<string, { x: number; y: number }>;
   onActivate: (id: string) => void;
+  onMove?: (id: string, position: { x: number; y: number }) => void;
+  onRequestRemoveEdge?: (id: string) => void;
 }
 
-export default function BoRelationshipDiagram({ nodes, edges, positions, onActivate }: Props) {
+type Interaction = { element: Element; originalEvent: MouseEvent };
+type BoDrag = { context: { shape: Shape; x: number; y: number }; dx: number; dy: number };
+
+function edgeWaypoints(source: Shape, target: Shape) {
+  const sourceCenter = { x: source.x + source.width / 2, y: source.y + source.height / 2 };
+  const targetCenter = { x: target.x + target.width / 2, y: target.y + target.height / 2 };
+  const dx = targetCenter.x - sourceCenter.x;
+  const dy = targetCenter.y - sourceCenter.y;
+  if (dx === 0 && dy === 0) return [sourceCenter, targetCenter];
+
+  // Start and end at the shape boundaries so the edge's hit area does not
+  // cover the centre of a card node.
+  const sourceScale = Math.min(source.width / (2 * Math.abs(dx)), source.height / (2 * Math.abs(dy)), 0.5);
+  const targetScale = Math.min(target.width / (2 * Math.abs(dx)), target.height / (2 * Math.abs(dy)), 0.5);
+  return [
+    { x: sourceCenter.x + dx * sourceScale, y: sourceCenter.y + dy * sourceScale },
+    { x: targetCenter.x - dx * targetScale, y: targetCenter.y - dy * targetScale },
+  ];
+}
+
+export default function BoRelationshipDiagram({
+  nodes,
+  edges,
+  positions,
+  onActivate,
+  onMove,
+  onRequestRemoveEdge,
+}: Props) {
   const { t } = useTranslation("reports");
   const container = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<Canvas | null>(null);
   const viewRef = useRef<{ x: number; y: number; width: number; height: number } | null>(null);
-  const activate = useRef(onActivate);
-  activate.current = onActivate;
+  const actions = useRef({ onActivate, onMove, onRequestRemoveEdge });
+  actions.current = { onActivate, onMove, onRequestRemoveEdge };
+  const [selectedRelation, setSelectedRelation] = useState<string | null>(null);
+  const canMove = onMove !== undefined;
+  const canRemove = onRequestRemoveEdge !== undefined;
+  const activeRelation = canRemove && edges.some((edge) => edge.id === selectedRelation)
+    ? selectedRelation
+    : null;
+
   useEffect(() => {
     if (!container.current) return;
     const diagram = new Diagram({
       canvas: { container: container.current },
-      modules: [{ __init__: ["boRenderer"], boRenderer: ["type", Renderer] }],
+      modules: [
+        InteractionEventsModule,
+        ...(canMove ? [DraggingModule] : []),
+        { __init__: ["boRenderer"], boRenderer: ["type", Renderer] },
+      ],
     });
     const canvas = diagram.get<Canvas>("canvas");
     canvasRef.current = canvas;
     const factory = diagram.get<ElementFactory>("elementFactory");
     const registry = diagram.get<ElementRegistry>("elementRegistry");
+    const eventBus = diagram.get<EventBus>("eventBus");
     const root = canvas.getRootElement();
     const shapes = new Map<string, Shape>();
+    const selectNode = (id: string) => {
+      setSelectedRelation(null);
+      actions.current.onActivate(id);
+    };
+    // Use the interaction bus so diagram-js can suppress the click after a drag.
+    eventBus.on("element.click", ({ element, originalEvent }: Interaction) => {
+      if (originalEvent.button !== 0) return;
+      if (element.businessObject?.node) selectNode(element.id);
+      else setSelectedRelation(canRemove && element.businessObject?.boRelationship ? element.id : null);
+    });
     for (const node of nodes) {
       const position = positions[node.id];
       if (!position) continue;
@@ -129,14 +184,11 @@ export default function BoRelationshipDiagram({ nodes, edges, positions, onActiv
       gfx.setAttribute("role", "button");
       gfx.setAttribute("tabindex", "0");
       gfx.setAttribute("aria-label", node.name);
-      gfx.addEventListener("click", (event) => {
-        if ((event as MouseEvent).button === 0) activate.current(node.id);
-      });
       gfx.addEventListener("keydown", (event) => {
         const { key } = event as KeyboardEvent;
         if (key === "Enter" || key === " ") {
           event.preventDefault();
-          activate.current(node.id);
+          selectNode(node.id);
         }
       });
     }
@@ -148,13 +200,61 @@ export default function BoRelationshipDiagram({ nodes, edges, positions, onActiv
         id: edge.id,
         source,
         target,
-        waypoints: [
-          { x: source.x + BO_NODE_WIDTH / 2, y: source.y + BO_NODE_HEIGHT / 2 },
-          { x: target.x + BO_NODE_WIDTH / 2, y: target.y + BO_NODE_HEIGHT / 2 },
-        ],
+        waypoints: edgeWaypoints(source, target),
         businessObject: { boRelationship: true, cardinality: edge.cardinality },
       });
       canvas.addConnection(connection, root);
+      if (canRemove) {
+        const gfx = registry.getGraphics(connection) as SVGElement;
+        gfx.setAttribute("role", "button");
+        gfx.setAttribute("tabindex", "0");
+        gfx.setAttribute("aria-label", t("boRelationship.relationLabel", {
+          source: (source.businessObject.node as BoNode).name,
+          target: (target.businessObject.node as BoNode).name,
+        }));
+        gfx.addEventListener("keydown", (event) => {
+          const { key } = event as KeyboardEvent;
+          if (key === "Enter" || key === " ") {
+            event.preventDefault();
+            setSelectedRelation(edge.id);
+          } else if (key === "Delete") {
+            event.preventDefault();
+            actions.current.onRequestRemoveEdge?.(edge.id);
+          }
+        });
+      }
+    }
+    if (canMove) {
+      const dragging = diagram.get<Dragging>("dragging");
+      const graphics = diagram.get<GraphicsFactory>("graphicsFactory");
+      const previewMove = (shape: Shape, x: number, y: number) => {
+        shape.x = x;
+        shape.y = y;
+        graphics.update("shape", shape, registry.getGraphics(shape) as SVGElement);
+        for (const edge of [...shape.incoming, ...shape.outgoing]) {
+          edge.waypoints = edgeWaypoints(edge.source as Shape, edge.target as Shape);
+          const gfx = registry.getGraphics(edge) as SVGElement;
+          graphics.update("connection", edge, gfx);
+          eventBus.fire("interactionEvents.updateHit", { element: edge, gfx });
+        }
+      };
+      eventBus.on("element.mousedown", ({ element, originalEvent }: Interaction) => {
+        if (originalEvent.button !== 0 || !element.businessObject?.node) return;
+        const shape = element as Shape;
+        dragging.init(originalEvent, "bo.move", {
+          cursor: "grabbing",
+          data: { context: { shape, x: shape.x, y: shape.y } },
+        });
+      });
+      eventBus.on("bo.move.move", ({ context: { shape, x, y }, dx, dy }: BoDrag) => {
+        previewMove(shape, x + dx, y + dy);
+      });
+      eventBus.on("bo.move.cancel", ({ context: { shape, x, y } }: BoDrag) => {
+        previewMove(shape, x, y);
+      });
+      eventBus.on("bo.move.end", ({ context: { shape, x, y }, dx, dy }: BoDrag) => {
+        if (dx || dy) actions.current.onMove?.(shape.id, { x: x + dx, y: y + dy });
+      });
     }
     if (viewRef.current) canvas.viewbox(viewRef.current);
     return () => {
@@ -163,7 +263,16 @@ export default function BoRelationshipDiagram({ nodes, edges, positions, onActiv
       canvasRef.current = null;
       diagram.destroy();
     };
-  }, [nodes, edges, positions]);
+  }, [nodes, edges, positions, canMove, canRemove, t]);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || !activeRelation) return;
+    canvas.addMarker(activeRelation, "bo-relation-selected");
+    return () => {
+      if (canvasRef.current === canvas) canvas.removeMarker(activeRelation, "bo-relation-selected");
+    };
+  }, [activeRelation, nodes, edges, positions, canMove, t]);
   const pan = (dx: number, dy: number) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -186,10 +295,22 @@ export default function BoRelationshipDiagram({ nodes, edges, positions, onActiv
         <Button onClick={() => pan(1, 0)}>{t("boRelationship.panRight")}</Button>
         <Button onClick={() => pan(0, -1)}>{t("boRelationship.panUp")}</Button>
         <Button onClick={() => pan(0, 1)}>{t("boRelationship.panDown")}</Button>
+        {canRemove && (
+          <Button
+            disabled={!activeRelation}
+            onClick={() => { if (activeRelation) onRequestRemoveEdge(activeRelation); }}
+          >
+            {t("boRelationship.removeSelectedRelation")}
+          </Button>
+        )}
       </Stack>
       <Box
         ref={container}
-        sx={{ width: "100%", height: 600, border: 1, borderColor: "divider", overflow: "hidden" }}
+        sx={{
+          width: "100%", height: 600, border: 1, borderColor: "divider", overflow: "hidden",
+          "& .bo-relation-selected .djs-visual": { color: "primary.main" },
+          "& .bo-relation-selected .djs-visual polyline": { stroke: "currentColor", strokeWidth: 4 },
+        }}
       />
     </Box>
   );

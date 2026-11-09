@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import uuid
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import TypeVar
 
@@ -27,6 +28,7 @@ from app.schemas.bo_relationship import (
     BoAcceptedInventoryChange,
     BoApplication,
     BoApplicationGroup,
+    BoApplicationLink,
     BoApplicationPage,
     BoCapabilities,
     BoEdge,
@@ -58,13 +60,6 @@ from app.services.card_write_service import (
 from app.services.permission_service import PermissionService
 
 
-class BoApplicationLink(BaseModel):
-    id: uuid.UUID
-    object_id: uuid.UUID
-    application: BoApplication
-    is_master: bool
-
-
 class BoSnapshot(BaseModel):
     snapshot_revision: uuid.UUID | None = None
     nodes: dict[uuid.UUID, BoNode] = Field(default_factory=dict)
@@ -88,6 +83,14 @@ class ErDeleteEvidence(BaseModel):
     type: str
     source: uuid.UUID
     target: uuid.UUID
+
+
+@dataclass(frozen=True)
+class SavedDraft:
+    operation: BoInventoryItem
+    result_id: uuid.UUID
+    available: bool
+    published: bool
 
 
 async def bo_read_scope(db: AsyncSession, user: User) -> CardReadScope:
@@ -450,8 +453,12 @@ def _apply_inventory_changes(
                 promoted[current.object_id] = current.id
         if not applied:
             conflicts.append(BoInventoryItem(kind=change.kind, id=change.id))
-    # A promotion is authoritative for its BO. Normalize after checking all
-    # tokens so accepting both sides of a transfer is order-independent.
+    _normalize_saved_masters(snapshot, promoted)
+    return conflicts
+
+
+def _normalize_saved_masters(snapshot: BoSnapshot, promoted: dict[uuid.UUID, uuid.UUID]) -> None:
+    # Accepting both sides of a transfer must be independent of input order.
     if promoted:
         for link in snapshot.application_links.values():
             if (
@@ -460,7 +467,82 @@ def _apply_inventory_changes(
                 and promoted[link.object_id] != link.id
             ):
                 link.is_master = False
-    return conflicts
+
+
+async def _load_saved_drafts(
+    db: AsyncSession,
+    user: User,
+    live: BoSnapshot,
+    drafts: list[BoInventoryItem],
+) -> list[SavedDraft]:
+    requested = {(item.kind, item.id): item for item in drafts}
+    if not requested:
+        return []
+    kinds = {kind for kind, _ in requested}
+    rows = await db.execute(
+        select(
+            BoOperationReceipt.kind, BoOperationReceipt.draft_id, BoOperationReceipt.result_id
+        ).where(
+            BoOperationReceipt.actor_id == user.id,
+            BoOperationReceipt.kind.in_(kinds | {f"layout_{kind}" for kind in kinds}),
+            BoOperationReceipt.draft_id.in_({draft_id for _, draft_id in requested}),
+        )
+    )
+    results = {(kind, draft_id): result_id for kind, draft_id, result_id in rows}
+    live_items: dict[str, Mapping[uuid.UUID, BaseModel]] = {
+        "node": live.nodes,
+        "edge": live.edges,
+        "application_link": live.application_links,
+    }
+    saved_drafts = []
+    for (kind, draft_id), item in requested.items():
+        result_id = results.get((kind, draft_id))
+        if result_id is None:
+            raise HTTPException(404, "Draft result not found")
+        saved_drafts.append(
+            SavedDraft(
+                operation=item,
+                result_id=result_id,
+                available=result_id in live_items[kind],
+                published=(f"layout_{kind}", draft_id) in results,
+            )
+        )
+    return saved_drafts
+
+
+def _apply_saved_drafts(
+    db: AsyncSession,
+    user: User,
+    snapshot: BoSnapshot,
+    live: BoSnapshot,
+    drafts: list[SavedDraft],
+) -> None:
+    promoted: dict[uuid.UUID, uuid.UUID] = {}
+    for draft in drafts:
+        if not draft.available or draft.published:
+            continue
+        kind, result_id = draft.operation.kind, draft.result_id
+        if kind == "node":
+            snapshot.nodes[result_id] = live.nodes[result_id]
+        elif kind == "edge":
+            snapshot.edges[result_id] = live.edges[result_id]
+        else:
+            link = live.application_links[result_id]
+            snapshot.application_links[result_id] = link
+            if link.is_master:
+                promoted[link.object_id] = link.id
+        # The drawing row is locked. Record publication in the same transaction
+        # so a retry after a lost layout response cannot restore a removed line.
+        db.add(
+            BoOperationReceipt(
+                actor_id=user.id,
+                draft_id=draft.operation.id,
+                kind=f"layout_{kind}",
+                result_id=result_id,
+                fingerprint=str(result_id),
+            )
+        )
+    _normalize_saved_masters(snapshot, promoted)
 
 
 async def save_bo_layout(db: AsyncSession, user: User, body: BoLayoutUpdate) -> BoLayoutResult:
@@ -473,30 +555,50 @@ async def save_bo_layout(db: AsyncSession, user: User, body: BoLayoutUpdate) -> 
     if snapshot.snapshot_revision is None:
         snapshot = (await load_bo_inventory(db, CardReadScope.everything())).active
     prior = snapshot.model_dump(mode="json")
+    drafts = await _load_saved_drafts(db, user, inventory.active, body.saved_drafts)
+    unavailable = [draft for draft in drafts if not draft.available]
+    unavailable_positions = {
+        draft.result_id for draft in unavailable if draft.operation.kind == "node"
+    }
     positions = body.positions.keys() | body.auto_positions.keys()
-    if not positions <= inventory.objects:
+    if not positions <= inventory.objects | unavailable_positions:
         raise HTTPException(404, "Card not found")
 
     accepted_edges = {item.id for item in body.accepted_inventory_changes if item.kind == "edge"}
     evidence_ids = (body.removed_relation_ids | accepted_edges) - inventory.edge_ids
     deleted_edges = await _er_delete_evidence(db, user, evidence_ids, inventory.objects)
-    if not body.removed_relation_ids <= inventory.edge_ids | deleted_edges:
-        raise HTTPException(404, "Relation not found")
-    if not body.restored_relation_ids <= inventory.active.edges.keys():
+    unavailable_relations = (body.removed_relation_ids - (inventory.edge_ids | deleted_edges)) | (
+        body.restored_relation_ids - inventory.active.edges.keys()
+    )
+    if unavailable_relations and not body.skip_unavailable_relations:
         raise HTTPException(404, "Relation not found")
 
     conflicts = _apply_inventory_changes(snapshot, inventory, body, deleted_edges)
+    _apply_saved_drafts(db, user, snapshot, inventory.active, drafts)
     conflicting_edges = {item.id for item in conflicts if item.kind == "edge"}
-    for id_ in body.removed_relation_ids:
+    conflicts.extend(
+        BoInventoryItem(kind="edge", id=id_)
+        for id_ in sorted(unavailable_relations - conflicting_edges)
+    )
+    for id_ in body.removed_relation_ids - unavailable_relations:
         snapshot.edges.pop(id_, None)
-    for id_ in body.restored_relation_ids - conflicting_edges:
+    for id_ in body.restored_relation_ids - (conflicting_edges | unavailable_relations):
         snapshot.edges.setdefault(id_, inventory.active.edges[id_])
-    snapshot.positions.update(body.positions)
+    snapshot.positions.update(
+        (id_, position)
+        for id_, position in body.positions.items()
+        if id_ not in unavailable_positions
+    )
     for id_, position in body.auto_positions.items():
-        snapshot.positions.setdefault(id_, position)
+        if id_ not in unavailable_positions:
+            snapshot.positions.setdefault(id_, position)
     if snapshot.snapshot_revision is None or snapshot.model_dump(mode="json") != prior:
         snapshot.snapshot_revision = uuid.uuid4()
         diagram.data = snapshot.model_dump(mode="json")
         await db.flush()
     graph = _project_graph(snapshot, inventory, can_manage_master=can_manage_master)
-    return BoLayoutResult(**graph.model_dump(), inventory_conflicts=conflicts)
+    return BoLayoutResult(
+        **graph.model_dump(),
+        inventory_conflicts=conflicts,
+        unavailable_drafts=[draft.operation for draft in unavailable],
+    )

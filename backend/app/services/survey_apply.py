@@ -36,6 +36,7 @@ from app.models.stakeholder import Stakeholder
 from app.models.survey import Survey, SurveyResponse
 from app.models.user import User
 from app.services import stakeholder_service
+from app.services.bo_relationship_constants import ER_RELATION
 from app.services.lifecycle import PHASE_CHRONOLOGICAL, parse_lifecycle_date
 from app.services.relation_orientation import direction_for
 
@@ -261,6 +262,43 @@ def provenance(survey: Survey, resp: SurveyResponse, respondent: User | None) ->
 # ── Writers ─────────────────────────────────────────────────────────────────
 
 
+async def lock_survey_er_pairs(db: AsyncSession, survey: Survey, response_ids: list[str]) -> None:
+    """Acquire the batch's ER creation locks before per-response savepoints."""
+    from app.services.card_write_service import lock_bo_relation_writes
+
+    er_fields = {
+        field.get("key")
+        for field in survey.fields or []
+        if isinstance(field, dict) and field.get("relation_type_key") == ER_RELATION
+    }
+    if not er_fields or not response_ids:
+        return
+
+    rows = await db.scalars(
+        select(SurveyResponse)
+        .where(
+            SurveyResponse.id.in_([uuid.UUID(id_) for id_ in response_ids]),
+            SurveyResponse.survey_id == survey.id,
+        )
+        .order_by(SurveyResponse.id)
+        .with_for_update()
+    )
+    pairs: list[tuple[str, uuid.UUID, uuid.UUID]] = []
+    for response in rows:
+        if response.status != "completed" or response.applied:
+            continue
+        for key, answer in (response.responses or {}).items():
+            if key not in er_fields or not isinstance(answer, dict) or answer.get("confirmed"):
+                continue
+            try:
+                peers = ref_ids(answer.get("new_value"))
+            except SurveyFieldError:
+                # The per-response savepoint reports invalid answers.
+                continue
+            pairs.extend((ER_RELATION, response.card_id, peer) for peer in peers)
+    await lock_bo_relation_writes(db, pairs)
+
+
 async def apply_relation_change(
     db: AsyncSession,
     card: Card,
@@ -280,7 +318,11 @@ async def apply_relation_change(
     # Local imports keep this module importable from card_write_service's
     # import graph without a cycle.
     from app.services.calculation_engine import run_calculations_for_card
-    from app.services.card_write_service import _emit_relation_events
+    from app.services.card_write_service import (
+        _emit_relation_events,
+        find_relation,
+        lock_bo_relation_writes,
+    )
 
     rtk = field_def["relation_type_key"]
     # The field's direction is the builder's; the relation type is the
@@ -291,6 +333,8 @@ async def apply_relation_change(
     ).scalar_one_or_none()
     direction = direction_for(rt, card.type, field_def["direction"])
     desired_ids = ref_ids(new_value)
+    if rtk == ER_RELATION:
+        await lock_bo_relation_writes(db, ((rtk, card.id, peer) for peer in desired_ids))
 
     if direction == "outgoing":
         q = select(Relation).where(Relation.type == rtk, Relation.source_id == card.id)
@@ -316,6 +360,8 @@ async def apply_relation_change(
         peer_card = await db.get(Card, peer_id)
         # Only link to active peers; skip stale ids the respondent may carry.
         if not peer_card or peer_card.status != "ACTIVE":
+            continue
+        if rtk == ER_RELATION and await find_relation(db, rtk, card.id, peer_id) is not None:
             continue
         if direction == "outgoing":
             rel = Relation(type=rtk, source_id=card.id, target_id=peer_id)

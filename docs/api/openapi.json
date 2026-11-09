@@ -1074,6 +1074,66 @@
         "title": "BoApplicationGroup",
         "type": "object"
       },
+      "BoApplicationLink": {
+        "properties": {
+          "application": {
+            "$ref": "#/components/schemas/BoApplication"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "is_master": {
+            "title": "Is Master",
+            "type": "boolean"
+          },
+          "object_id": {
+            "format": "uuid",
+            "title": "Object Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "object_id",
+          "application",
+          "is_master"
+        ],
+        "title": "BoApplicationLink",
+        "type": "object"
+      },
+      "BoApplicationLinkDraft": {
+        "additionalProperties": false,
+        "properties": {
+          "application_id": {
+            "format": "uuid",
+            "title": "Application Id",
+            "type": "string"
+          },
+          "object_id": {
+            "format": "uuid",
+            "title": "Object Id",
+            "type": "string"
+          },
+          "role": {
+            "enum": [
+              "master",
+              "slave",
+              "unclassified"
+            ],
+            "title": "Role",
+            "type": "string"
+          }
+        },
+        "required": [
+          "object_id",
+          "application_id",
+          "role"
+        ],
+        "title": "BoApplicationLinkDraft",
+        "type": "object"
+      },
       "BoApplicationPage": {
         "properties": {
           "items": {
@@ -1230,6 +1290,7 @@
         "type": "object"
       },
       "BoInventoryItem": {
+        "additionalProperties": false,
         "properties": {
           "id": {
             "format": "uuid",
@@ -1310,6 +1371,13 @@
               }
             ],
             "title": "Snapshot Revision"
+          },
+          "unavailable_drafts": {
+            "items": {
+              "$ref": "#/components/schemas/BoInventoryItem"
+            },
+            "title": "Unavailable Drafts",
+            "type": "array"
           }
         },
         "required": [
@@ -1319,7 +1387,8 @@
           "applications",
           "snapshot_revision",
           "capabilities",
-          "inventory_conflicts"
+          "inventory_conflicts",
+          "unavailable_drafts"
         ],
         "title": "BoLayoutResult",
         "type": "object"
@@ -1371,6 +1440,20 @@
             "title": "Restored Relation Ids",
             "type": "array",
             "uniqueItems": true
+          },
+          "saved_drafts": {
+            "items": {
+              "$ref": "#/components/schemas/BoInventoryItem"
+            },
+            "maxItems": 5000,
+            "title": "Saved Drafts",
+            "type": "array"
+          },
+          "skip_unavailable_relations": {
+            "default": false,
+            "description": "Save authorized deltas and report unavailable edge IDs as conflicts.",
+            "title": "Skip Unavailable Relations",
+            "type": "boolean"
           },
           "snapshot_revision": {
             "anyOf": [
@@ -1451,6 +1534,39 @@
         "title": "BoNode",
         "type": "object"
       },
+      "BoObjectDraft": {
+        "additionalProperties": false,
+        "properties": {
+          "isPaymentData": {
+            "default": false,
+            "title": "Ispaymentdata",
+            "type": "boolean"
+          },
+          "isPersonalData": {
+            "default": false,
+            "title": "Ispersonaldata",
+            "type": "boolean"
+          },
+          "name": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "subtype": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Subtype",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "subtype"
+        ],
+        "title": "BoObjectDraft",
+        "type": "object"
+      },
       "BoPosition": {
         "properties": {
           "x": {
@@ -1467,6 +1583,44 @@
           "y"
         ],
         "title": "BoPosition",
+        "type": "object"
+      },
+      "BoRelationDraft": {
+        "additionalProperties": false,
+        "properties": {
+          "cardinality": {
+            "anyOf": [
+              {
+                "enum": [
+                  "1:1",
+                  "1:n",
+                  "n:1",
+                  "n:m"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cardinality"
+          },
+          "source_id": {
+            "format": "uuid",
+            "title": "Source Id",
+            "type": "string"
+          },
+          "target_id": {
+            "format": "uuid",
+            "title": "Target Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source_id",
+          "target_id"
+        ],
+        "title": "BoRelationDraft",
         "type": "object"
       },
       "Body_import_bpmn_api_v1_bpm_processes__process_id__diagram_import_post": {
@@ -22790,6 +22944,59 @@
         ]
       }
     },
+    "/api/v1/bo-relationship/application-link-drafts/{draft_id}": {
+      "put": {
+        "operationId": "create_application_link_draft_api_v1_bo_relationship_application_link_drafts__draft_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "draft_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Draft Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BoApplicationLinkDraft"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BoApplicationLink"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Application Link Draft",
+        "tags": [
+          "bo-relationship"
+        ]
+      }
+    },
     "/api/v1/bo-relationship/applications": {
       "get": {
         "operationId": "search_applications_api_v1_bo_relationship_applications_get",
@@ -22904,6 +23111,59 @@
         ]
       }
     },
+    "/api/v1/bo-relationship/objects/{draft_id}": {
+      "put": {
+        "operationId": "create_object_draft_api_v1_bo_relationship_objects__draft_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "draft_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Draft Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BoObjectDraft"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BoNode"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Object Draft",
+        "tags": [
+          "bo-relationship"
+        ]
+      }
+    },
     "/api/v1/bo-relationship/objects/{object_id}/detail": {
       "get": {
         "operationId": "get_object_detail_api_v1_bo_relationship_objects__object_id__detail_get",
@@ -22995,6 +23255,95 @@
           }
         },
         "summary": "Update Master",
+        "tags": [
+          "bo-relationship"
+        ]
+      }
+    },
+    "/api/v1/bo-relationship/relation-drafts/{draft_id}": {
+      "put": {
+        "operationId": "create_relation_draft_api_v1_bo_relationship_relation_drafts__draft_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "draft_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Draft Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BoRelationDraft"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BoEdge"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Relation Draft",
+        "tags": [
+          "bo-relationship"
+        ]
+      }
+    },
+    "/api/v1/bo-relationship/relations/{relation_id}": {
+      "delete": {
+        "operationId": "delete_er_relation_api_v1_bo_relationship_relations__relation_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "relation_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Relation Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Er Relation",
         "tags": [
           "bo-relationship"
         ]
