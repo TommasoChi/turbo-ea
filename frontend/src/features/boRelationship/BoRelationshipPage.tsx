@@ -1,8 +1,9 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Alert, Box, Button, Chip, CircularProgress, Stack, Typography } from "@mui/material";
 import { useTranslation } from "react-i18next";
 import { api } from "@/api/client";
 import CardDetailSidePanel from "@/components/CardDetailSidePanel";
+import { FilterCheckboxList, FilterSectionHeader } from "@/components/FilterSidebarSection";
 import { hasTypePermission } from "@/components/RequirePermission";
 import { useOptionalAuthUser } from "@/hooks/AuthContext";
 import { useApiQuery } from "@/hooks/useApiQuery";
@@ -38,6 +39,9 @@ export default function BoRelationshipPage() {
   const canOpenApplications = hasTypePermission(user, "inventory.view", "Application");
   const { data, error, loading, refetch } = useApiQuery<BoGraph>("/bo-relationship");
   const [selected, setSelected] = useState<string | null>(null);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [personalData, setPersonalData] = useState(false);
+  const [paymentData, setPaymentData] = useState(false);
   const [mutationError, setMutationError] = useState("");
   const [detailVersion, setDetailVersion] = useState(0);
   const [masterBusy, setMasterBusy] = useState(false);
@@ -47,23 +51,35 @@ export default function BoRelationshipPage() {
     () => data ? computeLayout(data.nodes, data.edges, data.positions) : {},
     [data],
   );
+  // Independent facets combine with AND, as in the approved diagram mockup.
+  const visibleNodes = useMemo(() => (data?.nodes ?? []).filter((node) =>
+    (!personalData || node.isPersonalData) && (!paymentData || node.isPaymentData),
+  ), [data, personalData, paymentData]);
+  const visibleIds = useMemo(() => new Set(visibleNodes.map((node) => node.id)), [visibleNodes]);
+  const visibleEdges = useMemo(() => (data?.edges ?? []).filter((edge) =>
+    visibleIds.has(edge.source) && visibleIds.has(edge.target),
+  ), [data, visibleIds]);
+  const activeSelection = selected && visibleIds.has(selected) ? selected : null;
+  useEffect(() => {
+    if (data && selected && !visibleIds.has(selected)) setSelected(null);
+  }, [data, selected, visibleIds]);
   const canManageMaster = data?.capabilities.can_manage_master ?? false;
   // Graph reloads keep the accepted drawing. The mutation returns live roles
   // for the panel without implicitly accepting inventory changes.
-  const group = selected && data?.applications[selected]
-    ? (canManageMaster ? liveGroups[selected] : undefined) ?? data.applications[selected]
+  const group = activeSelection && data?.applications[activeSelection]
+    ? (canManageMaster ? liveGroups[activeSelection] : undefined) ?? data.applications[activeSelection]
     : undefined;
 
   const changeMaster = async (applicationId: string | null) => {
-    if (!selected || !canManageMaster || masterLock.current) return;
+    if (!activeSelection || !canManageMaster || masterLock.current) return;
     masterLock.current = true;
     setMasterBusy(true);
     try {
       const updated = await api.put<BoGroup>(
-        `/bo-relationship/objects/${selected}/master`,
+        `/bo-relationship/objects/${activeSelection}/master`,
         { application_id: applicationId },
       );
-      setLiveGroups((groups) => ({ ...groups, [selected]: updated }));
+      setLiveGroups((groups) => ({ ...groups, [activeSelection]: updated }));
       setMutationError("");
       setDetailVersion((n) => n + 1);
       refetch();
@@ -105,8 +121,8 @@ export default function BoRelationshipPage() {
         <Stack direction="row" spacing={2} alignItems="stretch">
           <Box sx={{ width: 220, flexShrink: 0 }}>
             <Typography variant="h6">{t("boRelationship.applications")}</Typography>
-            {!selected && <Typography>{t("boRelationship.noSelection")}</Typography>}
-            {selected && (
+            {!activeSelection && <Typography>{t("boRelationship.noSelection")}</Typography>}
+            {activeSelection && (
               <Stack spacing={2}>
                 {renderGroup(t("boRelationship.master"), group?.master ? [group.master] : [])}
                 {group?.master && canManageMaster && (
@@ -120,9 +136,39 @@ export default function BoRelationshipPage() {
             )}
           </Box>
           <Box sx={{ flex: 1, minWidth: 0 }}>
+            <Box
+              role="button"
+              tabIndex={0}
+              aria-label={t("boRelationship.filters")}
+              aria-expanded={filtersOpen}
+              onClick={(event) => {
+                if (event.target === event.currentTarget) setFiltersOpen((open) => !open);
+              }}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  setFiltersOpen((open) => !open);
+                }
+              }}
+            >
+              <FilterSectionHeader
+                label={t("boRelationship.filters")}
+                icon="filter_list"
+                expanded={filtersOpen}
+                onToggle={() => setFiltersOpen((open) => !open)}
+                count={Number(personalData) + Number(paymentData)}
+              />
+            </Box>
+            {filtersOpen && <FilterCheckboxList nativeCheckboxes items={[
+              { key: "personal", label: t("boRelationship.personalData"), checked: personalData, onToggle: () => setPersonalData((value) => !value) },
+              { key: "payment", label: t("boRelationship.paymentData"), checked: paymentData, onToggle: () => setPaymentData((value) => !value) },
+            ]} />}
+            {(personalData || paymentData) && visibleNodes.length === 0 && (
+              <Typography>{t("boRelationship.noFilterResults")}</Typography>
+            )}
             <BoRelationshipDiagram
-              nodes={data.nodes}
-              edges={data.edges}
+              nodes={visibleNodes}
+              edges={visibleEdges}
               positions={positions}
               onActivate={setSelected}
             />
@@ -133,8 +179,8 @@ export default function BoRelationshipPage() {
             </Stack>
           </Box>
           <CardDetailSidePanel
-            cardId={selected}
-            open={selected !== null}
+            cardId={activeSelection}
+            open={activeSelection !== null}
             onClose={() => setSelected(null)}
             docked
             boScoped

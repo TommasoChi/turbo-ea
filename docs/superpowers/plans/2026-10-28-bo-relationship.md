@@ -434,15 +434,18 @@ Commit the BO page, scoped card and picker changes, and regressions together as 
 
 ## Task 5: Filter panel for personal and payment data
 
+The two facets combine with AND. Hiding the selected BO closes its card panel. Filtering changes the visible graph and keeps its positions and viewport.
+
 **Files:**
 - Modify: `frontend/src/features/boRelationship/BoRelationshipPage.tsx`
 - Modify: `frontend/src/features/boRelationship/BoRelationshipPage.test.tsx`
+- Add the opt-in native checkbox mode in `frontend/src/components/FilterSidebarSection.tsx` and the English filter labels in `frontend/src/i18n/locales/en/reports.json`.
 
 **Interfaces:**
-- Consumes: `FilterSectionHeader`/`FilterCheckboxList` (`@/components/FilterSidebarSection`, read its exact props before wiring — this plan does not repeat its signature since the component is unmodified, just consumed).
+- Consumes: `FilterSectionHeader` and `FilterCheckboxList` from `@/components/FilterSidebarSection`. The BO page opts in to named native checkboxes.
 - Produces: nothing consumed by a later task.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```tsx
 it("filters out DataObjects that don't match a checked facet", async () => {
@@ -452,31 +455,28 @@ it("filters out DataObjects that don't match a checked facet", async () => {
 });
 ```
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 Run: `cd frontend && npx vitest run BoRelationshipPage.test.tsx -t "filter"`
 Expected: FAIL — no filter panel exists yet.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 Use the collapsible `FilterSectionHeader`/`FilterCheckboxList` with the `isPersonalData` and `isPaymentData` flags already returned by Task 2. Filter nodes and incident edges without altering saved positions. Add configurable fields only if included in the spec decision.
 
-- [ ] **Step 4: Run to verify it passes**
+- [x] **Step 4: Run to verify it passes**
 
 Run: `cd frontend && npx vitest run BoRelationshipPage.test.tsx`
 Expected: PASS, including every pre-existing test in the file.
 
-- [ ] **Step 5: Lint & typecheck**
+- [x] **Step 5: Lint & typecheck**
 
 Run: `cd frontend && npx eslint --fix src/features/boRelationship/BoRelationshipPage.tsx src/features/boRelationship/BoRelationshipPage.test.tsx && npx tsc --noEmit`
 Expected: clean.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
-```bash
-git add frontend/src/features/boRelationship/
-git commit -m "feat(bo-relationship): optional filter panel on isPersonalData/isPaymentData"
-```
+Commit the filters, shared checkbox option, labels, and regressions as `feat(bo): filter personal and payment data`.
 
 ---
 

@@ -88,7 +88,13 @@ export interface FilterCheckboxItem {
   onToggleFrozen?: () => void;
 }
 
-export function FilterCheckboxList({ items }: { items: FilterCheckboxItem[] }) {
+export function FilterCheckboxList({
+  items,
+  nativeCheckboxes = false,
+}: {
+  items: FilterCheckboxItem[];
+  nativeCheckboxes?: boolean;
+}) {
   return (
     <List dense disablePadding sx={{ mb: 1 }}>
       {items.map((item) => {
@@ -97,7 +103,10 @@ export function FilterCheckboxList({ items }: { items: FilterCheckboxItem[] }) {
           key={item.key}
           dense
           disabled={item.disabled}
-          onClick={item.onToggle}
+          component={nativeCheckboxes ? "label" : "div"}
+          role={nativeCheckboxes ? undefined : "button"}
+          tabIndex={nativeCheckboxes ? -1 : undefined}
+          onClick={nativeCheckboxes ? undefined : item.onToggle}
           sx={{
             py: 0.25,
             px: 1,
@@ -111,6 +120,8 @@ export function FilterCheckboxList({ items }: { items: FilterCheckboxItem[] }) {
               checked={item.checked}
               disabled={item.disabled}
               disableRipple
+              onChange={nativeCheckboxes ? item.onToggle : undefined}
+              slotProps={nativeCheckboxes ? { input: { "aria-label": item.label } } : undefined}
               sx={{ p: 0 }}
             />
           </ListItemIcon>

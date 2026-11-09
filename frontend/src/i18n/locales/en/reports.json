@@ -13,6 +13,8 @@
   "boRelationship.legacy": "BO without a subtype",
   "boRelationship.personalData": "Personal data (GDPR)",
   "boRelationship.paymentData": "Payment data",
+  "boRelationship.filters": "Filters",
+  "boRelationship.noFilterResults": "No business objects match the filters.",
   "boRelationship.indicators": "Indicators",
   "boRelationship.diagram": "Business object relationships",
   "boRelationship.cardDetails": "Business object details",
