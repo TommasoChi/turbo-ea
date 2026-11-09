@@ -15,8 +15,10 @@ from app.schemas.bo_relationship import (
     BoApplicationLinkDraft,
     BoApplicationPage,
     BoDetail,
+    BoDraftComparison,
     BoEdge,
     BoGraph,
+    BoInventoryChanges,
     BoLayoutResult,
     BoLayoutUpdate,
     BoMasterUpdate,
@@ -39,12 +41,31 @@ async def get_graph(
     return await service.get_bo_graph(db, user)
 
 
+@router.get("/changes", response_model=BoInventoryChanges)
+async def get_changes(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_permission("boRelationship.view")),
+):
+    return await service.compare_bo_inventory(db, user)
+
+
+@router.post("/changes/draft", response_model=BoInventoryChanges)
+async def compare_draft(
+    body: BoDraftComparison,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_permission("boRelationship.edit")),
+):
+    await PermissionService.require_permission(db, user, "boRelationship.view")
+    return await service.compare_bo_inventory(db, user, set(body.removed_relation_ids))
+
+
 @router.put("/layout", response_model=BoLayoutResult)
 async def save_layout(
     body: BoLayoutUpdate,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require_permission("boRelationship.edit")),
 ):
+    await PermissionService.require_permission(db, user, "boRelationship.view")
     result = await service.save_bo_layout(db, user, body)
     await db.commit()
     return result

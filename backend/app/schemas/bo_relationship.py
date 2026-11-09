@@ -149,3 +149,19 @@ class BoLayoutUpdate(BaseModel):
 class BoLayoutResult(BoGraph):
     inventory_conflicts: list[BoInventoryItem]
     unavailable_drafts: list[BoInventoryItem]
+
+
+class BoInventoryChange(BoAcceptedInventoryChange):
+    change: Literal["added", "updated", "removed"]
+    before: BoNode | BoEdge | BoApplicationLink | None
+    after: BoNode | BoEdge | BoApplicationLink | None
+
+
+class BoInventoryChanges(BaseModel):
+    changes: list[BoInventoryChange]
+
+
+class BoDraftComparison(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    removed_relation_ids: list[UUID] = Field(default_factory=list, max_length=5000)

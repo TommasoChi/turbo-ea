@@ -154,6 +154,16 @@ The toolbar Sync button shows a pulsing "N unsynced" pill whenever pending work 
 
 Diagrams can be linked to **any card** from the card's **Resources** tab (see [Card Details](card-details.md#resources-tab)). When linked to an **Initiative** card, the diagram also appears in the [EA Delivery](delivery.md) module alongside SoAW documents.
 
+## Checking BO Relationship against inventory
+
+Open **BO Relationship** from **Application & Data**. The canvas starts from the last shared drawing. The page compares it with inventory and lists changes you can see under **Inventory changes**. Use **Check for updates** to run the comparison again.
+
+1. Review the new, updated, or removed business objects and links.
+2. If you can edit the diagram, select the changes you want and choose **Sync**. The changes appear on your canvas. For example, a renamed business object with a new Document subtype gets its new name and folded corner in the same position.
+3. Choose **Save** to share the updated drawing. Other users still see the previous drawing until you save. If an inventory item changed again, recheck it before accepting the new version.
+
+The inventory check and this Sync flow read from inventory. Confirmed line removals waiting to be deleted from inventory appear separately and still require their own Sync action.
+
 ## Sharing a diagram outside Turbo EA
 
 A diagram can be published as a **read-only link that opens without signing in**, so it can be embedded in a wiki page such as Confluence.

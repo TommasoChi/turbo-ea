@@ -1188,6 +1188,22 @@
         "title": "BoDetail",
         "type": "object"
       },
+      "BoDraftComparison": {
+        "additionalProperties": false,
+        "properties": {
+          "removed_relation_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "maxItems": 5000,
+            "title": "Removed Relation Ids",
+            "type": "array"
+          }
+        },
+        "title": "BoDraftComparison",
+        "type": "object"
+      },
       "BoEdge": {
         "properties": {
           "cardinality": {
@@ -1287,6 +1303,99 @@
           "capabilities"
         ],
         "title": "BoGraph",
+        "type": "object"
+      },
+      "BoInventoryChange": {
+        "additionalProperties": false,
+        "properties": {
+          "after": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BoNode"
+              },
+              {
+                "$ref": "#/components/schemas/BoEdge"
+              },
+              {
+                "$ref": "#/components/schemas/BoApplicationLink"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "After"
+          },
+          "before": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BoNode"
+              },
+              {
+                "$ref": "#/components/schemas/BoEdge"
+              },
+              {
+                "$ref": "#/components/schemas/BoApplicationLink"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Before"
+          },
+          "change": {
+            "enum": [
+              "added",
+              "updated",
+              "removed"
+            ],
+            "title": "Change",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "node",
+              "edge",
+              "application_link"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "revision": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Revision",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "id",
+          "revision",
+          "change",
+          "before",
+          "after"
+        ],
+        "title": "BoInventoryChange",
+        "type": "object"
+      },
+      "BoInventoryChanges": {
+        "properties": {
+          "changes": {
+            "items": {
+              "$ref": "#/components/schemas/BoInventoryChange"
+            },
+            "title": "Changes",
+            "type": "array"
+          }
+        },
+        "required": [
+          "changes"
+        ],
+        "title": "BoInventoryChanges",
         "type": "object"
       },
       "BoInventoryItem": {
@@ -23065,6 +23174,68 @@
           }
         },
         "summary": "Search Applications",
+        "tags": [
+          "bo-relationship"
+        ]
+      }
+    },
+    "/api/v1/bo-relationship/changes": {
+      "get": {
+        "operationId": "get_changes_api_v1_bo_relationship_changes_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BoInventoryChanges"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Changes",
+        "tags": [
+          "bo-relationship"
+        ]
+      }
+    },
+    "/api/v1/bo-relationship/changes/draft": {
+      "post": {
+        "operationId": "compare_draft_api_v1_bo_relationship_changes_draft_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BoDraftComparison"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BoInventoryChanges"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Compare Draft",
         "tags": [
           "bo-relationship"
         ]

@@ -286,7 +286,9 @@ it("applies a newer scoped graph read after showing the committed layout respons
   signInAsEditor();
   const graph = { ...baseGraph, nodes: [customer, order], edges: [orderEdge] };
   const positions = { a: { x: 96, y: 48 }, b: { x: 400, y: 30 } };
-  vi.mocked(api.get).mockResolvedValueOnce(graph).mockResolvedValueOnce({ ...baseGraph, positions });
+  let graphReads = 0;
+  vi.mocked(api.get).mockImplementation(async (path) => path === "/bo-relationship/changes"
+    ? { changes: [] } : ++graphReads === 1 ? graph : { ...baseGraph, positions });
   vi.mocked(api.put).mockResolvedValue({ ...graph, positions });
   fireEvent.click(await openPage());
   fireEvent.click(screen.getByRole("button", { name: "Move first BO" }));
@@ -420,7 +422,9 @@ it("reopens the saved drawing with an empty inventory deletion queue", async () 
   signInAsEditor();
   const graph = { ...baseGraph, nodes: [customer, order], edges: [orderEdge] };
   const savedGraph = { ...graph, edges: [], positions: { ...graph.positions, b: { x: 400, y: 30 } } };
-  vi.mocked(api.get).mockResolvedValueOnce(graph).mockResolvedValueOnce(savedGraph);
+  let graphReads = 0;
+  vi.mocked(api.get).mockImplementation(async (path) => path === "/bo-relationship/changes"
+    ? { changes: [] } : ++graphReads === 1 ? graph : savedGraph);
   vi.mocked(api.put).mockResolvedValue(savedGraph);
   const page = render(<MemoryRouter><BoRelationshipPage /></MemoryRouter>);
   fireEvent.click(await screen.findByRole("button", { name: "Remove line a" }));
@@ -526,4 +530,150 @@ it("offers Unclassified and omits Master when the BO capability is denied", asyn
   expect(within(role).getByRole("option", { name: "boRelationship.unclassified" })).toBeInTheDocument();
   expect(within(role).queryByRole("option", { name: "boRelationship.master" })).not.toBeInTheDocument();
   expect(within(role).queryByRole("option", { name: "boRelationship.slave" })).not.toBeInTheDocument();
+});
+
+it("applies an inventory update locally without moving the BO and shares it only on Save", async () => {
+  signInAsEditor();
+  const updated = { ...customer, name: "Client", subtype: "Document" };
+  const change = { kind: "node", id: "a", revision: "a".repeat(64), change: "updated", before: customer, after: updated };
+  vi.mocked(api.get).mockImplementation(async (path) => path === "/bo-relationship/changes" ? { changes: [change] } : baseGraph);
+  vi.mocked(api.put).mockResolvedValue({ ...baseGraph, nodes: [updated], inventory_conflicts: [], unavailable_drafts: [] });
+  await openPage();
+  expect(await screen.findByText(/Client ·/)).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Customer" })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "boRelationship.acceptChange" }));
+  expect(screen.getByRole("button", { name: "Client" })).toBeInTheDocument();
+  expect(screen.getByTestId("canvas")).toHaveAttribute("data-positions", JSON.stringify(baseGraph.positions));
+  expect(api.put).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: "common:actions.save" }));
+  await waitFor(() => expect(api.put).toHaveBeenCalledWith("/bo-relationship/layout", expect.objectContaining({
+    accepted_inventory_changes: [{ kind: "node", id: "a", revision: "a".repeat(64) }],
+    positions: {},
+  })));
+});
+
+
+it("shows inventory changes to viewers without allowing synchronization", async () => {
+  const updated = { ...customer, name: "Client" };
+  vi.mocked(api.get).mockImplementation(async (path) => path === "/bo-relationship/changes"
+    ? { changes: [{ kind: "node", id: "a", revision: "a".repeat(64), change: "updated", before: customer, after: updated }] }
+    : baseGraph);
+  await openPage();
+  expect(await screen.findByText(/Client ·/)).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "boRelationship.acceptChange" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "common:actions.save" })).not.toBeInTheDocument();
+});
+
+it("keeps the drawing and its positions usable if the inventory comparison fails", async () => {
+  signInAsEditor();
+  vi.mocked(api.get).mockImplementation(async (path) => {
+    if (path === "/bo-relationship/changes") throw new Error("Inventory unavailable");
+    return baseGraph;
+  });
+  await openPage();
+  expect(await screen.findByText(/Inventory unavailable/)).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Customer" })).toBeInTheDocument();
+  expect(screen.getByTestId("canvas")).toHaveAttribute("data-positions", JSON.stringify(baseGraph.positions));
+  expect(screen.getByRole("button", { name: "boRelationship.checkUpdates" })).toBeEnabled();
+});
+
+it("requests a fresh comparison when an accepted inventory revision conflicts", async () => {
+  signInAsEditor();
+  const updated = { ...customer, name: "Client" };
+  const change = { kind: "node", id: "a", revision: "a".repeat(64), change: "updated", before: customer, after: updated };
+  vi.mocked(api.get).mockImplementation(async (path) => path === "/bo-relationship/changes" ? { changes: [change] } : baseGraph);
+  vi.mocked(api.put).mockResolvedValue({ ...baseGraph, inventory_conflicts: [{ kind: "node", id: "a" }], unavailable_drafts: [] });
+  await openPage();
+  fireEvent.click(await screen.findByRole("button", { name: "boRelationship.acceptChange" }));
+  fireEvent.click(screen.getByRole("button", { name: "common:actions.save" }));
+  expect(await screen.findByText("boRelationship.inventoryConflict")).toBeInTheDocument();
+  await waitFor(() => expect(vi.mocked(api.get).mock.calls.filter(([path]) => path === "/bo-relationship/changes")).toHaveLength(2));
+  expect(screen.getByRole("button", { name: "Customer" })).toBeInTheDocument();
+});
+
+it("syncs an application ownership change into the local groups", async () => {
+  signInAsEditor();
+  const crm = { id: "crm", name: "CRM" };
+  const erp = { id: "erp", name: "ERP" };
+  const graph = { ...baseGraph, applications: { a: { master: crm, slaves: [erp], unclassified: [] } } };
+  const before = { id: "link", object_id: "a", application: crm, is_master: true };
+  const change = { kind: "application_link", id: "link", revision: "b".repeat(64), change: "updated", before, after: { ...before, is_master: false } };
+  vi.mocked(api.get).mockImplementation(async (path) => path === "/bo-relationship/changes" ? { changes: [change] } : graph);
+  fireEvent.click(await openPage());
+  fireEvent.click(await screen.findByRole("button", { name: "boRelationship.acceptChange" }));
+  const groups = screen.getByText("boRelationship.unclassified").parentElement!;
+  expect(within(groups).getByText("CRM")).toBeInTheDocument();
+  expect(within(groups).getByText("ERP")).toBeInTheDocument();
+  expect(api.put).not.toHaveBeenCalled();
+});
+
+it("ignores a superseded inventory comparison even when its request resolves last", async () => {
+  signInAsEditor();
+  let resolveFirst!: (value: unknown) => void;
+  const first = new Promise((resolve) => { resolveFirst = resolve; });
+  let checks = 0;
+  const stale = { kind: "node", id: "a", revision: "a".repeat(64), change: "updated", before: customer, after: { ...customer, name: "Stale" } };
+  const fresh = { ...stale, revision: "b".repeat(64), after: { ...customer, name: "Fresh" } };
+  vi.mocked(api.get).mockImplementation(async (path) => {
+    if (path !== "/bo-relationship/changes") return baseGraph;
+    return ++checks === 1 ? first : { changes: [fresh] };
+  });
+  fireEvent.click(await openPage());
+  fireEvent.click(screen.getByRole("button", { name: "Refetch from card panel" }));
+  expect(await screen.findByText(/Fresh ·/)).toBeInTheDocument();
+  resolveFirst({ changes: [stale] });
+  await waitFor(() => expect(screen.queryByText(/Stale ·/)).not.toBeInTheDocument());
+  expect(screen.getByText(/Fresh ·/)).toBeInTheDocument();
+});
+
+it("keeps queued outgoing removals distinct from incoming changes after a visual Save", async () => {
+  signInAsEditor();
+  const graph = { ...baseGraph, nodes: [customer, order], edges: [orderEdge] };
+  const change = { kind: "edge", id: "ab", revision: "a".repeat(64), change: "added", before: null, after: orderEdge };
+  vi.mocked(api.get).mockImplementation(async (path) => path === "/bo-relationship/changes" ? { changes: [change] } : graph);
+  vi.mocked(api.put).mockResolvedValue({ ...graph, edges: [], inventory_conflicts: [], unavailable_drafts: [] });
+  await openPage();
+  fireEvent.click(screen.getByRole("button", { name: "Remove line a" }));
+  fireEvent.click(screen.getByRole("button", { name: "boRelationship.queueRemoval" }));
+  fireEvent.click(screen.getByRole("button", { name: "common:actions.save" }));
+  await waitFor(() => expect(screen.getByRole("button", { name: "boRelationship.syncRemoval" })).toBeEnabled());
+  expect(screen.queryByRole("button", { name: "boRelationship.acceptChange" })).not.toBeInTheDocument();
+  expect(screen.getByTestId("canvas")).toHaveAttribute("data-edges", "");
+  expect(api.delete).not.toHaveBeenCalled();
+});
+
+it("keeps the previous master as a slave when syncing a promotion", async () => {
+  signInAsEditor();
+  const crm = { id: "crm", name: "CRM" };
+  const erp = { id: "erp", name: "ERP" };
+  const graph = { ...baseGraph, applications: { a: { master: crm, slaves: [erp], unclassified: [] } } };
+  const before = { id: "link", object_id: "a", application: erp, is_master: false };
+  const change = { kind: "application_link", id: "link", revision: "b".repeat(64), change: "updated", before, after: { ...before, is_master: true } };
+  vi.mocked(api.get).mockImplementation(async (path) => path === "/bo-relationship/changes" ? { changes: [change] } : graph);
+  fireEvent.click(await openPage());
+  fireEvent.click(await screen.findByRole("button", { name: "boRelationship.acceptChange" }));
+  expect(within(screen.getByText("boRelationship.master").parentElement!).getByText("ERP")).toBeInTheDocument();
+  expect(within(screen.getByText("boRelationship.slave").parentElement!).getByText("CRM")).toBeInTheDocument();
+});
+
+it.each([true, false])("retains a manual move after a conflicting removal only if the node is visible (%s)", async (visible) => {
+  signInAsEditor();
+  const removal = { kind: "node", id: "a", revision: "a".repeat(64), change: "removed", before: customer, after: null };
+  vi.mocked(api.get).mockImplementation(async (path) => path === "/bo-relationship/changes" ? { changes: [removal] } : baseGraph);
+  vi.mocked(api.put).mockResolvedValue({
+    ...baseGraph,
+    nodes: visible ? baseGraph.nodes : [],
+    positions: visible ? baseGraph.positions : {},
+    inventory_conflicts: [{ kind: "node", id: "a" }],
+    unavailable_drafts: [],
+  });
+  await openPage();
+  fireEvent.click(screen.getByRole("button", { name: "Move first BO" }));
+  fireEvent.click(await screen.findByRole("button", { name: "boRelationship.acceptChange" }));
+  fireEvent.click(screen.getByRole("button", { name: "common:actions.save" }));
+  expect(await screen.findByText("boRelationship.inventoryConflict")).toBeInTheDocument();
+  expect(screen.getByTestId("canvas")).toHaveAttribute("data-positions", JSON.stringify(visible ? { a: { x: 96, y: 48 } } : {}));
+  const save = screen.getByRole("button", { name: "common:actions.save" });
+  if (visible) expect(save).toBeEnabled();
+  else expect(save).toBeDisabled();
 });

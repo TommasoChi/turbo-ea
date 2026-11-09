@@ -1152,13 +1152,30 @@ async def test_concurrent_master_transfers_and_layout_saves(test_engine):
     async with AsyncSession(test_engine, expire_on_commit=False) as setup:
         admin = await create_role(setup, key="bo-concurrent-admin")
         actor = await create_user(setup, role=admin.key)
+        editor = await create_role(
+            setup,
+            key="bo-concurrent-editor",
+            permissions={"boRelationship.view": True, "boRelationship.edit": True},
+        )
+        scoped_actor = await create_user(setup, role=editor.key)
         card_types = [
-            await create_card_type(setup, key=key) for key in ("DataObject", "Application")
+            await create_card_type(
+                setup,
+                key="DataObject",
+                subtypes=[{"key": "Data"}, {"key": "Document"}],
+                role_permissions={
+                    editor.key: {"inventory.view": {"value": False, "subtypes": ["Document"]}}
+                },
+            ),
+            await create_card_type(setup, key="Application"),
         ]
         relation_type = await create_relation_type(
             setup, key=APP_LINK, source_type_key="Application", target_type_key="DataObject"
         )
-        a, b = await bo(setup), await bo(setup, "Other object")
+        a = await bo(setup)
+        b = await create_card(
+            setup, card_type="DataObject", subtype="Document", name="Other object"
+        )
         apps = [await create_card(setup, name=name) for name in ("Alpha", "Beta")]
         for app in apps:
             await create_relation(setup, type_key=APP_LINK, source_id=app.id, target_id=a.id)
@@ -1169,11 +1186,11 @@ async def test_concurrent_master_transfers_and_layout_saves(test_engine):
             async with AsyncSession(test_engine) as session, session.begin():
                 return await assign_master(session, actor, a.id, application_id)
 
-        async def save(card_id, x):
+        async def save(user, card_id, x):
             async with AsyncSession(test_engine) as session, session.begin():
                 return await save_bo_layout(
                     session,
-                    actor,
+                    user,
                     BoLayoutUpdate(positions={card_id: {"x": x, "y": x}}, snapshot_revision=None),
                 )
 
@@ -1181,7 +1198,11 @@ async def test_concurrent_master_transfers_and_layout_saves(test_engine):
             asyncio.gather(*(assign(app.id) for app in apps)), timeout=10
         )
         assert [first.master.id, second.master.id] == [app.id for app in apps]
-        await asyncio.wait_for(asyncio.gather(save(a.id, 1), save(b.id, 2)), timeout=10)
+        scoped_save, full_save = await asyncio.wait_for(
+            asyncio.gather(save(scoped_actor, a.id, 1), save(actor, b.id, 2)), timeout=10
+        )
+        assert {node.id for node in scoped_save.nodes} == {a.id}
+        assert {node.id for node in full_save.nodes} == {a.id, b.id}
         async with AsyncSession(test_engine) as first_writer:
             await save_bo_layout(
                 first_writer, actor, BoLayoutUpdate(positions={a.id: {"x": 3, "y": 4}})
@@ -1190,7 +1211,7 @@ async def test_concurrent_master_transfers_and_layout_saves(test_engine):
 
             async def save_second():
                 second_started.set()
-                return await save(a.id, 5)
+                return await save(actor, a.id, 5)
 
             second_writer = asyncio.create_task(save_second())
             await second_started.wait()
@@ -1222,7 +1243,217 @@ async def test_concurrent_master_transfers_and_layout_saves(test_engine):
             await cleanup.execute(
                 delete(CardType).where(CardType.id.in_([ct.id for ct in card_types]))
             )
-            await cleanup.execute(delete(User).where(User.id == actor.id))
-            await cleanup.execute(delete(Role).where(Role.id == admin.id))
+            await cleanup.execute(delete(User).where(User.id.in_([actor.id, scoped_actor.id])))
+            await cleanup.execute(delete(Role).where(Role.id.in_([admin.id, editor.id])))
         PermissionService.invalidate_role_cache(admin.key)
+        PermissionService.invalidate_role_cache(editor.key)
         PermissionService.invalidate_type_permission_cache()
+
+
+async def test_changes_are_read_only_and_save_accepted_values_with_positions(client, db, env):
+    card = await bo(db)
+    url = f"{BASE}/layout"
+    initial = await client.put(
+        url, json={"positions": {str(card.id): {"x": 12, "y": 34}}}, headers=env["admin"]
+    )
+    assert initial.status_code == 200
+    card.name = "Changed"
+    card.subtype = "Document"
+    await db.flush()
+    response = await client.get(f"{BASE}/changes", headers=env["editor"])
+    assert response.status_code == 200
+    change = response.json()["changes"][0]
+    assert change["kind"] == "node" and change["change"] == "updated"
+    assert change["before"]["name"] == "Customer" and change["after"]["name"] == "Changed"
+    assert (await client.get(BASE, headers=env["editor"])).json()["nodes"][0]["name"] == "Customer"
+    result = await client.put(
+        url,
+        json={"accepted_inventory_changes": [{k: change[k] for k in ("kind", "id", "revision")}]},
+        headers=env["editor"],
+    )
+    assert result.status_code == 200
+    assert result.json()["nodes"][0]["name"] == "Changed"
+    assert result.json()["positions"][str(card.id)] == {"x": 12, "y": 34}
+
+
+async def test_draft_comparison_only_offers_readable_live_er_links(client, db, env):
+    a, b = await bo(db, "A"), await bo(db, "B")
+    edge = await create_relation(db, type_key=ER, source_id=a.id, target_id=b.id)
+    await client.put(f"{BASE}/layout", json={}, headers=env["admin"])
+    body = {"removed_relation_ids": [str(edge.id), str(edge.id), str(uuid.uuid4())]}
+    assert (
+        await client.post(f"{BASE}/changes/draft", json=body, headers=env["viewer"])
+    ).status_code == 403
+    result = await client.post(f"{BASE}/changes/draft", json=body, headers=env["editor"])
+    assert result.status_code == 200
+    assert [(c["kind"], c["id"], c["change"]) for c in result.json()["changes"]] == [
+        ("edge", str(edge.id), "added")
+    ]
+
+
+async def test_changes_proves_deleted_nodes_and_relations_without_leaking_hidden_cards(
+    client, db, env
+):
+    import json
+
+    a, b = await bo(db, "A"), await bo(db, "B")
+    edge = await create_relation(db, type_key=ER, source_id=a.id, target_id=b.id)
+    await client.put(f"{BASE}/layout", json={}, headers=env["admin"])
+    actor = await db.scalar(select(User).where(User.role == "admin"))
+    db.add(
+        BoOperationReceipt(
+            actor_id=actor.id,
+            draft_id=edge.id,
+            result_id=edge.id,
+            kind="inventory_relation_delete",
+            fingerprint=json.dumps({"type": ER, "source": str(a.id), "target": str(b.id)}),
+        )
+    )
+    await db.delete(edge)
+    await db.flush()
+    response = await client.get(f"{BASE}/changes", headers=env["editor"])
+    assert [(c["kind"], c["id"], c["change"]) for c in response.json()["changes"]] == [
+        ("edge", str(edge.id), "removed")
+    ]
+    ct = await db.scalar(select(CardType).where(CardType.key == "DataObject"))
+    ct.role_permissions = {"editor": {"inventory.view": {"value": False, "subtypes": ["Data"]}}}
+    PermissionService.invalidate_type_permission_cache()
+    await db.flush()
+    assert (await client.get(f"{BASE}/changes", headers=env["editor"])).json()["changes"] == []
+
+
+async def test_comparison_rejects_stale_acceptance_and_omits_unproven_deletion(client, db, env):
+    card = await bo(db)
+    await client.put(f"{BASE}/layout", json={}, headers=env["admin"])
+    card.name = "First change"
+    await db.flush()
+    change = (await client.get(f"{BASE}/changes", headers=env["editor"])).json()["changes"][0]
+    card.name = "Later change"
+    await db.flush()
+    acceptance = [{k: change[k] for k in ("kind", "id", "revision")}]
+    result = await client.put(
+        f"{BASE}/layout", json={"accepted_inventory_changes": acceptance}, headers=env["editor"]
+    )
+    assert result.json()["inventory_conflicts"] == [{"kind": "node", "id": str(card.id)}]
+    await db.delete(card)
+    await db.flush()
+    assert (await client.get(f"{BASE}/changes", headers=env["editor"])).json()["changes"] == []
+
+
+async def test_comparison_offers_archived_items_and_rejects_oversized_draft(client, db, env):
+    card = await bo(db)
+    await client.put(f"{BASE}/layout", json={}, headers=env["admin"])
+    card.status = "ARCHIVED"
+    await db.flush()
+    result = await client.get(f"{BASE}/changes", headers=env["viewer"])
+    assert [(c["id"], c["change"]) for c in result.json()["changes"]] == [(str(card.id), "removed")]
+    body = {"removed_relation_ids": [str(uuid.uuid4())] * 5001}
+    assert (
+        await client.post(f"{BASE}/changes/draft", json=body, headers=env["editor"])
+    ).status_code == 422
+
+
+async def test_comparison_reports_added_and_changed_links(client, db, env):
+    a, b = await bo(db, "A"), await bo(db, "B")
+    app = await create_card(db, card_type="Application", name="App")
+    edge = await create_relation(
+        db, type_key=ER, source_id=a.id, target_id=b.id, attributes={"cardinality": "1:1"}
+    )
+    await client.put(f"{BASE}/layout", json={}, headers=env["admin"])
+    edge.attributes = {"cardinality": "1:n"}
+    link = await create_relation(
+        db,
+        type_key=APP_LINK,
+        source_id=app.id,
+        target_id=a.id,
+        attributes={"dataOwnership": "master"},
+    )
+    await db.flush()
+    response = await client.get(f"{BASE}/changes", headers=env["editor"])
+    changes = {c["id"]: c for c in response.json()["changes"]}
+    assert changes[str(edge.id)]["change"] == "updated"
+    assert changes[str(edge.id)]["after"]["cardinality"] == "1:n"
+    assert changes[str(link.id)]["change"] == "added"
+    assert changes[str(link.id)]["after"]["is_master"] is True
+
+
+async def test_changed_relation_id_never_exposes_or_overwrites_hidden_saved_endpoints(
+    client, db, env
+):
+    hidden = await create_card(db, card_type="DataObject", subtype="Document", name="Hidden")
+    a, b = await bo(db, "A"), await bo(db, "B")
+    edge = await create_relation(db, type_key=ER, source_id=hidden.id, target_id=a.id)
+    await client.put(f"{BASE}/layout", json={}, headers=env["admin"])
+    ct = await db.scalar(select(CardType).where(CardType.key == "DataObject"))
+    ct.role_permissions = {"editor": {"inventory.view": {"value": False, "subtypes": ["Document"]}}}
+    PermissionService.invalidate_type_permission_cache()
+    edge.source_id = b.id
+    await db.flush()
+    changes = (await client.get(f"{BASE}/changes", headers=env["editor"])).json()["changes"]
+    assert str(edge.id) not in {c["id"] for c in changes}
+    result = await client.post(
+        f"{BASE}/changes/draft",
+        json={"removed_relation_ids": [str(edge.id)]},
+        headers=env["editor"],
+    )
+    assert result.json()["changes"] == []
+    item = BoInventoryItem(kind="edge", id=edge.id)
+    old = BoEdge(id=edge.id, source=hidden.id, target=a.id, cardinality=None)
+    current = BoEdge(id=edge.id, source=b.id, target=a.id, cardinality=None)
+    accepted = {
+        **item.model_dump(mode="json"),
+        "revision": inventory_item_revision(item, old, current),
+    }
+    result = await client.put(
+        f"{BASE}/layout", json={"accepted_inventory_changes": [accepted]}, headers=env["editor"]
+    )
+    assert result.json()["inventory_conflicts"] == [item.model_dump(mode="json")]
+    admin_graph = (await client.get(BASE, headers=env["admin"])).json()
+    assert next(e for e in admin_graph["edges"] if e["id"] == str(edge.id))["source"] == str(
+        hidden.id
+    )
+
+
+async def test_layout_and_draft_comparison_require_view_as_well_as_edit(client, db, env):
+    await create_role(db, key="edit_only", permissions={"boRelationship.edit": True})
+    headers = auth_headers(await create_user(db, role="edit_only"))
+    assert (await client.put(f"{BASE}/layout", json={}, headers=headers)).status_code == 403
+    assert (await client.post(f"{BASE}/changes/draft", json={}, headers=headers)).status_code == 403
+
+
+@pytest.mark.parametrize("unavailable", ["hidden", "missing"])
+@pytest.mark.parametrize("position_key", ["auto_positions", "positions"])
+async def test_unavailable_accepted_addition_does_not_block_position_save(
+    client, db, env, unavailable, position_key
+):
+    anchor = await bo(db, "Anchor")
+    await client.put(f"{BASE}/layout", json={}, headers=env["admin"])
+    added = await create_card(db, card_type="DataObject", subtype="Document", name="Added")
+    change = next(
+        c
+        for c in (await client.get(f"{BASE}/changes", headers=env["editor"])).json()["changes"]
+        if c["id"] == str(added.id)
+    )
+    if unavailable == "hidden":
+        ct = await db.scalar(select(CardType).where(CardType.key == "DataObject"))
+        ct.role_permissions = {
+            "editor": {"inventory.view": {"value": False, "subtypes": ["Document"]}}
+        }
+        PermissionService.invalidate_type_permission_cache()
+    else:
+        await db.delete(added)
+    await db.flush()
+    acceptance = [{k: change[k] for k in ("kind", "id", "revision")}]
+    layout = {"positions": {str(anchor.id): {"x": 23, "y": 45}}, "auto_positions": {}}
+    layout[position_key][str(added.id)] = {"x": 60, "y": 70}
+    assert (
+        await client.put(f"{BASE}/layout", json=layout, headers=env["editor"])
+    ).status_code == 404
+    response = await client.put(
+        f"{BASE}/layout",
+        json={**layout, "accepted_inventory_changes": acceptance},
+        headers=env["editor"],
+    )
+    assert response.status_code == 200
+    assert response.json()["inventory_conflicts"] == [{"kind": "node", "id": str(added.id)}]
+    assert response.json()["positions"] == {str(anchor.id): {"x": 23, "y": 45}}

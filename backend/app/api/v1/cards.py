@@ -80,6 +80,7 @@ from app.services import (
     card_write_service,
     notification_service,
 )
+from app.services.bo_inventory_deletions import record_inventory_card_deletions
 from app.services.bo_relationship_constants import BO_TYPE
 from app.services.calculation_engine import run_calculations_for_card
 from app.services.card_completeness import missing_mandatory
@@ -2387,6 +2388,7 @@ async def bulk_delete_cards(
         background_tasks=background_tasks,
     )
 
+    await record_inventory_card_deletions(db, user.id, target_objs)
     for did, dtype, dname in deleted_payload:
         await event_bus.publish(
             "card.deleted",
@@ -3059,6 +3061,7 @@ async def delete_card(
         background_tasks=background_tasks,
     )
 
+    await record_inventory_card_deletions(db, user.id, target_objs)
     for did, dtype, dname in deleted_payload:
         await event_bus.publish(
             "card.deleted",

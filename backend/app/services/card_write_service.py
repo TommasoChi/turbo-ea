@@ -51,6 +51,7 @@ from app.models.ppm_cost_line import PpmBudgetLine, PpmCostLine
 from app.models.relation import Relation
 from app.models.relation_type import RelationType
 from app.services import card_approval, card_lifecycle, card_reference, notification_service
+from app.services.bo_inventory_deletions import record_inventory_relation_deletion
 from app.services.bo_relationship_constants import APPLICATION_RELATION, ER_RELATION, OWNERSHIP_KEY
 from app.services.calculation_engine import run_calculations_for_card
 from app.services.card_costs import COST_ITEM_TYPES, DERIVED_KEY, recompute_derived
@@ -1343,6 +1344,8 @@ async def _emit_relation_events(
     label, reverse_label = await _resolve_relation_labels(db, rel.type)
     forward = label or rel.type
     backward = reverse_label or label or rel.type
+    if event_type == "relation.deleted":
+        await record_inventory_relation_deletion(db, actor_id, rel)
 
     source_name = source_card.name if source_card else None
     target_name = target_card.name if target_card else None

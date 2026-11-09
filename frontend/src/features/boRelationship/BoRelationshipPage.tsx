@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert, Box, Button, Chip, CircularProgress, Dialog, DialogActions, DialogContent,
   DialogTitle, Stack, Typography,
@@ -9,12 +9,14 @@ import CardDetailSidePanel from "@/components/CardDetailSidePanel";
 import { FilterCheckboxList, FilterSectionHeader } from "@/components/FilterSidebarSection";
 import { canReadType, hasPermission, hasTypePermission } from "@/components/RequirePermission";
 import { useOptionalAuthUser } from "@/hooks/AuthContext";
+import { useLatestRequest } from "@/hooks/useLatestRequest";
 import { useApiQuery } from "@/hooks/useApiQuery";
 import BoRelationshipDiagram from "./BoRelationshipDiagram";
 import {
   BoApplicationLinkDialog, BoNewObjectDialog, BoObjectLinkDialog,
 } from "./BoRelationshipEditDialogs";
 import { useBoDrawing } from "./useBoDrawing";
+import type { InventoryChange } from "./useBoDrawing";
 
 export interface BoNode {
   id: string;
@@ -58,10 +60,32 @@ export default function BoRelationshipPage() {
   const [liveGroups, setLiveGroups] = useState<Record<string, BoGroup>>({});
   const [dialog, setDialog] = useState<"object" | "relation" | "application" | null>(null);
   const [confirmRemoval, setConfirmRemoval] = useState<BoEdge | null>(null);
+  const [changes, setChanges] = useState<InventoryChange[]>([]);
+  const [checkError, setCheckError] = useState("");
+  const [checking, setChecking] = useState(false);
+  const { run: runChangeCheck } = useLatestRequest();
+  const graphLoaded = data !== undefined;
+  const checkChanges = useCallback(() => {
+    setChecking(true);
+    void runChangeCheck(async ({ signal, isCurrent }) => {
+      try {
+        const result = await api.get<{ changes: InventoryChange[] }>("/bo-relationship/changes", { signal });
+        if (isCurrent()) { setChanges(result.changes ?? []); setCheckError(""); }
+      } catch (error) {
+        if (isCurrent()) setCheckError(error instanceof Error ? error.message : String(error));
+      } finally {
+        if (isCurrent()) setChecking(false);
+      }
+    });
+  }, [runChangeCheck]);
+  useEffect(() => {
+    if (graphLoaded) checkChanges();
+  }, [graphLoaded, checkChanges]);
   const masterLock = useRef(false);
   const latestQuery = useRef({ data, loading });
   latestQuery.current = { data, loading };
   const drawing = useBoDrawing(data, (aliases, savedLayout, updatedApplications) => {
+    if (savedLayout) checkChanges();
     if (aliases.size) setSelected((id) => id ? aliases.get(id) ?? id : null);
     // A graph read already in flight may have started before this Save.
     if (savedLayout && (latestQuery.current.loading || latestQuery.current.data !== data)) refetch();
@@ -74,6 +98,10 @@ export default function BoRelationshipPage() {
       }
     }
   });
+  const pendingChanges = changes.filter((change) =>
+    !drawing.accepted.some((item) => item.kind === change.kind && item.id === change.id && item.revision === change.revision)
+    && !(change.kind === "edge" && (drawing.removedIds.includes(change.id)
+      || drawing.removals.some(({ edge }) => edge.id === change.id))));
   // Independent facets combine with AND, as in the approved diagram mockup.
   const visibleNodes = useMemo(() => drawing.nodes.filter((node) =>
     (!personalData || node.isPersonalData) && (!paymentData || node.isPaymentData),
@@ -92,7 +120,7 @@ export default function BoRelationshipPage() {
   // Graph reloads keep the accepted drawing. The mutation returns live roles
   // for the panel without implicitly accepting inventory changes.
   const group = activeSelection
-    ? (canManageMaster ? liveGroups[activeSelection] : undefined) ?? drawing.graph?.applications[activeSelection]
+    ? (canManageMaster ? liveGroups[activeSelection] : undefined) ?? drawing.applications[activeSelection]
     : undefined;
   const pendingApplications = drawing.pendingApplications.filter(({ objectId }) => objectId === activeSelection);
   const unavailableTargets = new Set([activeSelection]);
@@ -183,6 +211,30 @@ export default function BoRelationshipPage() {
             )}
           </Box>
           <Box sx={{ flex: 1, minWidth: 0 }}>
+            <Button disabled={checking} onClick={checkChanges}>{t("boRelationship.checkUpdates")}</Button>
+            {checkError && <Alert severity="error">{t("boRelationship.checkFailed")} {checkError}</Alert>}
+            {pendingChanges.length > 0 && (
+              <Box>
+                <Typography variant="subtitle2">{t("boRelationship.inventoryChanges")}</Typography>
+                {pendingChanges.map((change) => {
+                  const value = change.after ?? change.before;
+                  const label = value && "name" in value ? value.name
+                    : value && "application" in value ? value.application.name
+                    : value && "source" in value
+                      ? [value.source, value.target].map((id) => drawing.nodes.find((node) => node.id === id)?.name ?? id).join(" ↔ ")
+                      : change.id;
+                  return <Stack direction="row" spacing={1} key={`${change.kind}:${change.id}`}>
+                    <Typography>{label} · {t(`boRelationship.change_${change.change}`)}</Typography>
+                    {canEdit && <Button disabled={busy} onClick={() => {
+                      if (change.kind === "application_link") setLiveGroups({});
+                      drawing.acceptChanges([change]);
+                    }}>
+                      {t("boRelationship.acceptChange")}
+                    </Button>}
+                  </Stack>;
+                })}
+              </Box>
+            )}
             {canEdit && (
               <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
                 {canCreateObjects && (
@@ -296,7 +348,7 @@ export default function BoRelationshipPage() {
             docked
             boScoped
             refreshKey={detailVersion}
-            onSaved={refetch}
+            onSaved={() => { refetch(); checkChanges(); }}
           />
         </Stack>
       )}

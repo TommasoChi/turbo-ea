@@ -6,8 +6,8 @@ import hashlib
 import json
 import uuid
 from collections.abc import Mapping
-from dataclasses import dataclass
-from typing import TypeVar
+from dataclasses import dataclass, replace
+from typing import Literal, TypeVar, cast
 
 from fastapi import HTTPException
 from pydantic import BaseModel, Field, ValidationError
@@ -33,6 +33,8 @@ from app.schemas.bo_relationship import (
     BoCapabilities,
     BoEdge,
     BoGraph,
+    BoInventoryChange,
+    BoInventoryChanges,
     BoInventoryItem,
     BoLayoutResult,
     BoLayoutUpdate,
@@ -47,6 +49,8 @@ from app.services.bo_relationship_constants import (
     BO_TYPE,
     ER_DELETE_RECEIPT,
     ER_RELATION,
+    INVENTORY_CARD_DELETE,
+    INVENTORY_RELATION_DELETE,
     MASTER,
     OWNERSHIP_KEY,
 )
@@ -83,6 +87,11 @@ class ErDeleteEvidence(BaseModel):
     type: str
     source: uuid.UUID
     target: uuid.UUID
+
+
+class CardDeleteEvidence(BaseModel):
+    type: str
+    subtype: str | None
 
 
 @dataclass(frozen=True)
@@ -239,6 +248,20 @@ def _project_graph(
     )
 
 
+def _saved_item_readable(
+    snapshot: BoSnapshot, inventory: BoInventory, kind: str, id_: uuid.UUID
+) -> bool:
+    if kind == "node":
+        return id_ not in snapshot.nodes or id_ in inventory.objects
+    if kind == "edge":
+        edge = snapshot.edges.get(id_)
+        return edge is None or {edge.source, edge.target} <= inventory.objects
+    link = snapshot.application_links.get(id_)
+    return link is None or (
+        link.object_id in inventory.objects and link.application.id in inventory.applications
+    )
+
+
 async def get_bo_graph(db: AsyncSession, user: User) -> BoGraph:
     can_manage_master = await can_manage_bo_master(db, user)
     scope = await bo_read_scope(db, user)
@@ -247,6 +270,8 @@ async def get_bo_graph(db: AsyncSession, user: User) -> BoGraph:
     snapshot = BoSnapshot.model_validate(diagram.data or {}) if diagram else BoSnapshot()
     if snapshot.snapshot_revision is None:
         snapshot = inventory.active
+    else:
+        await _authorize_deleted_snapshot_items(db, user, snapshot, inventory)
     return _project_graph(snapshot, inventory, can_manage_master=can_manage_master)
 
 
@@ -378,6 +403,144 @@ def inventory_item_revision(
     return hashlib.sha256(json.dumps(values, sort_keys=True).encode()).hexdigest()
 
 
+async def compare_bo_inventory(
+    db: AsyncSession, user: User, removed_relation_ids: set[uuid.UUID] | None = None
+) -> BoInventoryChanges:
+    scope = await bo_read_scope(db, user)
+    inventory = await load_bo_inventory(db, scope)
+    diagram = await _bo_diagram(db)
+    snapshot = BoSnapshot.model_validate(diagram.data or {}) if diagram else BoSnapshot()
+    if snapshot.snapshot_revision is None:
+        snapshot = inventory.active
+    else:
+        await _authorize_deleted_snapshot_items(db, user, snapshot, inventory)
+
+    changes: list[BoInventoryChange] = []
+    if removed_relation_ids is not None:
+        for id_ in sorted(removed_relation_ids & inventory.active.edges.keys()):
+            if not _saved_item_readable(snapshot, inventory, "edge", id_):
+                continue
+            item = BoInventoryItem(kind="edge", id=id_)
+            current = inventory.active.edges[id_]
+            changes.append(
+                BoInventoryChange(
+                    **item.model_dump(),
+                    change="added",
+                    before=None,
+                    after=current,
+                    revision=inventory_item_revision(item, snapshot.edges.get(id_), current),
+                )
+            )
+        return BoInventoryChanges(changes=changes)
+
+    for kind, saved, live, readable in (
+        ("node", snapshot.nodes, inventory.active.nodes, inventory.objects),
+        ("edge", snapshot.edges, inventory.active.edges, inventory.edge_ids),
+        (
+            "application_link",
+            snapshot.application_links,
+            inventory.active.application_links,
+            inventory.application_link_ids,
+        ),
+    ):
+        for id_ in sorted((saved.keys() | live.keys()) & readable):
+            if not _saved_item_readable(snapshot, inventory, kind, id_):
+                continue
+            before, after = saved.get(id_), live.get(id_)
+            if before == after:
+                continue
+            item = BoInventoryItem(
+                kind=cast(Literal["node", "edge", "application_link"], kind), id=id_
+            )
+            changes.append(
+                BoInventoryChange(
+                    **item.model_dump(),
+                    change="added" if before is None else "removed" if after is None else "updated",
+                    before=before,
+                    after=after,
+                    revision=inventory_item_revision(item, before, after),
+                )
+            )
+    return BoInventoryChanges(changes=changes)
+
+
+async def _authorize_deleted_snapshot_items(
+    db: AsyncSession, user: User, snapshot: BoSnapshot, inventory: BoInventory
+) -> None:
+    """Admit absent snapshot items only when durable evidence proves visibility."""
+    endpoints = set(snapshot.nodes)
+    endpoints.update(link.application.id for link in snapshot.application_links.values())
+    endpoints.update(edge.source for edge in snapshot.edges.values())
+    endpoints.update(edge.target for edge in snapshot.edges.values())
+    relation_ids = set(snapshot.edges) | set(snapshot.application_links)
+    existing_cards = set((await db.scalars(select(Card.id).where(Card.id.in_(endpoints)))).all())
+    existing_relations = set(
+        (await db.scalars(select(Relation.id).where(Relation.id.in_(relation_ids)))).all()
+    )
+    absent_cards = endpoints - existing_cards
+    absent_relations = relation_ids - existing_relations
+    rows = await db.execute(
+        select(
+            BoOperationReceipt.kind, BoOperationReceipt.result_id, BoOperationReceipt.fingerprint
+        )
+        .where(
+            BoOperationReceipt.kind.in_((INVENTORY_CARD_DELETE, INVENTORY_RELATION_DELETE)),
+            BoOperationReceipt.result_id.in_(absent_cards | absent_relations),
+        )
+        .order_by(BoOperationReceipt.created_at.desc(), BoOperationReceipt.id.desc())
+    )
+    evidence: dict[tuple[str, uuid.UUID], str] = {}
+    for kind, id_, value in rows:
+        evidence.setdefault((kind, id_), value)
+    # Deleted stakeholder rows cannot establish present-day access.
+    scope = await CardReadScope.load(
+        db, user, include_subtype_denials=True, include_stakeholders=False
+    )
+    for id_ in absent_cards:
+        try:
+            card = CardDeleteEvidence.model_validate_json(evidence[(INVENTORY_CARD_DELETE, id_)])
+        except (KeyError, ValidationError):
+            continue
+        if card.type not in (BO_TYPE, APPLICATION_TYPE) or not scope.readable(
+            id_, card.type, mode="module", subtype=card.subtype
+        ):
+            continue
+        if card.type == APPLICATION_TYPE and id_ in snapshot.nodes:
+            continue
+        if card.type == BO_TYPE and any(
+            link.application.id == id_ for link in snapshot.application_links.values()
+        ):
+            continue
+        if card.type == BO_TYPE:
+            inventory.objects.add(id_)
+        else:
+            inventory.applications.add(id_)
+
+    for id_ in absent_relations:
+        edge = snapshot.edges.get(id_)
+        link = snapshot.application_links.get(id_)
+        if edge:
+            type_, source, target = ER_RELATION, edge.source, edge.target
+        else:
+            assert link is not None
+            type_, source, target = APPLICATION_RELATION, link.application.id, link.object_id
+        if target not in inventory.objects or source not in (
+            inventory.objects if edge else inventory.applications
+        ):
+            continue
+        fingerprint = evidence.get((INVENTORY_RELATION_DELETE, id_))
+        if fingerprint:
+            try:
+                deleted = ErDeleteEvidence.model_validate_json(fingerprint)
+            except ValidationError:
+                continue
+            if (deleted.type, deleted.source, deleted.target) != (type_, source, target):
+                continue
+        else:
+            continue
+        (inventory.edge_ids if edge else inventory.application_link_ids).add(id_)
+
+
 async def _er_delete_evidence(
     db: AsyncSession, user: User, ids: set[uuid.UUID], objects: set[uuid.UUID]
 ) -> set[uuid.UUID]:
@@ -413,7 +576,7 @@ def _apply_inventory_item(
     """Return false for a stale comparison, without changing the snapshot."""
     id_ = change.id
     if id_ not in readable_ids:
-        raise HTTPException(404, "Inventory item not found")
+        return False
     saved, current = saved_items.get(id_), live_items.get(id_)
     if saved == current and saved is not None:
         return True
@@ -437,6 +600,9 @@ def _apply_inventory_changes(
     conflicts: list[BoInventoryItem] = []
     promoted: dict[uuid.UUID, uuid.UUID] = {}
     for change in body.accepted_inventory_changes:
+        if not _saved_item_readable(snapshot, inventory, change.kind, change.id):
+            conflicts.append(BoInventoryItem(kind=change.kind, id=change.id))
+            continue
         if change.kind == "node":
             applied = _apply_inventory_item(change, snapshot.nodes, live.nodes, inventory.objects)
         elif change.kind == "edge":
@@ -554,12 +720,22 @@ async def save_bo_layout(db: AsyncSession, user: User, body: BoLayoutUpdate) -> 
     inventory = await load_bo_inventory(db, scope)
     if snapshot.snapshot_revision is None:
         snapshot = (await load_bo_inventory(db, CardReadScope.everything())).active
+    else:
+        await _authorize_deleted_snapshot_items(db, user, snapshot, inventory)
     prior = snapshot.model_dump(mode="json")
     drafts = await _load_saved_drafts(db, user, inventory.active, body.saved_drafts)
+    drafts = [
+        draft
+        if _saved_item_readable(snapshot, inventory, draft.operation.kind, draft.result_id)
+        else replace(draft, available=False)
+        for draft in drafts
+    ]
     unavailable = [draft for draft in drafts if not draft.available]
     unavailable_positions = {
         draft.result_id for draft in unavailable if draft.operation.kind == "node"
     }
+    accepted_nodes = {item.id for item in body.accepted_inventory_changes if item.kind == "node"}
+    unavailable_positions |= accepted_nodes - inventory.objects
     positions = body.positions.keys() | body.auto_positions.keys()
     if not positions <= inventory.objects | unavailable_positions:
         raise HTTPException(404, "Card not found")
@@ -570,6 +746,11 @@ async def save_bo_layout(db: AsyncSession, user: User, body: BoLayoutUpdate) -> 
     unavailable_relations = (body.removed_relation_ids - (inventory.edge_ids | deleted_edges)) | (
         body.restored_relation_ids - inventory.active.edges.keys()
     )
+    unavailable_relations |= {
+        id_
+        for id_ in body.removed_relation_ids | body.restored_relation_ids
+        if not _saved_item_readable(snapshot, inventory, "edge", id_)
+    }
     if unavailable_relations and not body.skip_unavailable_relations:
         raise HTTPException(404, "Relation not found")
 

@@ -12,7 +12,7 @@ type Cardinality = (typeof CARDINALITIES)[number];
 export type BoLinkInput = { source: string; target: string; cardinality: Cardinality | null };
 export type BoRole = "master" | "slave" | "unclassified";
 export type BoApplicationInput = { objectId: string; application: BoApplication; role: BoRole };
-type BoSavedApplication = { id: string; object_id: string; application: BoApplication; is_master: boolean };
+export type BoSavedApplication = { id: string; object_id: string; application: BoApplication; is_master: boolean };
 type Draft<Input, Saved> = { id: string; input: Input; saved?: Saved };
 type DrawingDraft = {
   objects: Draft<BoObjectInput, BoNode>[];
@@ -26,8 +26,16 @@ type Removal = { edge: BoEdge; label: string; error?: string };
 type SaveIssue = {
   id: string;
   names: string[];
-  reason: "saveFailed" | "waitingForObject" | "waitingForMaster" | "draftUnavailable" | "visualChangeUnavailable";
+  reason: "saveFailed" | "waitingForObject" | "waitingForMaster" | "draftUnavailable" | "visualChangeUnavailable" | "inventoryConflict";
   detail?: string;
+};
+export type InventoryChange = {
+  kind: "node" | "edge" | "application_link";
+  id: string;
+  revision: string;
+  change: "added" | "updated" | "removed";
+  before: BoNode | BoEdge | BoSavedApplication | null;
+  after: BoNode | BoEdge | BoSavedApplication | null;
 };
 type LayoutDraft = { kind: "node" | "edge" | "application_link"; id: string };
 type LayoutResult = BoGraph & {
@@ -57,6 +65,8 @@ export function useBoDrawing(initialGraph: BoGraph | undefined, onSaved: OnSave)
   useEffect(() => {
     setSavedGraph((current) => current?.base === initialGraph ? current : undefined);
   }, [initialGraph]);
+  const [accepted, setAccepted] = useState<InventoryChange[]>([]);
+  const [syncAnchors, setSyncAnchors] = useState<Positions>({});
   const [draft, setDraft] = useState(emptyDraft);
   const [removals, setRemovals] = useState<Removal[]>([]);
   const [issues, setIssues] = useState<SaveIssue[]>([]);
@@ -65,11 +75,19 @@ export function useBoDrawing(initialGraph: BoGraph | undefined, onSaved: OnSave)
 
   const drawing = useMemo(() => {
     const allNodes = new Map(graph?.nodes.map((node) => [node.id, node]));
+    for (const change of accepted.filter((item) => item.kind === "node")) {
+      if (change.after) allNodes.set(change.id, change.after as BoNode);
+      else allNodes.delete(change.id);
+    }
     for (const { id, input, saved } of draft.objects) {
       const node = saved ?? { id, ...input };
       allNodes.set(node.id, node);
     }
     const allEdges = new Map([...(graph?.edges ?? []), ...draft.restored].map((edge) => [edge.id, edge]));
+    for (const change of accepted.filter((item) => item.kind === "edge")) {
+      if (change.after) allEdges.set(change.id, change.after as BoEdge);
+      else allEdges.delete(change.id);
+    }
     for (const { id, input, saved } of draft.relations) {
       const edge = saved ?? {
         id, ...input,
@@ -80,10 +98,52 @@ export function useBoDrawing(initialGraph: BoGraph | undefined, onSaved: OnSave)
     }
     const removedIds = new Set([...draft.removed, ...removals.map(({ edge }) => edge.id)]);
     const nodes = [...allNodes.values()];
-    const edges = [...allEdges.values()].filter((edge) => !removedIds.has(edge.id));
-    const positions = computeLayout(nodes, edges, { ...graph?.positions, ...draft.moves });
+    const edges = [...allEdges.values()].filter((edge) => !removedIds.has(edge.id) && allNodes.has(edge.source) && allNodes.has(edge.target));
+    const positions = computeLayout(nodes, edges, { ...graph?.positions, ...syncAnchors, ...draft.moves });
     return { nodes, edges, positions };
-  }, [draft, graph, removals]);
+  }, [accepted, draft, graph, removals, syncAnchors]);
+
+  const acceptChanges = (changes: InventoryChange[]) => {
+    if (lock.current) return;
+    const outgoing = new Set([...draft.removed, ...removals.map(({ edge }) => edge.id)]);
+    const allowed = changes.filter((item) => item.kind !== "edge" || !outgoing.has(item.id));
+    setSyncAnchors((current) => ({ ...current, ...drawing.positions }));
+    setAccepted((current) => {
+      const merged = new Map(current.map((item) => [`${item.kind}:${item.id}`, item]));
+      for (const item of allowed) merged.set(`${item.kind}:${item.id}`, item);
+      return [...merged.values()];
+    });
+  };
+  const applications = useMemo(() => {
+    const groups = structuredClone(graph?.applications ?? {});
+    for (const change of accepted.filter((item) => item.kind === "application_link")) {
+      const before = change.before as BoSavedApplication | null;
+      const after = change.after as BoSavedApplication | null;
+      if (before) {
+        const group = groups[before.object_id];
+        if (group) {
+          if (group.master?.id === before.application.id) group.master = null;
+          group.slaves = group.slaves.filter(({ id }) => id !== before.application.id);
+          group.unclassified = group.unclassified.filter(({ id }) => id !== before.application.id);
+        }
+      }
+      if (after) {
+        const group = groups[after.object_id] ??= { master: null, slaves: [], unclassified: [] };
+        if (after.is_master) {
+          if (group.master && group.master.id !== after.application.id) group.slaves.push(group.master);
+          group.master = after.application;
+        } else if (group.master) group.slaves.push(after.application);
+        else group.unclassified.push(after.application);
+      }
+    }
+    for (const group of Object.values(groups)) {
+      const others = new Map([...group.slaves, ...group.unclassified]
+        .filter(({ id }) => id !== group.master?.id).map((app) => [app.id, app]));
+      group.slaves = group.master ? [...others.values()] : [];
+      group.unclassified = group.master ? [] : [...others.values()];
+    }
+    return groups;
+  }, [accepted, graph]);
 
   const stageObject = (input: BoObjectInput) => {
     const id = randomUuid();
@@ -235,7 +295,13 @@ export function useBoDrawing(initialGraph: BoGraph | undefined, onSaved: OnSave)
       const positions: Positions = {};
       const autoPositions: Positions = {};
       const unsavedMoves: Positions = {};
+      const suppressedMoves: Positions = {};
+      const removedNodes = new Set(accepted.filter((item) => item.kind === "node" && !item.after).map(({ id }) => id));
       for (const [id, point] of Object.entries(draft.moves)) {
+        if (removedNodes.has(id)) {
+          suppressedMoves[id] = point;
+          continue;
+        }
         const resolved = resolveId(next, id);
         if (resolved) positions[resolved] = point;
         else unsavedMoves[id] = point;
@@ -246,12 +312,13 @@ export function useBoDrawing(initialGraph: BoGraph | undefined, onSaved: OnSave)
           autoPositions[resolved] = drawing.positions[id];
         }
       }
-      next.moves = { ...positions, ...unsavedMoves };
-      if (savedDrafts.length || draft.removed.length || draft.restored.length
+      next.moves = { ...positions, ...unsavedMoves, ...suppressedMoves };
+      if (accepted.length || savedDrafts.length || draft.removed.length || draft.restored.length
         || Object.keys(positions).length || Object.keys(autoPositions).length) {
         const result = await api.put<LayoutResult>("/bo-relationship/layout", {
           snapshot_revision: graph.snapshot_revision,
           saved_drafts: savedDrafts,
+          accepted_inventory_changes: accepted.map(({ kind, id, revision }) => ({ kind, id, revision })),
           positions,
           auto_positions: autoPositions,
           removed_relation_ids: draft.removed,
@@ -281,6 +348,16 @@ export function useBoDrawing(initialGraph: BoGraph | undefined, onSaved: OnSave)
         if (result.inventory_conflicts?.some(({ kind, id }) => kind === "edge" && visualChanges.has(id))) {
           failures.push({ id: "visual", names: [], reason: "visualChangeUnavailable" });
         }
+        const conflicts = new Set((result.inventory_conflicts ?? []).map(({ kind, id }) => `${kind}:${id}`));
+        if (accepted.some(({ kind, id }) => conflicts.has(`${kind}:${id}`))) {
+          failures.push({ id: "inventory", names: [], reason: "inventoryConflict" });
+        }
+        const visibleNodes = new Set(result.nodes.map(({ id }) => id));
+        for (const [id, point] of Object.entries(suppressedMoves)) {
+          if (visibleNodes.has(id) && conflicts.has(`node:${id}`)) unsavedMoves[id] = point;
+        }
+        setAccepted([]);
+        setSyncAnchors({});
         setSavedGraph({ base: initialGraph, result });
         setDraft({
           objects: pendingObjects,
@@ -318,8 +395,8 @@ export function useBoDrawing(initialGraph: BoGraph | undefined, onSaved: OnSave)
   };
 
   return {
-    graph, ...drawing, busy, issues, removals, save, syncRemovals,
-    hasChanges: !!(draft.objects.length || draft.relations.length || draft.applications.length
+    graph, ...drawing, applications, accepted, acceptChanges, removedIds: draft.removed, busy, issues, removals, save, syncRemovals,
+    hasChanges: !!(accepted.length || draft.objects.length || draft.relations.length || draft.applications.length
       || draft.removed.length || draft.restored.length || Object.keys(draft.moves).length
       || drawing.nodes.some(({ id }) => !graph?.positions[id])),
     pendingApplications: draft.applications.map(({ input }) => ({
