@@ -8,9 +8,12 @@ from __future__ import annotations
 import uuid
 
 import pytest
+from sqlalchemy import select
 
 from app.api.v1.relations import MAX_CARD_IDS_PER_QUERY
 from app.core.permissions import VIEWER_PERMISSIONS
+from app.models.relation import Relation
+from app.services.bo_relationship_constants import BO_TYPE, ER_RELATION
 from tests.conftest import (
     auth_headers,
     create_card,
@@ -64,6 +67,131 @@ async def rel_env(db):
         "source": source,
         "target": target,
     }
+
+
+@pytest.fixture
+async def er_env(db, rel_env):
+    await create_card_type(db, key=BO_TYPE)
+    await create_relation_type(
+        db, key=ER_RELATION, source_type_key=BO_TYPE, target_type_key=BO_TYPE
+    )
+    first = await create_card(db, card_type=BO_TYPE, name="First")
+    second = await create_card(db, card_type=BO_TYPE, name="Second")
+    return auth_headers(rel_env["admin"]), first.id, second.id
+
+
+@pytest.mark.parametrize("writer", ["post", "patch", "bulk"])
+@pytest.mark.parametrize("label", ["1:2", ["1:n"]])
+async def test_er_invalid_cardinality_is_rejected(client, db, er_env, writer, label):
+    headers, source, target = er_env
+    link = await create_relation(
+        db,
+        type_key=ER_RELATION,
+        source_id=source,
+        target_id=target,
+        attributes={"cardinality": "1:1"},
+    )
+    link_id = link.id
+    # A fully rejected bulk request rolls back its request savepoint.
+    await db.commit()
+    attributes = {"cardinality": label}
+    if writer == "post":
+        response = await client.post(
+            "/api/v1/relations",
+            headers=headers,
+            json={
+                "type": ER_RELATION,
+                "source_id": str(source),
+                "target_id": str(target),
+                "attributes": attributes,
+            },
+        )
+        assert response.status_code == 422, response.text
+    elif writer == "patch":
+        response = await client.patch(
+            f"/api/v1/relations/{link_id}", headers=headers, json={"attributes": attributes}
+        )
+        assert response.status_code == 422, response.text
+    else:
+        response = await client.post(
+            "/api/v1/relations/bulk",
+            headers=headers,
+            json={
+                "operations": [
+                    {
+                        "row_index": 1,
+                        "type": ER_RELATION,
+                        "source": {"id": str(source)},
+                        "target": {"id": str(target)},
+                        "attributes": attributes,
+                    }
+                ]
+            },
+        )
+        assert response.status_code == 200, response.text
+        assert response.json()["results"][0]["status"] == "failed"
+        assert "cardinality" in response.json()["results"][0]["error"]
+    assert await db.scalar(select(Relation.attributes).where(Relation.id == link_id)) == {
+        "cardinality": "1:1"
+    }
+
+
+@pytest.mark.parametrize("writer", ["post", "bulk", "draft"])
+async def test_er_self_link_cannot_be_created(client, db, er_env, writer):
+    headers, source, _ = er_env
+    if writer == "post":
+        response = await client.post(
+            "/api/v1/relations",
+            headers=headers,
+            json={"type": ER_RELATION, "source_id": str(source), "target_id": str(source)},
+        )
+        assert response.status_code == 422, response.text
+    elif writer == "bulk":
+        response = await client.post(
+            "/api/v1/relations/bulk",
+            headers=headers,
+            json={
+                "operations": [
+                    {
+                        "row_index": 1,
+                        "type": ER_RELATION,
+                        "source": {"id": str(source)},
+                        "target": {"id": str(source)},
+                    }
+                ]
+            },
+        )
+        assert response.status_code == 200, response.text
+        assert response.json()["results"][0]["status"] == "failed"
+    else:
+        response = await client.put(
+            f"/api/v1/bo-relationship/relation-drafts/{uuid.uuid4()}",
+            headers=headers,
+            json={"source_id": str(source), "target_id": str(source)},
+        )
+        assert response.status_code == 422, response.text
+    assert await db.scalar(select(Relation.id).where(Relation.type == ER_RELATION)) is None
+
+
+async def test_legacy_er_self_link_can_be_repaired_and_removed(client, db, er_env):
+    headers, source, _ = er_env
+    link = await create_relation(
+        db,
+        type_key=ER_RELATION,
+        source_id=source,
+        target_id=source,
+        attributes={"cardinality": "legacy"},
+    )
+    path = f"/api/v1/relations/{link.id}"
+    response = await client.patch(path, headers=headers, json={"description": "Legacy link"})
+    assert response.status_code == 200, response.text
+    assert response.json()["attributes"] == {"cardinality": "legacy"}
+    response = await client.patch(path, headers=headers, json={"attributes": {"cardinality": None}})
+    assert response.status_code == 200, response.text
+    assert response.json()["attributes"] == {"cardinality": None}
+    response = await client.delete(path, headers=headers)
+    assert response.status_code == 204, response.text
+    assert await db.scalar(select(Relation.id).where(Relation.type == ER_RELATION)) is None
 
 
 # ---------------------------------------------------------------

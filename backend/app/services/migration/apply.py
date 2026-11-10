@@ -63,6 +63,8 @@ from app.services.card_write_service import (
     find_relation,
     lock_bo_relation_writes,
     orient_er_attributes,
+    relation_attributes_for_write,
+    validate_new_relation_endpoints,
 )
 from app.services.event_bus import event_bus
 from app.services.migration.staging import import_relation_attributes
@@ -780,6 +782,8 @@ async def _apply_relation_pass(
             attributes = import_relation_attributes(
                 type_key, (staged.source_data or {}).get("attributes") or {}
             )
+            if staged.action in ("create", "update"):
+                attributes = relation_attributes_for_write(type_key, attributes) or {}
             if staged.action == "create":
                 present = await find_relation(db, type_key, src_uuid, tgt_uuid)
                 if present is not None:
@@ -790,6 +794,7 @@ async def _apply_relation_pass(
                     staged.target_id = present.id
                     counts["updated"] += 1
                 else:
+                    validate_new_relation_endpoints(type_key, src_uuid, tgt_uuid)
                     rel = Relation(
                         type=type_key,
                         source_id=src_uuid,

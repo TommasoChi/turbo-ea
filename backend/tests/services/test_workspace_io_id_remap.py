@@ -464,6 +464,32 @@ async def test_bo_diagram_uses_reverse_existing_er_relation(db, selected):
     }
 
 
+async def test_workspace_round_trip_preserves_legacy_er_relation(db):
+    user = await create_user(db, email="legacy-er@test.com", role="admin")
+    await create_card_type(db, key="DataObject")
+    await create_relation_type(
+        db,
+        key="relDataObjectToDataObject",
+        source_type_key="DataObject",
+        target_type_key="DataObject",
+    )
+    card = await create_card(db, card_type="DataObject", name="Legacy", user_id=user.id)
+    await create_relation(
+        db,
+        type_key="relDataObjectToDataObject",
+        source_id=card.id,
+        target_id=card.id,
+        attributes={"cardinality": "legacy"},
+    )
+    raw = await build_bundle(db)
+    await _wipe(db)
+    await apply_bundle(db, parse_bundle(raw), user)
+    relation = await db.scalar(select(Relation).where(Relation.type == "relDataObjectToDataObject"))
+    assert relation is not None
+    assert relation.source_id == relation.target_id
+    assert relation.attributes == {"cardinality": "legacy"}
+
+
 async def test_diagram_ids_follow_cards_to_new_primary_keys(db):
     """The bug in #1246: a diagram imported into an empty instance named the
     source's card ids, so every card on it read as deleted."""

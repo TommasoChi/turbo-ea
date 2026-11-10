@@ -455,12 +455,18 @@ async def _get_card(db: AsyncSession, cid: Any) -> Card | None:
     return (await db.execute(select(Card).where(Card.id == uid))).scalar_one_or_none()
 
 
-async def _apply_delete_card(db: AsyncSession, op: dict[str, Any]) -> dict[str, Any]:
+async def _apply_delete_card(
+    db: AsyncSession, op: dict[str, Any], actor_id: uuid.UUID | None = None
+) -> dict[str, Any]:
     if not op.get("card_id"):
         return _skip(op, "missing_card_id")
     card = await _get_card(db, op["card_id"])
     if card is None:
         return _skip(op, "already_deleted")
+    if actor_id is not None:
+        from app.services.bo_inventory_deletions import record_inventory_card_deletions
+
+        await record_inventory_card_deletions(db, actor_id, [card])
     await db.delete(card)
     return _ok(op)
 
@@ -526,13 +532,22 @@ async def _apply_restore_card_fields(db: AsyncSession, op: dict[str, Any]) -> di
     return _ok(op)
 
 
-async def _apply_delete_relation(db: AsyncSession, op: dict[str, Any]) -> dict[str, Any]:
+async def _apply_delete_relation(
+    db: AsyncSession, op: dict[str, Any], actor_id: uuid.UUID | None = None
+) -> dict[str, Any]:
     rid = _uuid(op.get("relation_id"))
     if rid is None:
         return _skip(op, "missing_relation_id")
     rel = (await db.execute(select(Relation).where(Relation.id == rid))).scalar_one_or_none()
     if rel is None:
         return _skip(op, "already_deleted")
+    from app.services.bo_inventory_deletions import record_inventory_relation_deletion
+    from app.services.card_write_service import lock_relation_for_write
+
+    rel = await lock_relation_for_write(db, rel)
+    if rel is None:
+        return _skip(op, "already_deleted")
+    await record_inventory_relation_deletion(db, actor_id, rel)
     await db.delete(rel)
     return _ok(op)
 
@@ -856,12 +871,18 @@ _APPLIERS: dict[str, Callable[[AsyncSession, dict[str, Any]], Awaitable[dict[str
 }
 
 
-async def _apply_inverse(db: AsyncSession, op: dict[str, Any]) -> dict[str, Any]:
+async def _apply_inverse(
+    db: AsyncSession, op: dict[str, Any], actor_id: uuid.UUID | None = None
+) -> dict[str, Any]:
     """Execute a single inverse op. Returns a per-op result dict for the
     rollback batch's summary."""
     applier = _APPLIERS.get(op["op"])
     if applier is None:
         return _skip(op, "unsupported")
+    if op["op"] == "delete_card":
+        return await _apply_delete_card(db, op, actor_id)
+    if op["op"] == "delete_relation":
+        return await _apply_delete_relation(db, op, actor_id)
     return await applier(db, op)
 
 
@@ -880,6 +901,37 @@ async def _batch_events(db: AsyncSession, batch: MutationBatch) -> list[Event]:
         .scalars()
         .all()
     )
+
+
+async def _lock_inverse_writes(
+    db: AsyncSession, events: list[Event], ops: list[dict[str, Any]]
+) -> None:
+    """Acquire relation and card locks in the same order as inventory writers."""
+    from app.services.card_write_service import lock_bo_relation_writes, lock_relation_endpoints
+
+    card_ids = {event.card_id for event in events if event.card_id is not None}
+    card_ids.update(uid for op in ops if (uid := _uuid(op.get("card_id"))) is not None)
+    deleted_cards = {
+        uid for op in ops if op["op"] == "delete_card" and (uid := _uuid(op.get("card_id")))
+    }
+    relation_ids = {
+        uid for op in ops if op["op"] == "delete_relation" and (uid := _uuid(op.get("relation_id")))
+    }
+    relations = []
+    if deleted_cards or relation_ids:
+        relations = list(
+            await db.execute(
+                select(Relation.type, Relation.source_id, Relation.target_id).where(
+                    Relation.id.in_(relation_ids)
+                    | Relation.source_id.in_(deleted_cards)
+                    | Relation.target_id.in_(deleted_cards)
+                )
+            )
+        )
+    await lock_bo_relation_writes(db, relations)
+    for _, source_id, target_id in relations:
+        card_ids.update((source_id, target_id))
+    await lock_relation_endpoints(db, card_ids)
 
 
 async def plan_rollback(db: AsyncSession, batch: MutationBatch) -> dict[str, Any]:
@@ -938,12 +990,14 @@ async def execute_rollback(
         origin=request_origin.get() or "api",
     )
 
+    ops = plan_ops(events)
+    await _lock_inverse_writes(db, events, ops)
     results: list[dict[str, Any]] = []
-    for op in plan_ops(events):
+    for op in ops:
         if op["op"] == "unsupported":
             results.append(op)
             continue
-        outcome = await _apply_inverse(db, op)
+        outcome = await _apply_inverse(db, op, user_id)
         results.append(outcome)
         await event_bus.publish(
             f"rollback.{op['op']}",

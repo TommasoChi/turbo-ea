@@ -30,6 +30,7 @@ from app.services.bo_relationship import (
     bo_read_scope,
     can_manage_bo_master,
     get_bo_card,
+    lock_bo_master_endpoints,
     set_bo_master,
 )
 from app.services.bo_relationship_constants import (
@@ -260,6 +261,12 @@ async def create_application_link_draft(
         await card_write_service.lock_bo_master(db, body.object_id)
         if body.role == "slave":
             await _require_visible_master(db, scope, body)
+        elif body.role == MASTER:
+            # The upsert and ownership transfer share a transaction. Lock the
+            # whole set first so the transfer never acquires cards out of order.
+            await lock_bo_master_endpoints(
+                db, scope, body.object_id, new_application_id=body.application_id
+            )
         rel, _, _ = await card_write_service.upsert_relation(
             db,
             card_write_service.WriteActor.from_user(user),
@@ -289,7 +296,7 @@ async def delete_er_relation(db: AsyncSession, user: User, relation_id: uuid.UUI
         await _relation_cards(
             db, scope, ER_RELATION, rel.source_id, rel.target_id, active_only=False
         )
-        rel = await card_write_service.lock_relation_for_delete(db, rel)
+        rel = await card_write_service.lock_relation_for_write(db, rel)
     if rel is not None:
         evidence = ErDeleteEvidence(type=rel.type, source=rel.source_id, target=rel.target_id)
         await card_write_service.delete_relation(db, user.id, rel)

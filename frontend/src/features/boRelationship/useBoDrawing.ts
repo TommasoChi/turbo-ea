@@ -26,7 +26,8 @@ type Removal = { edge: BoEdge; label: string; error?: string };
 type SaveIssue = {
   id: string;
   names: string[];
-  reason: "saveFailed" | "waitingForObject" | "waitingForMaster" | "draftUnavailable" | "visualChangeUnavailable" | "inventoryConflict";
+  reason: "saveFailed" | "waitingForObject" | "waitingForMaster" | "draftUnavailable"
+    | "visualChangeUnavailable" | "inventoryConflict" | "positionUnavailable";
   detail?: string;
   discardable?: boolean;
 };
@@ -42,6 +43,7 @@ type LayoutDraft = { kind: "node" | "edge" | "application_link"; id: string };
 type LayoutResult = BoGraph & {
   unavailable_drafts?: LayoutDraft[];
   inventory_conflicts?: LayoutDraft[];
+  skipped_positions?: number;
 };
 type OnSave = (aliases: Map<string, string>, savedLayout: BoGraph | undefined, updatedApplicationObjects: string[]) => void;
 
@@ -365,6 +367,7 @@ export function useBoDrawing(initialGraph: BoGraph | undefined, onSaved: OnSave)
           accepted_inventory_changes: accepted.map(({ kind, id, revision }) => ({ kind, id, revision })),
           positions,
           auto_positions: autoPositions,
+          skip_unavailable_positions: true,
           removed_relation_ids: draft.removed,
           restored_relation_ids: draft.restored.map(({ id }) => id),
           skip_unavailable_relations: true,
@@ -387,6 +390,9 @@ export function useBoDrawing(initialGraph: BoGraph | undefined, onSaved: OnSave)
           );
           failures = failures.filter(({ id }) => pendingIds.has(id));
           failures.push({ id: "unavailable", names: [], reason: "draftUnavailable" });
+        }
+        if (result.skipped_positions) {
+          failures.push({ id: "positions", names: [], reason: "positionUnavailable" });
         }
         const visualChanges = new Set([...draft.removed, ...draft.restored.map(({ id }) => id)]);
         if (result.inventory_conflicts?.some(({ kind, id }) => kind === "edge" && visualChanges.has(id))) {

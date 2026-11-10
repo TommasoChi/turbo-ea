@@ -620,3 +620,153 @@ class TestSurveyRollback:
         (op,) = _ops(result, "close_survey")
         assert op["status"] == "skipped" and op["reason"] == "already_closed"
         assert len(await self._responses(db, survey.id)) == 2
+
+
+@pytest.mark.parametrize("delete_kind", ["relation", "card"])
+async def test_rollback_bo_deletion_is_available_to_inventory_sync(client, db, actor, delete_kind):
+    from app.models.bo_operation_receipt import BoOperationReceipt
+    from app.services.card_write_service import WriteActor, upsert_relation
+    from tests.conftest import auth_headers, create_card_type, create_relation_type, create_role
+
+    await create_role(db)
+    await create_card_type(db, key="DataObject", subtypes=[{"key": "Data"}])
+    relation_type = "relDataObjectToDataObject"
+    await create_relation_type(
+        db, key=relation_type, source_type_key="DataObject", target_type_key="DataObject"
+    )
+    source = await create_card(db, card_type="DataObject", subtype="Data", name="Customer")
+    target = await create_card(db, card_type="DataObject", subtype="Data", name="Order")
+    batch = await _open_batch(db, actor)
+    if delete_kind == "card":
+        with _InBatch(batch):
+            await event_bus.publish(
+                "card.created", {"id": str(source.id)}, db=db, card_id=source.id
+            )
+    relation_batch = batch if delete_kind == "relation" else await _open_batch(db, actor)
+    with _InBatch(relation_batch):
+        link, _, _ = await upsert_relation(
+            db,
+            WriteActor(user_id=actor.id, display_name=actor.display_name),
+            type_key=relation_type,
+            source_id=source.id,
+            target_id=target.id,
+        )
+    source_id, link_id = source.id, link.id
+    headers = auth_headers(actor)
+    base = "/api/v1/bo-relationship"
+    saved = await client.put(f"{base}/layout", json={}, headers=headers)
+    assert saved.status_code == 200, saved.text
+    assert any(edge["id"] == str(link_id) for edge in saved.json()["edges"])
+
+    rollback_actor = await create_user(db, role="admin", display_name="Rollback Actor")
+    await execute_rollback(db, batch, rollback_actor.id)
+    response = await client.get(f"{base}/changes", headers=headers)
+    assert response.status_code == 200, response.text
+    changes = response.json()["changes"]
+    expected = {("edge", str(link_id), "removed")}
+    if delete_kind == "card":
+        expected.add(("node", str(source_id), "removed"))
+    assert {(c["kind"], c["id"], c["change"]) for c in changes} == expected
+    proofs = list(
+        await db.scalars(
+            select(BoOperationReceipt).where(BoOperationReceipt.result_id.in_([source_id, link_id]))
+        )
+    )
+    assert len(proofs) == len(expected)
+    assert all(proof.actor_id == rollback_actor.id for proof in proofs)
+    accepted = [{k: change[k] for k in ("kind", "id", "revision")} for change in changes]
+    synced = await client.put(
+        f"{base}/layout", json={"accepted_inventory_changes": accepted}, headers=headers
+    )
+    assert synced.status_code == 200, synced.text
+    assert all(edge["id"] != str(link_id) for edge in synced.json()["edges"])
+    if delete_kind == "card":
+        assert all(node["id"] != str(source_id) for node in synced.json()["nodes"])
+
+
+@pytest.mark.parametrize("delete_kind", ["relation", "card"])
+async def test_rollback_and_inventory_relation_delete_do_not_deadlock(test_engine, delete_kind):
+    import asyncio
+
+    from sqlalchemy import delete, func
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+    from app.models.bo_operation_receipt import BoOperationReceipt
+    from app.models.card import Card
+    from app.models.card_type import CardType
+    from app.models.relation import Relation
+    from app.models.relation_type import RelationType
+    from app.models.user import User
+    from app.services.card_write_service import delete_relation, lock_relation_for_write
+    from tests.conftest import create_card_type, create_relation, create_relation_type
+
+    async with AsyncSession(test_engine, expire_on_commit=False) as session, session.begin():
+        actor = await create_user(session, role="admin")
+        ct = await create_card_type(session, key="DataObject")
+        rt = await create_relation_type(
+            session,
+            key="relDataObjectToDataObject",
+            source_type_key="DataObject",
+            target_type_key="DataObject",
+        )
+        source = await create_card(session, card_type="DataObject")
+        target = await create_card(session, card_type="DataObject")
+        relation = await create_relation(
+            session, type_key=rt.key, source_id=source.id, target_id=target.id
+        )
+        batch = await _open_batch(session, actor)
+        with _InBatch(batch):
+            if delete_kind == "relation":
+                await event_bus.publish("relation.created", {"id": str(relation.id)}, db=session)
+            else:
+                await event_bus.publish(
+                    "card.created", {"id": str(source.id)}, db=session, card_id=source.id
+                )
+
+    rollback_pid = None
+    ready = asyncio.Event()
+
+    async def rollback():
+        nonlocal rollback_pid
+        async with AsyncSession(test_engine) as session, session.begin():
+            current_batch = await session.get(MutationBatch, batch.id)
+            rollback_pid = await session.scalar(select(func.pg_backend_pid()))
+            ready.set()
+            await execute_rollback(session, current_batch, actor.id)
+
+    async def wait_blocked():
+        async with AsyncSession(test_engine) as observer:
+            while not await observer.scalar(select(func.pg_blocking_pids(rollback_pid))):
+                await asyncio.sleep(0.01)
+
+    task = None
+    try:
+        async with AsyncSession(test_engine) as session, session.begin():
+            current = await session.get(Relation, relation.id)
+            locked = await lock_relation_for_write(session, current)
+            task = asyncio.create_task(rollback())
+            await asyncio.wait_for(ready.wait(), timeout=5)
+            await asyncio.wait_for(wait_blocked(), timeout=5)
+            await asyncio.wait_for(delete_relation(session, actor.id, locked), timeout=5)
+            await asyncio.wait_for(session.flush(), timeout=5)
+        await asyncio.wait_for(task, timeout=5)
+    finally:
+        if task is not None:
+            if not task.done():
+                task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+        async with AsyncSession(test_engine) as cleanup, cleanup.begin():
+            batch_ids = select(MutationBatch.id).where(MutationBatch.actor_user_id == actor.id)
+            await cleanup.execute(
+                delete(Event).where((Event.user_id == actor.id) | Event.batch_id.in_(batch_ids))
+            )
+            await cleanup.execute(
+                delete(BoOperationReceipt).where(BoOperationReceipt.actor_id == actor.id)
+            )
+            await cleanup.execute(
+                delete(MutationBatch).where(MutationBatch.actor_user_id == actor.id)
+            )
+            await cleanup.execute(delete(Card).where(Card.id.in_([source.id, target.id])))
+            await cleanup.execute(delete(RelationType).where(RelationType.id == rt.id))
+            await cleanup.execute(delete(CardType).where(CardType.id == ct.id))
+            await cleanup.execute(delete(User).where(User.id == actor.id))

@@ -42,7 +42,8 @@ from datetime import datetime
 from typing import Any
 
 from fastapi import BackgroundTasks, HTTPException
-from sqlalchemy import and_, exists, func, or_, select
+from sqlalchemy import and_, any_, bindparam, exists, func, or_, select
+from sqlalchemy.dialects.postgresql import ARRAY, UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.card import Card
@@ -1460,19 +1461,29 @@ async def lock_bo_relation_writes(
         await db.execute(select(func.pg_advisory_xact_lock(key)))
 
 
-async def lock_relation_for_delete(db: AsyncSession, rel: Relation) -> Relation | None:
-    """Re-read the row after the BO lock, allowing a concurrent delete to win."""
+async def lock_relation_endpoints(
+    db: AsyncSession, card_ids: Iterable[uuid.UUID]
+) -> set[uuid.UUID]:
+    """Lock endpoints in card ID order before taking any relation row locks."""
+    ids = set(card_ids)
+    if not ids:
+        return set()
+    # Hard deletes lock cards before cascading to relations. The NO KEY UPDATE
+    # lock also covers the later recalculation writes without locking out FKs.
+    candidates = bindparam("relation_endpoints", list(ids), type_=ARRAY(UUID(as_uuid=True)))
+    locked = await db.scalars(
+        select(Card.id)
+        .where(Card.id == any_(candidates))
+        .order_by(Card.id)
+        .with_for_update(key_share=True)
+    )
+    return set(locked)
+
+
+async def lock_relation_for_write(db: AsyncSession, rel: Relation) -> Relation | None:
+    """Re-read the relation after locking its endpoints, so a hard delete can win."""
     await lock_bo_relation_writes(db, [(rel.type, rel.source_id, rel.target_id)])
-    if rel.type in (ER_RELATION, APPLICATION_RELATION):
-        # Card deletion takes its row lock before writing cascade evidence and
-        # removing relations. Lock endpoints first here too, including the card
-        # rows updated by the relation event and quality recalculation.
-        await db.execute(
-            select(Card.id)
-            .where(Card.id.in_((rel.source_id, rel.target_id)))
-            .order_by(Card.id)
-            .with_for_update(key_share=True)
-        )
+    await lock_relation_endpoints(db, (rel.source_id, rel.target_id))
     return await db.scalar(
         select(Relation)
         .where(Relation.id == rel.id)
@@ -1505,7 +1516,11 @@ async def delete_relation(db: AsyncSession, actor_id: uuid.UUID, rel: Relation) 
 def relation_attributes_for_write(
     type_key: str, attributes: dict | None, previous: dict | None = None
 ) -> dict | None:
-    """Reject generic ownership writes and retain the marker on replacement."""
+    """Validate supplied ER labels and preserve ownership on ordinary writes."""
+    if type_key == ER_RELATION and attributes is not None:
+        cardinality = attributes.get("cardinality")
+        if cardinality is not None and cardinality not in ("1:1", "1:n", "n:1", "n:m"):
+            raise HTTPException(422, "ER cardinality must be 1:1, 1:n, n:1, or n:m")
     if type_key != APPLICATION_RELATION:
         return attributes
     if attributes is not None and OWNERSHIP_KEY in attributes:
@@ -1513,6 +1528,13 @@ def relation_attributes_for_write(
     if previous is not None and OWNERSHIP_KEY in previous:
         return {**(attributes or {}), OWNERSHIP_KEY: previous[OWNERSHIP_KEY]}
     return attributes
+
+
+def validate_new_relation_endpoints(
+    type_key: str, source_id: uuid.UUID, target_id: uuid.UUID
+) -> None:
+    if type_key == ER_RELATION and source_id == target_id:
+        raise HTTPException(422, "An ER relation must link two different objects")
 
 
 def add_relation(
@@ -1525,6 +1547,7 @@ def add_relation(
     description: str | None,
 ) -> Relation:
     """Stage a new relation row in the session (not flushed)."""
+    validate_new_relation_endpoints(type_key, source_id, target_id)
     rel = Relation(
         type=type_key,
         source_id=source_id,
@@ -1579,6 +1602,9 @@ async def upsert_relation(
     into the existing row instead of forking a backwards one (#1140)."""
     source_id, target_id = await orient_endpoints(db, type_key, source_id, target_id)
     await lock_bo_relation_writes(db, [(type_key, source_id, target_id)])
+    endpoints = {source_id, target_id}
+    if await lock_relation_endpoints(db, endpoints) != endpoints:
+        raise HTTPException(404, "Card not found")
     rel = await find_relation(db, type_key, source_id, target_id)
     if rel is not None and create_only:
         return rel, True, []

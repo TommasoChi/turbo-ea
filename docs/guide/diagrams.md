@@ -168,7 +168,11 @@ The inventory check and this Sync flow read from inventory. Confirmed line remov
 
 The editor keeps a draft in your browser and refreshes it about every five seconds while you work. When you reopen BO Relationship in the same browser with the same account, the canvas shows the last shared drawing. If you have a recoverable draft, choose **Restore** to bring your edits back to the canvas or **Discard** to clear the draft. Other users see your changes after a successful **Save** or **Save and Exit**.
 
+Each open editor keeps its own draft. If several drafts are available, discarding the one shown offers the next one. After restoring a draft, you can reopen the editor to recover another.
+
 If **Save** reports a rejected business object or Application link, use **Discard** next to that item. Discarding a new business object also removes the draft links and position that depend on it. You can then save your other changes.
+
+If a business object becomes unavailable while you edit, **Save** skips its position and saves the positions you can still update.
 
 A line you removed can remain absent from the restored drawing. The inventory removal queue starts empty on reopening. If the relation still exists and you can see it, you can bring the line back through **Inventory changes**. To delete a relation from inventory, confirm a new removal in the current session and use its removal sync action.
 

@@ -49,6 +49,7 @@
   "boRelationship.change_updated": "Updated",
   "boRelationship.change_removed": "Removed",
   "boRelationship.inventoryConflict": "Inventory changed again. Check for updates and sync again.",
+  "boRelationship.positionUnavailable": "Some positions were skipped because the business objects are no longer available.",
   "boRelationship.pendingSave": "Some drawing changes could not be saved.",
   "boRelationship.saveFailed": "Save failed. Try again.",
   "boRelationship.waitingForObject": "Waiting for a business object to save.",

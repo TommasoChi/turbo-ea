@@ -246,7 +246,8 @@ class TestExecuteCommit:
             }
         }
 
-    async def test_reuses_the_existing_reverse_er_link(self, db, env):
+    @pytest.mark.parametrize("same_end", [False, True])
+    async def test_does_not_add_reverse_or_self_er_link(self, db, env, same_end):
         await create_card_type(db, key=BO_TYPE, label="Business Object")
         await create_relation_type(
             db, key=ER_RELATION, source_type_key=BO_TYPE, target_type_key=BO_TYPE
@@ -270,7 +271,7 @@ class TestExecuteCommit:
                 "proposedRelations": [
                     {
                         "sourceId": str(second.id),
-                        "targetId": str(first.id),
+                        "targetId": str(second.id if same_end else first.id),
                         "relationType": ER_RELATION,
                     }
                 ],

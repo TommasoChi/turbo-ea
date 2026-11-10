@@ -79,12 +79,15 @@ it("updates or clears the master and refreshes both panels", async () => {
     .mockResolvedValueOnce({ master: null, slaves: [], unclassified: [{ id: "x", name: "CRM" }, { id: "y", name: "ERP" }] });
   render(<MemoryRouter><BoRelationshipPage /></MemoryRouter>);
   fireEvent.click(await screen.findByRole("button", { name: "Customer" }));
+  await waitFor(() => expect(vi.mocked(api.get).mock.calls.filter(([path]) => path === "/bo-relationship/changes")).toHaveLength(1));
   fireEvent.click(screen.getByRole("button", { name: "boRelationship.setMaster" }));
   await waitFor(() => expect(api.put).toHaveBeenCalledWith("/bo-relationship/objects/a/master", { application_id: "y" }));
+  await waitFor(() => expect(vi.mocked(api.get).mock.calls.filter(([path]) => path === "/bo-relationship/changes")).toHaveLength(2));
   await waitFor(() => expect(vi.mocked(api.get).mock.calls.filter(([path]) => path === "/bo-relationship").length).toBeGreaterThan(1));
   expect(screen.getByTestId("card-panel")).toHaveAttribute("data-refresh", "1");
   fireEvent.click(screen.getByRole("button", { name: "boRelationship.clearMaster" }));
   await waitFor(() => expect(api.put).toHaveBeenCalledWith("/bo-relationship/objects/a/master", { application_id: null }));
+  await waitFor(() => expect(vi.mocked(api.get).mock.calls.filter(([path]) => path === "/bo-relationship/changes")).toHaveLength(3));
   await waitFor(() => expect(screen.queryByRole("button", { name: "boRelationship.clearMaster" })).not.toBeInTheDocument());
 });
 
@@ -816,7 +819,7 @@ it("restores a staged object with its original operation ID without publishing",
   vi.useFakeTimers();
   fireEvent.click(within(dialog).getByRole("button", { name: "boRelationship.stageObject" }));
   await act(async () => { vi.advanceTimersByTime(5100); });
-  const stored = JSON.parse(localStorage.getItem("turbo-ea-bo-relationship-draft-v1-editor")!);
+  const stored = JSON.parse(localStorage.getItem(localStorage.key(0)!)!);
   const id = stored.draft.objects[0].id;
   view.unmount();
   vi.useRealTimers();
@@ -881,13 +884,14 @@ it("preserves another tab's local draft when a clean editor autosaves or exits",
     await act(async () => {});
 
     await act(async () => { vi.advanceTimersByTime(4000); });
-    const saved = localStorage.getItem(recoveryStorageKey);
+    const writerKey = localStorage.key(0)!;
+    const saved = localStorage.getItem(writerKey);
     expect(saved).toContain('"moves":{"a":{"x":96,"y":48}}');
     await act(async () => { vi.advanceTimersByTime(1000); });
-    expect(localStorage.getItem(recoveryStorageKey)).toBe(saved);
+    expect(localStorage.getItem(writerKey)).toBe(saved);
 
     fireEvent.click(within(idle.container).getByRole("button", { name: "boRelationship.saveAndExit" }));
-    expect(localStorage.getItem(recoveryStorageKey)).toBe(saved);
+    expect(localStorage.getItem(writerKey)).toBe(saved);
   } finally {
     vi.useRealTimers();
     localStorage.clear();
@@ -932,6 +936,8 @@ it.each(["saved", "unavailable"])("recovers a partially saved BO without revivin
   expect(screen.getByTestId("canvas")).toHaveAttribute("data-edges", "");
   expect(screen.queryByText("boRelationship.pendingRemovals")).not.toBeInTheDocument();
   expect(api.put).not.toHaveBeenCalled();
+  expect(localStorage.length).toBe(1);
+  expect(localStorage.getItem(recoveryStorageKey)).toBeNull();
 
   fireEvent.click(screen.getByRole("button", { name: "common:actions.save" }));
   await waitFor(() => expect(api.put).toHaveBeenCalledWith("/bo-relationship/layout", expect.objectContaining({
@@ -942,7 +948,7 @@ it.each(["saved", "unavailable"])("recovers a partially saved BO without revivin
     ],
     removed_relation_ids: status === "saved" ? [orderEdge.id] : [],
   })));
-  await waitFor(() => expect(localStorage.getItem(recoveryStorageKey)).toBeNull());
+  await waitFor(() => expect(localStorage.length).toBe(0));
   expect(api.put).toHaveBeenCalledTimes(1);
   expect(api.delete).not.toHaveBeenCalled();
 });

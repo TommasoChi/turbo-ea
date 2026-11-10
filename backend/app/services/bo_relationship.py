@@ -62,6 +62,7 @@ from app.services.card_search import card_search_filter, card_search_rank
 from app.services.card_write_service import (
     _emit_relation_events,
     lock_bo_master,
+    lock_relation_endpoints,
     recalculate_and_rescore,
 )
 from app.services.permission_service import PermissionService
@@ -323,6 +324,31 @@ async def search_bo_applications(
     )
 
 
+async def lock_bo_master_endpoints(
+    db: AsyncSession,
+    scope: CardReadScope,
+    object_id: uuid.UUID,
+    *,
+    new_application_id: uuid.UUID | None = None,
+) -> None:
+    """With the ownership advisory held, lock cards before ownership relations."""
+    applications = await db.scalars(
+        select(Card.id)
+        .join(Relation, Card.id == Relation.source_id)
+        .where(
+            Relation.type == APPLICATION_RELATION,
+            Relation.target_id == object_id,
+            Card.type == APPLICATION_TYPE,
+            *scope.where(Card, mode="module"),
+        )
+    )
+    endpoints = {object_id, *applications}
+    if new_application_id is not None:
+        endpoints.add(new_application_id)
+    if object_id not in await lock_relation_endpoints(db, endpoints):
+        raise HTTPException(404, "Card not found")
+
+
 async def set_bo_master(
     db: AsyncSession, user: User, object_id: uuid.UUID, application_id: uuid.UUID | None
 ) -> BoApplicationGroup:
@@ -331,6 +357,7 @@ async def set_bo_master(
     scope = await bo_read_scope(db, user)
     await lock_bo_master(db, object_id)
     target = await get_bo_card(db, scope, object_id)
+    await lock_bo_master_endpoints(db, scope, object_id)
     rows = await db.execute(
         select(Relation, Card)
         .join(Card, Card.id == Relation.source_id)
@@ -598,12 +625,66 @@ def _apply_inventory_item(
     return True
 
 
-def _apply_inventory_changes(
+async def _apply_inventory_changes(
+    db: AsyncSession,
+    user: User,
     snapshot: BoSnapshot,
     inventory: BoInventory,
     body: BoLayoutUpdate,
     deleted_edges: set[uuid.UUID],
 ) -> list[BoInventoryItem]:
+    if not body.accepted_inventory_changes:
+        return []
+
+    def removal_kind(change: BoAcceptedInventoryChange) -> str:
+        return f"accepted_remove_{change.kind}"
+
+    receipts = {
+        (receipt.kind, receipt.draft_id): receipt
+        for receipt in await db.scalars(
+            select(BoOperationReceipt).where(
+                BoOperationReceipt.actor_id == user.id,
+                BoOperationReceipt.kind.in_(
+                    {removal_kind(change) for change in body.accepted_inventory_changes}
+                ),
+                BoOperationReceipt.draft_id.in_(
+                    {change.id for change in body.accepted_inventory_changes}
+                ),
+            )
+        )
+    }
+
+    def apply(
+        change: BoAcceptedInventoryChange,
+        saved_items: dict[uuid.UUID, SnapshotItem],
+        live_items: dict[uuid.UUID, SnapshotItem],
+        readable_ids: set[uuid.UUID],
+    ) -> bool:
+        kind = removal_kind(change)
+        receipt = receipts.get((kind, change.id))
+        absent = change.id not in live_items
+        had_saved_item = change.id in saved_items
+        # Replaying a removal can only acknowledge the same actor's committed
+        # acceptance. It has no effect on inventory or the drawing.
+        if absent and not had_saved_item and receipt and receipt.fingerprint == change.revision:
+            return True
+        if not _apply_inventory_item(change, saved_items, live_items, readable_ids):
+            return False
+        if absent and had_saved_item:
+            if receipt is None:
+                db.add(
+                    BoOperationReceipt(
+                        actor_id=user.id,
+                        draft_id=change.id,
+                        kind=kind,
+                        result_id=change.id,
+                        fingerprint=change.revision,
+                    )
+                )
+            else:
+                receipt.fingerprint = change.revision
+        return True
+
     live = inventory.active
     readable_edges = inventory.edge_ids | deleted_edges
     conflicts: list[BoInventoryItem] = []
@@ -613,11 +694,11 @@ def _apply_inventory_changes(
             conflicts.append(BoInventoryItem(kind=change.kind, id=change.id))
             continue
         if change.kind == "node":
-            applied = _apply_inventory_item(change, snapshot.nodes, live.nodes, inventory.objects)
+            applied = apply(change, snapshot.nodes, live.nodes, inventory.objects)
         elif change.kind == "edge":
-            applied = _apply_inventory_item(change, snapshot.edges, live.edges, readable_edges)
+            applied = apply(change, snapshot.edges, live.edges, readable_edges)
         else:
-            applied = _apply_inventory_item(
+            applied = apply(
                 change,
                 snapshot.application_links,
                 live.application_links,
@@ -795,8 +876,10 @@ async def save_bo_layout(db: AsyncSession, user: User, body: BoLayoutUpdate) -> 
     accepted_nodes = {item.id for item in body.accepted_inventory_changes if item.kind == "node"}
     unavailable_positions |= accepted_nodes - inventory.objects
     positions = body.positions.keys() | body.auto_positions.keys()
-    if not positions <= inventory.objects | unavailable_positions:
+    skipped_positions = positions - inventory.objects - unavailable_positions
+    if skipped_positions and not body.skip_unavailable_positions:
         raise HTTPException(404, "Card not found")
+    unavailable_positions |= skipped_positions
 
     accepted_edges = {item.id for item in body.accepted_inventory_changes if item.kind == "edge"}
     evidence_ids = (body.removed_relation_ids | accepted_edges) - inventory.edge_ids
@@ -812,7 +895,7 @@ async def save_bo_layout(db: AsyncSession, user: User, body: BoLayoutUpdate) -> 
     if unavailable_relations and not body.skip_unavailable_relations:
         raise HTTPException(404, "Relation not found")
 
-    conflicts = _apply_inventory_changes(snapshot, inventory, body, deleted_edges)
+    conflicts = await _apply_inventory_changes(db, user, snapshot, inventory, body, deleted_edges)
     _apply_saved_drafts(db, user, snapshot, inventory.active, drafts)
     conflicting_edges = {item.id for item in conflicts if item.kind == "edge"}
     conflicts.extend(
@@ -840,4 +923,5 @@ async def save_bo_layout(db: AsyncSession, user: User, body: BoLayoutUpdate) -> 
         **graph.model_dump(),
         inventory_conflicts=conflicts,
         unavailable_drafts=[draft.operation for draft in unavailable],
+        skipped_positions=len(skipped_positions),
     )

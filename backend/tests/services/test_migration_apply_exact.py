@@ -953,6 +953,40 @@ async def test_reverse_er_migration_merges_in_the_stored_orientation(db, env, ac
     assert stored.attributes == {"cardinality": "n:1", "custom": "keep"}
 
 
+@pytest.mark.parametrize(
+    ("target", "attributes", "error"),
+    [
+        ("first", {}, "two different objects"),
+        ("second", {"cardinality": "2:2"}, "ER cardinality"),
+    ],
+)
+async def test_invalid_staged_er_relation_is_reported(db, env, target, attributes, error):
+    await create_card_type(db, key=BO_TYPE)
+    await create_relation_type(
+        db, key=ER_RELATION, source_type_key=BO_TYPE, target_type_key=BO_TYPE
+    )
+    first = await create_card(db, card_type=BO_TYPE, name="First")
+    second = await create_card(db, card_type=BO_TYPE, name="Second")
+    await identity(db, "first", first.id)
+    await identity(db, "second", second.id)
+    staged = await stage(
+        db,
+        env,
+        "relation",
+        "invalid-er",
+        data={
+            "tea_type": ER_RELATION,
+            "from_entity_id": "first",
+            "to_entity_id": target,
+            "attributes": attributes,
+        },
+    )
+    assert await ap._apply_relation_pass(db, env.m, env.admin) == zero(errors=1)
+    assert staged.status == "error"
+    assert error in staged.error_message
+    assert await db.scalar(select(Relation.id)) is None
+
+
 async def test_only_a_relation_of_the_same_type_and_ends_is_reused(db, env, ends):
     await create_relation_type(db, key="app_to_itc_2", label="also runs on")
     spare = await create_card(db, card_type="ITComponent", name="Spare")

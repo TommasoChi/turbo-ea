@@ -806,6 +806,39 @@ async def test_first_restricted_save_preserves_hidden_snapshot_and_positions(cli
     assert response.json()["card"]["parent_id"] is None
 
 
+async def test_layout_can_skip_unavailable_positions_and_save_readable_positions(client, db, env):
+    visible = await bo(db, "Visible")
+    hidden = await create_card(db, card_type="DataObject", subtype="Document", name="Later hidden")
+    path = f"{BASE}/layout"
+    original = {"x": 10, "y": 20}
+    assert (
+        await client.put(path, json={"positions": {str(hidden.id): original}}, headers=env["admin"])
+    ).status_code == 200
+    assert str(hidden.id) in (await client.get(BASE, headers=env["editor"])).text
+    card_type = await db.scalar(select(CardType).where(CardType.key == "DataObject"))
+    card_type.role_permissions = {
+        "editor": {"inventory.view": {"value": False, "subtypes": ["Document"]}}
+    }
+    PermissionService.invalidate_type_permission_cache()
+    await db.flush()
+    move = {"x": 30, "y": 40}
+    body = {
+        "positions": {str(visible.id): move, str(hidden.id): move},
+        "auto_positions": {str(hidden.id): move, str(uuid.uuid4()): move},
+    }
+    assert (await client.put(path, json=body, headers=env["editor"])).status_code == 404
+
+    result = await client.put(
+        path, json={**body, "skip_unavailable_positions": True}, headers=env["editor"]
+    )
+    assert result.status_code == 200, result.text
+    assert result.json()["skipped_positions"] == 2
+    assert result.json()["positions"] == {str(visible.id): move}
+    assert str(hidden.id) not in result.text
+    shared = (await client.get(BASE, headers=env["admin"])).json()
+    assert shared["positions"] == {str(visible.id): move, str(hidden.id): original}
+
+
 async def test_inventory_change_rechecks_current_value_and_keeps_disjoint_positions(
     client, db, env
 ):
@@ -1290,6 +1323,49 @@ async def test_draft_comparison_only_offers_readable_live_er_links(client, db, e
     assert [(c["kind"], c["id"], c["change"]) for c in result.json()["changes"]] == [
         ("edge", str(edge.id), "added")
     ]
+
+
+@pytest.mark.parametrize("removal", ["archive", "card", "edge", "application_link"])
+async def test_accepted_inventory_removal_replay_does_not_conflict(client, db, env, removal):
+    a, b = await bo(db, "A"), await bo(db, "B")
+    admin = env["admin"]
+    layout = f"{BASE}/layout"
+    if removal == "edge":
+        item = await create_relation(db, type_key=ER, source_id=a.id, target_id=b.id)
+        delete_path = f"/api/v1/relations/{item.id}"
+    elif removal == "application_link":
+        app = await create_card(db, card_type="Application", name="CRM")
+        item = await create_relation(db, type_key=APP_LINK, source_id=app.id, target_id=a.id)
+        delete_path = f"/api/v1/relations/{item.id}"
+    else:
+        item = a
+        delete_path = f"/api/v1/cards/{a.id}"
+    assert (await client.put(layout, json={}, headers=admin)).status_code == 200
+    item_id = str(item.id)
+    if removal == "archive":
+        a.status = "ARCHIVED"
+        await db.flush()
+    else:
+        assert (await client.delete(delete_path, headers=admin)).status_code in (200, 204)
+    (change,) = (await client.get(f"{BASE}/changes", headers=admin)).json()["changes"]
+    assert change["id"] == item_id and change["change"] == "removed"
+    acceptance = {key: change[key] for key in ("kind", "id", "revision")}
+    payload = {"accepted_inventory_changes": [acceptance]}
+    saved = await client.put(layout, json=payload, headers=admin)
+    assert saved.status_code == 200
+    assert saved.json()["inventory_conflicts"] == []
+
+    replay = await client.put(layout, json=payload, headers=admin)
+    assert replay.status_code == 200
+    assert replay.json() == saved.json()
+    conflict = [{"kind": change["kind"], "id": item_id}]
+    assert (await client.put(layout, json=payload, headers=env["editor"])).json()[
+        "inventory_conflicts"
+    ] == conflict
+    acceptance["revision"] = "0" * 64
+    assert (await client.put(layout, json=payload, headers=admin)).json()[
+        "inventory_conflicts"
+    ] == conflict
 
 
 async def test_changes_proves_deleted_nodes_and_relations_without_leaking_hidden_cards(

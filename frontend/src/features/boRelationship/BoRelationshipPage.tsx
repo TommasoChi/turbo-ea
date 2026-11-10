@@ -163,6 +163,7 @@ export default function BoRelationshipPage() {
       setMutationError("");
       setDetailVersion((n) => n + 1);
       refetch();
+      checkChanges();
     } catch (e) {
       setMutationError(e instanceof Error ? e.message : String(e));
     } finally {

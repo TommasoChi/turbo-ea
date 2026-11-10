@@ -56,15 +56,20 @@ async def record_inventory_card_deletions(
     if not card_ids:
         return
     candidates = bindparam("bo_delete_candidates", card_ids, type_=ARRAY(UUID(as_uuid=True)))
-    # Read the current columns under the same row locks the delete needs. An
-    # ORM card already in the session may still carry a superseded subtype.
+    # Lock the entire delete set in the same order as relation writers. A
+    # mixed delete can include cards that do not generate BO evidence. Read
+    # the subtype under lock because the ORM card may still hold an old value.
     current = await db.execute(
         select(Card.id, Card.type, Card.subtype)
-        .where(Card.id == any_(candidates), Card.type.in_((BO_TYPE, APPLICATION_TYPE)))
+        .where(Card.id == any_(candidates))
         .order_by(Card.id)
         .with_for_update()
     )
-    evidence = {id_: {"type": type_, "subtype": subtype} for id_, type_, subtype in current}
+    evidence = {
+        id_: {"type": type_, "subtype": subtype}
+        for id_, type_, subtype in current
+        if type_ in (BO_TYPE, APPLICATION_TYPE)
+    }
     if not evidence:
         return
     await _record_evidence(db, actor_id, INVENTORY_CARD_DELETE, evidence)

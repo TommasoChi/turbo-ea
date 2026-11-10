@@ -1587,6 +1587,12 @@
             "title": "Positions",
             "type": "object"
           },
+          "skipped_positions": {
+            "default": 0,
+            "description": "Number of unavailable nodes skipped in the requested positions.",
+            "title": "Skipped Positions",
+            "type": "integer"
+          },
           "snapshot_revision": {
             "anyOf": [
               {
@@ -1675,6 +1681,12 @@
             "maxItems": 5000,
             "title": "Saved Drafts",
             "type": "array"
+          },
+          "skip_unavailable_positions": {
+            "default": false,
+            "description": "Save readable positions and report how many requested nodes were unavailable.",
+            "title": "Skip Unavailable Positions",
+            "type": "boolean"
           },
           "skip_unavailable_relations": {
             "default": false,

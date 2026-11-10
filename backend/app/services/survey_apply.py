@@ -348,6 +348,8 @@ async def apply_relation_change(
 
     to_add = desired_ids - set(current.keys())
     to_remove = set(current.keys()) - desired_ids
+    if rtk == ER_RELATION:
+        to_add.discard(card.id)
     if not to_add and not to_remove:
         return False
 

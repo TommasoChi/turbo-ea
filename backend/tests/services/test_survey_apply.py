@@ -583,7 +583,8 @@ async def test_apply_relation_change_adds_a_new_peer(db):
     assert new_peer.id in targets
 
 
-async def test_apply_relation_change_reuses_a_reverse_er_link(db):
+@pytest.mark.parametrize("same_end", [False, True])
+async def test_apply_relation_change_skips_reverse_or_self_er_links(db, same_end):
     await create_card_type(db, key=BO_TYPE, label="Business Object")
     await create_relation_type(
         db, key=ER_RELATION, source_type_key=BO_TYPE, target_type_key=BO_TYPE
@@ -602,7 +603,7 @@ async def test_apply_relation_change_reuses_a_reverse_er_link(db):
         db,
         second,
         {"relation_type_key": ER_RELATION, "direction": "outgoing"},
-        [{"id": str(first.id)}],
+        [{"id": str(second.id if same_end else first.id)}],
         actor.id,
     )
     assert changed is False

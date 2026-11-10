@@ -127,6 +127,10 @@ class BoLayoutUpdate(BaseModel):
     snapshot_revision: UUID | None = None
     positions: dict[UUID, BoPosition] = Field(default_factory=dict)
     auto_positions: dict[UUID, BoPosition] = Field(default_factory=dict)
+    skip_unavailable_positions: bool = Field(
+        default=False,
+        description="Save readable positions and report how many requested nodes were unavailable.",
+    )
     removed_relation_ids: set[UUID] = Field(default_factory=set)
     restored_relation_ids: set[UUID] = Field(default_factory=set)
     skip_unavailable_relations: bool = Field(
@@ -149,6 +153,9 @@ class BoLayoutUpdate(BaseModel):
 class BoLayoutResult(BoGraph):
     inventory_conflicts: list[BoInventoryItem]
     unavailable_drafts: list[BoInventoryItem]
+    skipped_positions: int = Field(
+        default=0, description="Number of unavailable nodes skipped in the requested positions."
+    )
 
 
 class BoInventoryChange(BoAcceptedInventoryChange):

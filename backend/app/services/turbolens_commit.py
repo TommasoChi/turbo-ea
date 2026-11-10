@@ -351,7 +351,10 @@ async def execute_commit(db: AsyncSession, run_id: str, data: dict[str, Any]) ->
     await lock_bo_relation_writes(db, resolved_relations)
     relations_created = 0
     for rel_type, source_uuid, target_uuid in resolved_relations:
-        if rel_type == ER_RELATION and await find_relation(db, rel_type, source_uuid, target_uuid):
+        if rel_type == ER_RELATION and (
+            source_uuid == target_uuid
+            or await find_relation(db, rel_type, source_uuid, target_uuid)
+        ):
             continue
         rel = Relation(
             id=uuid.uuid4(),
