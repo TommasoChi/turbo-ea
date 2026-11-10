@@ -62,6 +62,9 @@
     "label": "ملاحظة"
   },
   "toolbar": {
+    "linkedBadge": "مؤشر البطاقة المرتبطة",
+    "linkedName": "اسم البطاقة المرتبطة",
+    "inventoryRefreshed": "تم تحديث البطاقات المرتبطة.",
     "back": "رجوع",
     "undo": "تراجع",
     "redo": "إعادة",

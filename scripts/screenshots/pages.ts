@@ -1142,12 +1142,12 @@ export const DOC_PAGES: PageDef[] = [
     },
   },
 
-  // ── BO Relationship ─────────────────────────────────────────────────────
+  // ── Data Modeller ─────────────────────────────────────────────────────
   {
     id: "105_bo_relationship",
     route: "/application-architecture/bo-relationship",
     viewport: { width: 1560, height: 1050 },
-    waitFor: '.djs-shape[role="button"]',
+    waitFor: 'main header h1',
     actions: [
       { type: "click", selector: '.djs-shape[role="button"]', nth: 0 },
       { type: "wait", ms: 600 },

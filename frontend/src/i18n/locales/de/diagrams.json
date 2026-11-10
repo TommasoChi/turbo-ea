@@ -1,5 +1,8 @@
 {
   "page.title": "Diagramme",
+  "routing.label": "Linienführung",
+  "routing.straight": "Gerade",
+  "routing.orthogonal": "Rechtwinklig",
   "gallery.newDiagram": "Neues Diagramm",
   "gallery.diagramType": "Diagrammtyp",
   "gallery.diagramTypeDrawio": "Draw.io",
@@ -85,6 +88,7 @@
   "editor.toolbar.syncTooltipPending_other": "{{count}} ungesicherte Änderungen – zum Überprüfen klicken",
   "editor.toolbar.syncTooltipStale_one": "{{count}} Inventaränderung wartet auf Prüfung",
   "editor.toolbar.syncTooltipStale_other": "{{count}} Inventaränderungen warten auf Prüfung",
+  "editor.toolbar.dotGrid": "Punktraster",
   "editor.toolbar.moreActions": "Weitere Aktionen",
   "editor.toolbar.applyIcons": "Kartentyp-Symbole anwenden",
   "editor.toolbar.iconsApplied_one": "Symbol zu {{count}} Karte hinzugefügt",

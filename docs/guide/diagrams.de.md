@@ -153,11 +153,21 @@ Die Sync-Schaltfläche der Symbolleiste zeigt eine pulsierende «N unsynchron»-
 
 Diagramme können von der Registerkarte **Ressourcen** einer Karte aus mit **jeder beliebigen Karte** verknüpft werden (siehe [Karten-Details](card-details.de.md#registerkarte-ressourcen)). Wenn ein Diagramm mit einer **Initiative**-Karte verknüpft ist, erscheint es auch im Modul [EA Delivery](delivery.md) zusammen mit SoAW-Dokumenten.
 
-## Beziehungen zwischen Geschäftsobjekten mit dem Inventar abgleichen
+## Data Modeller
 
-Öffnen Sie **Beziehungen zwischen Geschäftsobjekten** unter **Application & Data Architecture**. Auf der Leinwand sehen Sie den zuletzt freigegebenen Stand des Diagramms. Die Seite gleicht diesen Stand mit dem Inventar ab und listet die für Sie sichtbaren Änderungen unter **Änderungen im Inventar** auf. Klicken Sie auf **Auf Änderungen prüfen**, um den Abgleich zu wiederholen.
+Öffnen Sie unter **Application & Data Architecture** den **Data Modeller**. Die erste Zeile enthält Kartenfarben, Karteninhalte und Synchronisierung. Die zweite enthält Zeichenwerkzeuge, Seitenleisten, Zoom, Filter und SVG-Export. Das Diagramm zeigt die zuletzt freigegebene Zeichnung. Starten Sie die Synchronisierung, um Änderungen im Inventar erneut zu prüfen.
 
 ![Diagramm der Beziehungen zwischen Geschäftsobjekten mit dem führenden System und der Karte des ausgewählten Geschäftsobjekts](../assets/img/de/105_beziehungen_geschaeftsobjekte.png)
+
+Ziehen Sie an der Linie oder ihren Griffen, um ein Segment zu verschieben, einen Knick hinzuzufügen oder den Anschluss am Rand eines Objekts zu versetzen. Speichern Sie den neuen Verlauf. Eine einfache Linie steht für eins. Ein Krähenfuß steht für viele (N oder M). Über **Punktraster** blenden Sie die Punkte im Hintergrund ein oder aus. Der Browser speichert Ihre Auswahl für jedes Diagramm.
+
+Klicken Sie mit der rechten Maustaste auf eine Verbindungslinie und wählen Sie **Gerade** oder **Rechtwinklig**. Die Linienführung bleibt beim Verschieben eines Knotens sowie nach dem Speichern und erneuten Öffnen des Diagramms erhalten.
+
+Halten Sie die linke Maustaste auf dem Hintergrund gedrückt und ziehen Sie, um die Ansicht zu verschieben. Mit dem Mausrad scrollen Sie vertikal, mit **Umschalt** und dem Mausrad horizontal und mit **Strg** und dem Mausrad zoomen Sie. Sie können auch den Fokus auf die Arbeitsfläche setzen und die Pfeiltasten verwenden.
+
+Öffnen Sie **Tastenkürzel** in der Symbolleiste, um die verfügbaren Befehle zu sehen. Mit der Schaltfläche für den Seitenbereich blenden Sie die Kartendetails ein oder aus. Wenn Sie ein Geschäftsobjekt auswählen, werden seine Details wieder angezeigt.
+
+Mit Bearbeitungsrechten können Sie Änderungen am aktuellen Diagrammentwurf mit **Rückgängig** und **Wiederholen** zurücknehmen oder erneut anwenden. Mit **Löschen** entfernen Sie ausgewählte Geschäftsobjekte beim Speichern aus dem Diagramm. Ihre Karten und Verknüpfungen bleiben im Inventar verfügbar. Für eine ausgewählte Linie gelten die übliche Bestätigung und Synchronisierung. **Kopieren** und **Einfügen** öffnen für jedes kopierte Geschäftsobjekt einen neuen Entwurf, sodass Sie vor dem Hinzufügen seinen Namen ändern können. Wenn Sie eine gespeicherte Karte umbenennen, wird das Inventar aktualisiert. Synchronisieren Sie die Änderung, um den neuen Namen in das Diagramm zu übernehmen.
 
 1. Prüfen Sie die hinzugefügten, aktualisierten oder entfernten Geschäftsobjekte und Verknüpfungen.
 2. Wenn Sie das Diagramm bearbeiten dürfen, klicken Sie bei den gewünschten Änderungen auf **Synchronisieren**. Die Änderungen erscheinen auf Ihrer Leinwand. Wurde beispielsweise ein Geschäftsobjekt umbenannt und dem Untertyp **Dokument** zugeordnet, erhält es an derselben Position den neuen Namen und eine gefaltete Ecke.

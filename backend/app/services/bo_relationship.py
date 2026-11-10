@@ -35,6 +35,7 @@ from app.schemas.bo_relationship import (
     BoDraftComparisonResult,
     BoDraftResult,
     BoEdge,
+    BoEdgeGeometry,
     BoGraph,
     BoInventoryChange,
     BoInventoryChanges,
@@ -43,6 +44,8 @@ from app.schemas.bo_relationship import (
     BoLayoutUpdate,
     BoNode,
     BoPosition,
+    BoSavedPlacement,
+    ConnectorRouting,
 )
 from app.services.bo_relationship_constants import (
     APPLICATION_RELATION,
@@ -74,6 +77,8 @@ class BoSnapshot(BaseModel):
     edges: dict[uuid.UUID, BoEdge] = Field(default_factory=dict)
     positions: dict[uuid.UUID, BoPosition] = Field(default_factory=dict)
     application_links: dict[uuid.UUID, BoApplicationLink] = Field(default_factory=dict)
+    edge_routes: dict[uuid.UUID, ConnectorRouting] = Field(default_factory=dict)
+    edge_geometry: dict[uuid.UUID, BoEdgeGeometry] = Field(default_factory=dict)
 
 
 @dataclass
@@ -231,6 +236,15 @@ def _group_links(links: list[BoApplicationLink]) -> BoApplicationGroup:
     )
 
 
+def _styled_edge(snapshot: BoSnapshot, edge: BoEdge) -> BoEdge:
+    return edge.model_copy(
+        update={
+            "routing": snapshot.edge_routes.get(edge.id),
+            "geometry": snapshot.edge_geometry.get(edge.id),
+        }
+    )
+
+
 def _project_graph(
     snapshot: BoSnapshot, inventory: BoInventory, *, can_manage_master: bool
 ) -> BoGraph:
@@ -242,7 +256,7 @@ def _project_graph(
     return BoGraph(
         nodes=list(nodes.values()),
         edges=[
-            edge
+            _styled_edge(snapshot, edge)
             for edge in snapshot.edges.values()
             if edge.source in nodes and edge.target in nodes
         ],
@@ -434,6 +448,32 @@ def inventory_item_revision(
     return hashlib.sha256(json.dumps(values, sort_keys=True).encode()).hexdigest()
 
 
+def _returning_node_placements(
+    snapshot: BoSnapshot, inventory: BoInventory
+) -> dict[uuid.UUID, BoSavedPlacement]:
+    returning = (inventory.active.nodes.keys() - snapshot.nodes.keys()) & snapshot.positions.keys()
+    if not returning:
+        return {}
+    edges: dict[uuid.UUID, list[BoEdge]] = {id_: [] for id_ in returning}
+    links: dict[uuid.UUID, list[BoApplicationLink]] = {id_: [] for id_ in returning}
+    for edge in snapshot.edges.values():
+        endpoints = {edge.source, edge.target}
+        if endpoints <= inventory.objects:
+            for id_ in endpoints & returning:
+                edges[id_].append(_styled_edge(snapshot, edge))
+    for link in snapshot.application_links.values():
+        if link.object_id in returning and link.application.id in inventory.applications:
+            links[link.object_id].append(link)
+    return {
+        id_: BoSavedPlacement(
+            position=snapshot.positions[id_],
+            edges=edges[id_],
+            applications=_group_links(links[id_]),
+        )
+        for id_ in returning
+    }
+
+
 async def compare_bo_inventory(
     db: AsyncSession,
     user: User,
@@ -463,12 +503,13 @@ async def compare_bo_inventory(
                     **item.model_dump(),
                     change="added",
                     before=None,
-                    after=current,
+                    after=_styled_edge(snapshot, current),
                     revision=inventory_item_revision(item, snapshot.edges.get(id_), current),
                 )
             )
         return BoInventoryChanges(changes=changes)
 
+    placements = _returning_node_placements(snapshot, inventory)
     for kind, saved, live, readable in (
         ("node", snapshot.nodes, inventory.active.nodes, inventory.objects),
         ("edge", snapshot.edges, inventory.active.edges, inventory.edge_ids),
@@ -493,8 +534,9 @@ async def compare_bo_inventory(
                     **item.model_dump(),
                     change="added" if before is None else "removed" if after is None else "updated",
                     before=before,
-                    after=after,
+                    after=_styled_edge(snapshot, after) if isinstance(after, BoEdge) else after,
                     revision=inventory_item_revision(item, before, after),
+                    placement=placements.get(id_) if kind == "node" else None,
                 )
             )
     return BoInventoryChanges(changes=changes)
@@ -857,6 +899,8 @@ async def save_bo_layout(db: AsyncSession, user: User, body: BoLayoutUpdate) -> 
     assert diagram is not None
     snapshot = BoSnapshot.model_validate(diagram.data or {})
     inventory = await load_bo_inventory(db, scope)
+    # Authorize visual removals against the scoped inventory before adding deletion evidence.
+    unavailable_nodes = body.removed_node_ids - inventory.objects
     if snapshot.snapshot_revision is None:
         snapshot = (await load_bo_inventory(db, CardReadScope.everything())).active
     else:
@@ -897,6 +941,15 @@ async def save_bo_layout(db: AsyncSession, user: User, body: BoLayoutUpdate) -> 
 
     conflicts = await _apply_inventory_changes(db, user, snapshot, inventory, body, deleted_edges)
     _apply_saved_drafts(db, user, snapshot, inventory.active, drafts)
+    conflicting_nodes = {item.id for item in conflicts if item.kind == "node"}
+    conflicts.extend(
+        BoInventoryItem(kind="node", id=id_)
+        for id_ in sorted(unavailable_nodes - conflicting_nodes)
+    )
+    # Projection drops incident lines and Application links with the node.
+    # Retain their saved values and position for an explicit re-add through Synch.
+    for id_ in body.removed_node_ids - unavailable_nodes:
+        snapshot.nodes.pop(id_, None)
     conflicting_edges = {item.id for item in conflicts if item.kind == "edge"}
     conflicts.extend(
         BoInventoryItem(kind="edge", id=id_)
@@ -906,6 +959,26 @@ async def save_bo_layout(db: AsyncSession, user: User, body: BoLayoutUpdate) -> 
         snapshot.edges.pop(id_, None)
     for id_ in body.restored_relation_ids - (conflicting_edges | unavailable_relations):
         snapshot.edges.setdefault(id_, inventory.active.edges[id_])
+    for id_ in body.edge_routes.keys() | body.edge_geometry.keys():
+        if id_ not in inventory.edge_ids or not _saved_item_readable(
+            snapshot, inventory, "edge", id_
+        ):
+            if id_ not in conflicting_edges and id_ not in unavailable_relations:
+                conflicts.append(BoInventoryItem(kind="edge", id=id_))
+        elif id_ in snapshot.edges:
+            if id_ in body.edge_routes:
+                if body.edge_routes[id_] == "orthogonal":
+                    snapshot.edge_routes[id_] = "orthogonal"
+                else:
+                    snapshot.edge_routes.pop(id_, None)
+            if id_ in body.edge_geometry:
+                geometry = body.edge_geometry[id_]
+                if geometry is None:
+                    snapshot.edge_geometry.pop(id_, None)
+                else:
+                    snapshot.edge_geometry[id_] = geometry
+        elif id_ not in body.removed_relation_ids and id_ not in conflicting_edges:
+            conflicts.append(BoInventoryItem(kind="edge", id=id_))
     snapshot.positions.update(
         (id_, position)
         for id_, position in body.positions.items()

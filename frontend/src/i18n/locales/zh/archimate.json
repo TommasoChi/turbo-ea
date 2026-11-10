@@ -62,6 +62,9 @@
     "label": "便签"
   },
   "toolbar": {
+    "linkedBadge": "关联卡片指示标记",
+    "linkedName": "关联卡片名称",
+    "inventoryRefreshed": "已刷新关联卡片。",
     "back": "返回",
     "undo": "撤销",
     "redo": "重做",

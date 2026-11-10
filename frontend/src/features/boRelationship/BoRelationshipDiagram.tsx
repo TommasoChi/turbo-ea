@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from "react";
-import { Box, Button, Stack } from "@mui/material";
+import { useCallback, useEffect, useImperativeHandle, useRef, useState, type Ref, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import { Box, IconButton, Stack, Tooltip } from "@mui/material";
 import { useTranslation } from "react-i18next";
 import Diagram from "diagram-js";
 import BaseRenderer from "diagram-js/lib/draw/BaseRenderer";
@@ -8,15 +8,52 @@ import type Canvas from "diagram-js/lib/core/Canvas";
 import type ElementFactory from "diagram-js/lib/core/ElementFactory";
 import type ElementRegistry from "diagram-js/lib/core/ElementRegistry";
 import type GraphicsFactory from "diagram-js/lib/core/GraphicsFactory";
+import BendpointsModule from "diagram-js/lib/features/bendpoints";
+import ConnectionPreviewModule from "diagram-js/lib/features/connection-preview";
+import BaseLayouter from "diagram-js/lib/layout/BaseLayouter";
+import CroppingConnectionDocking from "diagram-js/lib/layout/CroppingConnectionDocking";
 import DraggingModule from "diagram-js/lib/features/dragging";
 import type Dragging from "diagram-js/lib/features/dragging/Dragging";
 import InteractionEventsModule from "diagram-js/lib/features/interaction-events";
+import { hasModifier, isCmd, isCopy, isKey, isPaste, isRedo, isUndo } from "diagram-js/lib/features/keyboard/KeyboardUtil";
+import MoveCanvasModule from "diagram-js/lib/navigation/movecanvas";
+import ZoomScrollModule from "diagram-js/lib/navigation/zoomscroll";
+import type ZoomScroll from "diagram-js/lib/navigation/zoomscroll/ZoomScroll";
 import type { Element, Shape, Connection } from "diagram-js/lib/model/Types";
+import type { Point } from "diagram-js/lib/util/Types";
 import { append, attr, create } from "tiny-svg";
-import { ARCHIMATE_LAYER_COLORS, ARCHIMATE_TEXT_COLOR } from "@/theme/tokens";
+import MaterialSymbol from "@/components/MaterialSymbol";
+import ConnectorRoutingMenu from "@/components/ConnectorRoutingMenu";
+import type { ConnectorRouting } from "@/lib/connectorRouting";
+import { iconSize } from "@/theme/tokens";
+import { downloadText } from "@/features/archimate/download";
+import { anchorOffset, boEdgeWaypoints, crowFoot, type BoEdgeGeometry } from "./boConnectorGeometry";
 import { BO_NODE_HEIGHT, BO_NODE_WIDTH } from "./boRelationshipLayout";
 import type { BoNode, BoEdge } from "./BoRelationshipPage";
 import "diagram-js/assets/diagram-js.css";
+
+const panKeys: Partial<Record<string, readonly [number, number]>> = {
+  ArrowLeft: [-1, 0],
+  ArrowRight: [1, 0],
+  ArrowUp: [0, -1],
+  ArrowDown: [0, 1],
+};
+
+export type BoCanvasAction = "undo" | "redo" | "copy" | "paste" | "delete" | "edit" | "selectAll";
+
+function shortcutAction(event: KeyboardEvent): BoCanvasAction | undefined {
+  if (isCmd(event)) {
+    if (isUndo(event)) return "undo";
+    if (isRedo(event)) return "redo";
+    if (event.shiftKey) return;
+    if (isCopy(event)) return "copy";
+    if (isPaste(event)) return "paste";
+    if (isKey(["a", "A"], event)) return "selectAll";
+  }
+  if (hasModifier(event)) return;
+  if (isKey(["Delete", "Backspace"], event)) return "delete";
+  if (isKey(["F2", "Enter"], event)) return "edit";
+}
 
 class Renderer extends BaseRenderer {
   static $inject = ["eventBus"];
@@ -32,33 +69,45 @@ class Renderer extends BaseRenderer {
   drawShape(visuals: SVGElement, shape: Shape) {
     const node = shape.businessObject.node as BoNode;
     const kind = node.subtype?.toLowerCase();
-    const colors = kind === "data" || kind === "document"
-      ? ARCHIMATE_LAYER_COLORS.application
-      : ARCHIMATE_LAYER_COLORS.other;
     const { width, height } = shape;
     const body = create("path");
-    let path = `M 0 0 H ${width} V ${height} H 0 Z`;
-    if (kind === "document") {
-      const fold = width - 18;
-      path = `M 0 0 H ${fold} L ${width} 18 V ${height} H 0 Z M ${fold} 0 V 18 H ${width}`;
-    } else if (kind === "data") {
-      path = `M 10 0 H ${width - 10} Q ${width} 0 ${width} 10 V ${height - 10} `
-        + `Q ${width} ${height} ${width - 10} ${height} H 10 Q 0 ${height} 0 ${height - 10} `
-        + "V 10 Q 0 0 10 0 Z";
-    }
-    attr(body, { d: path, fill: colors.fill, stroke: colors.stroke, "stroke-width": 2 });
+    const fold = width - 16;
+    const path = kind === "document"
+      ? `M 3 0 H ${fold} L ${width} 16 V ${height - 3} Q ${width} ${height} ${width - 3} ${height} H 3 Q 0 ${height} 0 ${height - 3} V 3 Q 0 0 3 0 Z`
+      : `M 8 0 H ${width - 8} Q ${width} 0 ${width} 8 V ${height - 8} Q ${width} ${height} ${width - 8} ${height} H 8 Q 0 ${height} 0 ${height - 8} V 8 Q 0 0 8 0 Z`;
+    attr(body, { d: path, class: "bo-node-body", "data-kind": kind === "document" || kind === "data" ? kind : "legacy",
+      "data-personal": String(node.isPersonalData), "data-payment": String(node.isPaymentData) });
     append(visuals, body);
+    if (kind === "document") {
+      const corner = create("path");
+      attr(corner, { d: `M ${fold} 0 V 16 H ${width}`, class: "bo-node-fold" });
+      append(visuals, corner);
+    }
+    const icon = create("text");
+    attr(icon, { x: 12, y: 27, class: "bo-node-icon material-symbols-outlined", "font-size": 18 });
+    icon.textContent = kind === "document" ? "description" : "database";
+    append(visuals, icon);
 
     const text = create("text");
-    attr(text, { x: 10, y: 35, fill: ARCHIMATE_TEXT_COLOR, "font-size": 14 });
-    text.textContent = node.name;
+    attr(text, { x: 36, y: 27, class: "bo-node-title", "font-size": 13, "font-weight": 650 });
+    text.textContent = node.name.length > 20 ? `${node.name.slice(0, 19)}…` : node.name;
     append(visuals, text);
 
-    const badges = create("text");
-    attr(badges, { x: 10, y: 70, fill: ARCHIMATE_TEXT_COLOR, "font-size": 12 });
-    badges.textContent = [node.isPersonalData && "GDPR", node.isPaymentData && "PAY"]
-      .filter(Boolean).join("  ");
-    append(visuals, badges);
+    const type = create("text");
+    attr(type, { x: 36, y: 46, class: "bo-node-meta", "font-size": 11 });
+    type.textContent = shape.businessObject.typeLabel;
+    append(visuals, type);
+    const badges = [node.isPersonalData && "GDPR", node.isPaymentData && "PCI"].filter(Boolean);
+    badges.forEach((badge, index) => {
+      const x = 36 + index * 56;
+      const chip = create("rect");
+      attr(chip, { x, y: 57, width: badge === "GDPR" ? 49 : 34, height: 19, rx: 7, class: badge === "GDPR" ? "bo-badge-personal" : "bo-badge-payment" });
+      append(visuals, chip);
+      const label = create("text");
+      attr(label, { x: x + 6, y: 70, class: badge === "GDPR" ? "bo-badge-personal-text" : "bo-badge-payment-text", "font-size": 11, "font-weight": 600 });
+      label.textContent = String(badge);
+      append(visuals, label);
+    });
     return body;
   }
 
@@ -67,83 +116,137 @@ class Renderer extends BaseRenderer {
     attr(line, {
       points: connection.waypoints.map(({ x, y }) => `${x},${y}`).join(" "),
       fill: "none",
-      stroke: ARCHIMATE_LAYER_COLORS.other.stroke,
+      class: "bo-edge-line",
       "stroke-width": 2,
     });
     append(visuals, line);
 
-    if (connection.businessObject.cardinality) {
-      const start = connection.waypoints[0];
-      const end = connection.waypoints[connection.waypoints.length - 1];
-      const label = create("text");
-      attr(label, {
-        x: (start.x + end.x) / 2, y: (start.y + end.y) / 2 - 5,
-        fill: ARCHIMATE_TEXT_COLOR, "font-size": 12, "text-anchor": "middle",
-      });
-      label.textContent = connection.businessObject.cardinality;
-      append(visuals, label);
+    const cardinalities = String(connection.businessObject.cardinality ?? "").toLowerCase().split(":");
+    const ends = ["source", "target"] as const;
+    for (const [index, cardinality] of cardinalities.entries()) {
+      if (cardinality !== "n" && cardinality !== "m") continue;
+      const points = index === 0 ? connection.waypoints : [...connection.waypoints].reverse();
+      const [end] = points;
+      const toward = points.find(({ x, y }) => x !== end.x || y !== end.y);
+      const path = toward && crowFoot(end, toward);
+      if (path) {
+        const marker = create("path");
+        attr(marker, { d: path, "data-end": ends[index], class: "bo-edge-many", fill: "none", "stroke-width": 2 });
+        append(visuals, marker);
+      }
     }
     return line;
   }
 }
 
+export interface BoCanvasControls {
+  zoom: (step: number) => void;
+  fit: () => void;
+  exportSvg: (name: string) => void;
+}
+
 interface Props {
+  ref?: Ref<BoCanvasControls>;
+  showGrid?: boolean;
+  colorBy?: "default" | "subtype" | "personalData" | "paymentData";
+  display?: { subtype: boolean; personalData: boolean; paymentData: boolean };
+  selectedId?: string | null;
+  selectedIds?: ReadonlySet<string>;
   nodes: BoNode[];
   edges: BoEdge[];
   positions: Record<string, { x: number; y: number }>;
   onActivate: (id: string) => void;
   onMove?: (id: string, position: { x: number; y: number }) => void;
   onRequestRemoveEdge?: (id: string) => void;
+  onChangeGeometry?: (id: string, geometry: BoEdgeGeometry) => void;
+  onChangeRouting?: (id: string, routing: ConnectorRouting) => void;
+  onShortcut?: (action: BoCanvasAction, nodeId?: string) => boolean;
 }
 
 type Interaction = { element: Element; originalEvent: MouseEvent };
 type BoDrag = { context: { shape: Shape; x: number; y: number }; dx: number; dy: number };
 
-function edgeWaypoints(source: Shape, target: Shape) {
-  const sourceCenter = { x: source.x + source.width / 2, y: source.y + source.height / 2 };
-  const targetCenter = { x: target.x + target.width / 2, y: target.y + target.height / 2 };
-  const dx = targetCenter.x - sourceCenter.x;
-  const dy = targetCenter.y - sourceCenter.y;
-  if (dx === 0 && dy === 0) return [sourceCenter, targetCenter];
-
-  // Start and end at the shape boundaries so the edge's hit area does not
-  // cover the centre of a card node.
-  const sourceScale = Math.min(source.width / (2 * Math.abs(dx)), source.height / (2 * Math.abs(dy)), 0.5);
-  const targetScale = Math.min(target.width / (2 * Math.abs(dx)), target.height / (2 * Math.abs(dy)), 0.5);
-  return [
-    { x: sourceCenter.x + dx * sourceScale, y: sourceCenter.y + dy * sourceScale },
-    { x: targetCenter.x - dx * targetScale, y: targetCenter.y - dy * targetScale },
-  ];
-}
-
 export default function BoRelationshipDiagram({
+  ref,
+  showGrid = true,
+  colorBy = "default",
+  display,
+  selectedId,
+  selectedIds,
   nodes,
   edges,
   positions,
   onActivate,
   onMove,
   onRequestRemoveEdge,
+  onChangeRouting,
+  onChangeGeometry,
+  onShortcut,
 }: Props) {
   const { t } = useTranslation("reports");
   const container = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<Canvas | null>(null);
+  const registryRef = useRef<ElementRegistry | null>(null);
+  const zoomScrollRef = useRef<ZoomScroll | null>(null);
   const viewRef = useRef<{ x: number; y: number; width: number; height: number } | null>(null);
-  const actions = useRef({ onActivate, onMove, onRequestRemoveEdge });
-  actions.current = { onActivate, onMove, onRequestRemoveEdge };
+  const restoreCanvasFocus = useRef(false);
+  const actions = useRef({ onActivate, onMove, onChangeGeometry });
+  actions.current = { onActivate, onMove, onChangeGeometry };
   const [selectedRelation, setSelectedRelation] = useState<string | null>(null);
+  const [routeMenu, setRouteMenu] = useState<{ id: string; left: number; top: number } | null>(null);
   const canMove = onMove !== undefined;
   const canRemove = onRequestRemoveEdge !== undefined;
-  const activeRelation = canRemove && edges.some((edge) => edge.id === selectedRelation)
+  const canRoute = onChangeRouting !== undefined;
+  const canReshape = onChangeGeometry !== undefined;
+  const routeEdge = canRoute && routeMenu ? edges.find(({ id }) => id === routeMenu.id) : undefined;
+  const activeRelation = (canRemove || canReshape) && edges.some((edge) => edge.id === selectedRelation)
     ? selectedRelation
     : null;
+  const selectNode = useCallback((id: string) => {
+    setSelectedRelation(null);
+    actions.current.onActivate(id);
+  }, []);
 
   useEffect(() => {
     if (!container.current) return;
+    const setGeometry = (connection: Connection, bends: Point[], pinned?: { end: "source" | "target"; offset: Point }) => {
+      const geometry: BoEdgeGeometry = {
+        ...connection.businessObject.geometry,
+        bends: bends.map(({ x, y }) => ({ x, y })),
+        ...(pinned ? { [pinned.end]: pinned.offset } : {}),
+      };
+      actions.current.onChangeGeometry?.(connection.id, geometry);
+    };
     const diagram = new Diagram({
       canvas: { container: container.current },
       modules: [
         InteractionEventsModule,
+        MoveCanvasModule,
+        ZoomScrollModule,
         ...(canMove ? [DraggingModule] : []),
+        ...(canReshape ? [BendpointsModule, ConnectionPreviewModule, {
+          // Use the same interaction as ArchiMate, committing to the shared drawing draft.
+          // Redocking can choose an anchor on the same object. Endpoints are inventory relations.
+          modeling: ["value", {
+            updateWaypoints(connection: Connection, points: Point[]) {
+              setGeometry(connection, points.slice(1, -1));
+            },
+            reconnect(connection: Connection, source: Shape, target: Shape, point: Point, hints: { docking: "source" | "target" }) {
+              if (source !== connection.source || target !== connection.target) return;
+              const end = hints.docking;
+              setGeometry(connection, connection.waypoints.slice(1, -1), {
+                end, offset: anchorOffset(end === "source" ? source : target, point),
+              });
+            },
+          }],
+          rules: ["value", {
+            allowed(action: string, { connection, source, target }: { connection: Connection; source: Element; target: Element }) {
+              return action !== "connection.reconnect" || (source === connection.source && target === connection.target);
+            },
+          }],
+          layouter: ["type", BaseLayouter],
+          connectionDocking: ["type", CroppingConnectionDocking],
+        }] : []),
         { __init__: ["boRenderer"], boRenderer: ["type", Renderer] },
       ],
     });
@@ -151,18 +254,19 @@ export default function BoRelationshipDiagram({
     canvasRef.current = canvas;
     const factory = diagram.get<ElementFactory>("elementFactory");
     const registry = diagram.get<ElementRegistry>("elementRegistry");
+    registryRef.current = registry;
+    const zoomScroll = diagram.get<ZoomScroll>("zoomScroll");
+    zoomScrollRef.current = zoomScroll;
+    // Keep scrolling available after a rebuild under a stationary pointer.
+    zoomScroll.toggle(true);
     const eventBus = diagram.get<EventBus>("eventBus");
     const root = canvas.getRootElement();
     const shapes = new Map<string, Shape>();
-    const selectNode = (id: string) => {
-      setSelectedRelation(null);
-      actions.current.onActivate(id);
-    };
     // Use the interaction bus so diagram-js can suppress the click after a drag.
     eventBus.on("element.click", ({ element, originalEvent }: Interaction) => {
       if (originalEvent.button !== 0) return;
       if (element.businessObject?.node) selectNode(element.id);
-      else setSelectedRelation(canRemove && element.businessObject?.boRelationship ? element.id : null);
+      else setSelectedRelation((canRemove || canReshape) && element.businessObject?.boRelationship ? element.id : null);
     });
     for (const node of nodes) {
       const position = positions[node.id];
@@ -172,11 +276,13 @@ export default function BoRelationshipDiagram({
         ...position,
         width: BO_NODE_WIDTH,
         height: BO_NODE_HEIGHT,
-        businessObject: { boRelationship: true, node },
+        businessObject: { boRelationship: true, node, typeLabel: t(`boRelationship.${["data", "document"].includes(node.subtype?.toLowerCase() ?? "") ? node.subtype!.toLowerCase() : "legacy"}`) },
       });
       canvas.addShape(shape, root);
       shapes.set(node.id, shape);
       const gfx = registry.getGraphics(shape) as SVGElement;
+      // MoveCanvas leaves draggable elements to their own interactions.
+      gfx.classList.add("djs-draggable");
       // diagram-js disables hit testing on visuals by default. BO shapes are
       // activatable even without its editing and selection modules.
       const visual = gfx.querySelector<SVGElement>(".djs-visual");
@@ -184,13 +290,7 @@ export default function BoRelationshipDiagram({
       gfx.setAttribute("role", "button");
       gfx.setAttribute("tabindex", "0");
       gfx.setAttribute("aria-label", node.name);
-      gfx.addEventListener("keydown", (event) => {
-        const { key } = event as KeyboardEvent;
-        if (key === "Enter" || key === " ") {
-          event.preventDefault();
-          selectNode(node.id);
-        }
-      });
+      gfx.setAttribute("aria-pressed", "false");
     }
     for (const edge of edges) {
       const source = shapes.get(edge.source);
@@ -200,29 +300,28 @@ export default function BoRelationshipDiagram({
         id: edge.id,
         source,
         target,
-        waypoints: edgeWaypoints(source, target),
-        businessObject: { boRelationship: true, cardinality: edge.cardinality },
+        waypoints: boEdgeWaypoints(source, target, edge.routing, edge.geometry),
+        businessObject: { boRelationship: true, cardinality: edge.cardinality, routing: edge.routing, geometry: edge.geometry },
       });
       canvas.addConnection(connection, root);
-      if (canRemove) {
-        const gfx = registry.getGraphics(connection) as SVGElement;
+      const gfx = registry.getGraphics(connection) as SVGElement;
+      gfx.classList.add("djs-draggable");
+      if (canRemove || canRoute || canReshape) {
         gfx.setAttribute("role", "button");
         gfx.setAttribute("tabindex", "0");
         gfx.setAttribute("aria-label", t("boRelationship.relationLabel", {
           source: (source.businessObject.node as BoNode).name,
           target: (target.businessObject.node as BoNode).name,
         }));
-        gfx.addEventListener("keydown", (event) => {
-          const { key } = event as KeyboardEvent;
-          if (key === "Enter" || key === " ") {
-            event.preventDefault();
-            setSelectedRelation(edge.id);
-          } else if (key === "Delete") {
-            event.preventDefault();
-            actions.current.onRequestRemoveEdge?.(edge.id);
-          }
-        });
+        if (edge.cardinality) gfx.setAttribute("aria-description", t("boRelationship.cardinality") + " " + edge.cardinality);
       }
+    }
+    if (canRoute) {
+      eventBus.on("element.contextmenu", ({ element, originalEvent }: Interaction) => {
+        if (!element.waypoints || !element.businessObject?.boRelationship) return;
+        originalEvent.preventDefault();
+        setRouteMenu({ id: element.id, left: originalEvent.clientX, top: originalEvent.clientY });
+      });
     }
     if (canMove) {
       const dragging = diagram.get<Dragging>("dragging");
@@ -232,10 +331,11 @@ export default function BoRelationshipDiagram({
         shape.y = y;
         graphics.update("shape", shape, registry.getGraphics(shape) as SVGElement);
         for (const edge of [...shape.incoming, ...shape.outgoing]) {
-          edge.waypoints = edgeWaypoints(edge.source as Shape, edge.target as Shape);
+          edge.waypoints = boEdgeWaypoints(edge.source as Shape, edge.target as Shape, edge.businessObject.routing, edge.businessObject.geometry);
           const gfx = registry.getGraphics(edge) as SVGElement;
           graphics.update("connection", edge, gfx);
           eventBus.fire("interactionEvents.updateHit", { element: edge, gfx });
+          eventBus.fire("connection.changed", { element: edge, gfx });
         }
       };
       eventBus.on("element.mousedown", ({ element, originalEvent }: Interaction) => {
@@ -257,62 +357,220 @@ export default function BoRelationshipDiagram({
       });
     }
     if (viewRef.current) canvas.viewbox(viewRef.current);
+    if (restoreCanvasFocus.current && document.activeElement === document.body) canvas.focus();
     return () => {
+      restoreCanvasFocus.current = canvas.getContainer().contains(document.activeElement);
       const view = canvas.viewbox();
       viewRef.current = { x: view.x, y: view.y, width: view.width, height: view.height };
       canvasRef.current = null;
+      registryRef.current = null;
+      zoomScrollRef.current = null;
+      zoomScroll.toggle(false);
       diagram.destroy();
     };
-  }, [nodes, edges, positions, canMove, canRemove, t]);
+  }, [nodes, edges, positions, canMove, canRemove, canRoute, canReshape, selectNode, t]);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    const registry = registryRef.current;
+    if (!canvas || !registry) return;
+    const selectedGraphics = new Map<string, SVGElement>();
+    for (const id of selectedIds ?? (selectedId ? [selectedId] : [])) {
+      const gfx = registry.getGraphics(id);
+      if (!gfx?.classList.contains("djs-shape")) continue;
+      canvas.addMarker(id, "bo-node-selected");
+      gfx.setAttribute("aria-pressed", "true");
+      selectedGraphics.set(id, gfx);
+    }
+    return () => {
+      if (canvasRef.current !== canvas) return;
+      for (const [id, gfx] of selectedGraphics) {
+        canvas.removeMarker(id, "bo-node-selected");
+        gfx.setAttribute("aria-pressed", "false");
+      }
+    };
+  }, [selectedId, selectedIds, nodes, edges, positions, canMove, canRemove, t]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas || !activeRelation) return;
     canvas.addMarker(activeRelation, "bo-relation-selected");
+    if (canReshape) canvas.addMarker(activeRelation, "selected");
     return () => {
-      if (canvasRef.current === canvas) canvas.removeMarker(activeRelation, "bo-relation-selected");
+      if (canvasRef.current !== canvas) return;
+      canvas.removeMarker(activeRelation, "bo-relation-selected");
+      if (canReshape) canvas.removeMarker(activeRelation, "selected");
     };
-  }, [activeRelation, nodes, edges, positions, canMove, t]);
-  const pan = (dx: number, dy: number) => {
+  }, [activeRelation, nodes, edges, positions, canMove, canReshape, t]);
+  const zoom = (step: number) => {
+    canvasRef.current?.resized();
+    zoomScrollRef.current?.stepZoom(step);
+  };
+
+  const fit = () => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const view = canvas.viewbox();
-    canvas.viewbox({
-      x: view.x + dx * view.width / 4, y: view.y + dy * view.height / 4,
-      width: view.width, height: view.height,
-    });
+    canvas.resized();
+    // The canvas accepts "auto" to center the fitted drawing.
+    canvas.zoom("fit-viewport", "auto" as unknown as Point);
   };
-  const zoom = (factor: number) => {
+
+  useImperativeHandle(ref, () => ({
+    zoom,
+    fit,
+    exportSvg(name) {
+      const layer = canvasRef.current?.getActiveLayer() as unknown as SVGGraphicsElement | undefined;
+      if (!layer) return;
+      const { x, y, width, height } = layer.getBBox();
+      const svg = create("svg");
+      attr(svg, { viewBox: `${x - 8} ${y - 8} ${width + 16} ${height + 16}` });
+      layer.querySelectorAll<SVGGElement>(".djs-element > .djs-visual").forEach((visual) => {
+        const copy = visual.cloneNode(false) as SVGGElement;
+        const transform = visual.parentElement?.getAttribute("transform");
+        if (transform) copy.setAttribute("transform", transform);
+        for (const child of visual.children) {
+          const styles = getComputedStyle(child);
+          if (styles.display === "none") continue;
+          const item = child.cloneNode(true) as SVGElement;
+          for (const key of ["fill", "fill-opacity", "stroke", "stroke-width", "opacity", "font-family"]) {
+            const value = styles.getPropertyValue(key);
+            if (value) item.setAttribute(key, value);
+          }
+          append(copy, item);
+        }
+        append(svg, copy);
+      });
+      downloadText(`${name}.svg`, new XMLSerializer().serializeToString(svg), "image/svg+xml");
+    },
+  }));
+
+  const handleCanvasKey = (event: ReactKeyboardEvent<HTMLDivElement>): boolean => {
+    const { nativeEvent, target } = event;
     const canvas = canvasRef.current;
-    if (canvas) canvas.zoom(Math.max(0.2, Math.min(3, canvas.zoom() * factor)));
+    if (!canvas || event.defaultPrevented || nativeEvent.isComposing || !(target instanceof SVGElement)
+      || !canvas.getContainer().contains(target)) return false;
+
+    if (isCmd(nativeEvent)) {
+      if (isKey(["+", "="], nativeEvent)) {
+        zoom(1);
+        return true;
+      }
+      if (isKey("-", nativeEvent)) {
+        zoom(-1);
+        return true;
+      }
+      if (isKey("0", nativeEvent) && !event.shiftKey) {
+        fit();
+        return true;
+      }
+    }
+
+    const hasKeyModifier = hasModifier(nativeEvent);
+    const delta = panKeys[event.key];
+    if (!hasKeyModifier && delta && target instanceof SVGSVGElement) {
+      const { width, height } = canvas.getSize();
+      canvas.scroll({ dx: -delta[0] * width / 4, dy: -delta[1] * height / 4 });
+      return true;
+    }
+
+    const gfx = target.closest<SVGElement>(".djs-shape, .djs-connection");
+    const element = gfx && registryRef.current?.get(gfx);
+    if (gfx && element?.waypoints && canRoute && (event.key === "ContextMenu" || (event.shiftKey && event.key === "F10"))) {
+      const { left, bottom } = gfx.getBoundingClientRect();
+      setRouteMenu({ id: element.id, left, top: bottom });
+      return true;
+    }
+    const nodeId = element && element.businessObject?.node ? element.id : undefined;
+    const edgeId = element && !nodeId && (canRemove || canReshape) ? element.id : undefined;
+    if (!hasKeyModifier && (event.key === "Enter" || event.key === " ")) {
+      if (nodeId) {
+        const selected = selectedIds ? selectedIds.has(nodeId) : selectedId === nodeId;
+        if (event.key === " " || !selected || !onShortcut?.("edit", nodeId)) selectNode(nodeId);
+        return true;
+      }
+      if (edgeId) {
+        setSelectedRelation(edgeId);
+        return true;
+      }
+    }
+
+    const action = shortcutAction(nativeEvent);
+    if (!action) return false;
+    const relationId = edgeId ?? (nodeId ? null : activeRelation);
+    if (action === "delete" && relationId && onRequestRemoveEdge) {
+      onRequestRemoveEdge(relationId);
+      return true;
+    }
+    if (action === "edit" && edgeId) return false;
+    if (nodeId && (action === "copy" || action === "delete" || action === "edit")) {
+      return onShortcut?.(action, nodeId) ?? false;
+    }
+    if (!onShortcut?.(action)) return false;
+    if (action === "selectAll" || action === "paste") {
+      setSelectedRelation(null);
+      if (edgeId) canvas.focus();
+    }
+    return true;
   };
   return (
-    <Box role="region" aria-label={t("boRelationship.diagram")}>
-      <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-        <Button onClick={() => zoom(1.25)}>{t("boRelationship.zoomIn")}</Button>
-        <Button onClick={() => zoom(0.8)}>{t("boRelationship.zoomOut")}</Button>
-        <Button onClick={() => pan(-1, 0)}>{t("boRelationship.panLeft")}</Button>
-        <Button onClick={() => pan(1, 0)}>{t("boRelationship.panRight")}</Button>
-        <Button onClick={() => pan(0, -1)}>{t("boRelationship.panUp")}</Button>
-        <Button onClick={() => pan(0, 1)}>{t("boRelationship.panDown")}</Button>
-        {canRemove && (
-          <Button
-            disabled={!activeRelation}
-            onClick={() => { if (activeRelation) onRequestRemoveEdge(activeRelation); }}
-          >
-            {t("boRelationship.removeSelectedRelation")}
-          </Button>
-        )}
-      </Stack>
+    <Box role="region" aria-label={t("boRelationship.diagram")} sx={{ position: "relative", minWidth: 0, minHeight: 340, height: "100%" }}>
       <Box
         ref={container}
         dir="ltr"
+        onKeyDown={(event) => {
+          if (handleCanvasKey(event)) event.preventDefault();
+        }}
         sx={{
-          width: "100%", height: 600, border: 1, borderColor: "divider", overflow: "hidden",
-          "& .bo-relation-selected .djs-visual": { color: "primary.main" },
-          "& .bo-relation-selected .djs-visual polyline": { stroke: "currentColor", strokeWidth: 4 },
+          width: "100%", height: "100%", minHeight: 340, overflow: "hidden",
+          bgcolor: "background.default",
+          backgroundImage: (theme) => showGrid ? `radial-gradient(${theme.palette.divider} 0.85px, transparent 0.85px)` : "none",
+          backgroundSize: "15px 15px",
+          "& .djs-container > svg": { cursor: "grab" },
+          "& .djs-shape": { cursor: canMove ? "move" : "pointer" },
+          "& .djs-connection": { cursor: canReshape ? "grab" : canRemove ? "pointer" : "default" },
+          "& .djs-parent": {
+            "--bendpoint-fill-color": (theme) => theme.palette.primary.main,
+            "--bendpoint-stroke-color": (theme) => theme.palette.background.default,
+          },
+          "& .bo-node-body": { fill: (theme) => theme.palette.background.paper, stroke: (theme) => theme.palette.divider, strokeWidth: 1 },
+          ...(colorBy === "subtype" && {
+            '& .bo-node-body[data-kind="data"]': { fill: (theme) => theme.palette.action.selected },
+            '& .bo-node-body[data-kind="document"]': { fill: (theme) => theme.palette.info.main, fillOpacity: 0.2 },
+          }),
+          ...(colorBy === "personalData" && {
+            '& .bo-node-body[data-personal="true"]': { fill: (theme) => theme.palette.warning.main, fillOpacity: 0.2 },
+          }),
+          ...(colorBy === "paymentData" && {
+            '& .bo-node-body[data-payment="true"]': { fill: (theme) => theme.palette.primary.main, fillOpacity: 0.2 },
+          }),
+          ...(display?.subtype === false && { "& .bo-node-meta": { display: "none" } }),
+          ...(display?.personalData === false && { "& .bo-badge-personal, & .bo-badge-personal-text": { display: "none" } }),
+          ...(display?.paymentData === false && { "& .bo-badge-payment, & .bo-badge-payment-text": { display: "none" } }),
+          "& .bo-node-fold": { fill: "none", stroke: (theme) => theme.palette.divider, strokeWidth: 1 },
+          "& .bo-node-icon": { fill: (theme) => theme.palette.primary.main },
+          "& .bo-node-title": { fill: (theme) => theme.palette.text.primary },
+          "& .bo-node-meta": { fill: (theme) => theme.palette.text.secondary },
+          "& .bo-badge-personal": { fill: (theme) => theme.palette.warning.main, opacity: 0.16 },
+          "& .bo-badge-payment": { fill: (theme) => theme.palette.primary.main, opacity: 0.14 },
+          "& .bo-badge-personal-text": { fill: (theme) => theme.palette.mode === "dark" ? theme.palette.warning.light : theme.palette.warning.dark },
+          "& .bo-badge-payment-text": { fill: (theme) => theme.palette.primary.main },
+          "& .bo-edge-line, & .bo-edge-many": { stroke: (theme) => theme.palette.text.secondary },
+          "& .bo-node-selected .bo-node-body": { stroke: (theme) => theme.palette.primary.main, strokeWidth: 3 },
+          "& .djs-shape:focus-visible .bo-node-body, & .djs-connection:focus-visible .bo-edge-line": { stroke: (theme) => theme.palette.primary.main, strokeWidth: 3 },
+          "& .bo-relation-selected .bo-edge-line, & .bo-relation-selected .bo-edge-many": { stroke: (theme) => theme.palette.primary.main, strokeWidth: 4 },
         }}
       />
+      {canRemove && <Stack direction="row" spacing={0.25} sx={{ position: "absolute", bottom: 8, right: 8, p: 0.25, border: 1, borderColor: "divider", borderRadius: 1, bgcolor: "background.paper" }}>
+          <Tooltip title={t("boRelationship.removeSelectedRelation")}>
+            <span><IconButton size="small" aria-label={t("boRelationship.removeSelectedRelation")} disabled={!activeRelation} onClick={() => { if (activeRelation) onRequestRemoveEdge(activeRelation); }}>
+              <MaterialSymbol icon="delete" size={iconSize.sm} />
+            </IconButton></span>
+          </Tooltip>
+      </Stack>}
+      <ConnectorRoutingMenu anchor={routeEdge ? routeMenu : null}
+        routing={routeEdge?.routing === "orthogonal" ? "orthogonal" : routeEdge?.geometry ? undefined : "straight"}
+        onSelect={(routing) => { if (routeEdge) onChangeRouting?.(routeEdge.id, routing); }}
+        onClose={() => setRouteMenu(null)} />
     </Box>
   );
 }

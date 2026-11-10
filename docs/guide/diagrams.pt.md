@@ -153,11 +153,21 @@ O botão Sync da barra mostra uma pílula pulsante «N por sincronizar» sempre 
 
 Os diagramas podem ser vinculados a **qualquer cartão** a partir do separador **Recursos** do cartão (ver [Detalhes do cartão](card-details.pt.md#separador-recursos)). Quando um diagrama está vinculado a um cartão **Iniciativa**, aparece também no módulo [EA Delivery](delivery.md) ao lado dos documentos SoAW.
 
-## Comparar as relações entre objetos de negócio com o inventário
+## Data Modeller
 
-No menu **Application & Data Architecture**, abra **Relações entre objetos de negócio**. A tela mostra o último desenho partilhado. A página compara-o com o inventário e lista, em **Alterações no inventário**, as mudanças que pode ver. Selecione **Verificar atualizações** para repetir a comparação.
+Em **Application & Data Architecture**, abra o **Data Modeller**. A primeira linha reúne as cores, o conteúdo dos cartões e a sincronização. A barra inferior reúne as ferramentas de desenho, os painéis, o zoom, os filtros e a exportação SVG. O diagrama mostra o último desenho compartilhado. Use a sincronização para consultar novamente as alterações do inventário.
 
 ![Diagrama de relações entre objetos de negócio com os papéis das aplicações e o cartão do objeto selecionado](../assets/img/pt/105_relacoes_objetos_negocio.png)
+
+Arraste a linha ou as alças para mover um segmento, adicionar uma dobra ou mudar o ponto de conexão na borda de um objeto. Salve para compartilhar o novo trajeto. Uma linha simples indica um. Um pé de galinha indica muitos (N ou M). Use **Grade de pontos** para mostrar ou ocultar os pontos no fundo. O navegador lembra sua escolha para cada diagrama.
+
+Clique com o botão direito num conector e escolha **Reto** ou **Ortogonal**. O traçado mantém-se ao mover um nó e ao guardar e voltar a abrir o diagrama.
+
+Para se deslocar pelo diagrama, mantenha premido o botão esquerdo do rato sobre o fundo e arraste. Use a roda do rato para se deslocar na vertical, **Shift** com a roda para se deslocar na horizontal e **Ctrl** com a roda para ajustar o zoom. Também pode colocar o foco na tela e usar as teclas de seta.
+
+Abra **Atalhos de teclado** na barra de ferramentas para consultar os comandos disponíveis. Use o botão do painel para mostrar ou ocultar os detalhes do cartão. Ao selecionar um objeto de negócio, os respetivos detalhes voltam a abrir.
+
+Se puder editar o diagrama, **Anular** e **Refazer** atuam sobre as alterações do rascunho atual. **Eliminar** retira os objetos de negócio selecionados do desenho ao guardá-lo. Os respetivos cartões e associações continuam disponíveis no inventário. Para uma linha selecionada, aplicam-se a confirmação e a sincronização habituais. **Copiar** e **Colar** abrem um novo rascunho por cada objeto de negócio copiado, para que possa mudar o nome antes de o adicionar. Mudar o nome de um cartão guardado atualiza o inventário. Sincronize a alteração para aplicar o novo nome no desenho.
 
 1. Reveja os objetos de negócio e as associações adicionados, atualizados ou removidos.
 2. Se puder editar o diagrama, selecione as alterações pretendidas e escolha **Sincronizar**. As alterações aparecem na tela. Por exemplo, se um objeto de negócio mudar de nome e passar para o subtipo **Documento**, permanece no mesmo lugar, com o novo nome e o canto dobrado.

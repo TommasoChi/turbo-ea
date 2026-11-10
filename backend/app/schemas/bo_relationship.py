@@ -16,16 +16,29 @@ class BoNode(BaseModel):
     isPaymentData: bool  # noqa: N815 - existing metamodel key
 
 
-class BoEdge(BaseModel):
-    id: UUID
-    source: UUID
-    target: UUID
-    cardinality: str | None
+ConnectorRouting = Literal["straight", "orthogonal"]
 
 
 class BoPosition(BaseModel):
     x: FiniteFloat
     y: FiniteFloat
+
+
+class BoEdgeGeometry(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    bends: list[BoPosition] = Field(max_length=64)
+    source: BoPosition | None = None
+    target: BoPosition | None = None
+
+
+class BoEdge(BaseModel):
+    id: UUID
+    source: UUID
+    target: UUID
+    cardinality: str | None
+    routing: ConnectorRouting | None = Field(default=None, exclude_if=lambda value: value is None)
+    geometry: BoEdgeGeometry | None = Field(default=None, exclude_if=lambda value: value is None)
 
 
 class BoApplication(BaseModel):
@@ -127,9 +140,16 @@ class BoLayoutUpdate(BaseModel):
     snapshot_revision: UUID | None = None
     positions: dict[UUID, BoPosition] = Field(default_factory=dict)
     auto_positions: dict[UUID, BoPosition] = Field(default_factory=dict)
+    edge_routes: dict[UUID, ConnectorRouting] = Field(default_factory=dict, max_length=5000)
+    edge_geometry: dict[UUID, BoEdgeGeometry | None] = Field(default_factory=dict, max_length=5000)
     skip_unavailable_positions: bool = Field(
         default=False,
         description="Save readable positions and report how many requested nodes were unavailable.",
+    )
+    removed_node_ids: set[UUID] = Field(
+        default_factory=set,
+        max_length=5000,
+        description="Remove nodes from the drawing and report unavailable IDs as conflicts.",
     )
     removed_relation_ids: set[UUID] = Field(default_factory=set)
     restored_relation_ids: set[UUID] = Field(default_factory=set)
@@ -158,10 +178,17 @@ class BoLayoutResult(BoGraph):
     )
 
 
+class BoSavedPlacement(BaseModel):
+    position: BoPosition
+    edges: list[BoEdge]
+    applications: BoApplicationGroup
+
+
 class BoInventoryChange(BoAcceptedInventoryChange):
     change: Literal["added", "updated", "removed"]
     before: BoNode | BoEdge | BoApplicationLink | None
     after: BoNode | BoEdge | BoApplicationLink | None
+    placement: BoSavedPlacement | None = None
 
 
 class BoInventoryChanges(BaseModel):

@@ -1335,10 +1335,35 @@
             ],
             "title": "Cardinality"
           },
+          "geometry": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BoEdgeGeometry"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "id": {
             "format": "uuid",
             "title": "Id",
             "type": "string"
+          },
+          "routing": {
+            "anyOf": [
+              {
+                "enum": [
+                  "straight",
+                  "orthogonal"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Routing"
           },
           "source": {
             "format": "uuid",
@@ -1358,6 +1383,44 @@
           "cardinality"
         ],
         "title": "BoEdge",
+        "type": "object"
+      },
+      "BoEdgeGeometry": {
+        "additionalProperties": false,
+        "properties": {
+          "bends": {
+            "items": {
+              "$ref": "#/components/schemas/BoPosition"
+            },
+            "maxItems": 64,
+            "title": "Bends",
+            "type": "array"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BoPosition"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "target": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BoPosition"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "bends"
+        ],
+        "title": "BoEdgeGeometry",
         "type": "object"
       },
       "BoGraph": {
@@ -1482,6 +1545,16 @@
             ],
             "title": "Kind",
             "type": "string"
+          },
+          "placement": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BoSavedPlacement"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "revision": {
             "pattern": "^[0-9a-f]{64}$",
@@ -1646,6 +1719,39 @@
             "title": "Auto Positions",
             "type": "object"
           },
+          "edge_geometry": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/BoEdgeGeometry"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "maxProperties": 5000,
+            "propertyNames": {
+              "format": "uuid"
+            },
+            "title": "Edge Geometry",
+            "type": "object"
+          },
+          "edge_routes": {
+            "additionalProperties": {
+              "enum": [
+                "straight",
+                "orthogonal"
+              ],
+              "type": "string"
+            },
+            "maxProperties": 5000,
+            "propertyNames": {
+              "format": "uuid"
+            },
+            "title": "Edge Routes",
+            "type": "object"
+          },
           "positions": {
             "additionalProperties": {
               "$ref": "#/components/schemas/BoPosition"
@@ -1655,6 +1761,17 @@
             },
             "title": "Positions",
             "type": "object"
+          },
+          "removed_node_ids": {
+            "description": "Remove nodes from the drawing and report unavailable IDs as conflicts.",
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "maxItems": 5000,
+            "title": "Removed Node Ids",
+            "type": "array",
+            "uniqueItems": true
           },
           "removed_relation_ids": {
             "items": {
@@ -1860,6 +1977,30 @@
           "target_id"
         ],
         "title": "BoRelationDraft",
+        "type": "object"
+      },
+      "BoSavedPlacement": {
+        "properties": {
+          "applications": {
+            "$ref": "#/components/schemas/BoApplicationGroup"
+          },
+          "edges": {
+            "items": {
+              "$ref": "#/components/schemas/BoEdge"
+            },
+            "title": "Edges",
+            "type": "array"
+          },
+          "position": {
+            "$ref": "#/components/schemas/BoPosition"
+          }
+        },
+        "required": [
+          "position",
+          "edges",
+          "applications"
+        ],
+        "title": "BoSavedPlacement",
         "type": "object"
       },
       "Body_import_bpmn_api_v1_bpm_processes__process_id__diagram_import_post": {

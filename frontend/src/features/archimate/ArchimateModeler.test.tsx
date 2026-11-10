@@ -134,6 +134,7 @@ async function advance(ms: number) {
 
 beforeEach(() => {
   mockApi.reset();
+  localStorage.clear();
   mockApi.on("patch", "/diagrams/d1", {});
   mockApi.on("get", "/cards?ids=*", { items: [{ id: "c1", name: "CRM" }] });
   // useArchimateBridge fetches the Enterprise Object registry to resolve card<->element
@@ -166,6 +167,53 @@ beforeEach(() => {
 afterEach(() => vi.useRealTimers());
 
 describe("loading", () => {
+  it("puts the diagram title and inventory controls above the canvas toolbar", async () => {
+    const back = vi.fn();
+    await mount(doc(), { onBack: back });
+    const header = screen.getByRole("heading", { name: "A", level: 1 }).closest("header")!;
+    const actions = within(header).getAllByRole("button");
+    expect(actions.map((button) => button.textContent)).toEqual([
+      expect.stringContaining("arrow_back"), expect.stringContaining("Card colors"),
+      expect.stringContaining("Show on card"), expect.stringContaining("Sync"),
+    ]);
+    fireEvent.click(actions[0]);
+    expect(back).toHaveBeenCalledOnce();
+    expect(within(screen.getByRole("toolbar")).getByRole("button", { name: "Fit to screen" })).toBeInTheDocument();
+    const grid = within(screen.getByRole("toolbar")).getByRole("button", { name: "Dot grid" });
+    expect(grid).toHaveAttribute("aria-pressed", "true");
+    fireEvent.click(grid);
+    expect(grid).toHaveAttribute("aria-pressed", "false");
+  });
+
+  it("restores the dot grid choice independently for each diagram without saving the drawing", async () => {
+    const first = await mount();
+    fireEvent.click(screen.getByRole("button", { name: "Dot grid" }));
+    first.unmount();
+
+    mockApi.on("get", "/diagrams/d2", { ...doc(), id: "d2", name: "B" });
+    const other = renderWithProviders(tree("d2"), { theme: true });
+    expect(await screen.findByRole("button", { name: "Dot grid" })).toHaveAttribute("aria-pressed", "true");
+    other.unmount();
+
+    await mount();
+    expect(await screen.findByRole("button", { name: "Dot grid" })).toHaveAttribute("aria-pressed", "false");
+    expect(mockApi.callsOf("patch")).toHaveLength(0);
+  });
+
+  it("shows the refreshed linked card name without renaming or saving the ArchiMate element", async () => {
+    const { container } = await mount(doc(MODEL));
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "Show on card" }));
+    await user.click(screen.getByRole("menuitem", { name: "Linked card name" }));
+    await user.keyboard("{Escape}");
+    mockApi.on("get", "/cards?ids=*", { items: [{ id: "c1", name: "New inventory name" }] });
+    fireEvent.click(screen.getByRole("button", { name: "Sync" }));
+    expect(await screen.findByText("Linked cards refreshed.")).toBeVisible();
+    expect(container.querySelector(".archimate-linked-name")).toHaveTextContent("New inventory");
+    expect(container.querySelector(".archimate-name")).toHaveTextContent("CRM");
+    expect(mockApi.callsOf("patch")).toHaveLength(0);
+  });
+
   it("shows the not-ArchiMate alert and no editor for another kind of diagram", async () => {
     mockApi.on("get", "/diagrams/d1", doc(UNLINKED, { kind: "drawio" }));
     const { container } = renderWithProviders(<ArchimateModeler diagramId="d1" />);
@@ -1090,7 +1138,8 @@ describe("properties panel", () => {
     await user.clear(name);
     await user.type(name, "Renamed{Enter}");
     await waitFor(() => expect(mockApi.callsOf("patch").at(-1)?.body).toEqual({ name: "Renamed" }));
-    expect(screen.getByRole("heading", { name: "Renamed" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Renamed", level: 1 })).toBeInTheDocument();
+    expect(within(screen.getByRole("complementary", { name: "Properties" })).getByRole("heading", { name: "Renamed" })).toBeInTheDocument();
     const doc2 = screen.getByLabelText("Documentation");
     expect(doc2).toHaveValue("Old description");
     await user.clear(doc2);

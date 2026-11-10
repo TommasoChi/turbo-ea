@@ -597,6 +597,274 @@ async def test_explicit_disjoint_removals_merge_without_inventory_delete(client,
     assert (await client.get(BASE, headers=env["viewer"])).json()["edges"] == []
 
 
+async def test_routing_is_per_edge_and_survives_reopening_and_moving_nodes(client, db, env):
+    a, b, c = await bo(db), await bo(db, "Order"), await bo(db, "Address")
+    first = await create_relation(db, type_key=ER, source_id=a.id, target_id=b.id)
+    second = await create_relation(db, type_key=ER, source_id=a.id, target_id=c.id)
+    url = f"{BASE}/layout"
+    initial = await client.put(url, json={}, headers=env["editor"])
+    revision = initial.json()["snapshot_revision"]
+    for edge in (first, second):
+        saved = await client.put(
+            url,
+            json={"snapshot_revision": revision, "edge_routes": {str(edge.id): "orthogonal"}},
+            headers=env["editor"],
+        )
+        assert saved.status_code == 200, saved.text
+    straightened = await client.put(
+        url,
+        json={
+            "edge_routes": {str(first.id): "straight"},
+            "positions": {str(a.id): {"x": 15, "y": 30}},
+        },
+        headers=env["editor"],
+    )
+    assert straightened.status_code == 200, straightened.text
+    graph = (await client.get(BASE, headers=env["viewer"])).json()
+    assert {edge["id"]: edge.get("routing") for edge in graph["edges"]} == {
+        str(first.id): None,
+        str(second.id): "orthogonal",
+    }
+    assert (await client.get(f"{BASE}/changes", headers=env["editor"])).json()["changes"] == []
+    assert (
+        await client.put(
+            url, json={"edge_routes": {str(first.id): "invalid"}}, headers=env["editor"]
+        )
+    ).status_code == 422
+    assert (
+        await client.put(
+            url, json={"edge_routes": {str(first.id): "orthogonal"}}, headers=env["viewer"]
+        )
+    ).status_code == 403
+
+
+async def test_manual_connector_geometry_is_shared_without_changing_inventory(client, db, env):
+    a, b = await bo(db), await bo(db, "Order")
+    edge = await create_relation(db, type_key=ER, source_id=a.id, target_id=b.id)
+    edge_id = str(edge.id)
+    url = f"{BASE}/layout"
+    geometry = {"bends": [{"x": 300, "y": 80}], "source": {"x": 200, "y": 25}, "target": None}
+    payload = {"edge_geometry": {edge_id: geometry}}
+    assert (await client.put(url, json=payload, headers=env["viewer"])).status_code == 403
+    assert (
+        await client.put(
+            url,
+            json={"edge_geometry": {edge_id: {"bends": geometry["bends"] * 65}}},
+            headers=env["editor"],
+        )
+    ).status_code == 422
+    saved = await client.put(url, json=payload, headers=env["editor"])
+    assert saved.status_code == 200, saved.text
+    graph = (await client.get(BASE, headers=env["viewer"])).json()
+    assert graph["edges"][0]["geometry"] == geometry
+    assert (await client.get(f"{BASE}/changes", headers=env["editor"])).json()["changes"] == []
+    reset = await client.put(url, json={"edge_geometry": {edge_id: None}}, headers=env["editor"])
+    assert reset.status_code == 200, reset.text
+    assert "geometry" not in reset.json()["edges"][0]
+
+
+async def test_removing_saved_node_keeps_inventory_and_restores_position_on_sync(client, db, env):
+    customer, order = await bo(db), await bo(db, "Order")
+    app = await create_card(db, name="Catalogue")
+    edge = await create_relation(db, type_key=ER, source_id=customer.id, target_id=order.id)
+    link = await create_relation(db, type_key=APP_LINK, source_id=app.id, target_id=customer.id)
+    url = f"{BASE}/layout"
+    customer_id = str(customer.id)
+    position = {"x": 12, "y": 34}
+    initial = await client.put(
+        url, json={"positions": {customer_id: position}}, headers=env["editor"]
+    )
+    assert initial.status_code == 200, initial.text
+    payload = {"removed_node_ids": [customer_id]}
+    assert (await client.put(url, json=payload, headers=env["viewer"])).status_code == 403
+
+    removed = await client.put(url, json=payload, headers=env["editor"])
+    assert removed.status_code == 200, removed.text
+    assert removed.json()["inventory_conflicts"] == []
+    reopened = (await client.get(BASE, headers=env["viewer"])).json()
+    assert reopened["snapshot_revision"] != initial.json()["snapshot_revision"]
+    assert [node["id"] for node in reopened["nodes"]] == [str(order.id)]
+    assert reopened["edges"] == []
+    assert customer_id not in reopened["positions"]
+    assert customer_id not in reopened["applications"]
+    assert await db.scalar(select(Card.name).where(Card.id == customer.id)) == "Customer"
+    assert set(await db.scalars(select(Relation.id))) == {edge.id, link.id}
+
+    replay = await client.put(url, json=payload, headers=env["editor"])
+    assert replay.status_code == 200, replay.text
+    assert replay.json()["inventory_conflicts"] == []
+    assert replay.json()["snapshot_revision"] == reopened["snapshot_revision"]
+
+    changes = (await client.get(f"{BASE}/changes", headers=env["editor"])).json()["changes"]
+    assert [(change["kind"], change["id"], change["change"]) for change in changes] == [
+        ("node", customer_id, "added")
+    ]
+    assert changes[0]["placement"] == {
+        "position": position,
+        "edges": [
+            {
+                "id": str(edge.id),
+                "source": customer_id,
+                "target": str(order.id),
+                "cardinality": None,
+            }
+        ],
+        "applications": {
+            "master": None,
+            "slaves": [],
+            "unclassified": [{"id": str(app.id), "name": "Catalogue"}],
+        },
+    }
+    change = {key: changes[0][key] for key in ("kind", "id", "revision")}
+    restored = await client.put(
+        url, json={"accepted_inventory_changes": [change]}, headers=env["editor"]
+    )
+    assert restored.status_code == 200, restored.text
+    assert restored.json()["positions"] == {customer_id: position}
+    assert [row["id"] for row in restored.json()["edges"]] == [str(edge.id)]
+    assert restored.json()["applications"][customer_id]["unclassified"] == [
+        {"id": str(app.id), "name": "Catalogue"}
+    ]
+
+
+async def test_returning_node_placement_omits_unreadable_connections(client, db, env):
+    customer, order = await bo(db), await bo(db, "Order")
+    hidden = await create_card(db, card_type="DataObject", subtype="Document", name="Private")
+    app = await create_card(db, name="Catalogue")
+    private_app = await create_card(db, subtype="Restricted", name="Private Catalogue")
+    card_type = await db.scalar(select(CardType).where(CardType.key == "DataObject"))
+    card_type.role_permissions = {
+        "partial": {"inventory.view": {"value": False, "subtypes": ["Document"]}}
+    }
+    visible_edge = await create_relation(db, type_key=ER, source_id=order.id, target_id=customer.id)
+    hidden_edge = await create_relation(db, type_key=ER, source_id=customer.id, target_id=hidden.id)
+    await create_relation(db, type_key=APP_LINK, source_id=app.id, target_id=customer.id)
+    hidden_link = await create_relation(
+        db,
+        type_key=APP_LINK,
+        source_id=private_app.id,
+        target_id=customer.id,
+        attributes={"dataOwnership": "master"},
+    )
+    customer_id = str(customer.id)
+    position = {"x": 12, "y": 34}
+    saved = await client.put(
+        f"{BASE}/layout",
+        json={
+            "removed_node_ids": [customer_id, str(hidden.id)],
+            "positions": {customer_id: position, str(hidden.id): position},
+        },
+        headers=env["admin"],
+    )
+    assert saved.status_code == 200, saved.text
+    added = await bo(db, "New DataObject")
+
+    comparison = await client.get(f"{BASE}/changes", headers=env["partial"])
+    assert comparison.status_code == 200, comparison.text
+    changes = {change["id"]: change for change in comparison.json()["changes"]}
+    assert set(changes) == {customer_id, str(added.id)}
+    assert changes[str(added.id)].get("placement") is None
+    assert changes[customer_id]["placement"] == {
+        "position": position,
+        "edges": [
+            {
+                "id": str(visible_edge.id),
+                "source": str(order.id),
+                "target": customer_id,
+                "cardinality": None,
+            }
+        ],
+        "applications": {
+            "master": None,
+            "slaves": [],
+            "unclassified": [{"id": str(app.id), "name": "Catalogue"}],
+        },
+    }
+    for id_ in (hidden.id, hidden_edge.id, private_app.id, hidden_link.id):
+        assert str(id_) not in comparison.text
+
+
+async def test_node_removals_from_same_stale_revision_merge_with_other_layout_edits(
+    client, db, env
+):
+    a, b, c = await bo(db), await bo(db, "Order"), await bo(db, "Address")
+    url = f"{BASE}/layout"
+    initial = await client.put(url, json={}, headers=env["editor"])
+    assert initial.status_code == 200, initial.text
+    revision = initial.json()["snapshot_revision"]
+
+    first = await client.put(
+        url,
+        json={"snapshot_revision": revision, "removed_node_ids": [str(a.id)]},
+        headers=env["editor"],
+    )
+    assert first.status_code == 200, first.text
+    position = {"x": 5, "y": 8}
+    second = await client.put(
+        url,
+        json={
+            "snapshot_revision": revision,
+            "removed_node_ids": [str(b.id)],
+            "positions": {str(c.id): position},
+        },
+        headers=env["partial"],
+    )
+    assert second.status_code == 200, second.text
+    assert second.json()["inventory_conflicts"] == []
+    assert [node["id"] for node in second.json()["nodes"]] == [str(c.id)]
+    assert second.json()["positions"] == {str(c.id): position}
+
+
+async def test_unavailable_node_removals_report_conflicts_and_keep_disjoint_edits(client, db, env):
+    hidden = await create_card(db, card_type="DataObject", subtype="Document", name="Confidential")
+    removed, moved = await bo(db), await bo(db, "Order")
+    app = await create_card(db)
+    card_type = await db.scalar(select(CardType).where(CardType.key == "DataObject"))
+    card_type.role_permissions = {
+        "editor": {"inventory.view": {"value": False, "subtypes": ["Document"]}}
+    }
+    await db.flush()
+    missing = uuid.uuid4()
+    position = {"x": 10, "y": 20}
+    response = await client.put(
+        f"{BASE}/layout",
+        json={
+            "removed_node_ids": [str(id_) for id_ in (hidden.id, removed.id, app.id, missing)],
+            "positions": {str(moved.id): position},
+        },
+        headers=env["editor"],
+    )
+    assert response.status_code == 200, response.text
+    result = response.json()
+    assert result["inventory_conflicts"] == [
+        {"kind": "node", "id": str(id_)} for id_ in sorted((hidden.id, app.id, missing))
+    ]
+    assert [node["id"] for node in result["nodes"]] == [str(moved.id)]
+    assert result["positions"] == {str(moved.id): position}
+    assert "Confidential" not in response.text
+    admin_graph = (await client.get(BASE, headers=env["admin"])).json()
+    assert {node["id"] for node in admin_graph["nodes"]} == {str(hidden.id), str(moved.id)}
+
+
+@pytest.mark.parametrize(
+    ("removed_node_ids", "error_type"),
+    [
+        (["invalid-id"], "uuid_parsing"),
+        ([str(uuid.UUID(int=i)) for i in range(5001)], "too_long"),
+    ],
+    ids=["invalid-id", "too-many-ids"],
+)
+async def test_layout_rejects_invalid_node_removals(client, env, removed_node_ids, error_type):
+    response = await client.put(
+        f"{BASE}/layout", json={"removed_node_ids": removed_node_ids}, headers=env["editor"]
+    )
+    assert response.status_code == 422
+    assert any(
+        error["loc"][:2] == ["body", "removed_node_ids"] and error["type"] == error_type
+        for error in response.json()["detail"]
+    )
+
+
 @pytest.mark.parametrize(
     ("delta", "editor"),
     [("removed_relation_ids", "partial"), ("restored_relation_ids", "admin")],

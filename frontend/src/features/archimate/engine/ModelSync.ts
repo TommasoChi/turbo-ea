@@ -12,10 +12,45 @@ import type EventBus from "diagram-js/lib/core/EventBus";
 import BaseLayouter, { type LayoutConnectionHints } from "diagram-js/lib/layout/BaseLayouter";
 import type CroppingConnectionDocking from "diagram-js/lib/layout/CroppingConnectionDocking";
 import { getMid } from "diagram-js/lib/layout/LayoutUtil";
-import type { Connection } from "diagram-js/lib/model/Types";
+import type { Connection, ShapeLike } from "diagram-js/lib/model/Types";
 import type { Point } from "diagram-js/lib/util/Types";
+import type CommandHandler from "diagram-js/lib/command/CommandHandler";
+import { orthogonalWaypoints, type ConnectorRouting } from "@/lib/connectorRouting";
 
 interface ConnectionContext { connection: Connection; cropped?: boolean }
+export type RoutedConnection = Connection & { orthogonal?: boolean };
+
+type ConnectionEnd = NonNullable<LayoutConnectionHints["source"]>;
+
+export function archimateOrthogonalWaypoints(source: ConnectionEnd, target: ConnectionEnd) {
+  const bounds = (element: typeof source) => element.waypoints
+    ? { ...getMid(element), width: 0, height: 0 }
+    : element as ShapeLike;
+  // The docking service rounds intersections to integer pixels.
+  return orthogonalWaypoints(bounds(source), bounds(target)).map(({ x, y }) => ({ x: Math.round(x), y: Math.round(y) }));
+}
+
+type RoutingContext = {
+  connection: RoutedConnection;
+  routing: ConnectorRouting;
+  waypoints: Point[];
+  previous?: { orthogonal: boolean | undefined; waypoints: Connection["waypoints"] };
+};
+
+export class UpdateRoutingHandler implements CommandHandler {
+  execute(context: RoutingContext) {
+    const { connection, routing, waypoints } = context;
+    context.previous = { orthogonal: connection.orthogonal, waypoints: connection.waypoints };
+    connection.orthogonal = routing === "orthogonal";
+    connection.waypoints = waypoints;
+    return [connection];
+  }
+
+  revert({ connection, previous }: RoutingContext) {
+    if (previous) Object.assign(connection, previous);
+    return [connection];
+  }
+}
 
 /** Crops the ends at the shapes' outlines. ponytail: a connection ending on a connection is left uncropped. */
 export function cropConnection(docking: CroppingConnectionDocking, connection: Connection): void {
@@ -48,7 +83,10 @@ export default class ModelSync extends CommandInterceptor {
 }
 
 export class ArchimateLayouter extends BaseLayouter {
-  layoutConnection(connection: Connection, hints: LayoutConnectionHints = {}): Point[] {
+  layoutConnection(connection: RoutedConnection, hints: LayoutConnectionHints = {}): Point[] {
+    if (connection.orthogonal) {
+      return archimateOrthogonalWaypoints(hints.source || connection.source!, hints.target || connection.target!);
+    }
     // `||`, as BaseLayouter: MoveHelper passes `connectionStart: false` for the end that did not move.
     return [
       hints.connectionStart || getMid(hints.source || connection.source!),

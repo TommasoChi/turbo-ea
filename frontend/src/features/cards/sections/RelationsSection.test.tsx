@@ -639,6 +639,44 @@ describe("RelationsSection attribute row", () => {
     expect(screen.queryByRole("button", { name: /Add/ })).not.toBeInTheDocument();
   });
 
+  it("shows both directions under one heading for a symmetric BO verb in the diagram panel", async () => {
+    const er = {
+      ...orgToOrg,
+      key: "relDataObjectToDataObject",
+      source_type_key: "DataObject",
+      target_type_key: "DataObject",
+      label: "relates to",
+      reverse_label: "relates to",
+      attributes_schema: [{ key: "cardinality", label: "Cardinality", type: "single_select", options: ["1:n", "n:1"].map((key) => ({ key, label: key })) }],
+    };
+    mm.relationTypes = [er];
+    const selected = { id: FS, type: "DataObject", name: "Customer" };
+    const outgoing = {
+      ...relation("outgoing", "Order", er.key),
+      source: selected,
+      target: { id: "order", type: "DataObject", name: "Order" },
+      target_id: "order",
+      attributes: { cardinality: "1:n" },
+    };
+    const incoming = {
+      ...outgoing,
+      id: "incoming",
+      source: { id: "consent", type: "DataObject", name: "Consent" },
+      source_id: "consent",
+      target: selected,
+      target_id: FS,
+    };
+    mockApi([outgoing, incoming], []);
+
+    render(<RelationsSection fsId={FS} cardTypeKey="DataObject" existingBoRelationsOnly initialExpanded />);
+
+    expect(await screen.findByText("Order")).toBeInTheDocument();
+    expect(screen.getByText("Consent")).toBeInTheDocument();
+    expect(screen.getAllByText(/^relates to/)).toHaveLength(1);
+    expect(screen.getByText("1:n")).toBeInTheDocument();
+    expect(screen.getByText("n:1")).toBeInTheDocument();
+  });
+
   it("strips the reserved ownership marker when editing CRUD", async () => {
     mm.relationTypes = [{ ...appToOrg, key: "relAppToDataObj", attributes_schema: [{ key: "dataOwnership", label: "Ownership", type: "boolean" }, { key: "crudRead", label: "Read", type: "boolean" }] }];
     const row = { ...relation("master", "Finance", "relAppToDataObj"), attributes: { dataOwnership: "master", crudRead: true } };

@@ -62,6 +62,9 @@
     "label": "Note"
   },
   "toolbar": {
+    "linkedBadge": "Indicateur de fiche liée",
+    "linkedName": "Nom de la fiche liée",
+    "inventoryRefreshed": "Fiches liées actualisées.",
     "back": "Retour",
     "undo": "Annuler",
     "redo": "Rétablir",

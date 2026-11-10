@@ -62,6 +62,9 @@
     "label": "Notiz"
   },
   "toolbar": {
+    "linkedBadge": "Hinweis auf verknüpfte Karte",
+    "linkedName": "Name der verknüpften Karte",
+    "inventoryRefreshed": "Verknüpfte Karten aktualisiert.",
     "back": "Zurück",
     "undo": "Rückgängig",
     "redo": "Wiederholen",

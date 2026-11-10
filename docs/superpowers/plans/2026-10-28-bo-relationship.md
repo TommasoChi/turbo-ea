@@ -635,3 +635,10 @@ Assign integration testing to a fresh agent that derives its cases from the spec
 - Verify the Task 10 conflict handling across import, updates and restores. Keep the approved shapes, indicators, legend and filters in the visual acceptance review.
 - Verify seed behavior on fresh and upgraded workspaces, safe layout storage and permission wiring. The initial read contract already covers the Application groups and filter facets.
 - Acceptance covers left-click card access in the right drawer, Master capability, ER and Application writes, concurrent visual removals, inventory Sync separation, scoped draft recovery, safe retries, layout saves, and workspace transfer with Master conflicts.
+
+## Follow-up for canvas controls and shortcuts
+
+1. Reuse the ArchiMate canvas navigation modules and shortcut labels. Cover mouse drag, the three wheel gestures, keyboard zoom and fit, and canvas-only action dispatch in diagram tests.
+2. Wire the shortcut help and panel toggle into the BO toolbar. Exercise single and multiple selections, draft copy and rename, and permission checks for renaming a saved card.
+3. Keep undo and redo inside the local draft. Test that hiding a BO preserves inventory links, that older recovered drafts remain usable, and that Save and removal Sync attempts clear the drawing history even when a write only partly succeeds. Card edits saved directly to inventory stay outside that history.
+4. Extend the existing layout Save with scoped node removal deltas. Test concurrent disjoint removals, rejected inputs and permission denial. Re-add through Sync and verify the node, position and readable links on the open canvas before Save publishes them. Regenerate OpenAPI, update the guide and screenshots, and verify both viewer and editor behavior in Chromium before deployment.

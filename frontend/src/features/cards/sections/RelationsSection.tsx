@@ -892,7 +892,23 @@ function RelationsSection({
   );
 
   // Displayed groups: visible=true OR mandatory=true, on that side.
+  const boSide = existingBoRelationsOnly && sides.length === 2 ? sides[0] : undefined;
+  // The diagram panel edits existing ER rows. When both sides have the same
+  // verb, one group suffices: the row reads cardinality from its own end.
+  const combinedBoType = boSide && relLabel(boSide.rt) === relLabel(boSide.rt, true)
+    ? boSide.rt
+    : undefined;
   const displayedGroups = useMemo(() => {
+    if (combinedBoType) {
+      const forward = effectiveSideFlags(combinedBoType, true, optionalSides);
+      const reverse = effectiveSideFlags(combinedBoType, false, optionalSides);
+      const mandatory = forward.mandatory || reverse.mandatory;
+      const visible = forward.visible || reverse.visible;
+      const rels = relations.filter(({ type }) => type === combinedBoType.key);
+      return visible || mandatory || rels.length
+        ? [{ rt: combinedBoType, isSource: true, visible, mandatory, rels }]
+        : [];
+    }
     return sides
       .map(({ rt, isSource }) => {
         const { visible, mandatory } = effectiveSideFlags(rt, isSource, optionalSides);
@@ -900,17 +916,17 @@ function RelationsSection({
         return { rt, isSource, visible, mandatory, rels };
       })
       .filter(({ visible, mandatory }) => visible || mandatory);
-  }, [sides, relations, fsId, optionalSides]);
+  }, [sides, relations, fsId, optionalSides, combinedBoType]);
 
   // Sides with no group of their own (reached via the section's Add menu, and
   // rendered below only while they hold data).
   const hiddenSides = useMemo(
     () =>
-      sides.filter(({ rt, isSource }) => {
+      combinedBoType ? [] : sides.filter(({ rt, isSource }) => {
         const { visible, mandatory } = effectiveSideFlags(rt, isSource, optionalSides);
         return !visible && !mandatory;
       }),
-    [sides, optionalSides],
+    [sides, optionalSides, combinedBoType],
   );
 
   const openAddDialog = (side: RelationSide<RelationType>) => {
@@ -985,7 +1001,7 @@ function RelationsSection({
             onRequestAdd={() => openAddDialog({ rt, isSource })}
             onRelationUpdated={handleRelationUpdated}
             rollupCount={rollup[`${rt.key}::${isSource ? "outgoing" : "incoming"}`] ?? 0}
-            multiLinked={multiLinked}
+            multiLinked={combinedBoType ? undefined : multiLinked}
           />
         ))}
 

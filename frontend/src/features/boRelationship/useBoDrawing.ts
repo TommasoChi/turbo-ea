@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api, ApiError } from "@/api/client";
 import { randomUuid } from "@/lib/randomUuid";
-import type { BoApplication, BoEdge, BoGraph, BoNode } from "./BoRelationshipPage";
+import type { ConnectorRouting } from "@/lib/connectorRouting";
+import type { BoApplication, BoEdge, BoGraph, BoGroup, BoNode } from "./BoRelationshipPage";
+import { MAX_BO_BENDS, type BoEdgeGeometry } from "./boConnectorGeometry";
 import { computeLayout } from "./boRelationshipLayout";
 
 type Position = { x: number; y: number };
@@ -21,6 +23,9 @@ export type DrawingDraft = {
   moves: Positions;
   removed: string[];
   restored: BoEdge[];
+  removedNodes?: string[];
+  edgeRoutes?: Record<string, ConnectorRouting>;
+  edgeGeometry?: Record<string, BoEdgeGeometry | null>;
 };
 type Removal = { edge: BoEdge; label: string; error?: string };
 type SaveIssue = {
@@ -38,6 +43,7 @@ export type InventoryChange = {
   change: "added" | "updated" | "removed";
   before: BoNode | BoEdge | BoSavedApplication | null;
   after: BoNode | BoEdge | BoSavedApplication | null;
+  placement?: { position: Position; edges: BoEdge[]; applications: BoGroup } | null;
 };
 type LayoutDraft = { kind: "node" | "edge" | "application_link"; id: string };
 type LayoutResult = BoGraph & {
@@ -46,6 +52,14 @@ type LayoutResult = BoGraph & {
   skipped_positions?: number;
 };
 type OnSave = (aliases: Map<string, string>, savedLayout: BoGraph | undefined, updatedApplicationObjects: string[]) => void;
+type LocalDrawing = {
+  draft: DrawingDraft;
+  removals: Removal[];
+  accepted: InventoryChange[];
+  syncAnchors: Positions;
+  issues: SaveIssue[];
+};
+const HISTORY_LIMIT = 50;
 
 const emptyDraft: DrawingDraft = {
   objects: [], relations: [], applications: [], moves: {}, removed: [], restored: [],
@@ -56,11 +70,36 @@ function resolveId(draft: DrawingDraft, id: string) {
   return object ? object.saved?.id : id;
 }
 
+function orientGeometry(draft: DrawingDraft, item: DrawingDraft["relations"][number], geometry: BoEdgeGeometry | null) {
+  if (!geometry || !item.saved || resolveId(draft, item.input.source) !== item.saved.target) return geometry;
+  return { bends: [...geometry.bends].reverse(), source: geometry.target, target: geometry.source };
+}
+
 function failureDetail(error: unknown) {
   return error instanceof Error ? error.message : undefined;
 }
 
-export function useBoDrawing(initialGraph: BoGraph | undefined, onSaved: OnSave) {
+function discardLocalDrafts(draft: DrawingDraft, objectIds: Set<string>, discarded: Set<string>) {
+  const moves = { ...draft.moves };
+  for (const id of objectIds) delete moves[id];
+  for (const { id, input } of draft.relations) {
+    if (objectIds.has(input.source) || objectIds.has(input.target)) discarded.add(id);
+  }
+  for (const { id, input } of draft.applications) {
+    if (objectIds.has(input.objectId)) discarded.add(id);
+  }
+  return {
+    ...draft,
+    moves,
+    ...(draft.edgeRoutes ? { edgeRoutes: Object.fromEntries(Object.entries(draft.edgeRoutes).filter(([id]) => !discarded.has(id))) } : {}),
+    ...(draft.edgeGeometry ? { edgeGeometry: Object.fromEntries(Object.entries(draft.edgeGeometry).filter(([id]) => !discarded.has(id))) } : {}),
+    objects: draft.objects.filter(({ id }) => !objectIds.has(id)),
+    relations: draft.relations.filter(({ id }) => !discarded.has(id)),
+    applications: draft.applications.filter(({ id }) => !discarded.has(id)),
+  };
+}
+
+export function useBoDrawing(initialGraph: BoGraph | undefined, onSaved: OnSave, scope?: string) {
   const [savedGraph, setSavedGraph] = useState<{ base: BoGraph | undefined; result: BoGraph }>();
   // Render the committed response immediately. The next scoped graph read
   // supersedes it so changes in scope are reflected in the open editor.
@@ -68,13 +107,46 @@ export function useBoDrawing(initialGraph: BoGraph | undefined, onSaved: OnSave)
   useEffect(() => {
     setSavedGraph((current) => current?.base === initialGraph ? current : undefined);
   }, [initialGraph]);
-  const [accepted, setAccepted] = useState<InventoryChange[]>([]);
-  const [syncAnchors, setSyncAnchors] = useState<Positions>({});
-  const [draft, setDraft] = useState(emptyDraft);
-  const [removals, setRemovals] = useState<Removal[]>([]);
-  const [issues, setIssues] = useState<SaveIssue[]>([]);
+  const [local, setLocal] = useState<LocalDrawing>({
+    draft: emptyDraft, removals: [], accepted: [], syncAnchors: {}, issues: [],
+  });
+  const { accepted, syncAnchors, draft, removals, issues } = local;
   const [busy, setBusy] = useState(false);
   const lock = useRef(false);
+  // Each command reads the latest snapshot, even if several commands run
+  // before React commits a render.
+  const current = useRef(local);
+  const history = useRef<{ undo: LocalDrawing[]; redo: LocalDrawing[] }>({ undo: [], redo: [] });
+
+  useEffect(() => {
+    history.current = { undo: [], redo: [] };
+  }, [initialGraph, scope]);
+
+  const updateLocal = (next: LocalDrawing) => {
+    current.current = next;
+    setLocal(next);
+  };
+  const edit = (change: (previous: LocalDrawing) => LocalDrawing) => {
+    if (lock.current) return false;
+    const previous = current.current;
+    const next = change(previous);
+    if (previous === next) return false;
+    const { undo } = history.current;
+    history.current = { undo: [...undo.slice(1 - HISTORY_LIMIT), previous], redo: [] };
+    updateLocal(next);
+    return true;
+  };
+  const stepHistory = (direction: "undo" | "redo") => {
+    if (lock.current) return false;
+    const snapshot = history.current[direction].pop();
+    if (!snapshot) return false;
+    history.current[direction === "undo" ? "redo" : "undo"].push(current.current);
+    updateLocal(snapshot);
+    return true;
+  };
+
+  const placements = useMemo(() => accepted.flatMap(({ kind, id, after, placement }) =>
+    kind === "node" && after && placement ? [{ id, placement }] : []), [accepted]);
 
   const drawing = useMemo(() => {
     const allNodes = new Map(graph?.nodes.map((node) => [node.id, node]));
@@ -86,9 +158,17 @@ export function useBoDrawing(initialGraph: BoGraph | undefined, onSaved: OnSave)
       const node = saved ?? { id, ...input };
       allNodes.set(node.id, node);
     }
-    const allEdges = new Map([...(graph?.edges ?? []), ...draft.restored].map((edge) => [edge.id, edge]));
+    for (const id of draft.removedNodes ?? []) allNodes.delete(id);
+    const allEdges = new Map(graph?.edges.map((edge) => [edge.id, edge]));
+    for (const { placement } of placements) {
+      for (const edge of placement.edges) {
+        if (!allEdges.has(edge.id)) allEdges.set(edge.id, edge);
+      }
+    }
+    for (const edge of draft.restored) allEdges.set(edge.id, edge);
     for (const change of accepted.filter((item) => item.kind === "edge")) {
-      if (change.after) allEdges.set(change.id, change.after as BoEdge);
+      const before = allEdges.get(change.id);
+      if (change.after) allEdges.set(change.id, { ...before, ...change.after as BoEdge });
       else allEdges.delete(change.id);
     }
     for (const { id, input, saved } of draft.relations) {
@@ -101,33 +181,51 @@ export function useBoDrawing(initialGraph: BoGraph | undefined, onSaved: OnSave)
     }
     const removedIds = new Set([...draft.removed, ...removals.map(({ edge }) => edge.id)]);
     const nodes = [...allNodes.values()];
-    const edges = [...allEdges.values()].filter((edge) => !removedIds.has(edge.id) && allNodes.has(edge.source) && allNodes.has(edge.target));
-    const positions = computeLayout(nodes, edges, { ...graph?.positions, ...syncAnchors, ...draft.moves });
+    const routes = new Map(Object.entries(draft.edgeRoutes ?? {}));
+    const geometry = new Map(Object.entries(draft.edgeGeometry ?? {}));
+    for (const relation of draft.relations) {
+      const { id, saved } = relation;
+      if (!saved) continue;
+      const routing = routes.get(id);
+      const shape = geometry.get(id);
+      if (routing) routes.set(saved.id, routing);
+      if (shape !== undefined && !geometry.has(saved.id)) geometry.set(saved.id, orientGeometry(draft, relation, shape));
+    }
+    const edges = [...allEdges.values()]
+      .filter((edge) => !removedIds.has(edge.id) && allNodes.has(edge.source) && allNodes.has(edge.target))
+      .map((edge) => ({
+        ...edge,
+        ...(routes.has(edge.id) ? { routing: routes.get(edge.id) } : {}),
+        ...(geometry.has(edge.id) ? { geometry: geometry.get(edge.id) } : {}),
+      }));
+    const priorPositions = Object.fromEntries(placements.map(({ id, placement }) => [id, placement.position]));
+    const positions = computeLayout(nodes, edges, { ...priorPositions, ...graph?.positions, ...syncAnchors, ...draft.moves });
     return { nodes, edges, positions };
-  }, [accepted, draft, graph, removals, syncAnchors]);
+  }, [accepted, draft, graph, placements, removals, syncAnchors]);
 
   const restoreDraft = (recovered: DrawingDraft, recoveredAccepted: InventoryChange[]) => {
-    setDraft(recovered);
-    setAccepted(recoveredAccepted);
-    setRemovals([]);
-    setIssues([]);
+    if (lock.current) return;
+    history.current = { undo: [], redo: [] };
+    updateLocal({ draft: recovered, accepted: recoveredAccepted, syncAnchors: {}, removals: [], issues: [] });
   };
 
-  const acceptChanges = (changes: InventoryChange[]) => {
-    if (lock.current) return;
-    const outgoing = new Set(removals.map(({ edge }) => edge.id));
+  const acceptChanges = (changes: InventoryChange[]) => edit((previous) => {
+    const outgoing = new Set(previous.removals.map(({ edge }) => edge.id));
     const allowed = changes.filter((item) => item.kind !== "edge" || !outgoing.has(item.id));
+    if (!allowed.length) return previous;
     const restoredIds = new Set(allowed.filter((item) => item.kind === "edge" && item.after).map(({ id }) => id));
-    setDraft((current) => ({ ...current, removed: current.removed.filter((id) => !restoredIds.has(id)) }));
-    setSyncAnchors((current) => ({ ...current, ...drawing.positions }));
-    setAccepted((current) => {
-      const merged = new Map(current.map((item) => [`${item.kind}:${item.id}`, item]));
-      for (const item of allowed) merged.set(`${item.kind}:${item.id}`, item);
-      return [...merged.values()];
-    });
-  };
+    const merged = new Map(previous.accepted.map((item) => [`${item.kind}:${item.id}`, item]));
+    for (const item of allowed) merged.set(`${item.kind}:${item.id}`, item);
+    return {
+      ...previous,
+      draft: { ...previous.draft, removed: previous.draft.removed.filter((id) => !restoredIds.has(id)) },
+      syncAnchors: { ...previous.syncAnchors, ...drawing.positions },
+      accepted: [...merged.values()],
+    };
+  });
   const applications = useMemo(() => {
-    const groups = structuredClone(graph?.applications ?? {});
+    const priorGroups = Object.fromEntries(placements.map(({ id, placement }) => [id, placement.applications]));
+    const groups = structuredClone({ ...priorGroups, ...graph?.applications });
     for (const change of accepted.filter((item) => item.kind === "application_link")) {
       const before = change.before as BoSavedApplication | null;
       const after = change.after as BoSavedApplication | null;
@@ -155,101 +253,168 @@ export function useBoDrawing(initialGraph: BoGraph | undefined, onSaved: OnSave)
       group.unclassified = group.master ? [] : [...others.values()];
     }
     return groups;
-  }, [accepted, graph]);
+  }, [accepted, graph, placements]);
 
   const stageObject = (input: BoObjectInput) => {
     const id = randomUuid();
-    setDraft((current) => ({ ...current, objects: [...current.objects, { id, input }] }));
-    return id;
+    const staged = edit((previous) => ({
+      ...previous, draft: { ...previous.draft, objects: [...previous.draft.objects, { id, input }] },
+    }));
+    return staged ? id : null;
   };
   const stageRelation = (input: BoLinkInput) => {
     const id = randomUuid();
-    setDraft((current) => ({ ...current, relations: [...current.relations, { id, input }] }));
+    edit((previous) => ({
+      ...previous, draft: { ...previous.draft, relations: [...previous.draft.relations, { id, input }] },
+    }));
   };
   const stageApplication = (input: BoApplicationInput) => {
     const id = randomUuid();
-    setDraft((current) => ({ ...current, applications: [...current.applications, { id, input }] }));
+    edit((previous) => ({
+      ...previous, draft: { ...previous.draft, applications: [...previous.draft.applications, { id, input }] },
+    }));
   };
-  const move = (id: string, point: Position) => {
-    if (lock.current) return;
-    setDraft((current) => ({ ...current, moves: { ...current.moves, [id]: point } }));
-  };
-  const discardDraftRelation = (id: string) => {
-    if (!draft.relations.some((item) => item.id === id && !item.saved)) return false;
-    setDraft((current) => ({ ...current, relations: current.relations.filter((item) => item.id !== id) }));
-    setIssues((current) => current.filter((issue) => issue.id !== id));
-    return true;
-  };
-  const discardFailedDraft = (id: string) => {
-    if (lock.current || !issues.some((issue) => issue.id === id && issue.discardable)) return;
-    const object = draft.objects.find((item) => item.id === id && !item.saved);
-    const application = draft.applications.find((item) => item.id === id && !item.saved);
-    if (!object && !application) return;
+  const move = (id: string, point: Position) => edit((previous) => {
+    const start = previous.draft.moves[id] ?? drawing.positions[id];
+    if (start?.x === point.x && start.y === point.y) return previous;
+    return { ...previous, draft: { ...previous.draft, moves: { ...previous.draft.moves, [id]: point } } };
+  });
+  const setEdgeRouting = (id: string, routing: ConnectorRouting) => edit((previous) => {
+    const edge = drawing.edges.find((item) => item.id === id);
+    if (!edge || ((edge.routing ?? "straight") === routing && !edge.geometry)) return previous;
+    return {
+      ...previous,
+      draft: {
+        ...previous.draft,
+        edgeRoutes: { ...previous.draft.edgeRoutes, [id]: routing },
+        ...(edge.geometry ? { edgeGeometry: { ...previous.draft.edgeGeometry, [id]: null } } : {}),
+      },
+    };
+  });
 
+  const setEdgeGeometry = (id: string, geometry: BoEdgeGeometry) => edit((previous) => {
+    if (geometry.bends.length > MAX_BO_BENDS || !drawing.edges.some((edge) => edge.id === id)) return previous;
+    return { ...previous, draft: { ...previous.draft, edgeGeometry: { ...previous.draft.edgeGeometry, [id]: geometry } } };
+  });
+  const discardDraftRelation = (id: string) => edit((previous) => {
+    if (!previous.draft.relations.some((item) => item.id === id && !item.saved)) return previous;
+    return {
+      ...previous,
+      draft: discardLocalDrafts(previous.draft, new Set(), new Set([id])),
+      issues: previous.issues.filter((issue) => issue.id !== id),
+    };
+  });
+
+  const discardFailedDraft = (id: string) => edit((previous) => {
+    if (!previous.issues.some((issue) => issue.id === id && issue.discardable)) return previous;
+    const object = previous.draft.objects.some((item) => item.id === id && !item.saved);
+    const application = previous.draft.applications.some((item) => item.id === id && !item.saved);
+    if (!object && !application) return previous;
     const discarded = new Set([id]);
-    if (object) {
-      for (const relation of draft.relations) {
-        if (relation.input.source === id || relation.input.target === id) discarded.add(relation.id);
-      }
-      for (const link of draft.applications) {
-        if (link.input.objectId === id) discarded.add(link.id);
-      }
+    const next = discardLocalDrafts(previous.draft, new Set(object ? [id] : []), discarded);
+    return { ...previous, draft: next, issues: previous.issues.filter((issue) => !discarded.has(issue.id)) };
+  });
+
+  const removeNodes = (ids: readonly string[]) => edit((previous) => {
+    const localObjects = new Map(previous.draft.objects.map((item) => [item.saved?.id ?? item.id, item]));
+    const visibleIds = new Set(drawing.nodes.map(({ id }) => id));
+    const objectIds = new Set<string>();
+    const hiddenIds = new Set(previous.draft.removedNodes);
+    const removedIds = new Set<string>();
+    for (const id of ids) {
+      if (hiddenIds.has(id)) continue;
+      const object = localObjects.get(id);
+      if (object && !object.saved) {
+        // A missing response could mean the inventory write succeeded.
+        if (previous.issues.some((issue) => issue.id === id && !issue.discardable)) continue;
+        objectIds.add(id);
+      } else if (visibleIds.has(id)) {
+        hiddenIds.add(id);
+      } else continue;
+      removedIds.add(id);
     }
-    setDraft((current) => {
-      const moves = { ...current.moves };
-      if (object) delete moves[id];
-      return {
-        ...current,
-        moves,
-        objects: current.objects.filter((item) => !discarded.has(item.id)),
-        relations: current.relations.filter((item) => !discarded.has(item.id)),
-        applications: current.applications.filter((item) => !discarded.has(item.id)),
-      };
-    });
-    setIssues((current) => current.filter((issue) => !discarded.has(issue.id)));
-  };
-  const queueRemoval = (edge: BoEdge, label: string) => {
-    setRemovals((current) => current.some((item) => item.edge.id === edge.id)
-      ? current
-      : [...current, { edge, label }]);
-    setDraft((current) => ({
-      ...current,
-      removed: [...new Set([...current.removed, edge.id])],
-      restored: current.restored.filter((item) => item.id !== edge.id),
-    }));
-  };
-  const cancelRemoval = (edge: BoEdge) => {
-    if (lock.current) return;
-    setRemovals((current) => current.filter((item) => item.edge.id !== edge.id));
-    setDraft((current) => ({
-      ...current,
-      removed: current.removed.filter((id) => id !== edge.id),
-      restored: graph?.edges.some(({ id }) => id === edge.id)
-        ? current.restored
-        : [...current.restored, edge],
-    }));
-  };
+    if (!removedIds.size) return previous;
+    const discarded = new Set(objectIds);
+    const next = discardLocalDrafts(previous.draft, objectIds, discarded);
+    for (const id of removedIds) delete next.moves[id];
+    return {
+      ...previous,
+      draft: { ...next, ...(hiddenIds.size ? { removedNodes: [...hiddenIds] } : {}) },
+      issues: previous.issues.filter((issue) => !discarded.has(issue.id)),
+    };
+  });
+  const renameDraftObject = (id: string, name: string) => edit((previous) => {
+    const object = previous.draft.objects.find((item) => item.id === id && !item.saved);
+    const trimmed = name.trim();
+    if (!object || !trimmed || trimmed === object.input.name
+      || previous.issues.some((issue) => issue.id === id && !issue.discardable)) return previous;
+    return {
+      ...previous,
+      draft: {
+        ...previous.draft,
+        objects: previous.draft.objects.map((item) => item === object
+          ? { ...item, input: { ...item.input, name: trimmed } }
+          : item),
+      },
+      issues: previous.issues.filter((issue) => issue.id !== id),
+    };
+  });
+  const queueRemoval = (edge: BoEdge, label: string) => edit((previous) => {
+    if (previous.removals.some((item) => item.edge.id === edge.id)) return previous;
+    return {
+      ...previous,
+      removals: [...previous.removals, { edge, label }],
+      draft: {
+        ...previous.draft,
+        removed: [...new Set([...previous.draft.removed, edge.id])],
+        restored: previous.draft.restored.filter((item) => item.id !== edge.id),
+      },
+    };
+  });
+  const cancelRemoval = (edge: BoEdge) => edit((previous) => {
+    if (!previous.removals.some((item) => item.edge.id === edge.id)) return previous;
+    return {
+      ...previous,
+      removals: previous.removals.filter((item) => item.edge.id !== edge.id),
+      draft: {
+        ...previous.draft,
+        removed: previous.draft.removed.filter((id) => id !== edge.id),
+        restored: graph?.edges.some(({ id }) => id === edge.id)
+          ? previous.draft.restored
+          : [...previous.draft.restored, edge],
+      },
+    };
+  });
 
   const syncRemovals = async (items: Removal[]) => {
     if (lock.current || items.length === 0) return;
     lock.current = true;
+    history.current = { undo: [], redo: [] };
     setBusy(true);
     try {
       for (const { edge } of items) {
         try {
           await api.delete(`/bo-relationship/relations/${edge.id}`);
-          setRemovals((current) => current.filter((item) => item.edge.id !== edge.id));
-          setDraft((current) => ({
-            ...current,
-            // Keep the confirmed deletion's receipt available to the next
-            // layout Save, even if an earlier Save already hid the line.
-            removed: [...new Set([...current.removed, edge.id])],
-            relations: current.relations.filter((item) => item.saved?.id !== edge.id),
-          }));
+          const previous = current.current;
+          updateLocal({
+            ...previous,
+            removals: previous.removals.filter((item) => item.edge.id !== edge.id),
+            draft: {
+              ...previous.draft,
+              // Keep the confirmed deletion's receipt available to the next
+              // layout Save, even if an earlier Save already hid the line.
+              removed: [...new Set([...previous.draft.removed, edge.id])],
+              relations: previous.draft.relations.filter((item) => item.saved?.id !== edge.id),
+            },
+          });
         } catch (error) {
-          setRemovals((current) => current.map((item) => item.edge.id === edge.id
-            ? { ...item, error: failureDetail(error) ?? "" }
-            : item));
+          const previous = current.current;
+          updateLocal({
+            ...previous,
+            removals: previous.removals.map((item) => item.edge.id === edge.id
+              ? { ...item, error: failureDetail(error) ?? "" }
+              : item),
+          });
         }
       }
     } finally {
@@ -261,7 +426,11 @@ export function useBoDrawing(initialGraph: BoGraph | undefined, onSaved: OnSave)
   const save = async () => {
     if (!graph || lock.current) return false;
     lock.current = true;
+    history.current = { undo: [], redo: [] };
     setBusy(true);
+    const previous = current.current;
+    const { draft, accepted } = previous;
+    let pending: LocalDrawing = previous;
     const next = {
       ...draft,
       objects: draft.objects.map((item) => ({ ...item })),
@@ -359,8 +528,23 @@ export function useBoDrawing(initialGraph: BoGraph | undefined, onSaved: OnSave)
         }
       }
       next.moves = { ...positions, ...unsavedMoves, ...suppressedMoves };
-      if (accepted.length || savedDrafts.length || draft.removed.length || draft.restored.length
-        || Object.keys(positions).length || Object.keys(autoPositions).length) {
+      const resolveEdgeUpdates = <Value,>(updates: Record<string, Value> | undefined,
+        orient?: (draft: DrawingDraft, item: DrawingDraft["relations"][number], value: Value) => Value) => {
+        const savedUpdates: Record<string, Value> = {};
+        const pendingUpdates: Record<string, Value> = {};
+        for (const [id, value] of Object.entries(updates ?? {})) {
+          const staged = next.relations.find((item) => item.id === id);
+          const resolved = staged ? staged.saved?.id : id;
+          if (!resolved) pendingUpdates[id] = value;
+          else if (!draft.removed.includes(resolved)) savedUpdates[resolved] = staged && orient ? orient(next, staged, value) : value;
+        }
+        return [savedUpdates, pendingUpdates] as const;
+      };
+      const [edgeRoutes, pendingRoutes] = resolveEdgeUpdates(draft.edgeRoutes);
+      const [edgeGeometry, pendingGeometry] = resolveEdgeUpdates(draft.edgeGeometry, orientGeometry);
+      const visualEdgeIds = [...Object.keys(edgeRoutes), ...Object.keys(edgeGeometry)];
+      if (accepted.length || savedDrafts.length || draft.removed.length || draft.restored.length || draft.removedNodes?.length
+        || Object.keys(positions).length || Object.keys(autoPositions).length || visualEdgeIds.length) {
         const result = await api.put<LayoutResult>("/bo-relationship/layout", {
           snapshot_revision: graph.snapshot_revision,
           saved_drafts: savedDrafts,
@@ -371,6 +555,9 @@ export function useBoDrawing(initialGraph: BoGraph | undefined, onSaved: OnSave)
           removed_relation_ids: draft.removed,
           restored_relation_ids: draft.restored.map(({ id }) => id),
           skip_unavailable_relations: true,
+          ...(draft.removedNodes?.length ? { removed_node_ids: draft.removedNodes } : {}),
+          ...(Object.keys(edgeRoutes).length ? { edge_routes: edgeRoutes } : {}),
+          ...(Object.keys(edgeGeometry).length ? { edge_geometry: edgeGeometry } : {}),
         });
         savedLayout = result;
         const unavailable = result.unavailable_drafts ?? [];
@@ -394,8 +581,9 @@ export function useBoDrawing(initialGraph: BoGraph | undefined, onSaved: OnSave)
         if (result.skipped_positions) {
           failures.push({ id: "positions", names: [], reason: "positionUnavailable" });
         }
-        const visualChanges = new Set([...draft.removed, ...draft.restored.map(({ id }) => id)]);
-        if (result.inventory_conflicts?.some(({ kind, id }) => kind === "edge" && visualChanges.has(id))) {
+        const visualChanges = new Set([...draft.removed, ...draft.restored.map(({ id }) => id), ...visualEdgeIds]);
+        if (result.inventory_conflicts?.some(({ kind, id }) =>
+          (kind === "edge" && visualChanges.has(id)) || (kind === "node" && draft.removedNodes?.includes(id)))) {
           failures.push({ id: "visual", names: [], reason: "visualChangeUnavailable" });
         }
         const conflicts = new Set((result.inventory_conflicts ?? []).map(({ kind, id }) => `${kind}:${id}`));
@@ -406,39 +594,44 @@ export function useBoDrawing(initialGraph: BoGraph | undefined, onSaved: OnSave)
         for (const [id, point] of Object.entries(suppressedMoves)) {
           if (visibleNodes.has(id) && conflicts.has(`node:${id}`)) unsavedMoves[id] = point;
         }
-        setAccepted([]);
-        setSyncAnchors({});
         setSavedGraph({ base: initialGraph, result });
-        setDraft({
-          objects: pendingObjects,
-          relations: pendingRelations.map((item) => ({
-            ...item,
-            input: {
-              ...item.input,
-              source: aliases.get(item.input.source) ?? item.input.source,
-              target: aliases.get(item.input.target) ?? item.input.target,
-            },
-          })),
-          applications: pendingApplications.map((item) => ({
-            ...item,
-            input: { ...item.input, objectId: aliases.get(item.input.objectId) ?? item.input.objectId },
-          })),
-          moves: unsavedMoves,
-          removed: [],
-          restored: [],
-        });
+        pending = {
+          ...previous,
+          accepted: [],
+          syncAnchors: {},
+          draft: {
+            objects: pendingObjects,
+            relations: pendingRelations.map((item) => ({
+              ...item,
+              input: {
+                ...item.input,
+                source: aliases.get(item.input.source) ?? item.input.source,
+                target: aliases.get(item.input.target) ?? item.input.target,
+              },
+            })),
+            applications: pendingApplications.map((item) => ({
+              ...item,
+              input: { ...item.input, objectId: aliases.get(item.input.objectId) ?? item.input.objectId },
+            })),
+            moves: unsavedMoves,
+            removed: [],
+            restored: [],
+            ...(Object.keys(pendingRoutes).length ? { edgeRoutes: pendingRoutes } : {}),
+            ...(Object.keys(pendingGeometry).length ? { edgeGeometry: pendingGeometry } : {}),
+          },
+        };
       } else {
-        setDraft(next);
+        pending = { ...previous, draft: next };
       }
     } catch (error) {
       failures.push({ id: "layout", names: [], reason: "saveFailed", detail: failureDetail(error) });
-      setDraft(next);
+      pending = { ...previous, draft: next };
     } finally {
+      updateLocal({ ...pending, issues: failures });
       onSaved(
         aliases, savedLayout,
         next.applications.flatMap(({ saved }) => saved ? [saved.object_id] : []),
       );
-      setIssues(failures);
       lock.current = false;
       setBusy(false);
     }
@@ -448,13 +641,16 @@ export function useBoDrawing(initialGraph: BoGraph | undefined, onSaved: OnSave)
   return {
     graph, ...drawing, draft, restoreDraft, applications, accepted, acceptChanges, removedIds: draft.removed, busy, issues, removals, save, syncRemovals,
     hasChanges: !!(accepted.length || draft.objects.length || draft.relations.length || draft.applications.length
-      || draft.removed.length || draft.restored.length || Object.keys(draft.moves).length
+      || draft.removed.length || draft.restored.length || draft.removedNodes?.length || Object.keys(draft.moves).length
+      || Object.keys(draft.edgeRoutes ?? {}).length || Object.keys(draft.edgeGeometry ?? {}).length
       || drawing.nodes.some(({ id }) => !graph?.positions[id])),
     pendingApplications: draft.applications.map(({ input }) => ({
       ...input, objectId: resolveId(draft, input.objectId) ?? input.objectId,
     })),
     isDraftObject: (id: string) => draft.objects.some((item) => item.id === id && !item.saved),
-    stageObject, stageRelation, stageApplication, move, discardDraftRelation, discardFailedDraft,
-    queueRemoval, cancelRemoval,
+    stageObject, stageRelation, stageApplication, move, setEdgeRouting, setEdgeGeometry, discardDraftRelation, discardFailedDraft,
+    queueRemoval, cancelRemoval, removeNodes, renameDraftObject,
+    canUndo: history.current.undo.length > 0, canRedo: history.current.redo.length > 0,
+    undo: () => stepHistory("undo"), redo: () => stepHistory("redo"),
   };
 }

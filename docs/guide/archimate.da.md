@@ -5,6 +5,8 @@
 !!! warning "Versionens status"
     Denne version leverer ArchiMate-fundamentet som en **sandkasse for administratorer**. Modulet er som standard slået fra, diagrammerne vises ikke i menuen [Diagrammer](diagrams.md), og de kan endnu ikke publiceres eller indlejres. Se [Kendte begrænsninger](#known-limits).
 
+Den øverste række viser diagramnavnet, kortfarver, kortindhold og synkronisering. Synkronisering opdaterer data for tilknyttede kort. Rækken nedenunder indeholder tegneværktøjer, zoom, SVG-eksport og egenskabspanelet. Brug **Punktgitter** til at vise eller skjule prikkerne i baggrunden. Browseren husker dit valg for hvert diagram.
+
 ## Slå modulet til
 
 1. Åbn **Admin → Indstillinger** og find kortet **ArchiMate-diagrammer** (ved siden af de øvrige modulkontakter).
@@ -124,6 +126,8 @@ For en Access-relation betyder `crud`, at adgangstypen følger relationens egne 
 | Forretningsproces → Forretningskontekst, *realiserer* | `Realization` | — |
 | Mål → Forretningskontekst, *er mål for* | `Association` | — |
 | Forretningskontekst → Forretningskontekst, *efterfølger* | `Triggering` | tegnet fra målet til kilden |
+
+Højreklik på en forbindelseslinje, og vælg **Lige** eller **Retvinklet**. Linjen beholder ruten, når du flytter en node, og når du gemmer og genåbner diagrammet.
 
 ## Exchange-filen {#exchange-file}
 

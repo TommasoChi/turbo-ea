@@ -1,7 +1,7 @@
 import type Modeling from "diagram-js/lib/features/modeling/Modeling";
 import type Selection from "diagram-js/lib/features/selection/Selection";
 import type ElementRegistry from "diagram-js/lib/core/ElementRegistry";
-import type { Shape } from "diagram-js/lib/model/Types";
+import type { Connection, Shape } from "diagram-js/lib/model/Types";
 import type { EnterpriseObject } from "@/types";
 import { MODEL } from "@/test/archimateModel";
 import { makeBridge } from "@/test/archimateBridge";
@@ -29,6 +29,29 @@ function setup() {
 }
 
 describe("ArchimateEngine", () => {
+  it("keeps the selected connector routing after moving and reopening the diagram", () => {
+    const { engine, get } = setup();
+    const registry = get<ElementRegistry>("elementRegistry");
+    const id = MODEL.views[0].connections[0].id;
+    const assertOrthogonal = () => {
+      const points = (registry.get(id) as Connection).waypoints;
+      expect(points.length).toBeGreaterThan(2);
+      expect(points.slice(1).every((p, i) => Math.abs(p.x - points[i].x) < 0.01 || Math.abs(p.y - points[i].y) < 0.01), JSON.stringify(points)).toBe(true);
+    };
+    engine.setConnectionRouting(id, "orthogonal");
+    assertOrthogonal();
+    get<Modeling>("modeling").moveShape(registry.get("id-n1") as Shape, { x: -45, y: 35 });
+    assertOrthogonal();
+    engine.load(readExchange(writeExchange(engine.toModel())));
+    expect(engine.connectionRouting(id)).toBe("orthogonal");
+    assertOrthogonal();
+    engine.setConnectionRouting(id, "straight");
+    expect((registry.get(id) as Connection).waypoints).toHaveLength(2);
+    engine.undo();
+    expect(engine.connectionRouting(id)).toBe("orthogonal");
+    assertOrthogonal();
+  });
+
   it("round-trips the loaded model unchanged, without touching the caller's object", () => {
     const { engine, onChange } = setup();
     expect(engine.toModel()).toEqual(MODEL);

@@ -82,6 +82,16 @@ export default class ArchimateRenderer extends BaseRenderer {
     super(eventBus, 1200);
   }
 
+  private cards: ReadonlyMap<string, { name: string; color?: string }> = new Map();
+  private showLinkedBadge = true;
+  private showLinkedName = false;
+
+  setCardAppearance(cards: typeof this.cards, showLinkedBadge: boolean, showLinkedName: boolean): void {
+    this.cards = cards;
+    this.showLinkedBadge = showLinkedBadge;
+    this.showLinkedName = showLinkedName;
+  }
+
   canRender(element: Element): boolean {
     const bo = element.businessObject;
     if (element.waypoints) return isRelationshipType(bo?.type);
@@ -106,7 +116,9 @@ export default class ArchimateRenderer extends BaseRenderer {
         ? { fill: tint(eo.color), stroke: eo.color }
         : defaultColors;
     const style = (shape as { style?: { fillColor?: Rgb } }).style;
-    let fill = style?.fillColor ? rgb(style.fillColor) : colors.fill;
+    const cardId = getCardId(bo);
+    const card = cardId ? this.cards.get(cardId) : undefined;
+    let fill = card?.color ? tint(card.color) : style?.fillColor ? rgb(style.fillColor) : colors.fill;
     if (bo.type === "AndJunction") fill = ARCHIMATE_TEXT_COLOR;
     else if (bo.type === "OrJunction") fill = "white";
 
@@ -147,7 +159,13 @@ export default class ArchimateRenderer extends BaseRenderer {
       const first = top + (body === "grouping" ? 4 : 2) + FONT_SIZE - 1;
       svgAppend(visuals, this.text(lines, width / 2, first));
     }
-    if (getCardId(bo) !== null) {
+    if (this.showLinkedName && card?.name && card.name !== bo.name && height >= 52) {
+      const lines = wrapText(card.name, Math.floor((width - 24) / CHAR_WIDTH), 1);
+      const name = this.text(lines, width / 2, height - 6);
+      svgAttr(name, { class: "archimate-linked-name", "font-size": 10 });
+      svgAppend(visuals, name);
+    }
+    if (this.showLinkedBadge && cardId !== null) {
       const badge = svgCreate("circle");
       svgAttr(badge, {
         class: "archimate-linked-badge", cx: width - LINK_BADGE_RADIUS - 2, cy: height - LINK_BADGE_RADIUS - 2,

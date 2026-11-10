@@ -7,6 +7,9 @@ import type { NodeStyle, Rgb } from "../exchange/exchangeModel";
 import type ArchimateElementFactory from "./ArchimateElementFactory";
 import UpdatePropertiesHandler, { type ElementUpdate, type RelationshipUpdate } from "./UpdatePropertiesHandler";
 import UpdateStyleHandler from "./UpdateStyleHandler";
+import { UpdateRoutingHandler, type RoutedConnection } from "./ModelSync";
+import type { ConnectorRouting } from "@/lib/connectorRouting";
+import type { Point } from "diagram-js/lib/util/Types";
 
 export default class ArchimateModeling extends Modeling {
   static $inject = ["eventBus", "elementFactory", "commandStack"];
@@ -21,6 +24,7 @@ export default class ArchimateModeling extends Modeling {
       ...(super.getHandlers() as unknown as Record<string, unknown>),
       "element.updateProperties": UpdatePropertiesHandler,
       "element.updateStyle": UpdateStyleHandler,
+      "connection.updateRouting": UpdateRoutingHandler,
     } as unknown as ReturnType<Modeling["getHandlers"]>;
   }
 
@@ -34,5 +38,9 @@ export default class ArchimateModeling extends Modeling {
   /** One undoable command for every shape at once, even across a multi-selection. */
   setStyle(elements: (Shape & { style?: NodeStyle })[], fillColor: Rgb | null): void {
     this.stack.execute("element.updateStyle", { elements, fillColor });
+  }
+
+  setConnectionRouting(connection: RoutedConnection, routing: ConnectorRouting, waypoints: Point[]): void {
+    this.stack.execute("connection.updateRouting", { connection, routing, waypoints });
   }
 }

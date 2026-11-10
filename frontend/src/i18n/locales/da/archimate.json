@@ -62,6 +62,9 @@
     "label": "Note"
   },
   "toolbar": {
+    "linkedBadge": "Indikator for tilknyttet kort",
+    "linkedName": "Navn på tilknyttet kort",
+    "inventoryRefreshed": "Tilknyttede kort opdateret.",
     "back": "Tilbage",
     "undo": "Fortryd",
     "redo": "Gentag",

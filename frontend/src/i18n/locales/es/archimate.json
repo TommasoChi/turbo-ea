@@ -62,6 +62,9 @@
     "label": "Nota"
   },
   "toolbar": {
+    "linkedBadge": "Indicador de ficha vinculada",
+    "linkedName": "Nombre de la ficha vinculada",
+    "inventoryRefreshed": "Fichas vinculadas actualizadas.",
     "back": "Volver",
     "undo": "Deshacer",
     "redo": "Rehacer",

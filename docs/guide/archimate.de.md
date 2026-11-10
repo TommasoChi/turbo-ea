@@ -5,6 +5,8 @@ Der **ArchiMate**-Editor zeichnet [ArchiMate-3](https://pubs.opengroup.org/archi
 !!! warning "Status der Version"
     Diese Version liefert die ArchiMate-Grundlage als **Sandbox für Administratoren**. Das Modul ist standardmäßig deaktiviert, die Diagramme erscheinen nicht im Menü [Diagramme](diagrams.md) und können noch nicht veröffentlicht oder eingebettet werden. Siehe [Bekannte Einschränkungen](#known-limits).
 
+Die obere Zeile zeigt den Diagrammnamen, Kartenfarben, Karteninhalte und Synchronisierung. Die Synchronisierung aktualisiert Daten verknüpfter Karten. Die untere Zeile enthält Zeichenwerkzeuge, Zoom, SVG-Export und das Eigenschaftenfenster. Über **Punktraster** blenden Sie die Punkte im Hintergrund ein oder aus. Der Browser speichert Ihre Auswahl für jedes Diagramm.
+
 ## Das Modul aktivieren
 
 1. Öffnen Sie **Admin → Einstellungen** und suchen Sie die Kachel **ArchiMate-Diagramme** (neben den anderen Modulschaltern).
@@ -124,6 +126,8 @@ Bei einer Access-Beziehung bedeutet `crud`, dass die Zugriffsart den Create/Read
 | Geschäftsprozess → Geschäftskontext, *realisiert* | `Realization` | — |
 | Ziel → Geschäftskontext, *ist Ziel für* | `Association` | — |
 | Geschäftskontext → Geschäftskontext, *folgt auf* | `Triggering` | vom Ziel zur Quelle gezeichnet |
+
+Klicken Sie mit der rechten Maustaste auf eine Verbindungslinie und wählen Sie **Gerade** oder **Rechtwinklig**. Die Linienführung bleibt beim Verschieben eines Knotens sowie nach dem Speichern und erneuten Öffnen des Diagramms erhalten.
 
 ## Die Exchange-Datei {#exchange-file}
 

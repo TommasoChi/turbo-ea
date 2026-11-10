@@ -153,11 +153,21 @@ Le bouton Sync de la barre d'outils affiche une pastille pulsée « N non synchr
 
 Les diagrammes peuvent être liés à **n'importe quelle fiche** depuis l'onglet **Ressources** de la fiche (voir [Détail des fiches](card-details.fr.md#onglet-ressources)). Lorsqu'un diagramme est lié à une fiche **Initiative**, il apparaît également dans le module [EA Delivery](delivery.md) aux côtés des documents SoAW.
 
-## Comparer les relations entre objets métier avec l’inventaire
+## Data Modeller
 
-Ouvrez **Relations entre objets métier** dans **Application & Data Architecture**. Le canevas affiche le dernier dessin partagé. La page le compare à l’inventaire et répertorie les changements que vous pouvez consulter sous **Modifications de l’inventaire**. Cliquez sur **Vérifier les mises à jour** pour relancer la comparaison.
+Dans **Application & Data Architecture**, ouvrez **Data Modeller**. La première ligne contient la couleur, le contenu des fiches et la synchronisation. La barre suivante regroupe les outils de dessin, les panneaux, le zoom, les filtres et l’export SVG. Le diagramme affiche le dernier dessin partagé. Lancez la synchronisation pour consulter les modifications de l’inventaire.
 
 ![Diagramme des relations entre objets métier avec l’application de référence et la fiche de l’objet métier sélectionné](../assets/img/fr/105_relations_objets_metier.png)
+
+Faites glisser la ligne ou ses poignées pour déplacer un segment, ajouter un coude ou déplacer son point d’ancrage le long d’un objet. Enregistrez pour partager le tracé. Une ligne simple indique un. Une patte d’oie indique plusieurs (N ou M). Utilisez **Grille de points** pour afficher ou masquer les points du fond. Le navigateur mémorise votre choix pour chaque diagramme.
+
+Cliquez avec le bouton droit sur un connecteur et choisissez **Droit** ou **Orthogonal**. Le tracé est conservé quand vous déplacez un nœud et après avoir enregistré puis rouvert le diagramme.
+
+Pour vous déplacer dans le diagramme, maintenez le bouton gauche de la souris enfoncé sur le fond et faites glisser la souris. Utilisez la molette pour défiler verticalement, **Maj** avec la molette pour défiler horizontalement et **Ctrl** avec la molette pour zoomer. Vous pouvez aussi placer le focus sur le canevas et utiliser les touches fléchées.
+
+Ouvrez **Raccourcis clavier** dans la barre d’outils pour consulter les commandes disponibles. Le bouton du panneau permet d’afficher ou de masquer les détails de la fiche. La sélection d’un objet métier affiche de nouveau ses détails.
+
+Si vous pouvez modifier le diagramme, **Annuler** et **Rétablir** agissent sur les modifications du brouillon en cours. **Supprimer** retire les objets métier sélectionnés du dessin lors de l’enregistrement. Leurs fiches et leurs liens restent disponibles dans l’inventaire. Pour une ligne sélectionnée, la confirmation et la synchronisation habituelles s’appliquent. **Copier** et **Coller** ouvrent un nouveau brouillon pour chaque objet métier copié afin que vous puissiez modifier son nom avant de l’ajouter. Renommer une fiche enregistrée met à jour l’inventaire. Synchronisez la modification pour reprendre le nouveau nom dans le dessin.
 
 1. Passez en revue les objets métier et les liens ajoutés, mis à jour ou supprimés.
 2. Si vous pouvez modifier le diagramme, cliquez sur **Synchroniser** pour les changements que vous souhaitez reprendre. Ils apparaissent sur votre canevas. Par exemple, un objet métier renommé et passé au sous-type **Document** affiche son nouveau nom et un coin replié, tout en gardant sa position.

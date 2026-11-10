@@ -153,11 +153,21 @@ El botón Sync de la barra de herramientas muestra una pastilla pulsante «N sin
 
 Los diagramas pueden vincularse a **cualquier tarjeta** desde la pestaña **Recursos** de la tarjeta (ver [Detalle de tarjetas](card-details.es.md#pestaña-recursos)). Cuando un diagrama está vinculado a una tarjeta **Iniciativa**, también aparece en el módulo [EA Delivery](delivery.md) junto a los documentos SoAW.
 
-## Comparar las relaciones entre objetos de negocio con el inventario
+## Data Modeller
 
-Abra **Relaciones entre objetos de negocio** en **Application & Data Architecture**. El lienzo muestra el último dibujo compartido. La página lo compara con el inventario y enumera los cambios que puede consultar en **Cambios en el inventario**. Use **Buscar actualizaciones** para repetir la comparación.
+En **Application & Data Architecture**, abre **Data Modeller**. La primera fila contiene el color, el contenido de las fichas y la sincronización. La barra inferior contiene las herramientas de edición, los paneles, el zoom, los filtros y la exportación SVG. El diagrama muestra el último dibujo compartido. Usa la sincronización para volver a consultar los cambios del inventario.
 
 ![Diagrama de relaciones entre objetos de negocio con la aplicación maestra y la ficha del objeto de negocio seleccionado](../assets/img/es/105_relaciones_objetos_negocio.png)
+
+Arrastra la línea o sus controles para mover un segmento, añadir un codo o cambiar el punto de anclaje en el borde de un objeto. Guarda el nuevo recorrido para compartirlo. Una línea simple indica uno. La pata de cuervo indica muchos (N o M). Usa **Cuadrícula de puntos** para mostrar u ocultar los puntos del fondo. El navegador recuerda tu elección para cada diagrama.
+
+Haz clic con el botón derecho en un conector y elige **Recto** u **Ortogonal**. El conector mantiene su trazado al mover un nodo y al guardar y volver a abrir el diagrama.
+
+Para desplazarse por el diagrama, mantenga pulsado el botón izquierdo del ratón sobre el fondo y arrastre. Use la rueda para desplazarse en vertical, **Mayús** con la rueda para desplazarse en horizontal y **Ctrl** con la rueda para ajustar el zoom. También puede poner el foco en el lienzo y utilizar las teclas de flecha.
+
+Abra **Atajos de teclado** en la barra de herramientas para ver los comandos disponibles. Use el botón del panel para mostrar u ocultar los detalles de la ficha. Al seleccionar un objeto de negocio, se vuelven a abrir sus detalles.
+
+Si puede editar el diagrama, **Deshacer** y **Rehacer** se aplican a los cambios del borrador actual. **Eliminar** quita del dibujo los objetos de negocio seleccionados cuando guarda. Sus fichas y vínculos siguen disponibles en el inventario. Para una línea seleccionada, se aplican la confirmación y la sincronización habituales. **Copiar** y **Pegar** abren un nuevo borrador por cada objeto de negocio copiado para que pueda cambiar su nombre antes de añadirlo. Cambiar el nombre de una ficha guardada actualiza el inventario. Sincronice el cambio para incorporar el nuevo nombre al dibujo.
 
 1. Revise los objetos de negocio y los vínculos nuevos, actualizados o eliminados.
 2. Si puede editar el diagrama, haga clic en **Sincronizar** junto a los cambios que quiera incorporar. Los cambios aparecerán en el lienzo. Por ejemplo, si un objeto de negocio cambia de nombre y pasa al subtipo **Documento**, aparecerá en la misma posición con el nuevo nombre y una esquina doblada.

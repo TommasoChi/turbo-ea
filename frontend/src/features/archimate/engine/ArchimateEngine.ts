@@ -13,7 +13,10 @@ import type Selection from "diagram-js/lib/features/selection/Selection";
 import type { Element, Shape } from "diagram-js/lib/model/Types";
 import type ZoomScroll from "diagram-js/lib/navigation/zoomscroll/ZoomScroll";
 import type { Point } from "diagram-js/lib/util/Types";
+import { getMid } from "diagram-js/lib/layout/LayoutUtil";
+import type CroppingConnectionDocking from "diagram-js/lib/layout/CroppingConnectionDocking";
 import { innerSVG } from "tiny-svg";
+import type { ConnectorRouting } from "@/lib/connectorRouting";
 import type { EnterpriseObject } from "@/types";
 import {
   CARD_ID_DEFINITION, getCardId, isCustomEnterpriseObject, isNoteObject, newIdentifier,
@@ -22,14 +25,28 @@ import {
 import type { ElementType } from "../taxonomy/elements";
 import type { RelationshipType } from "../taxonomy/relationships";
 import type ArchimateModeling from "./ArchimateModeling";
+import type ArchimateRenderer from "./ArchimateRenderer";
 import type { EditorBridge } from "./EditorBridge";
 import { ARCHIMATE_MODULES } from "./modules";
+import { archimateOrthogonalWaypoints, cropConnection, type RoutedConnection } from "./ModelSync";
 import { reconcileModel } from "./reconcile";
 import { extractEdited, importView, type ViewServices } from "./viewIO";
 
 /** Neither carries an ArchiMate type, a card, documentation or properties: a Note's free text and
  *  a custom Enterprise Object's instance name are the only things either one has of its own. */
 const isFreeText = (bo: unknown): boolean => isNoteObject(bo) || isCustomEnterpriseObject(bo);
+const ROUTING_DEFINITION = "propid-turboea-orthogonalConnections";
+
+function orthogonalIds(model: ArchimateModel): Set<string> {
+  const property = model.properties.find(({ ref }) => ref === ROUTING_DEFINITION);
+  if (!property) return new Set();
+  try {
+    const ids: unknown = JSON.parse(property.value);
+    return new Set(Array.isArray(ids) ? ids.filter((id): id is string => typeof id === "string") : []);
+  } catch {
+    return new Set();
+  }
+}
 
 export interface EngineOptions {
   container: HTMLElement; bridge: EditorBridge; enterpriseObjects: EnterpriseObject[]; onChange?: () => void;
@@ -39,6 +56,7 @@ export interface EngineOptions {
   viewpointObjectKeys?: string[] | null;
   /** The selection changed (a click, a lasso, a delete). */
   onSelect?: () => void;
+  onConnectionContextMenu?: (id: string, anchor: { left: number; top: number }) => void;
 }
 
 /** A property the user typed (the card link, stored as a property too, is not one of them). */
@@ -87,6 +105,11 @@ export class ArchimateEngine {
       if (e.trigger !== "clear") this.onChange?.();
     });
     this.get<EventBus>("eventBus").on("selection.changed", () => opts.onSelect?.());
+    this.get<EventBus>("eventBus").on("element.contextmenu", ({ element, originalEvent }: { element: Element; originalEvent: MouseEvent }) => {
+      if (!opts.onConnectionContextMenu || !element.waypoints) return;
+      originalEvent.preventDefault();
+      opts.onConnectionContextMenu(element.id, { left: originalEvent.clientX, top: originalEvent.clientY });
+    });
   }
 
   private get<T>(name: string): T {
@@ -108,12 +131,41 @@ export class ArchimateEngine {
     if (!base.views.length) base.views.push({ id: newIdentifier(), name: base.name, nodes: [], connections: [], notes: [] });
     this.base = base;
     this.diagram.clear(); // also empties the command stack, without a change event
-    importView(this.services(), base, base.views[0]);
+    importView(this.services(), base, base.views[0], orthogonalIds(base));
   }
 
   toModel(): ArchimateModel {
     if (!this.base) throw new Error("ArchimateEngine.toModel() before load()");
-    return structuredClone(reconcileModel(this.base, extractEdited(this.services(), this.base.views[0])));
+    const model = reconcileModel(this.base, extractEdited(this.services(), this.base.views[0]));
+    const ids = orthogonalIds(this.base);
+    for (const { id } of this.base.views[0].connections) ids.delete(id);
+    const routed = this.get<ElementRegistry>("elementRegistry").filter((element) =>
+      !!element.waypoints && !!(element as RoutedConnection).orthogonal);
+    for (const { id } of routed) ids.add(id);
+    // Use an Exchange Format model property, while the actual geometry stays in bendpoints.
+    model.properties = model.properties.filter(({ ref }) => ref !== ROUTING_DEFINITION);
+    model.propertyDefinitions = model.propertyDefinitions.filter(({ id }) => id !== ROUTING_DEFINITION);
+    if (ids.size) {
+      model.propertyDefinitions.push({ id: ROUTING_DEFINITION, name: "turboea:orthogonalConnections", type: "string" });
+      model.properties.push({ ref: ROUTING_DEFINITION, value: JSON.stringify([...ids].sort()) });
+    }
+    return structuredClone(model);
+  }
+
+  connectionRouting(id: string): ConnectorRouting | undefined {
+    const connection = this.get<ElementRegistry>("elementRegistry").get(id) as RoutedConnection | undefined;
+    if (!connection?.waypoints) return undefined;
+    return connection.orthogonal ? "orthogonal" : connection.waypoints.length === 2 ? "straight" : undefined;
+  }
+
+  setConnectionRouting(id: string, routing: ConnectorRouting): void {
+    const connection = this.get<ElementRegistry>("elementRegistry").get(id) as RoutedConnection | undefined;
+    if (!connection?.waypoints || !connection.source || !connection.target || this.connectionRouting(id) === routing) return;
+    const { source, target } = connection;
+    const waypoints = routing === "orthogonal" ? archimateOrthogonalWaypoints(source, target) : [getMid(source), getMid(target)];
+    const routed = { ...connection, source, target, waypoints };
+    cropConnection(this.get<CroppingConnectionDocking>("connectionDocking"), routed);
+    this.get<ArchimateModeling>("modeling").setConnectionRouting(connection, routing, routed.waypoints);
   }
 
   private shape(shapeId: string): Shape | undefined {
@@ -236,7 +288,7 @@ export class ArchimateEngine {
 
   /** The model's own custom properties — the diagram's "parameters" in the properties panel. */
   modelProperties(): UserProperty[] {
-    return this.userProperties({ properties: this.base?.properties ?? [] });
+    return this.userProperties({ properties: (this.base?.properties ?? []).filter(({ ref }) => ref !== ROUTING_DEFINITION) });
   }
 
   /**
@@ -250,14 +302,15 @@ export class ArchimateEngine {
     for (const { name, value } of props) if (name.trim()) byName.set(name.trim(), value);
     const wanted = [...byName].map(([name, value]) => ({ name, value }));
     if (JSON.stringify(wanted) === JSON.stringify(this.modelProperties())) return;
-    base.properties = wanted.map(({ name, value }) => {
-      let def = base.propertyDefinitions.find((d) => d.id !== CARD_ID_DEFINITION && d.name === name);
+    const routingProperties = base.properties.filter(({ ref }) => ref === ROUTING_DEFINITION);
+    base.properties = [...wanted.map(({ name, value }) => {
+      let def = base.propertyDefinitions.find((d) => d.id !== CARD_ID_DEFINITION && d.id !== ROUTING_DEFINITION && d.name === name);
       if (!def) {
         def = { id: `propid-${newIdentifier().slice(3)}`, name, type: "string" };
         base.propertyDefinitions.push(def);
       }
       return { ref: def.id, value };
-    });
+    }), ...routingProperties];
     this.onChange?.();
   }
 
@@ -280,6 +333,14 @@ export class ArchimateEngine {
   redo(): void { this.get<CommandStack>("commandStack").redo(); }
   canUndo(): boolean { return this.get<CommandStack>("commandStack").canUndo(); }
   canRedo(): boolean { return this.get<CommandStack>("commandStack").canRedo(); }
+
+  setCardAppearance(cards: ReadonlyMap<string, { name: string; color?: string }>, badge: boolean, name: boolean): void {
+    this.get<ArchimateRenderer>("archimateRenderer").setCardAppearance(cards, badge, name);
+    const elements = this.get<ElementRegistry>("elementRegistry").filter((element) =>
+      !element.waypoints && Array.isArray(element.businessObject?.properties) && getCardId(element.businessObject) !== null,
+    );
+    this.get<EventBus>("eventBus").fire("elements.changed", { elements });
+  }
 
   zoomBy(step: number): void { this.get<ZoomScroll>("zoomScroll").stepZoom(step); }
   // "auto" centres the drawing (Canvas.js accepts it; the d.ts only knows a Point).

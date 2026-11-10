@@ -1,5 +1,8 @@
 {
   "page.title": "Diagrams",
+  "routing.label": "Connector routing",
+  "routing.straight": "Straight",
+  "routing.orthogonal": "Orthogonal",
   "gallery.newDiagram": "New Diagram",
   "gallery.diagramType": "Diagram type",
   "gallery.diagramTypeDrawio": "Draw.io",
@@ -49,6 +52,7 @@
   "editor.toolbar.syncTooltipPending_other": "{{count}} unsynced changes — click to review",
   "editor.toolbar.syncTooltipStale_one": "{{count}} inventory change needs review",
   "editor.toolbar.syncTooltipStale_other": "{{count}} inventory changes need review",
+  "editor.toolbar.dotGrid": "Dot grid",
   "editor.toolbar.moreActions": "More actions",
   "editor.toolbar.applyIcons": "Apply card-type icons",
   "editor.toolbar.iconsApplied_one": "Added the icon to {{count}} card",

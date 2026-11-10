@@ -292,6 +292,23 @@ it("loads BO detail and permissions only from the scoped endpoint", async () => 
   expect(vi.mocked(api.get).mock.calls.some(([path]) => path.startsWith("/cards/"))).toBe(false);
 });
 
+it("renders docked BO details inside their host without hiding the canvas", async () => {
+  vi.mocked(api.get).mockResolvedValue({ card: CARD, permissions: { can_view: true } });
+  const onClose = vi.fn();
+  render(<MemoryRouter>
+    <button>Diagram node</button>
+    <aside aria-label="Details column">
+      <CardDetailSidePanel cardId="c1" open onClose={onClose} docked boScoped />
+    </aside>
+  </MemoryRouter>);
+  const details = await screen.findByTestId("card-content");
+  expect(screen.getByRole("complementary", { name: "Details column" })).toContainElement(details);
+  expect(screen.getByRole("button", { name: "Diagram node" })).toBeVisible();
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  await userEvent.click(screen.getByRole("button", { name: "Close" }));
+  expect(onClose).toHaveBeenCalledOnce();
+});
+
 it("does not replace the current card with a late BO detail response", async () => {
   let resolveFirst!: (value: unknown) => void;
   vi.mocked(api.get).mockImplementation((path: string) => path.includes("/c1/")

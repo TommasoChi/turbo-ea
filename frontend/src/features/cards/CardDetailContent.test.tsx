@@ -49,7 +49,9 @@ vi.mock("@/features/cards/sections", async () => {
     LifecycleSection: stub,
     HierarchySection: stub,
     SuccessorsSection: stub,
-    RelationsSection: stub,
+    RelationsSection: ({ initialExpanded }: { initialExpanded: boolean }) => (
+      <div data-testid="relations" data-expanded={initialExpanded} />
+    ),
     LayeredDependencySection: stub,
     CommentsTab: stub,
     TodosTab: stub,
@@ -140,6 +142,14 @@ beforeEach(() => {
 });
 
 describe("CardDetailContent extension field visibility", () => {
+  it("shows the BO relationships above the other sections in the diagram panel", async () => {
+    renderContent(true);
+    const relations = screen.getByTestId("relations");
+    const attributes = await screen.findByText("Indicators");
+    expect(relations).toHaveAttribute("data-expanded", "true");
+    expect(relations.compareDocumentPosition(attributes) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
   it("keeps inventory extension providers and header slots out of a scoped card", async () => {
     registerExtension("daaf", {
       key: "daaf",

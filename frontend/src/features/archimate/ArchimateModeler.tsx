@@ -9,7 +9,7 @@
  * A failed save is never silent: the error stays on screen with a Retry, the diagram stays dirty and
  * the browser warns before the tab closes.
  */
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useTheme } from "@mui/material/styles";
 import useMediaQuery from "@mui/material/useMediaQuery";
@@ -23,13 +23,17 @@ import DialogContent from "@mui/material/DialogContent";
 import DialogContentText from "@mui/material/DialogContentText";
 import DialogTitle from "@mui/material/DialogTitle";
 import Divider from "@mui/material/Divider";
-import IconButton from "@mui/material/IconButton";
 import Snackbar from "@mui/material/Snackbar";
-import Stack from "@mui/material/Stack";
-import Tooltip from "@mui/material/Tooltip";
 import Typography from "@mui/material/Typography";
 import CardDetailSidePanel from "@/components/CardDetailSidePanel";
 import MaterialSymbol from "@/components/MaterialSymbol";
+import { DiagramCanvasToolbar, DiagramDisplayMenu, DiagramEditorHeader, DiagramGridTool, DiagramSyncButton, DiagramTool } from "@/components/DiagramEditorToolbar";
+import ColorBySelector from "@/features/diagrams/ColorBySelector";
+import { buildColorMap, colorKeyForCard, type ViewSource } from "@/features/diagrams/viewSource";
+import { useMetamodel } from "@/hooks/useMetamodel";
+import { useDiagramDotGrid } from "@/hooks/useDiagramDotGrid";
+import { useFieldLabel, useOptionLabel, useTypeLabel } from "@/hooks/useResolveLabel";
+import { useLatestRequest } from "@/hooks/useLatestRequest";
 import { fetchCardsByIds } from "@/api/cardsByIds";
 import { getViewpoint } from "@/api/archimateViewpoints";
 import { api } from "@/api/client";
@@ -47,6 +51,7 @@ import ArchimatePropertiesPanel from "./ArchimatePropertiesPanel";
 import CreateCardDialog from "./CreateCardDialog";
 import LinkCardDialog from "./LinkCardDialog";
 import ShortcutsDialog from "./ShortcutsDialog";
+import ConnectorRoutingMenu from "@/components/ConnectorRoutingMenu";
 import ValidationDialog, { type ValidationIssue } from "./ValidationDialog";
 import { describeApiError } from "./saveError";
 import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
@@ -89,8 +94,19 @@ function parse(xml: string): { model: ArchimateModel; warnings: string[] } {
 const fileName = (name: string) => name.replace(/[\\/:*?"<>|]+/g, "_").trim() || "diagram";
 
 export default function ArchimateModeler({ diagramId, onBack, onEngine }: ArchimateModelerProps) {
-  const { t } = useTranslation(["archimate", "common", "cards"]);
+  const { t } = useTranslation(["archimate", "common", "cards", "diagrams"]);
   const theme = useTheme();
+  const { types } = useMetamodel();
+  const typeLabel = useTypeLabel();
+  const fieldLabel = useFieldLabel();
+  const optionLabel = useOptionLabel();
+  const [cardView, setCardView] = useState<ViewSource>({ kind: "card_type" });
+  const [cards, setCards] = useState<Card[]>([]);
+  const [showLinkedBadge, setShowLinkedBadge] = useState(true);
+  const [showLinkedName, setShowLinkedName] = useState(false);
+  const [showGrid, toggleGrid] = useDiagramDotGrid(`archimate.${diagramId}`);
+  const [syncing, setSyncing] = useState(false);
+  const { run: runInventory, cancel: cancelInventory } = useLatestRequest();
   const {
     bridge, enterpriseObjects, enterpriseObjectsLoaded,
     linkShapeId, createShapeId, objectInfo, objectInfoObject, closeDialogs, rememberCards,
@@ -129,6 +145,7 @@ export default function ArchimateModeler({ diagramId, onBack, onEngine }: Archim
   const [pendingImport, setPendingImport] = useState<{ model: ArchimateModel; warnings: string[] } | null>(null);
   const [issues, setIssues] = useState<ValidationIssue[] | null>(null);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const [routeMenu, setRouteMenu] = useState<{ id: string; left: number; top: number } | null>(null);
   // The card sheet drawer, opened from the panel's "Linked card" button.
   const [cardSheetId, setCardSheetId] = useState<string | null>(null);
   // The full card record behind the selected element's link, for the panel's readonly summary.
@@ -172,6 +189,9 @@ export default function ArchimateModeler({ diagramId, onBack, onEngine }: Archim
     setPendingImport(null);
     setIssues(null);
     setCardSheetId(null);
+    cancelInventory();
+    setCards([]);
+    setSyncing(false);
     setLinkedCard(null);
     setLinkedCardLoading(false);
     closeDialogs();
@@ -307,18 +327,40 @@ export default function ArchimateModeler({ diagramId, onBack, onEngine }: Archim
   // Stable identity: a language switch must never rebuild the engine (that would drop the edits).
   const reasonRef = useRef(reason);
   reasonRef.current = reason;
-  const resolveNames = useCallback(
-    async (m: ArchimateModel) => {
-      const epoch = epochRef.current;
-      try {
-        rememberCards(await fetchCardsByIds(linkedCardIds(m)));
-      } catch (e) {
-        // Links still work; only the names in the context pad are missing.
-        if (epoch === epochRef.current && !unmountedRef.current) setSnack(reasonRef.current(e));
-      }
+  const refreshInventory = useCallback(
+    (m: ArchimateModel, requested = false) => {
+      if (requested) setSyncing(true);
+      void runInventory(async ({ signal, isCurrent }) => {
+        try {
+          const result = await fetchCardsByIds(linkedCardIds(m), { signal });
+          if (!isCurrent()) return;
+          rememberCards(result);
+          setCards(result);
+          if (requested) {
+            const selected = engineRef.current?.selectedItem();
+            const selectedId = selected?.kind === "element" ? selected.cardId : null;
+            if (selectedId) setLinkedCard(result.find(({ id }) => id === selectedId) ?? null);
+            setSnack(t("archimate:toolbar.inventoryRefreshed"));
+          }
+        } catch (e) {
+          if (isCurrent()) setSnack(reasonRef.current(e));
+        } finally {
+          if (isCurrent()) setSyncing(false);
+        }
+      });
     },
-    [rememberCards],
+    [rememberCards, runInventory, t],
   );
+  const refreshInventoryRef = useRef(refreshInventory);
+  refreshInventoryRef.current = refreshInventory;
+  const activeCardTypes = useMemo(() => [...new Set(cards.map(({ type }) => type).filter(Boolean))], [cards]);
+  const cardAppearance = useMemo(() => {
+    const palette = buildColorMap(cardView, types, { typeLabel, fieldLabel, optionLabel, t });
+    return new Map(cards.map((card) => {
+      const key = colorKeyForCard(cardView, card);
+      return [card.id, { name: card.name, color: key ? palette.get(key)?.color : undefined }];
+    }));
+  }, [cardView, cards, types, typeLabel, fieldLabel, optionLabel, t]);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -334,11 +376,12 @@ export default function ArchimateModeler({ diagramId, onBack, onEngine }: Archim
       container, bridge, enterpriseObjects, viewpointObjectKeys,
       onChange: () => markChangedRef.current(),
       onSelect: () => refreshPanelRef.current(),
+      onConnectionContextMenu: (id, anchor) => setRouteMenu({ id, ...anchor }),
     });
     engine.load(model);
     engineRef.current = engine;
     setHistory({ undo: false, redo: false });
-    void resolveNames(model);
+    refreshInventoryRef.current(model);
     onEngineRef.current?.(engine);
     return () => {
       engine.destroy();
@@ -346,7 +389,11 @@ export default function ArchimateModeler({ diagramId, onBack, onEngine }: Archim
     };
     // enterpriseObjects itself is still a dependency (it's read inside), but in practice it is
     // already stable by the time enterpriseObjectsLoaded flips true, so this effect now runs once.
-  }, [model, bridge, enterpriseObjects, enterpriseObjectsLoaded, viewpointObjectKeys, viewpointLoaded, resolveNames]);
+  }, [model, bridge, enterpriseObjects, enterpriseObjectsLoaded, viewpointObjectKeys, viewpointLoaded]);
+
+  useEffect(() => {
+    engineRef.current?.setCardAppearance(cardAppearance, showLinkedBadge, showLinkedName);
+  }, [model, enterpriseObjectsLoaded, viewpointLoaded, cardAppearance, showLinkedBadge, showLinkedName]);
 
   useEffect(() => {
     unmountedRef.current = false;
@@ -454,7 +501,7 @@ export default function ArchimateModeler({ diagramId, onBack, onEngine }: Archim
     if (!engine || !next) return;
     engine.load(next.model);
     setWarnings(next.warnings);
-    void resolveNames(next.model);
+    refreshInventory(next.model);
     markChanged();
   };
 
@@ -519,25 +566,24 @@ export default function ArchimateModeler({ diagramId, onBack, onEngine }: Archim
       ? t("archimate:status.unsaved")
       : t("archimate:status.saved");
   const tool = (label: string, icon: string, onClick: () => void, disabled = false) => (
-    <Tooltip title={label}>
-      <span>
-        <IconButton size="small" aria-label={label} onClick={onClick} disabled={disabled}>
-          <MaterialSymbol icon={icon} />
-        </IconButton>
-      </span>
-    </Tooltip>
+    <DiagramTool label={label} icon={icon} onClick={onClick} disabled={disabled} />
   );
   const divider = <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />;
 
   return (
     <Box sx={{ display: "flex", flexDirection: "column", height: "calc(100vh - 64px - 48px)" }}>
-      <Stack
-        direction="row"
-        alignItems="center"
-        spacing={0.5}
-        sx={{ px: 2, py: 1, borderBottom: 1, borderColor: "divider", bgcolor: "background.paper", flexWrap: "wrap" }}
-      >
-        {onBack && tool(t("archimate:toolbar.back"), "arrow_back", onBack)}
+      <DiagramEditorHeader title={name} onBack={onBack}>
+        <ColorBySelector activeTypeKeys={activeCardTypes} types={types} current={cardView} onChange={setCardView} />
+        <DiagramDisplayMenu label={t("common:cardDisplay.showOnCard")} icon="label" options={[
+          { label: t("archimate:toolbar.linkedBadge"), checked: showLinkedBadge, onSelect: () => setShowLinkedBadge((v) => !v) },
+          { label: t("archimate:toolbar.linkedName"), checked: showLinkedName, onSelect: () => setShowLinkedName((v) => !v) },
+        ]} />
+        <DiagramSyncButton disabled={syncing} onClick={() => {
+          const current = engineRef.current;
+          if (current) refreshInventory(current.toModel(), true);
+        }} />
+      </DiagramEditorHeader>
+      <DiagramCanvasToolbar>
         <Button
           variant="contained"
           size="small"
@@ -564,6 +610,7 @@ export default function ArchimateModeler({ diagramId, onBack, onEngine }: Archim
         {tool(t("archimate:toolbar.exportSvg"), "image", () => void exportSvg())}
         {tool(t("archimate:toolbar.importXml"), "upload", () => fileInputRef.current?.click())}
         <Box sx={{ flex: 1 }} />
+        <DiagramGridTool enabled={showGrid} onToggle={toggleGrid} />
         {tool(t("archimate:toolbar.shortcuts"), "keyboard", () => setShortcutsOpen(true))}
         {tool(
           t("archimate:toolbar.togglePanel"),
@@ -582,7 +629,7 @@ export default function ArchimateModeler({ diagramId, onBack, onEngine }: Archim
             void onFileChosen(file);
           }}
         />
-      </Stack>
+      </DiagramCanvasToolbar>
 
       {saveError && (
         <Alert
@@ -609,7 +656,7 @@ export default function ArchimateModeler({ diagramId, onBack, onEngine }: Archim
       )}
 
       <Box sx={{ flex: 1, minHeight: 0, display: "flex" }}>
-        <Box ref={containerRef} sx={{ flex: 1, minWidth: 0, minHeight: 0, ...archimateCanvasSx(theme) }} />
+        <Box ref={containerRef} sx={{ flex: 1, minWidth: 0, minHeight: 0, ...archimateCanvasSx(theme, showGrid) }} />
         {panelOpen && (
           <ArchimatePropertiesPanel
             info={selected}
@@ -669,6 +716,10 @@ export default function ArchimateModeler({ diagramId, onBack, onEngine }: Archim
       )}
       {issues && <ValidationDialog open issues={issues} onClose={() => setIssues(null)} />}
       <ShortcutsDialog open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
+      <ConnectorRoutingMenu anchor={routeMenu}
+        routing={routeMenu ? engineRef.current?.connectionRouting(routeMenu.id) : undefined}
+        onSelect={(routing) => { if (routeMenu) engineRef.current?.setConnectionRouting(routeMenu.id, routing); }}
+        onClose={() => setRouteMenu(null)} />
 
       <Dialog open={!!pendingImport} onClose={() => setPendingImport(null)}>
         <DialogTitle>{t("archimate:import.confirmTitle")}</DialogTitle>

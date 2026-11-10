@@ -78,3 +78,22 @@ it("does not offer a stale source after restoring, editing and saving its draft"
   const reopened = renderHook(() => useBoRecovery(savedGraph, "editor", true, empty, [], vi.fn(), false, permissions));
   await waitFor(() => expect(reopened.result.current.candidate?.draft.moves.a.x).toBe(5));
 });
+
+it("recovers local node hiding only for objects in the scoped drawing", async () => {
+  const scoped = {
+    ...graph,
+    nodes: [{ id: "a", name: "Customer", subtype: "Data", isPersonalData: false, isPaymentData: false }],
+  };
+  localStorage.setItem("turbo-ea-bo-relationship-draft-v1-editor", JSON.stringify({
+    version: 1,
+    revision: null,
+    original: { positions: {}, edges: [] },
+    draft: { ...empty, removedNodes: ["a", "revoked"] },
+    accepted: [],
+  }));
+  const restore = vi.fn();
+  const reopened = renderHook(() => useBoRecovery(scoped, "editor", true, empty, [], restore, false, permissions));
+  await waitFor(() => expect(reopened.result.current.candidate?.draft.removedNodes).toEqual(["a"]));
+  act(() => reopened.result.current.apply());
+  expect(restore).toHaveBeenCalledWith({ ...empty, removedNodes: ["a"] }, []);
+});

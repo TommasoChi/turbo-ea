@@ -1,6 +1,6 @@
 import { useId, useState, type ReactNode } from "react";
 import {
-  Button, Checkbox, Dialog, DialogActions, DialogContent, DialogTitle,
+  Alert, Button, Checkbox, Dialog, DialogActions, DialogContent, DialogTitle,
   FormControlLabel, Stack, TextField, Typography,
 } from "@mui/material";
 import { useTranslation } from "react-i18next";
@@ -14,29 +14,30 @@ import { CARDINALITIES, type BoApplicationInput, type BoLinkInput, type BoObject
 type DialogProps = { onClose: () => void };
 
 function StageDialog({
-  title, action, ready, onClose, onStage, children,
+  title, action, ready, pending, onClose, onStage, children,
 }: DialogProps & {
   title: string;
   action: string;
   ready: boolean;
+  pending?: boolean;
   onStage: () => void;
   children: ReactNode;
 }) {
   const { t: tCommon } = useTranslation("common");
   const titleId = useId();
   return (
-    <Dialog open onClose={onClose} aria-labelledby={titleId} fullWidth maxWidth="xs">
+    <Dialog open onClose={pending ? undefined : onClose} aria-labelledby={titleId} fullWidth maxWidth="xs">
       <DialogTitle id={titleId}>{title}</DialogTitle>
       <form onSubmit={(event) => {
         event.preventDefault();
-        if (ready) onStage();
+        if (ready && !pending) onStage();
       }}>
         <DialogContent>
           <Stack spacing={2} sx={{ pt: 1 }}>{children}</Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={onClose}>{tCommon("actions.cancel")}</Button>
-          <Button type="submit" variant="contained" disabled={!ready}>{action}</Button>
+          <Button disabled={pending} onClick={onClose}>{tCommon("actions.cancel")}</Button>
+          <Button type="submit" variant="contained" disabled={!ready || pending}>{action}</Button>
         </DialogActions>
       </form>
     </Dialog>
@@ -44,19 +45,22 @@ function StageDialog({
 }
 
 const nativeSelect = { select: { native: true } } as const;
+const nameLimit = 500;
 
-export function BoNewObjectDialog({ onClose, onStage }: DialogProps & { onStage: (input: BoObjectInput) => void }) {
+export function BoNewObjectDialog({ onClose, onStage, copy }: DialogProps & {
+  onStage: (input: BoObjectInput) => void;
+  copy?: BoNode;
+}) {
   const { t } = useTranslation("reports");
   const id = useId();
   const { types } = useMetamodel();
   const subtypeLabel = useSubtypeLabel();
   const subtypes = types.find(({ key }) => key === "DataObject")?.subtypes ?? [];
-  const [name, setName] = useState("");
-  const [subtype, setSubtype] = useState("");
-  const [isPersonalData, setPersonalData] = useState(false);
-  const [isPaymentData, setPaymentData] = useState(false);
+  const [name, setName] = useState(() => copy ? t("boRelationship.copyName", { name: copy.name }) : "");
+  const [subtype, setSubtype] = useState(copy?.subtype ?? "");
+  const [isPersonalData, setPersonalData] = useState(copy?.isPersonalData ?? false);
+  const [isPaymentData, setPaymentData] = useState(copy?.isPaymentData ?? false);
   const trimmedName = name.trim();
-  const nameLimit = 500;
   const tooLong = [...trimmedName].length > nameLimit;
   return (
     <StageDialog
@@ -87,6 +91,33 @@ export function BoNewObjectDialog({ onClose, onStage }: DialogProps & { onStage:
         control={<Checkbox checked={isPaymentData} onChange={(_, checked) => setPaymentData(checked)} />}
         label={t("boRelationship.paymentData")}
       />
+    </StageDialog>
+  );
+}
+
+export function BoRenameDialog({ object, error, pending, onClose, onRename }: DialogProps & {
+  object: BoNode;
+  error: string;
+  pending: boolean;
+  onRename: (name: string) => void;
+}) {
+  const { t } = useTranslation(["reports", "archimate", "common"]);
+  const [name, setName] = useState(object.name);
+  const trimmed = name.trim();
+  const tooLong = [...trimmed].length > nameLimit;
+  return (
+    <StageDialog
+      title={t("archimate:shortcuts.edit")}
+      action={t("common:actions.save")}
+      ready={!!trimmed && !tooLong && trimmed !== object.name}
+      pending={pending}
+      onClose={onClose}
+      onStage={() => onRename(trimmed)}
+    >
+      {error && <Alert severity="error">{error}</Alert>}
+      <TextField label={t("boRelationship.objectName")} value={name} autoFocus disabled={pending}
+        onChange={(event) => setName(event.target.value)} error={tooLong}
+        helperText={tooLong ? t("boRelationship.objectNameTooLong", { max: nameLimit }) : undefined} />
     </StageDialog>
   );
 }

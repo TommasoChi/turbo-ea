@@ -1,5 +1,8 @@
 {
   "page.title": "Diagrammer",
+  "routing.label": "Forbindelseslinjens rute",
+  "routing.straight": "Lige",
+  "routing.orthogonal": "Retvinklet",
   "gallery.newDiagram": "Nyt diagram",
   "gallery.diagramType": "Diagramtype",
   "gallery.diagramTypeDrawio": "Draw.io",
@@ -49,6 +52,7 @@
   "editor.toolbar.syncTooltipPending_other": "{{count}} usynkroniserede ændringer — klik for at gennemgå",
   "editor.toolbar.syncTooltipStale_one": "{{count}} lagerændring kræver gennemgang",
   "editor.toolbar.syncTooltipStale_other": "{{count}} lagerændringer kræver gennemgang",
+  "editor.toolbar.dotGrid": "Punktgitter",
   "editor.toolbar.moreActions": "Flere handlinger",
   "editor.toolbar.applyIcons": "Anvend korttype-ikoner",
   "editor.toolbar.iconsApplied_one": "Ikon tilføjet til {{count}} kort",

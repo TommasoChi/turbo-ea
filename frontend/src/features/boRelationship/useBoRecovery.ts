@@ -3,6 +3,7 @@ import { api } from "@/api/client";
 import { randomUuid } from "@/lib/randomUuid";
 import type { BoApplication, BoEdge, BoGraph, BoNode } from "./BoRelationshipPage";
 import type { DrawingDraft, InventoryChange, BoSavedApplication } from "./useBoDrawing";
+import { validBoEdgeGeometry } from "./boConnectorGeometry";
 
 type Recovery = {
   version: 1;
@@ -33,7 +34,9 @@ function removeStoredEntry(entry: StoredEntry | null) {
 
 function hasChanges(draft: DrawingDraft, accepted: InventoryChange[]) {
   return !!(draft.objects.length || draft.relations.length || draft.applications.length
-    || Object.keys(draft.moves).length || draft.removed.length || draft.restored.length || accepted.length);
+    || Object.keys(draft.moves).length || draft.removed.length || draft.restored.length
+    || draft.removedNodes?.length || Object.keys(draft.edgeRoutes ?? {}).length
+    || Object.keys(draft.edgeGeometry ?? {}).length || accepted.length);
 }
 
 function projectRecovery(draft: DrawingDraft, accepted: InventoryChange[], graph: BoGraph): Recovery {
@@ -109,6 +112,11 @@ export function useBoRecovery(
         if (!stored || stored.version !== 1 || !stored.draft || !Array.isArray(stored.accepted)) { removeStoredEntry(entry); if (active) setRetry((n) => n + 1); return; }
         const d = stored.draft;
         if (!Array.isArray(d.objects) || !Array.isArray(d.relations) || !Array.isArray(d.applications) || !Array.isArray(d.removed) || !Array.isArray(d.restored) || !d.moves) { removeStoredEntry(entry); if (active) setRetry((n) => n + 1); return; }
+        if (d.removedNodes !== undefined && (!Array.isArray(d.removedNodes) || d.removedNodes.some((id) => typeof id !== "string"))) {
+          removeStoredEntry(entry);
+          if (active) setRetry((n) => n + 1);
+          return;
+        }
         const operations = [...d.objects.map(({ id }) => ({ kind: "node", id })), ...d.relations.map(({ id }) => ({ kind: "edge", id })), ...d.applications.map(({ id }) => ({ kind: "application_link", id }))];
         const objectIds = [...new Set([...Object.keys(d.moves), ...d.relations.flatMap(({ input }) => [input.source, input.target]), ...d.applications.map(({ input }) => input.objectId)].filter((id) => !d.objects.some((item) => item.id === id)))];
         const [result, inventory] = await Promise.all([
@@ -174,11 +182,32 @@ export function useBoRecovery(
         for (const { saved } of relations) {
           if (saved) readableEdgeIds.add(saved.id);
         }
+        const localEdgeIds = new Set(relations.map(({ id }) => id));
         for (const change of matched) {
           if (change.kind === "edge" && change.after) readableEdgeIds.add(change.id);
+          for (const edge of change.placement?.edges ?? []) readableEdgeIds.add(edge.id);
         }
         const removed = d.removed.filter((id) => readableEdgeIds.has(id));
-        const recovered = { objects, relations, applications, moves, removed, restored };
+        const edgeRoutes = Object.fromEntries(Object.entries(d.edgeRoutes ?? {}).filter(([id, route]) =>
+          (readableEdgeIds.has(id) || localEdgeIds.has(id)) && (route === "straight" || route === "orthogonal")));
+        const edgeGeometry = Object.fromEntries(Object.entries(d.edgeGeometry ?? {}).filter(([id, geometry]) =>
+          (readableEdgeIds.has(id) || localEdgeIds.has(id)) && validBoEdgeGeometry(geometry)));
+        const visibleNodeIds = new Set(shared.nodes?.map(({ id }) => id));
+        for (const change of matched) {
+          if (change.kind !== "node") continue;
+          if (change.after) visibleNodeIds.add(change.id);
+          else visibleNodeIds.delete(change.id);
+        }
+        for (const { saved } of objects) {
+          if (saved) visibleNodeIds.add(saved.id);
+        }
+        const removedNodes = d.removedNodes?.filter((id) => visibleNodeIds.has(id));
+        const recovered = {
+          objects, relations, applications, moves, removed, restored,
+          ...(removedNodes?.length ? { removedNodes } : {}),
+          ...(Object.keys(edgeRoutes).length ? { edgeRoutes } : {}),
+          ...(Object.keys(edgeGeometry).length ? { edgeGeometry } : {}),
+        };
         if (hasChanges(recovered, matched)) {
           const changes = result.changes.filter(({ id }) => removed.includes(id));
           setCandidate({ token, draft: recovered, accepted: matched, changes });

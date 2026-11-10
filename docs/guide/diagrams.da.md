@@ -153,11 +153,21 @@ Synkroniseringsknappen i værktøjslinjen viser en pulserende "N usynkroniseret"
 
 Diagrammer kan linkes til **et hvilket som helst kort** fra kortets fane **Resources** (se [Kortdetaljer](card-details.md#resources-tab)). Når et diagram er linket til et **Initiative**-kort, vises det også i [EA Delivery](delivery.md)-modulet sammen med SoAW-dokumenter.
 
-## Afstem forretningsobjekters relationer med lageret
+## Data Modeller
 
-Åbn **Forretningsobjekters relationer** under **Application & Data Architecture**. Lærredet viser den senest delte version af diagrammet. Siden sammenligner den med lageret og viser de ændringer, du har adgang til, under **Ændringer i lageret**. Vælg **Tjek opdateringer** for at gentage sammenligningen.
+Åbn **Data Modeller** under **Application & Data Architecture**. Den øverste række viser kortfarver, kortindhold og synkronisering. Rækken nedenunder indeholder tegneværktøjer, sidepaneler, zoom, filtre og SVG-eksport. Diagrammet viser den senest delte tegning. Brug synkroniseringen til at kontrollere ændringer i lageret igen.
 
 ![Diagram over forretningsobjekters relationer med applikationsroller og kortet for det valgte objekt](../assets/img/da/105_bo_relationship.png)
+
+Træk i linjen eller dens håndtag for at flytte et segment, tilføje et knæk eller flytte tilslutningen langs objektets kant. Gem for at dele den nye linjeføring. En almindelig linje viser én. En kragefod viser mange (N eller M). Brug **Punktgitter** til at vise eller skjule prikkerne i baggrunden. Browseren husker dit valg for hvert diagram.
+
+Højreklik på en forbindelseslinje, og vælg **Lige** eller **Retvinklet**. Linjen beholder ruten, når du flytter en node, og når du gemmer og genåbner diagrammet.
+
+Hold venstre museknap nede på baggrunden, og træk for at flytte visningen i diagrammet. Brug musehjulet til at rulle lodret, **Skift** med musehjulet til at rulle vandret og **Ctrl** med musehjulet til at zoome. Du kan også sætte fokus på lærredet og bruge piletasterne.
+
+Åbn **Tastaturgenveje** på værktøjslinjen for at se de tilgængelige kommandoer. Brug panelknappen til at vise eller skjule kortets detaljer. Når du vælger et forretningsobjekt, åbnes detaljerne igen.
+
+Hvis du kan redigere diagrammet, gælder **Fortryd** og **Gentag** for ændringer i den aktuelle diagramkladde. **Slet** fjerner de valgte forretningsobjekter fra diagrammet, når du gemmer. Deres kort og relationer er stadig tilgængelige i lageret. For en valgt linje gælder den sædvanlige bekræftelse og synkronisering. **Kopiér** og **Indsæt** åbner en ny kladde for hvert kopieret forretningsobjekt, så du kan ændre navnet, før du tilføjer det. Når du omdøber et gemt kort, opdateres lageret. Synkronisér ændringen for at få det nye navn ind i diagrammet.
 
 1. Gennemgå de tilføjede, opdaterede eller fjernede forretningsobjekter og relationer.
 2. Hvis du har ret til at redigere diagrammet, skal du vælge de ønskede ændringer og vælge **Synkronisér**. Ændringerne vises på lærredet. Hvis et forretningsobjekt for eksempel har fået nyt navn og undertypen Dokument, vises det med det nye navn og et foldet hjørne på samme sted.

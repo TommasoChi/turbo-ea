@@ -5,6 +5,8 @@ L'éditeur **ArchiMate** dessine des diagrammes [ArchiMate 3](https://pubs.openg
 !!! warning "État de la version"
     Cette version livre les fondations d'ArchiMate sous la forme d'un **bac à sable pour les administrateurs**. Le module est désactivé par défaut, les diagrammes ne figurent pas dans le menu [Diagrammes](diagrams.md) et ne peuvent pas encore être publiés ni intégrés. Voir les [Limites connues](#known-limits).
 
+La première ligne affiche le nom du diagramme, les réglages de couleur et de contenu des fiches et la synchronisation. La synchronisation actualise les données des fiches liées. La deuxième ligne contient les outils de dessin, le zoom, l’export SVG et le panneau de propriétés. Utilisez **Grille de points** pour afficher ou masquer les points du fond. Le navigateur mémorise votre choix pour chaque diagramme.
+
 ## Activer le module
 
 1. Ouvrez **Admin → Paramètres** et repérez la carte **Diagrammes ArchiMate** (à côté des autres interrupteurs de modules).
@@ -124,6 +126,8 @@ Pour une relation Access, `crud` signifie que le type d'accès suit les indicate
 | Processus métier → Contexte métier, *réalise* | `Realization` | — |
 | Objectif → Contexte métier, *est un objectif pour* | `Association` | — |
 | Contexte métier → Contexte métier, *succède à* | `Triggering` | dessinée de la cible vers la source |
+
+Cliquez avec le bouton droit sur un connecteur et choisissez **Droit** ou **Orthogonal**. Le tracé est conservé quand vous déplacez un nœud et après avoir enregistré puis rouvert le diagramme.
 
 ## Le fichier Exchange {#exchange-file}
 

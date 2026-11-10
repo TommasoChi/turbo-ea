@@ -153,11 +153,21 @@ Il pulsante Sync della barra strumenti mostra una pillola pulsante «N non sincr
 
 I diagrammi possono essere collegati a **qualsiasi scheda** dalla scheda **Risorse** della scheda stessa (vedi [Dettaglio scheda](card-details.it.md#scheda-risorse)). Quando un diagramma è collegato a una scheda **Iniziativa**, appare anche nel modulo [EA Delivery](delivery.md) accanto ai documenti SoAW.
 
-## Verificare le relazioni tra oggetti di business rispetto all’inventario
+## Data Modeller
 
-Dal menu **Application & Data Architecture**, aprite **Relazioni tra oggetti di business**. La tela mostra l’ultimo disegno condiviso. La pagina lo confronta con l’inventario ed elenca in **Modifiche all’inventario** le variazioni che potete vedere. Selezionate **Verifica aggiornamenti** per ripetere il confronto.
+Dal menu **Application & Data Architecture**, aprite **Data Modeller**. Nella prima riga trovate i colori delle card, i dettagli da mostrare e **Sincronizza**. La barra sotto contiene i comandi del diagramma, i pannelli laterali, lo zoom, i filtri e l’esportazione SVG. Il diagramma si apre sull’ultimo disegno condiviso. Usate **Sincronizza** per ripetere il confronto e consultare le modifiche all’inventario.
 
 ![Diagramma delle relazioni tra oggetti di business con i ruoli delle applicazioni e la scheda dell’oggetto selezionato](../assets/img/it/105_relazioni_oggetti_business.png)
+
+Trascinate la linea o le sue maniglie per spostare un segmento, aggiungere una piega o cambiare il punto d’attacco sul bordo di un oggetto. Salvate per condividere il percorso. Una linea semplice indica uno. La zampa di corvo indica molti (N o M). Con **Griglia a punti** potete mostrare o nascondere i puntini sullo sfondo. Il browser ricorda la scelta per ciascun diagramma.
+
+Fai clic con il tasto destro su una linea e scegli **Retto** o **Ortogonale**. La linea mantiene il percorso scelto quando sposti un nodo e dopo il salvataggio e la riapertura del diagramma.
+
+Per spostarvi nel diagramma, tenete premuto il tasto sinistro del mouse sullo sfondo e trascinate. Usate la rotellina per scorrere in verticale, **Maiusc** con la rotellina per scorrere in orizzontale e **Ctrl** con la rotellina per regolare lo zoom. Potete anche portare il focus sulla tela e usare i tasti freccia.
+
+Aprite **Scorciatoie da tastiera** dalla barra degli strumenti per vedere i comandi disponibili. Usate il pulsante del pannello per mostrare o nascondere i dettagli della scheda. Selezionando un oggetto di business, ne riaprite i dettagli.
+
+Se potete modificare il diagramma, **Annulla** e **Ripeti** agiscono sulle modifiche della bozza corrente. **Elimina** rimuove dal disegno gli oggetti di business selezionati al momento del salvataggio. Le loro schede e i loro collegamenti restano disponibili nell’inventario. Per una linea selezionata si applicano la conferma e la sincronizzazione consuete. **Copia** e **Incolla** aprono una nuova bozza per ogni oggetto di business copiato, così potete cambiarne il nome prima di aggiungerlo. Rinominare una scheda salvata aggiorna l’inventario. Sincronizzate la modifica per riportare il nuovo nome nel disegno.
 
 1. Esaminate gli oggetti di business e i collegamenti aggiunti, aggiornati o rimossi.
 2. Se potete modificare il diagramma, selezionate le variazioni da recepire e scegliete **Sincronizza**. Le modifiche compaiono sulla tela. Per esempio, un oggetto rinominato e passato al sottotipo **Documento** mostra il nuovo nome e l’angolo ripiegato nella stessa posizione.
@@ -167,7 +177,7 @@ La verifica e questa sincronizzazione leggono i dati dall’inventario. Le rimoz
 
 ### Recuperare una bozza delle relazioni tra oggetti di business
 
-L’editor conserva una bozza nel browser e la aggiorna ogni cinque secondi circa mentre lavorate. Quando riaprite **Relazioni tra oggetti di business** nello stesso browser con lo stesso account, la tela mostra l’ultimo disegno condiviso. Se è disponibile una bozza, scegliete **Ripristina** per riportare le modifiche sulla tela oppure **Scarta** per eliminare la bozza. Gli altri utenti vedono le modifiche dopo aver completato **Salva** o **Salva ed esci**.
+L’editor conserva una bozza nel browser e la aggiorna ogni cinque secondi circa mentre lavorate. Quando riaprite **Data Modeller** nello stesso browser con lo stesso account, la tela mostra l’ultimo disegno condiviso. Se è disponibile una bozza, scegliete **Ripristina** per riportare le modifiche sulla tela oppure **Scarta** per eliminare la bozza. Gli altri utenti vedono le modifiche dopo aver completato **Salva** o **Salva ed esci**.
 
 Ogni editor aperto conserva la propria bozza. Se sono disponibili più bozze, quando scartate quella mostrata l’editor propone la successiva. Dopo averne ripristinata una, potete riaprire l’editor per recuperarne un’altra.
 

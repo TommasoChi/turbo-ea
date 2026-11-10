@@ -423,6 +423,13 @@ async def test_bo_diagram_uses_reverse_existing_er_relation(db, selected):
                 "cardinality": "1:n",
             }
         },
+        "edge_routes": {str(rel.id): "orthogonal"},
+        "edge_geometry": {
+            str(rel.id): {
+                "bends": [{"x": 24, "y": 60}, {"x": 24, "y": 150}],
+                "source": {"x": 200, "y": 40},
+            }
+        },
         "positions": {},
         "application_links": {},
     }
@@ -460,6 +467,14 @@ async def test_bo_diagram_uses_reverse_existing_er_relation(db, selected):
             "source": str(b2.id),
             "target": str(a2.id),
             "cardinality": "n:1",
+        }
+    }
+    assert restored.data["edge_routes"] == {str(reverse.id): "orthogonal"}
+    assert restored.data["edge_geometry"] == {
+        str(reverse.id): {
+            "bends": [{"x": 24, "y": 150}, {"x": 24, "y": 60}],
+            "source": None,
+            "target": {"x": 200, "y": 40},
         }
     }
 

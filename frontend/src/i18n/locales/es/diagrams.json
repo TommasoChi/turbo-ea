@@ -1,5 +1,8 @@
 {
   "page.title": "Diagramas",
+  "routing.label": "Trazado del conector",
+  "routing.straight": "Recto",
+  "routing.orthogonal": "Ortogonal",
   "gallery.newDiagram": "Nuevo diagrama",
   "gallery.diagramType": "Tipo de diagrama",
   "gallery.diagramTypeDrawio": "Draw.io",
@@ -85,6 +88,7 @@
   "editor.toolbar.syncTooltipPending_other": "{{count}} cambios sin sincronizar — haga clic para revisar",
   "editor.toolbar.syncTooltipStale_one": "{{count}} cambio del inventario pendiente de revisión",
   "editor.toolbar.syncTooltipStale_other": "{{count}} cambios del inventario pendientes de revisión",
+  "editor.toolbar.dotGrid": "Cuadrícula de puntos",
   "editor.toolbar.moreActions": "Más acciones",
   "editor.toolbar.applyIcons": "Aplicar iconos de tipo de tarjeta",
   "editor.toolbar.iconsApplied_one": "Icono añadido a {{count}} tarjeta",

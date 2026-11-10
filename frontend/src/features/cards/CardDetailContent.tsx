@@ -462,7 +462,7 @@ export default function CardDetailContent({
   const renderSection = (key: string) => {
     if (secHidden(key)) return null;
     if (boScoped && !["description", "lifecycle", "tags", "relations"].includes(key) && !key.startsWith("custom:")) return null;
-    const exp = secExpanded(key, sectionDefaultExpanded(key));
+    const exp = secExpanded(key, (boScoped && key === "relations") || sectionDefaultExpanded(key));
 
     if (key === "description") {
       return (
@@ -771,7 +771,8 @@ export default function CardDetailContent({
               })}
             </Alert>
           )}
-          {sectionOrder.map(renderSection)}
+          {boScoped && sectionOrder.includes("relations") && renderSection("relations")}
+          {sectionOrder.filter((key) => !boScoped || key !== "relations").map(renderSection)}
           {showLdvSection && !boScoped && (
             <ErrorBoundary label="Dependencies" inline>
               <LayeredDependencySection cardId={card.id} />

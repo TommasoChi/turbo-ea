@@ -235,7 +235,8 @@ export default function CardDetailSidePanel({
           <Box sx={{ flex: 1, minWidth: 0 }}>
             {card ? (
               <>
-                <Typography variant="subtitle1" fontWeight={700} noWrap>
+                <Typography variant="subtitle1" fontWeight={700} noWrap={!docked}
+                  sx={docked ? { overflowWrap: "anywhere" } : undefined}>
                   {card.name}
                 </Typography>
                 <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
@@ -265,8 +266,8 @@ export default function CardDetailSidePanel({
                 alignItems: "center",
                 flexWrap: "wrap",
                 gap: 0.5,
-                flexBasis: { xs: "100%", sm: "auto" },
-                order: { xs: 1, sm: 0 },
+                flexBasis: docked ? "100%" : { xs: "100%", sm: "auto" },
+                order: docked ? 1 : { xs: 1, sm: 0 },
               }}
             >
               <DataQualityPill
@@ -378,8 +379,8 @@ export default function CardDetailSidePanel({
         aria-label={reportT("boRelationship.cardDetails")}
         onKeyDown={(e) => { if (e.key === "Escape" && !e.defaultPrevented) onClose(); }}
         sx={{
-          width: 480, maxWidth: "45%", flexShrink: 0, overflow: "auto",
-          borderLeft: 1, borderColor: "divider", maxHeight: 700,
+          width: "100%", minWidth: 0, overflow: "auto",
+          maxHeight: { xs: 560, lg: "calc(var(--bo-canvas-height, 650px) + 40px)" },
         }}
       >
         {content}

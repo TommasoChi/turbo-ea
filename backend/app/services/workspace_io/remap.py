@@ -38,7 +38,9 @@ from dataclasses import dataclass, field
 from typing import Any
 
 import defusedxml.ElementTree as ET  # noqa: N817
+from pydantic import ValidationError
 
+from app.schemas.bo_relationship import BoEdgeGeometry
 from app.services.bo_relationship_constants import (
     APPLICATION_RELATION,
     APPLICATION_TYPE,
@@ -610,6 +612,21 @@ def rewrite_bo_snapshot(kwargs: dict[str, Any], ctx: RemapContext) -> RewriteTal
             "target": details[2],
             "cardinality": cardinality,
         }
+        routing = (source.get("edge_routes") or {}).get(old)
+        if routing in ("straight", "orthogonal"):
+            result.setdefault("edge_routes", {})[rid] = routing
+        geometry = (source.get("edge_geometry") or {}).get(old)
+        if geometry is not None:
+            try:
+                layout = BoEdgeGeometry.model_validate(geometry)
+            except ValidationError:
+                missing()
+            else:
+                if details[1] != src:
+                    layout = BoEdgeGeometry(
+                        bends=layout.bends[::-1], source=layout.target, target=layout.source
+                    )
+                result.setdefault("edge_geometry", {})[rid] = layout.model_dump(mode="json")
         tally.bump(REMAPPED)
     for old, link in (source.get("application_links") or {}).items():
         rid = ctx.ids.lookup(RELATIONS, old)
