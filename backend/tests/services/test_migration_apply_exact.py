@@ -27,7 +27,7 @@ from app.models.relation_type import RelationType
 from app.models.stakeholder import Stakeholder
 from app.models.tag import CardTag, Tag, TagGroup
 from app.models.user import User
-from app.services.bo_relationship_constants import BO_TYPE, ER_RELATION
+from app.services.bo_relationship_constants import APPLICATION_RELATION, BO_TYPE, ER_RELATION
 from app.services.migration import apply as ap
 from tests.conftest import (
     create_card,
@@ -821,6 +821,98 @@ async def test_a_relation_already_present_takes_the_new_attributes(db, env, ends
     assert present.attributes == {"a": 1, "k": 1}
     assert staged.target_id == again.target_id == present.id
     assert len((await db.execute(select(Relation))).scalars().all()) == 1
+
+
+@pytest.fixture
+async def business_object(db):
+    await create_card_type(db, key=BO_TYPE, label="Business Object")
+    await create_relation_type(
+        db, key=APPLICATION_RELATION, source_type_key="Application", target_type_key=BO_TYPE
+    )
+    obj = await create_card(db, card_type=BO_TYPE, name="Account")
+    await identity(db, "account", obj.id)
+    return obj
+
+
+@pytest.mark.parametrize("has_other_master", [False, True])
+async def test_legacy_staged_application_link_does_not_assign_master(
+    db, env, ends, business_object, has_other_master
+):
+    if has_other_master:
+        master = await create_relation(
+            db,
+            type_key=APPLICATION_RELATION,
+            source_id=ends.other.id,
+            target_id=business_object.id,
+            attributes={"dataOwnership": "master"},
+        )
+    staged = await stage(
+        db,
+        env,
+        "relation",
+        "legacy-app-link",
+        data={
+            "tea_type": APPLICATION_RELATION,
+            "from_entity_id": "app",
+            "to_entity_id": "account",
+            "attributes": {"dataOwnership": "master", "crudRead": True},
+        },
+    )
+    unrelated = await stage(
+        db,
+        env,
+        "relation",
+        "unrelated-link",
+        data={
+            "tea_type": "app_to_itc",
+            "from_entity_id": "app",
+            "to_entity_id": "server",
+            "attributes": {"dataOwnership": "ordinary value"},
+        },
+    )
+
+    assert await ap._apply_relation_pass(db, env.m, env.admin) == zero(created=2)
+    imported = await db.get(Relation, staged.target_id)
+    assert (imported.source_id, imported.target_id) == (ends.app.id, business_object.id)
+    assert imported.attributes == {"crudRead": True}
+    assert (await db.get(Relation, unrelated.target_id)).attributes == {
+        "dataOwnership": "ordinary value"
+    }
+    if has_other_master:
+        await db.refresh(master)
+        assert master.attributes == {"dataOwnership": "master"}
+
+
+@pytest.mark.parametrize("action", ["create", "update"])
+async def test_legacy_staged_application_link_preserves_current_master(
+    db, env, ends, business_object, action
+):
+    master = await create_relation(
+        db,
+        type_key=APPLICATION_RELATION,
+        source_id=ends.app.id,
+        target_id=business_object.id,
+        attributes={"dataOwnership": "master", "crudRead": True, "crudUpdate": False},
+    )
+    staged = await stage(
+        db,
+        env,
+        "relation",
+        "legacy-app-link",
+        action=action,
+        target_id=master.id if action == "update" else None,
+        data={
+            "tea_type": APPLICATION_RELATION,
+            "from_entity_id": "app",
+            "to_entity_id": "account",
+            "attributes": {"dataOwnership": None, "crudUpdate": True},
+        },
+    )
+
+    assert await ap._apply_relation_pass(db, env.m, env.admin) == zero(updated=1)
+    assert staged.target_id == master.id
+    await db.refresh(master)
+    assert master.attributes == {"dataOwnership": "master", "crudRead": True, "crudUpdate": True}
 
 
 @pytest.mark.parametrize("action", ["create", "update"])

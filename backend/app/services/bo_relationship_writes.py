@@ -45,6 +45,10 @@ from app.services.card_read_scope import CardReadScope
 from app.services.permission_service import PermissionService
 
 
+def _draft_fingerprint(body: BaseModel) -> str:
+    return hashlib.sha256(body.model_dump_json().encode()).hexdigest()
+
+
 async def _find_receipt(
     db: AsyncSession, actor_id: uuid.UUID, draft_id: uuid.UUID, kind: str
 ) -> BoOperationReceipt | None:
@@ -60,7 +64,7 @@ async def _find_receipt(
 async def _claim_draft(
     db: AsyncSession, user: User, draft_id: uuid.UUID, kind: str, body: BaseModel
 ) -> tuple[BoOperationReceipt, bool]:
-    fingerprint = hashlib.sha256(body.model_dump_json().encode()).hexdigest()
+    fingerprint = _draft_fingerprint(body)
     # Claim the key before writing inventory. A competing retry waits for the
     # complete transaction and sees its committed result, or takes over on rollback.
     claimed = await db.scalar(
@@ -83,7 +87,7 @@ async def _claim_draft(
 
 
 def _require_same_request(receipt: BoOperationReceipt, body: BaseModel) -> None:
-    if receipt.fingerprint != hashlib.sha256(body.model_dump_json().encode()).hexdigest():
+    if receipt.fingerprint != _draft_fingerprint(body):
         raise HTTPException(409, "Draft ID has already been used with a different request")
 
 

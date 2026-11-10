@@ -1,13 +1,16 @@
 import { render, screen, fireEvent, waitFor, within, act } from "@testing-library/react";
 import { MemoryRouter, useLocation } from "react-router";
 import { vi, it, expect, beforeEach } from "vitest";
-import { api } from "@/api/client";
+import { api, ApiError } from "@/api/client";
 import { useOptionalAuthUser } from "@/hooks/AuthContext";
 import type { User } from "@/types";
 import BoRelationshipPage from "./BoRelationshipPage";
 import type Diagram from "./BoRelationshipDiagram";
 
-vi.mock("@/api/client", () => ({ api: { get: vi.fn(), post: vi.fn(), put: vi.fn(), delete: vi.fn() }, isAbortError: () => false }));
+vi.mock("@/api/client", async (importOriginal) => ({
+  ...await importOriginal<typeof import("@/api/client")>(),
+  api: { get: vi.fn(), post: vi.fn(), put: vi.fn(), delete: vi.fn() },
+}));
 vi.mock("@/hooks/AuthContext", () => ({ useOptionalAuthUser: vi.fn() }));
 vi.mock("@/hooks/useMetamodel", () => ({
   useMetamodel: () => ({
@@ -192,6 +195,44 @@ async function stageOrderAndLink() {
   fireEvent.change(target, { target: { value: orderOption.value } });
   fireEvent.click(within(dialog).getByRole("button", { name: "boRelationship.stageLink" }));
 }
+
+it("discards a rejected BO and its dependent link while keeping independent edits", async () => {
+  signInAsEditor();
+  vi.mocked(api.get).mockResolvedValue(baseGraph);
+  vi.mocked(api.put).mockRejectedValueOnce(new ApiError("Duplicate BO name", 409, null));
+  await stageOrderAndLink();
+
+  const save = screen.getByRole("button", { name: "common:actions.save" });
+  fireEvent.click(save);
+  expect(await screen.findByText(/Duplicate BO name/)).toBeInTheDocument();
+  expect(screen.getByText(/boRelationship.waitingForObject/)).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Move first BO" }));
+  fireEvent.click(screen.getByRole("button", { name: "boRelationship.discardFailedDraft Order" }));
+
+  expect(screen.queryByRole("button", { name: "Order" })).not.toBeInTheDocument();
+  expect(screen.queryByText(/boRelationship.waitingForObject/)).not.toBeInTheDocument();
+  expect(screen.getByTestId("canvas")).toHaveAttribute("data-edges", "");
+  vi.mocked(api.put).mockResolvedValue({ ...baseGraph, positions: { a: { x: 96, y: 48 } } });
+  fireEvent.click(save);
+  await waitFor(() => expect(api.put).toHaveBeenNthCalledWith(2, "/bo-relationship/layout",
+    expect.objectContaining({ positions: { a: { x: 96, y: 48 } }, saved_drafts: [] })));
+  expect(api.delete).not.toHaveBeenCalled();
+});
+
+it("prevents staging an object name beyond the API limit", async () => {
+  signInAsEditor();
+  vi.mocked(api.get).mockResolvedValue(baseGraph);
+  await openPage();
+  fireEvent.click(screen.getByRole("button", { name: "boRelationship.newObject" }));
+  const dialog = screen.getByRole("dialog");
+  const name = within(dialog).getByLabelText("boRelationship.objectName");
+  fireEvent.change(within(dialog).getByLabelText("boRelationship.subtype"), { target: { value: "Data" } });
+  fireEvent.change(name, { target: { value: "a".repeat(501) } });
+  const stage = within(dialog).getByRole("button", { name: "boRelationship.stageObject" });
+  expect(stage).toBeDisabled();
+  fireEvent.change(name, { target: { value: "a".repeat(500) } });
+  expect(stage).toBeEnabled();
+});
 
 it("keeps a saved BO and retries only its failed link with the same draft ID", async () => {
   signInAsEditor();
@@ -486,6 +527,29 @@ async function stageApplication(name: string, role: "master" | "slave" | "unclas
   fireEvent.change(within(dialog).getByLabelText("boRelationship.role"), { target: { value: role } });
   fireEvent.click(within(dialog).getByRole("button", { name: "boRelationship.stageLink" }));
 }
+
+it("discards a rejected Application link without dropping another edit", async () => {
+  signInAsEditor();
+  vi.mocked(api.get).mockImplementation(async (path) => path.startsWith("/bo-relationship/applications?")
+    ? { items: [crm], total: 1 }
+    : baseGraph);
+  vi.mocked(api.put).mockRejectedValueOnce(new ApiError("Application unavailable", 404, null));
+  fireEvent.click(await openPage());
+  await stageApplication("CRM", "unclassified");
+  const save = screen.getByRole("button", { name: "common:actions.save" });
+  fireEvent.click(save);
+  expect(await screen.findByText(/Application unavailable/)).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Move first BO" }));
+  fireEvent.click(screen.getByRole("button", { name: "boRelationship.discardFailedDraft Customer ↔ CRM" }));
+  expect(screen.queryByText(/Application unavailable/)).not.toBeInTheDocument();
+  expect(screen.queryByText(/CRM · boRelationship.unclassified/)).not.toBeInTheDocument();
+
+  vi.mocked(api.put).mockResolvedValue({ ...baseGraph, positions: { a: { x: 96, y: 48 } } });
+  fireEvent.click(save);
+  await waitFor(() => expect(api.put).toHaveBeenNthCalledWith(2, "/bo-relationship/layout",
+    expect.objectContaining({ positions: { a: { x: 96, y: 48 } }, saved_drafts: [] })));
+  expect(api.delete).not.toHaveBeenCalled();
+});
 
 it("keeps a Slave pending until the staged Master saves, using the module-scoped picker", async () => {
   signInAsEditor();
@@ -802,6 +866,33 @@ it("restores a hidden line without restoring its outgoing removal queue", async 
 function LocationMarker() { return <span data-testid="location">{useLocation().pathname}</span>; }
 
 const recoveryStorageKey = "turbo-ea-bo-relationship-draft-v1-editor";
+
+it("preserves another tab's local draft when a clean editor autosaves or exits", async () => {
+  localStorage.clear();
+  vi.mocked(useOptionalAuthUser).mockReturnValue({ id: "editor", permissions: { "*": true } } as User);
+  vi.mocked(api.get).mockImplementation(async (path) => path === "/bo-relationship" ? baseGraph : { changes: [] });
+  const writer = render(<MemoryRouter><BoRelationshipPage /></MemoryRouter>);
+  const move = await within(writer.container).findByRole("button", { name: "Move first BO" });
+  vi.useFakeTimers();
+  try {
+    fireEvent.click(move);
+    await act(async () => { vi.advanceTimersByTime(1000); });
+    const idle = render(<MemoryRouter><BoRelationshipPage /></MemoryRouter>);
+    await act(async () => {});
+
+    await act(async () => { vi.advanceTimersByTime(4000); });
+    const saved = localStorage.getItem(recoveryStorageKey);
+    expect(saved).toContain('"moves":{"a":{"x":96,"y":48}}');
+    await act(async () => { vi.advanceTimersByTime(1000); });
+    expect(localStorage.getItem(recoveryStorageKey)).toBe(saved);
+
+    fireEvent.click(within(idle.container).getByRole("button", { name: "boRelationship.saveAndExit" }));
+    expect(localStorage.getItem(recoveryStorageKey)).toBe(saved);
+  } finally {
+    vi.useRealTimers();
+    localStorage.clear();
+  }
+});
 
 it.each(["saved", "unavailable"])("recovers a partially saved BO without reviving a removed ER (%s)", async (status) => {
   localStorage.clear();

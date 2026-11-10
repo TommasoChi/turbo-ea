@@ -24,6 +24,12 @@ vi.mock("./download", () => ({ downloadText: vi.fn() }));
 const CARD_TYPES: CardType[] = [
   { key: "Application", label: "Application", archimate_type: "ApplicationComponent", subtypes: [], fields_schema: [] },
   { key: "ITComponent", label: "IT Component", archimate_type: "Node", subtypes: [], fields_schema: [] },
+  {
+    key: "DataObject",
+    label: "Data Object",
+    subtypes: [{ key: "customer_record", label: "Customer record" }],
+    fields_schema: [],
+  },
 ] as unknown as CardType[];
 vi.mock("@/hooks/useMetamodel", () => ({
   useMetamodel: () => ({
@@ -131,7 +137,7 @@ beforeEach(() => {
   mockApi.on("patch", "/diagrams/d1", {});
   mockApi.on("get", "/cards?ids=*", { items: [{ id: "c1", name: "CRM" }] });
   // useArchimateBridge fetches the Enterprise Object registry to resolve card<->element
-  // mappings. Mirrors CARD_TYPES above: Application <-> ApplicationComponent, ITComponent <-> Node.
+  // mappings. Application <-> ApplicationComponent, ITComponent <-> Node.
   mockApi.on("get", "/metamodel/enterprise-objects?include_hidden=true", [
     {
       key: "ApplicationComponent",
@@ -803,6 +809,33 @@ describe("link dialog", () => {
 
 describe("create-card dialog", () => {
   const open = () => act(() => handle!.bridge.openCreateCard(APP_SHAPE));
+
+  it("creates and links a mapped Data Object only after a declared subtype is chosen", async () => {
+    mockApi.on("get", "/metamodel/enterprise-objects?include_hidden=true", [
+      {
+        key: "DataObject",
+        name: "Data Object",
+        card_mappings: [
+          { id: "m3", enterprise_object_key: "DataObject", card_type_key: "DataObject", card_subtype_key: null },
+        ],
+      },
+    ]);
+    mockApi.on("post", "/cards", { id: "data-new", name: "Customer" });
+    const { user } = await mount();
+    act(() => handle!.bridge.openCreateCard("id-n2"));
+    const submit = await screen.findByRole("button", { name: "Create and link" });
+    expect(screen.getByRole("textbox", { name: "Name" })).toHaveValue("Customer");
+    expect(submit).toBeDisabled();
+    expect(mockApi.callsOf("post", "/cards")).toHaveLength(0);
+
+    await user.click(screen.getByRole("combobox", { name: /^Subtype/ }));
+    await user.click(screen.getByRole("option", { name: "Customer record" }));
+    await user.click(submit);
+    await waitFor(() => expect(engine().elementInfo("id-n2")?.cardId).toBe("data-new"));
+    expect(mockApi.callsOf("post", "/cards").map((call) => call.body)).toEqual([
+      { type: "DataObject", name: "Customer", subtype: "customer_record" },
+    ]);
+  });
 
   it("creates the card on submit and links the element", async () => {
     mockApi.on("post", "/cards", { id: "c9", name: "CRM <core>", type: "Application" });

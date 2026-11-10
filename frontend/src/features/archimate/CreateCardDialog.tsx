@@ -14,6 +14,9 @@ import Stack from "@mui/material/Stack";
 import TextField from "@mui/material/TextField";
 import { useTranslation } from "react-i18next";
 import { api } from "@/api/client";
+import RequiredCardSubtypeSelect from "@/components/RequiredCardSubtypeSelect";
+import { useMetamodel } from "@/hooks/useMetamodel";
+import { useRequiredCardSubtype } from "@/hooks/useRequiredCardSubtype";
 import type { Card } from "@/types";
 import type { CardTypeOption } from "./engine/EditorBridge";
 import { describeApiError } from "./saveError";
@@ -28,17 +31,25 @@ interface Props {
 
 export default function CreateCardDialog({ open, cardTypes, initialName, onCreated, onClose }: Props) {
   const { t } = useTranslation(["archimate", "common"]);
+  const { getType } = useMetamodel();
   const [type, setType] = useState<string | null>(null);
   const [name, setName] = useState(initialName);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const selected = type !== null && cardTypes.some((c) => c.key === type) ? type : (cardTypes[0]?.key ?? "");
+  const { subtype, subtypeValid, subtypeField, resetSubtype } = useRequiredCardSubtype(selected, getType(selected)?.subtypes);
+  const canCreate = !!selected && !!name.trim() && subtypeValid && !busy;
 
   const submit = async () => {
+    if (!canCreate) return;
     setBusy(true);
     setError(null);
     try {
-      const created = await api.post<Card>("/cards", { type: selected, name: name.trim() });
+      const created = await api.post<Card>("/cards", {
+        type: selected,
+        name: name.trim(),
+        ...(subtype ? { subtype } : {}),
+      });
       onCreated({ id: created.id, name: created.name ?? name.trim() });
     } catch (e) {
       const reason = describeApiError(e, t("common:errors.generic"));
@@ -59,12 +70,16 @@ export default function CreateCardDialog({ open, cardTypes, initialName, onCreat
             size="small"
             label={t("archimate:createCardDialog.type")}
             value={selected}
-            onChange={(e) => setType(e.target.value)}
+            onChange={(e) => {
+              setType(e.target.value);
+              resetSubtype();
+            }}
           >
             {cardTypes.map((c) => (
               <MenuItem key={c.key} value={c.key}>{c.label}</MenuItem>
             ))}
           </TextField>
+          {subtypeField && <RequiredCardSubtypeSelect {...subtypeField} />}
           <TextField
             size="small"
             label={t("archimate:createCardDialog.name")}
@@ -76,7 +91,7 @@ export default function CreateCardDialog({ open, cardTypes, initialName, onCreat
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose} disabled={busy}>{t("common:actions.cancel")}</Button>
-        <Button variant="contained" onClick={submit} disabled={busy || !name.trim() || !selected}>
+        <Button variant="contained" onClick={submit} disabled={!canCreate}>
           {t("archimate:createCardDialog.submit")}
         </Button>
       </DialogActions>

@@ -22,6 +22,14 @@ type Result = {
   }[];
 };
 
+type StoredEntry = { key: string; raw: string };
+
+function removeStoredEntry(entry: StoredEntry | null) {
+  try {
+    if (entry && localStorage.getItem(entry.key) === entry.raw) localStorage.removeItem(entry.key);
+  } catch { /* Local storage is optional. */ }
+}
+
 function hasChanges(draft: DrawingDraft, accepted: InventoryChange[]) {
   return !!(draft.objects.length || draft.relations.length || draft.applications.length
     || Object.keys(draft.moves).length || draft.removed.length || draft.restored.length || accepted.length);
@@ -65,6 +73,8 @@ export function useBoRecovery(
   const [checking, setChecking] = useState(false);
   const [failed, setFailed] = useState(false);
   const [retry, setRetry] = useState(0);
+  const checkedEntry = useRef<StoredEntry | null>(null);
+  const ownedEntry = useRef<StoredEntry | null>(null);
   const current = useRef({ draft, accepted, graph });
   current.current = { draft, accepted, graph };
   const graphReady = !!graph;
@@ -73,6 +83,7 @@ export function useBoRecovery(
     setCandidate(null);
     setFailed(false);
     setCheckedKey(null);
+    checkedEntry.current = null;
     const shared = current.current.graph;
     if (!key || !shared) return () => { active = false; };
     setChecking(true);
@@ -81,11 +92,13 @@ export function useBoRecovery(
         let raw: string | null;
         try { raw = localStorage.getItem(key); } catch { if (active) setCheckedKey(key); return; }
         if (!raw) { if (active) setCheckedKey(key); return; }
+        const entry = { key, raw };
+        checkedEntry.current = entry;
         let stored: Recovery;
-        try { stored = JSON.parse(raw) as Recovery; } catch { localStorage.removeItem(key); if (active) setCheckedKey(key); return; }
-        if (stored.version !== 1 || !stored.draft || !Array.isArray(stored.accepted)) { localStorage.removeItem(key); if (active) setCheckedKey(key); return; }
+        try { stored = JSON.parse(raw) as Recovery; } catch { removeStoredEntry(entry); if (active) setCheckedKey(key); return; }
+        if (!stored || stored.version !== 1 || !stored.draft || !Array.isArray(stored.accepted)) { removeStoredEntry(entry); if (active) setCheckedKey(key); return; }
         const d = stored.draft;
-        if (!Array.isArray(d.objects) || !Array.isArray(d.relations) || !Array.isArray(d.applications) || !Array.isArray(d.removed) || !Array.isArray(d.restored) || !d.moves) { localStorage.removeItem(key); if (active) setCheckedKey(key); return; }
+        if (!Array.isArray(d.objects) || !Array.isArray(d.relations) || !Array.isArray(d.applications) || !Array.isArray(d.removed) || !Array.isArray(d.restored) || !d.moves) { removeStoredEntry(entry); if (active) setCheckedKey(key); return; }
         const operations = [...d.objects.map(({ id }) => ({ kind: "node", id })), ...d.relations.map(({ id }) => ({ kind: "edge", id })), ...d.applications.map(({ id }) => ({ kind: "application_link", id }))];
         const objectIds = [...new Set([...Object.keys(d.moves), ...d.relations.flatMap(({ input }) => [input.source, input.target]), ...d.applications.map(({ input }) => input.objectId)].filter((id) => !d.objects.some((item) => item.id === id)))];
         const [result, inventory] = await Promise.all([
@@ -93,8 +106,10 @@ export function useBoRecovery(
           api.get<{ changes: InventoryChange[] }>("/bo-relationship/changes"),
         ]);
         if (!active) return;
-        const status = (kind: string, id: string) =>
-          result.draft_results.find((item) => item.kind === kind && item.id === id);
+        const resultsByDraft = new Map(result.draft_results.map((item) =>
+          [`${item.kind}:${item.id}`, item] as const));
+        const status = (kind: Result["draft_results"][number]["kind"], id: string) =>
+          resultsByDraft.get(`${kind}:${id}`);
         const aliases = new Map(d.objects.flatMap((item) => {
           const operation = status("node", item.id);
           return operation?.status === "published" && operation.value
@@ -157,6 +172,9 @@ export function useBoRecovery(
         if (hasChanges(recovered, matched)) {
           const changes = result.changes.filter(({ id }) => removed.includes(id));
           setCandidate({ token, draft: recovered, accepted: matched, changes });
+        } else {
+          removeStoredEntry(entry);
+          checkedEntry.current = null;
         }
         if (active) setCheckedKey(key);
       } catch { if (active) setFailed(true); /* Keep the candidate intact for retry. */ }
@@ -165,47 +183,59 @@ export function useBoRecovery(
     void check();
     return () => { active = false; };
   }, [key, graphReady, permissions.create, permissions.relations, permissions.applications, permissions.scope, retry, token]);
+  const clear = useCallback(() => {
+    const entry = ownedEntry.current;
+    if (entry?.key === key) {
+      removeStoredEntry(entry);
+      ownedEntry.current = null;
+    }
+  }, [key]);
   const persist = useCallback(() => {
     if (!key || checkedKey !== key || candidate) return;
     const { draft: currentDraft, accepted: currentAccepted, graph: currentGraph } = current.current;
     if (!currentGraph) return;
     try {
       if (!hasChanges(currentDraft, currentAccepted)) {
-        localStorage.removeItem(key);
+        clear();
       } else {
-        localStorage.setItem(key, JSON.stringify(projectRecovery(currentDraft, currentAccepted, currentGraph)));
+        const raw = JSON.stringify(projectRecovery(currentDraft, currentAccepted, currentGraph));
+        localStorage.setItem(key, raw);
+        ownedEntry.current = { key, raw };
       }
     } catch { /* Local storage is optional. */ }
-  }, [key, checkedKey, candidate]);
+  }, [key, checkedKey, candidate, clear]);
   const hasLocalChanges = hasChanges(draft, accepted);
   useEffect(() => {
     if (!key || checkedKey !== key || candidate) return;
+    if (!hasLocalChanges) {
+      clear();
+      return;
+    }
     const timer = window.setInterval(persist, 5000);
     return () => window.clearInterval(timer);
-  }, [key, checkedKey, candidate, hasLocalChanges, persist]);
+  }, [key, checkedKey, candidate, hasLocalChanges, persist, clear]);
   const wasBusy = useRef(false);
   useEffect(() => {
     if (wasBusy.current && !busy) persist();
     wasBusy.current = busy;
   });
-  const clear = () => {
-    try {
-      if (key) localStorage.removeItem(key);
-    } catch { /* Local storage is optional. */ }
-  };
   return {
     candidate: visibleCandidate,
     failed,
     retry: () => setRetry((n) => n + 1),
     blocked: !!key && graphReady && (checking || settledToken !== token || !!visibleCandidate || failed),
     discard: () => {
-      clear();
+      removeStoredEntry(checkedEntry.current);
+      checkedEntry.current = null;
       setCandidate(null);
       setFailed(false);
       setCheckedKey(key);
     },
     apply: () => {
-      if (visibleCandidate) restore(visibleCandidate.draft, visibleCandidate.accepted);
+      if (visibleCandidate) {
+        ownedEntry.current = checkedEntry.current;
+        restore(visibleCandidate.draft, visibleCandidate.accepted);
+      }
       setCandidate(null);
     },
     clear,

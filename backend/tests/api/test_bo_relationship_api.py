@@ -1415,11 +1415,60 @@ async def test_changed_relation_id_never_exposes_or_overwrites_hidden_saved_endp
     )
 
 
-async def test_layout_and_draft_comparison_require_view_as_well_as_edit(client, db, env):
-    await create_role(db, key="edit_only", permissions={"boRelationship.edit": True})
+@pytest.mark.parametrize(
+    "operation",
+    ["picker", "layout", "compare", "object", "relation", "application", "delete", "master"],
+)
+async def test_bo_editor_endpoints_require_view_as_well_as_edit(client, db, env, operation):
+    await create_role(
+        db,
+        key="edit_only",
+        permissions={
+            "boRelationship.edit": True,
+            "boRelationship.view": False,
+            "inventory.view": False,
+            "inventory.create": True,
+            "inventory.edit": True,
+            "relations.manage": True,
+        },
+    )
     headers = auth_headers(await create_user(db, role="edit_only"))
-    assert (await client.put(f"{BASE}/layout", json={}, headers=headers)).status_code == 403
-    assert (await client.post(f"{BASE}/changes/draft", json={}, headers=headers)).status_code == 403
+    first, second, third = await bo(db), await bo(db, "Order"), await bo(db, "Address")
+    application = await create_card(db, name="Catalog")
+    er = await create_relation(db, type_key=ER, source_id=first.id, target_id=second.id)
+    link = await create_relation(
+        db, type_key=APP_LINK, source_id=application.id, target_id=first.id
+    )
+    draft_id = uuid.uuid4()
+    requests = {
+        "picker": ("GET", "/applications?search=Catalog", None),
+        "layout": ("PUT", "/layout", {"positions": {str(first.id): {"x": 1, "y": 2}}}),
+        "compare": ("POST", "/changes/draft", {}),
+        "object": ("PUT", f"/objects/{draft_id}", {"name": "New object", "subtype": "Data"}),
+        "relation": (
+            "PUT",
+            f"/relation-drafts/{draft_id}",
+            {"source_id": str(first.id), "target_id": str(third.id)},
+        ),
+        "application": (
+            "PUT",
+            f"/application-link-drafts/{draft_id}",
+            {"object_id": str(second.id), "application_id": str(application.id), "role": "master"},
+        ),
+        "delete": ("DELETE", f"/relations/{er.id}", None),
+        "master": ("PUT", f"/objects/{first.id}/master", {"application_id": str(application.id)}),
+    }
+    method, path, body = requests[operation]
+    response = await client.request(method, f"{BASE}{path}", headers=headers, json=body)
+    assert response.status_code == 403, response.text
+    assert response.json() == {"detail": "Insufficient permissions"}
+    assert set(await db.scalars(select(Card.id))) == {first.id, second.id, third.id, application.id}
+    assert dict((await db.execute(select(Relation.id, Relation.attributes))).all()) == {
+        er.id: {},
+        link.id: {},
+    }
+    assert await db.scalar(select(Diagram.id).where(Diagram.kind == BO_RELATIONSHIP_KIND)) is None
+    assert await db.scalar(select(BoOperationReceipt.actor_id)) is None
 
 
 @pytest.mark.parametrize("unavailable", ["hidden", "missing"])

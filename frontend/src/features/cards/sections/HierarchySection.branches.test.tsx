@@ -38,7 +38,7 @@ vi.mock("@/components/CardPicker", () => ({
 
 import { mockApi } from "@/test/apiMock";
 import { hookState, withMetamodel } from "@/test/hooks";
-import { makeCardType } from "@/test/fixtures/metamodel";
+import { makeCardType, makeSubtype } from "@/test/fixtures/metamodel";
 import { renderWithProviders, userWith, wrapWithProviders } from "@/test/render";
 import { HierarchySection } from "./index";
 import type { Card, HierarchyData } from "@/types";
@@ -76,12 +76,12 @@ function LocationProbe() {
 }
 
 function renderSection(
-  opts: { canEdit?: boolean; user?: ReturnType<typeof userWith>; onUpdate?: () => void } = {},
+  opts: { card?: Card; canEdit?: boolean; user?: ReturnType<typeof userWith>; onUpdate?: () => void } = {},
 ) {
   const onUpdate = opts.onUpdate ?? vi.fn();
   const result = renderWithProviders(
     <>
-      <HierarchySection card={CARD} onUpdate={onUpdate} canEdit={opts.canEdit} />
+      <HierarchySection card={opts.card ?? CARD} onUpdate={onUpdate} canEdit={opts.canEdit} />
       <LocationProbe />
     </>,
     { route: "/cards/b", user: opts.user },
@@ -97,6 +97,40 @@ beforeEach(() => {
   withMetamodel([ORG]);
   mockApi.on("get", "/cards/b/hierarchy", WITH_PARENT);
   mockApi.on("patch", /^\/cards\//, {});
+});
+
+describe("HierarchySection — Data Object quick-create", () => {
+  it.each([
+    ["Change parent", "Create & Set as Parent", {}, [{ parent_id: "data-new" }]],
+    ["Add Child", "Create & Add as Child", { parent_id: "b" }, []],
+  ])("requires a declared subtype through %s", async (entry, action, parent, patches) => {
+    withMetamodel([makeCardType({
+      key: "DataObject",
+      label: "Data Object",
+      has_hierarchy: true,
+      subtypes: [makeSubtype({ key: "customer_record", label: "Customer record" })],
+    })]);
+    mockApi.on("post", "/cards", { id: "data-new", name: "Customer" });
+    const { user } = renderSection({ card: { ...CARD, type: "DataObject" } });
+    await user.click(entry === "Change parent"
+      ? await screen.findByTitle(entry)
+      : await screen.findByRole("button", { name: /Add Child/ }));
+    const dialog = within(await screen.findByRole("dialog"));
+    await user.click(dialog.getByRole("button", { name: /Create new Data Object/ }));
+    const name = dialog.getByLabelText("Name");
+    await user.type(name, "Customer{Enter}");
+    expect(mockApi.callsOf("post", "/cards")).toHaveLength(0);
+    const submit = dialog.getByRole("button", { name: action });
+    expect(submit).toBeDisabled();
+
+    await user.click(dialog.getByRole("combobox", { name: /^Subtype/ }));
+    await user.click(screen.getByRole("option", { name: "Customer record" }));
+    await user.click(submit);
+    await waitFor(() => expect(mockApi.callsOf("post", "/cards").map((call) => call.body)).toEqual([
+      { type: "DataObject", name: "Customer", subtype: "customer_record", ...parent },
+    ]));
+    expect(mockApi.callsOf("patch", "/cards/b").map((call) => call.body)).toEqual(patches);
+  });
 });
 
 describe("HierarchySection — rendering", () => {

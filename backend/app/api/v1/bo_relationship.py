@@ -5,7 +5,7 @@ import uuid
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import require_permission
+from app.api.deps import get_current_user, require_permission
 from app.api.v1.cards import card_detail_response, redact_bo_card_references
 from app.database import get_db
 from app.models.user import User
@@ -31,13 +31,17 @@ from app.services import bo_relationship as service
 from app.services import bo_relationship_writes as writes
 from app.services.permission_service import PermissionService
 
-router = APIRouter(prefix="/bo-relationship", tags=["bo-relationship"])
+router = APIRouter(
+    prefix="/bo-relationship",
+    tags=["bo-relationship"],
+    dependencies=[Depends(require_permission("boRelationship.view"))],
+)
 
 
 @router.get("", response_model=BoGraph)
 async def get_graph(
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(require_permission("boRelationship.view")),
+    user: User = Depends(get_current_user),
 ):
     return await service.get_bo_graph(db, user)
 
@@ -45,7 +49,7 @@ async def get_graph(
 @router.get("/changes", response_model=BoInventoryChanges)
 async def get_changes(
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(require_permission("boRelationship.view")),
+    user: User = Depends(get_current_user),
 ):
     return await service.compare_bo_inventory(db, user)
 
@@ -56,7 +60,6 @@ async def compare_draft(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require_permission("boRelationship.edit")),
 ):
-    await PermissionService.require_permission(db, user, "boRelationship.view")
     return await service.compare_bo_draft(db, user, body)
 
 
@@ -66,7 +69,6 @@ async def save_layout(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require_permission("boRelationship.edit")),
 ):
-    await PermissionService.require_permission(db, user, "boRelationship.view")
     result = await service.save_bo_layout(db, user, body)
     await db.commit()
     return result
@@ -134,7 +136,7 @@ async def update_master(
 async def get_object_detail(
     object_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(require_permission("boRelationship.view")),
+    user: User = Depends(get_current_user),
 ):
     read_scope = await service.bo_read_scope(db, user)
     card = await service.get_bo_card(db, read_scope, object_id, detail=True)

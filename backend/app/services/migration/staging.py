@@ -43,6 +43,7 @@ from app.models.relation import Relation as RelationModel
 from app.models.tag import Tag as TagModel
 from app.models.tag import TagGroup
 from app.models.user import User
+from app.services.bo_relationship_constants import APPLICATION_RELATION, OWNERSHIP_KEY
 from app.services.card_costs import COST_ITEM_TYPES, DERIVED_KEY
 from app.services.migration.protocol import MigrationSource
 from app.services.migration.snapshot import MigrationSnapshot, SourceEntity
@@ -423,6 +424,8 @@ async def stage_relations(
             )
             continue
 
+        attributes = import_relation_attributes(tea_type, rel.attributes)
+
         # Successor relations encode "X has successor Y" with the older
         # entity as ``from`` in the source. Turbo EA's matching
         # ``rel*Successor`` edge is the opposite — ``source succeeds
@@ -459,7 +462,7 @@ async def stage_relations(
                         "to_entity_id": tgt_native_id,
                         "native_type": rel.type,
                         "tea_type": tea_type,
-                        "attributes": rel.attributes,
+                        "attributes": attributes,
                     },
                     action="conflict",
                     diff={"reason": "Endpoint not staged: " + ", ".join(missing)},
@@ -488,7 +491,7 @@ async def stage_relations(
             stats["create"] += 1
         else:
             target_id = existing_rel.id
-            attr_diff = _compare_relation_attrs(rel.attributes, existing_rel.attributes or {})
+            attr_diff = _compare_relation_attrs(attributes, existing_rel.attributes or {})
             if attr_diff:
                 action = "update"
                 diff = {"attributes": attr_diff}
@@ -509,7 +512,7 @@ async def stage_relations(
                     "tea_type": tea_type,
                     "from_entity_id": src_native_id,
                     "to_entity_id": tgt_native_id,
-                    "attributes": rel.attributes,
+                    "attributes": attributes,
                     # Resolved endpoint UUIDs are cached on the staged
                     # row so the apply pass doesn't have to redo the
                     # identity lookup.
@@ -558,6 +561,13 @@ async def _resolve_endpoint_card_id(
     if source_id in in_snapshot:
         return uuid.UUID("00000000-0000-0000-0000-000000000000")
     return None
+
+
+def import_relation_attributes(type_key: str, attributes: dict[str, Any]) -> dict[str, Any]:
+    """Import ordinary relation attributes. Master is assigned in BO Relationship."""
+    if type_key == APPLICATION_RELATION:
+        return {key: value for key, value in attributes.items() if key != OWNERSHIP_KEY}
+    return attributes
 
 
 def _compare_relation_attrs(

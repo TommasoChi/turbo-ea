@@ -43,12 +43,18 @@ const ORG_TYPE = {
   icon: "corporate_fare",
   subtypes: [],
 };
+const DATA_TYPE = {
+  key: "DataObject",
+  label: "Data Object",
+  color: "#2889ff",
+  icon: "database",
+  subtypes: [{ key: "customer_record", label: "Customer record" }],
+};
 
 vi.mock("@/hooks/useMetamodel", () => ({
   useMetamodel: () => ({
-    getType: (key: string) =>
-      key === "Organization" ? ORG_TYPE : key === "Application" ? APP_TYPE : undefined,
-    types: [APP_TYPE, ORG_TYPE],
+    getType: (key: string) => [APP_TYPE, ORG_TYPE, DATA_TYPE].find((type) => type.key === key),
+    types: [APP_TYPE, ORG_TYPE, DATA_TYPE],
     relationTypes: [],
   }),
 }));
@@ -123,16 +129,16 @@ const RELATIONS = [
   },
 ];
 
-function mount(relationTypes: RelationType[]) {
+function mount(relationTypes: RelationType[], selectedType = "Organization", cardId = ORG_ID) {
   const onRelationsChanged = vi.fn();
   render(
     <RelationCellPopover
       open
       onClose={vi.fn()}
-      cardId={ORG_ID}
+      cardId={cardId}
       cardName="Finance"
       relationTypes={relationTypes}
-      selectedType="Organization"
+      selectedType={selectedType}
       onRelationsChanged={onRelationsChanged}
     />,
   );
@@ -147,6 +153,37 @@ beforeEach(() => {
 });
 
 describe("RelationCellPopover — single relation type", () => {
+  it("creates and links a Data Object from an Application with its selected subtype", async () => {
+    const user = userEvent.setup();
+    vi.mocked(api.post).mockResolvedValueOnce({ id: "data-new", name: "Customer" });
+    const { onRelationsChanged } = mount([{
+      ...USES,
+      key: "relAppToDataObject",
+      source_type_key: "Application",
+      target_type_key: "DataObject",
+    }], "Application", "app-1");
+    await user.click(await screen.findByRole("button", { name: /Create new Data Object/ }));
+    await user.type(screen.getByPlaceholderText("Name"), "Customer{Enter}");
+    expect(api.post).not.toHaveBeenCalled();
+    const submit = screen.getByRole("button", { name: "Create & Add" });
+    expect(submit).toBeDisabled();
+
+    await user.click(screen.getByRole("combobox", { name: /^Subtype/ }));
+    await user.click(screen.getByRole("option", { name: "Customer record" }));
+    await user.click(submit);
+    await waitFor(() => expect(onRelationsChanged).toHaveBeenCalledOnce());
+    expect(api.post).toHaveBeenNthCalledWith(1, "/cards", {
+      type: "DataObject",
+      name: "Customer",
+      subtype: "customer_record",
+    });
+    expect(api.post).toHaveBeenNthCalledWith(2, "/relations", {
+      type: "relAppToDataObject",
+      source_id: "app-1",
+      target_id: "data-new",
+    });
+  });
+
   it("shows that type's relations and posts with its key", async () => {
     mount([USES]);
     expect(await screen.findByText("CRM")).toBeInTheDocument();

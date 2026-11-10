@@ -1463,6 +1463,16 @@ async def lock_bo_relation_writes(
 async def lock_relation_for_delete(db: AsyncSession, rel: Relation) -> Relation | None:
     """Re-read the row after the BO lock, allowing a concurrent delete to win."""
     await lock_bo_relation_writes(db, [(rel.type, rel.source_id, rel.target_id)])
+    if rel.type in (ER_RELATION, APPLICATION_RELATION):
+        # Card deletion takes its row lock before writing cascade evidence and
+        # removing relations. Lock endpoints first here too, including the card
+        # rows updated by the relation event and quality recalculation.
+        await db.execute(
+            select(Card.id)
+            .where(Card.id.in_((rel.source_id, rel.target_id)))
+            .order_by(Card.id)
+            .with_for_update(key_share=True)
+        )
     return await db.scalar(
         select(Relation)
         .where(Relation.id == rel.id)

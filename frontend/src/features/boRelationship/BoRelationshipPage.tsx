@@ -282,11 +282,26 @@ export default function BoRelationshipPage() {
             {canEdit && drawing.issues.length > 0 && (
               <Alert severity="warning">
                 <Typography variant="subtitle2">{t("boRelationship.pendingSave")}</Typography>
-                {drawing.issues.map(({ id, names, reason, detail }) => (
-                  <Typography key={id} variant="body2">
-                    {[names.filter(Boolean).join(" ↔ "), detail || t(`boRelationship.${reason}`)].filter(Boolean).join(" · ")}
-                  </Typography>
-                ))}
+                {drawing.issues.map(({ id, names, reason, detail, discardable }) => {
+                  const name = names.filter(Boolean).join(" ↔ ");
+                  return (
+                    <Stack key={id} direction="row" spacing={1} alignItems="center">
+                      <Typography variant="body2">
+                        {[name, detail || t(`boRelationship.${reason}`)].filter(Boolean).join(" · ")}
+                      </Typography>
+                      {discardable && (
+                        <Button
+                          size="small"
+                          disabled={busy}
+                          aria-label={t("boRelationship.discardFailedDraft", { name })}
+                          onClick={() => drawing.discardFailedDraft(id)}
+                        >
+                          {t("boRelationship.discardDraft")}
+                        </Button>
+                      )}
+                    </Stack>
+                  );
+                })}
               </Alert>
             )}
             {canEditRelations && drawing.removals.length > 0 && (

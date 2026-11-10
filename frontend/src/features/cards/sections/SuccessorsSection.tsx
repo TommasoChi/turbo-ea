@@ -19,6 +19,7 @@ import DialogActions from "@mui/material/DialogActions";
 import { useTranslation } from "react-i18next";
 import MaterialSymbol from "@/components/MaterialSymbol";
 import CardPicker, { type CardOption } from "@/components/CardPicker";
+import RequiredCardSubtypeSelect from "@/components/RequiredCardSubtypeSelect";
 import ClickableCardName from "@/components/ClickableCardName";
 import { useMetamodel } from "@/hooks/useMetamodel";
 import { hasTypePermission } from "@/components/RequirePermission";
@@ -27,6 +28,7 @@ import { useTypeLabel } from "@/hooks/useResolveLabel";
 import { useSyncedExpanded } from "@/hooks/useSyncedExpanded";
 import { api, isAbortError } from "@/api/client";
 import { useLatestRequest } from "@/hooks/useLatestRequest";
+import { useRequiredCardSubtype } from "@/hooks/useRequiredCardSubtype";
 import type { Card, Relation } from "@/types";
 import { findSuccessorRelationType } from "@/lib/successorRelation";
 
@@ -65,6 +67,8 @@ function SuccessorsSection({
   const canCreateOwnType = hasTypePermission(user, "inventory.create", card.type);
   const [createName, setCreateName] = useState("");
   const [createLoading, setCreateLoading] = useState(false);
+  const { subtype, subtypeValid, subtypeField, resetSubtype } = useRequiredCardSubtype(card.type, typeConfig?.subtypes);
+  const canQuickCreate = !!createName.trim() && subtypeValid && !createLoading;
 
   // Through the request hook, like the other sections' loads: a reload after a
   // write that lands late must not overwrite the list a newer one fetched.
@@ -135,13 +139,14 @@ function SuccessorsSection({
   };
 
   const handleQuickCreate = async () => {
-    if (!createName.trim() || !successorRT) return;
+    if (!canQuickCreate || !successorRT) return;
     setCreateLoading(true);
     setError("");
     try {
       const created = await api.post<{ id: string; name: string }>("/cards", {
         type: card.type,
         name: createName.trim(),
+        ...(subtype ? { subtype } : {}),
       });
       if (addMode === "successor") {
         await api.post("/relations", {
@@ -406,6 +411,7 @@ function SuccessorsSection({
                     onClick={() => {
                       setCreateMode(true);
                       setCreateName(search);
+                      resetSubtype();
                     }}
                   >
                     {t("successors.createNew", { type: typeLabel })}
@@ -444,12 +450,13 @@ function SuccessorsSection({
                   autoFocus
                   sx={{ mb: 1 }}
                 />
+                {subtypeField && <RequiredCardSubtypeSelect {...subtypeField} sx={{ mb: 1 }} />}
                 <Box sx={{ display: "flex", gap: 1 }}>
                   <Button
                     size="small"
                     variant="contained"
                     onClick={handleQuickCreate}
-                    disabled={!createName.trim() || createLoading}
+                    disabled={!canQuickCreate}
                   >
                     {t("successors.createAndAdd")}
                   </Button>

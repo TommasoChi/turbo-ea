@@ -57,7 +57,7 @@ from app.models.stakeholder import Stakeholder
 from app.models.tag import CardTag, Tag, TagGroup
 from app.models.user import User
 from app.services import card_type_categories
-from app.services.bo_relationship_constants import ER_RELATION
+from app.services.bo_relationship_constants import APPLICATION_RELATION, ER_RELATION
 from app.services.card_costs import recompute_derived
 from app.services.card_write_service import (
     find_relation,
@@ -65,6 +65,7 @@ from app.services.card_write_service import (
     orient_er_attributes,
 )
 from app.services.event_bus import event_bus
+from app.services.migration.staging import import_relation_attributes
 from app.services.relation_orientation import orient_endpoints
 
 logger = logging.getLogger(__name__)
@@ -775,7 +776,10 @@ async def _apply_relation_pass(
     )
     for staged, type_key, src_uuid, tgt_uuid in resolved_rows:
         try:
-            attributes = (staged.source_data or {}).get("attributes") or {}
+            # Older staged rows can still carry a source-supplied ownership marker.
+            attributes = import_relation_attributes(
+                type_key, (staged.source_data or {}).get("attributes") or {}
+            )
             if staged.action == "create":
                 present = await find_relation(db, type_key, src_uuid, tgt_uuid)
                 if present is not None:
@@ -799,9 +803,10 @@ async def _apply_relation_pass(
             elif staged.action == "update":
                 if staged.target_id is None:
                     raise ValueError("update relation has no cached target_id")
-                existing_rel = (
-                    await db.execute(select(Relation).where(Relation.id == staged.target_id))
-                ).scalar_one_or_none()
+                stmt = select(Relation).where(Relation.id == staged.target_id)
+                if type_key == APPLICATION_RELATION:
+                    stmt = stmt.with_for_update().execution_options(populate_existing=True)
+                existing_rel = (await db.execute(stmt)).scalar_one_or_none()
                 if existing_rel is None:
                     raise ValueError("target relation no longer exists")
                 existing_rel.attributes = {

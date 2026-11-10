@@ -5,6 +5,7 @@ import { mockApi } from "@/test/apiMock";
 import CreateCardDialog from "./CreateCardDialog";
 
 vi.mock("@/api/client", () => import("@/test/apiMock").then((m) => m.apiClientModule()));
+vi.mock("@/hooks/useMetamodel", () => import("@/test/hooks").then((m) => m.useMetamodelModule()));
 
 const TYPES = [{ key: "Application", label: "Application" }, { key: "ITComponent", label: "IT Component" }];
 

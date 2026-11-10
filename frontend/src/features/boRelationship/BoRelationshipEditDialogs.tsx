@@ -55,17 +55,22 @@ export function BoNewObjectDialog({ onClose, onStage }: DialogProps & { onStage:
   const [subtype, setSubtype] = useState("");
   const [isPersonalData, setPersonalData] = useState(false);
   const [isPaymentData, setPaymentData] = useState(false);
+  const trimmedName = name.trim();
+  const nameLimit = 500;
+  const tooLong = [...trimmedName].length > nameLimit;
   return (
     <StageDialog
       title={t("boRelationship.newObject")}
       action={t("boRelationship.stageObject")}
-      ready={!!name.trim() && subtypes.some(({ key }) => key === subtype)}
+      ready={!!trimmedName && !tooLong && subtypes.some(({ key }) => key === subtype)}
       onClose={onClose}
-      onStage={() => onStage({ name: name.trim(), subtype, isPersonalData, isPaymentData })}
+      onStage={() => onStage({ name: trimmedName, subtype, isPersonalData, isPaymentData })}
     >
       <TextField
         id={`${id}-name`} label={t("boRelationship.objectName")}
         value={name} onChange={(event) => setName(event.target.value)} autoFocus
+        error={tooLong}
+        helperText={tooLong ? t("boRelationship.objectNameTooLong", { max: nameLimit }) : undefined}
       />
       <TextField
         id={`${id}-subtype`} label={t("boRelationship.subtype")} value={subtype}

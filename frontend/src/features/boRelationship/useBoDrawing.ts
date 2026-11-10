@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { api } from "@/api/client";
+import { api, ApiError } from "@/api/client";
 import { randomUuid } from "@/lib/randomUuid";
 import type { BoApplication, BoEdge, BoGraph, BoNode } from "./BoRelationshipPage";
 import { computeLayout } from "./boRelationshipLayout";
@@ -28,6 +28,7 @@ type SaveIssue = {
   names: string[];
   reason: "saveFailed" | "waitingForObject" | "waitingForMaster" | "draftUnavailable" | "visualChangeUnavailable" | "inventoryConflict";
   detail?: string;
+  discardable?: boolean;
 };
 export type InventoryChange = {
   kind: "node" | "edge" | "application_link";
@@ -177,6 +178,34 @@ export function useBoDrawing(initialGraph: BoGraph | undefined, onSaved: OnSave)
     setIssues((current) => current.filter((issue) => issue.id !== id));
     return true;
   };
+  const discardFailedDraft = (id: string) => {
+    if (lock.current || !issues.some((issue) => issue.id === id && issue.discardable)) return;
+    const object = draft.objects.find((item) => item.id === id && !item.saved);
+    const application = draft.applications.find((item) => item.id === id && !item.saved);
+    if (!object && !application) return;
+
+    const discarded = new Set([id]);
+    if (object) {
+      for (const relation of draft.relations) {
+        if (relation.input.source === id || relation.input.target === id) discarded.add(relation.id);
+      }
+      for (const link of draft.applications) {
+        if (link.input.objectId === id) discarded.add(link.id);
+      }
+    }
+    setDraft((current) => {
+      const moves = { ...current.moves };
+      if (object) delete moves[id];
+      return {
+        ...current,
+        moves,
+        objects: current.objects.filter((item) => !discarded.has(item.id)),
+        relations: current.relations.filter((item) => !discarded.has(item.id)),
+        applications: current.applications.filter((item) => !discarded.has(item.id)),
+      };
+    });
+    setIssues((current) => current.filter((issue) => !discarded.has(issue.id)));
+  };
   const queueRemoval = (edge: BoEdge, label: string) => {
     setRemovals((current) => current.some((item) => item.edge.id === edge.id)
       ? current
@@ -249,7 +278,13 @@ export function useBoDrawing(initialGraph: BoGraph | undefined, onSaved: OnSave)
         item.saved ??= await request();
         savedDrafts.push({ kind, id: item.id });
       } catch (error) {
-        failures.push({ id: item.id, names, reason: "saveFailed", detail: failureDetail(error) });
+        // Only discard requests that the server definitively rejected. A lost
+        // response can follow a successful write and needs the same-ID retry.
+        const discardable = kind !== "edge" && error instanceof ApiError
+          && [400, 403, 404, 409, 422].includes(error.status);
+        failures.push({
+          id: item.id, names, reason: "saveFailed", detail: failureDetail(error), discardable,
+        });
       }
     };
     const nodeNames = new Map(drawing.nodes.map(({ id, name }) => [id, name]));
@@ -413,6 +448,7 @@ export function useBoDrawing(initialGraph: BoGraph | undefined, onSaved: OnSave)
       ...input, objectId: resolveId(draft, input.objectId) ?? input.objectId,
     })),
     isDraftObject: (id: string) => draft.objects.some((item) => item.id === id && !item.saved),
-    stageObject, stageRelation, stageApplication, move, discardDraftRelation, queueRemoval, cancelRemoval,
+    stageObject, stageRelation, stageApplication, move, discardDraftRelation, discardFailedDraft,
+    queueRemoval, cancelRemoval,
   };
 }

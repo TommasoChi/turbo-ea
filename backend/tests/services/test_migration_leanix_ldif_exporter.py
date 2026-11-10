@@ -15,7 +15,7 @@ import json
 import zipfile
 from io import BytesIO
 
-from app.services.migration.snapshot import MigrationSnapshot
+from app.services.migration.snapshot import MigrationSnapshot, Relation, SourceEntity
 from app.services.migration.sources.leanix.ldif_exporter import (
     COMMENTS_FILE,
     LDIF_FILE,
@@ -87,8 +87,13 @@ class TestMappingConsistency:
         from app.services.seed import RELATIONS
 
         seeded = {r["key"] for r in RELATIONS}
-        # No LeanIX counterpart exists for these Turbo EA-only relation types.
-        turbo_only = {"relProcessCalls", "relObjectiveToBizCtx", "relBusinessContextSuccessor"}
+        # These types use their Turbo EA keys and require a custom relation in LeanIX.
+        turbo_only = {
+            "relProcessCalls",
+            "relObjectiveToBizCtx",
+            "relBusinessContextSuccessor",
+            "relDataObjectToDataObject",
+        }
         missing = seeded - set(EXPORT_RELATION_API_MAPPING) - turbo_only
         assert not missing, missing
 
@@ -162,6 +167,34 @@ class TestLdif:
         assert org["attributes"] == {"usageType": "owner"}
         assert _items(ldif, "relProcessToApplication")
         assert _items(ldif, "relServerToApp")  # custom relation keeps its key
+
+    def test_business_object_er_relation_requires_a_custom_type_and_preserves_direction(self):
+        snap = _snapshot()
+        snap.entities.extend(
+            [
+                SourceEntity("account", "DataObject", "Account"),
+                SourceEntity("customer", "DataObject", "Customer"),
+            ]
+        )
+        snap.relations.extend(
+            [
+                Relation(
+                    "er", "relDataObjectToDataObject", "account", "customer", {"cardinality": "1:n"}
+                ),
+                Relation("lineage", "relDataObjectSuccessor", "account", "customer"),
+            ]
+        )
+
+        ldif, processors, _, readme = _open(build_bundle(snap))
+        (er,) = _items(ldif, "relDataObjectToDataObject")
+        assert (er["data"]["from"], er["data"]["to"]) == ("account", "customer")
+        assert er["data"]["attributes"] == {"cardinality": "1:n"}
+        er_processor = _processor(processors, "relDataObjectToDataObject", "inboundRelation")
+        assert er_processor["type"] == "relDataObjectToDataObject"
+        assert "- relation type `relDataObjectToDataObject`" in readme
+        (lineage,) = _items(ldif, "relDataObjectSuccessor")
+        assert (lineage["data"]["from"], lineage["data"]["to"]) == ("customer", "account")
+        assert "- relation type `relDataObjectSuccessor`" not in readme
 
     def test_dangling_relations_are_dropped_and_every_endpoint_exists(self):
         ldif, _, _, _ = _open(build_bundle(_snapshot()))
