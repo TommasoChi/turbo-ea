@@ -19,6 +19,8 @@ Toppen af kortet viser:
 
 ![Panel med opdeling af datakvaliteten](../assets/img/da/63_card_data_quality_breakdown.png)
 
+Når du opretter et **Dataobjekt**, skal du vælge en af de undertyper, der er konfigureret for korttypen. Du kan også vælge undertype, når du opretter et dataobjekt fra hierarkiet, en forgænger eller efterfølger, en relationscelle i lageret eller et ArchiMate-element.
+
 Når en administrator slår [TurboRPG-tilstand](../admin/settings.md#turborpg-gamificeret-datakvalitet) (gamificeret datakvalitet) til, fejres hver gemning, der hæver scoren, som at få liv i et spil: et glødende **+X%** forlader den sektion, du netop har gemt, flyver til scoren og rammer den – ringen blinker og gløder, dens fyld vokser til den nye score, og tallet tæller op. Når du er scrollet forbi overskriften, holder en slank scorebjælke hæftet under den øverste bjælke scoren i syne, og gevinsten lander på den i stedet. Klik på barens score – chippen med pilen – for at åbne den samme opdeling som ved ringen. At nå det grønne bånd (80%) og at nå 100% er milepæle med et kort konfettiregn. Rydning eller fjernelse af data afspiller den dæmpede omvendte version: et rødt **−X%** flyver fra scoren tilbage til sektionen, og bjælken tømmes og tæller ned, uden blink og konfetti. Hvis reduceret bevægelse er slået til i dit operativsystem, flyver intet; du ser i stedet en statisk **+X%** eller **−X%**.
 - **Handlingsmenu** — Arkivér, slet og godkendelseshandlinger. Indeholder også en ét-klik **Observe this card**-skifter (når korttypen definerer en Observer-rolle), så enhver bruger med læseadgang kan følge kortet uden at skulle gå gennem Stakeholders-fanen.
 

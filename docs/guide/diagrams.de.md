@@ -153,6 +153,32 @@ Die Sync-Schaltfläche der Symbolleiste zeigt eine pulsierende «N unsynchron»-
 
 Diagramme können von der Registerkarte **Ressourcen** einer Karte aus mit **jeder beliebigen Karte** verknüpft werden (siehe [Karten-Details](card-details.de.md#registerkarte-ressourcen)). Wenn ein Diagramm mit einer **Initiative**-Karte verknüpft ist, erscheint es auch im Modul [EA Delivery](delivery.md) zusammen mit SoAW-Dokumenten.
 
+## Beziehungen zwischen Geschäftsobjekten mit dem Inventar abgleichen
+
+Öffnen Sie **Beziehungen zwischen Geschäftsobjekten** unter **Application & Data Architecture**. Auf der Leinwand sehen Sie den zuletzt freigegebenen Stand des Diagramms. Die Seite gleicht diesen Stand mit dem Inventar ab und listet die für Sie sichtbaren Änderungen unter **Änderungen im Inventar** auf. Klicken Sie auf **Auf Änderungen prüfen**, um den Abgleich zu wiederholen.
+
+![Diagramm der Beziehungen zwischen Geschäftsobjekten mit dem führenden System und der Karte des ausgewählten Geschäftsobjekts](../assets/img/de/105_beziehungen_geschaeftsobjekte.png)
+
+1. Prüfen Sie die hinzugefügten, aktualisierten oder entfernten Geschäftsobjekte und Verknüpfungen.
+2. Wenn Sie das Diagramm bearbeiten dürfen, klicken Sie bei den gewünschten Änderungen auf **Synchronisieren**. Die Änderungen erscheinen auf Ihrer Leinwand. Wurde beispielsweise ein Geschäftsobjekt umbenannt und dem Untertyp **Dokument** zugeordnet, erhält es an derselben Position den neuen Namen und eine gefaltete Ecke.
+3. Klicken Sie auf **Speichern**, um den aktualisierten Stand freizugeben. Bis dahin sehen andere Benutzer den vorherigen Stand. Wurde ein Inventareintrag inzwischen erneut geändert, prüfen Sie ihn, bevor Sie die neue Fassung übernehmen.
+
+Bei diesem Abgleich und dieser Synchronisierung werden die Daten aus dem Inventar gelesen. Bestätigte Entfernungen von Linien, deren Beziehungen noch aus dem Inventar gelöscht werden sollen, erscheinen in einer separaten Liste. Synchronisieren Sie diese Entfernungen separat.
+
+### Einen Entwurf für Beziehungen zwischen Geschäftsobjekten wiederherstellen
+
+Der Editor hält einen Entwurf in Ihrem Browser vor und aktualisiert ihn während der Bearbeitung etwa alle fünf Sekunden. Wenn Sie **Beziehungen zwischen Geschäftsobjekten** im selben Browser mit demselben Konto erneut öffnen, erscheint der zuletzt freigegebene Stand. Ist ein Entwurf verfügbar, wählen Sie **Wiederherstellen**, um Ihre Änderungen auf die Leinwand zu übernehmen, oder **Verwerfen**, um den Entwurf zu löschen. Andere Benutzer sehen Ihre Änderungen erst, wenn **Speichern** oder **Speichern und schließen** erfolgreich war.
+
+Jeder geöffnete Editor hält einen eigenen Entwurf vor. Sind mehrere Entwürfe verfügbar, wird nach dem Verwerfen des angezeigten Entwurfs der nächste angeboten. Wenn Sie einen Entwurf wiederhergestellt haben, können Sie den Editor erneut öffnen, um einen weiteren Entwurf wiederherzustellen.
+
+Wenn **Speichern** meldet, dass ein Geschäftsobjekt oder eine Verknüpfung mit einer Anwendung abgelehnt wurde, klicken Sie neben dem Eintrag auf **Verwerfen**. Wenn Sie ein neues Geschäftsobjekt verwerfen, werden auch seine Position und die davon abhängigen Verknüpfungen aus dem Entwurf entfernt. Anschließend können Sie Ihre übrigen Änderungen speichern.
+
+Ist ein Geschäftsobjekt während der Bearbeitung nicht mehr verfügbar, überspringt **Speichern** dessen Position und speichert die Positionen, die Sie weiterhin aktualisieren können.
+
+Eine entfernte Linie kann auch im wiederhergestellten Diagramm fehlen. Beim erneuten Öffnen ist die Liste der vorgemerkten Löschungen leer. Wenn die Beziehung noch vorhanden und für Sie sichtbar ist, können Sie die Linie über **Änderungen im Inventar** zurückholen. Um die Beziehung aus dem Inventar zu löschen, bestätigen Sie die Entfernung in der aktuellen Sitzung erneut und klicken Sie auf **Entfernung synchronisieren**.
+
+**Speichern und schließen** lässt den Editor geöffnet, wenn Sie noch Änderungen prüfen müssen. Bei vorgemerkten Löschungen aus dem Inventar warnt der Editor Sie vor dem Schließen.
+
 ## Ein Diagramm außerhalb von Turbo EA teilen
 
 Ein Diagramm kann als **schreibgeschützter Link veröffentlicht werden, der sich ohne Anmeldung öffnet** — so lässt es sich in eine Wiki-Seite wie Confluence einbetten.

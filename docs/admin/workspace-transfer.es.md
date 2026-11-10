@@ -19,6 +19,8 @@ La exportación captura el workspace completo como un paquete `.zip` que contien
 - **Datos de módulos** — BPM (diagramas de proceso, elementos, versiones de flujo, evaluaciones), PPM (informes de estado, costes, presupuestos, riesgos, tareas, WBS, dependencias), el registro de riesgos de GRC (riesgos, tareas de mitigación y sus ocurrencias, enlaces a tarjetas), los hallazgos de cumplimiento de GRC (con las ejecuciones de análisis a las que hacen referencia), decisiones de arquitectura y Statements of Architecture Work, diagramas de dibujo libre, informes guardados, marcadores (vistas guardadas del inventario, incluidas sus comparticiones), portales web y encuestas.
 - **Activos** — los archivos adjuntos binarios, el XML de diagramas y BPMN, y el logo/favicon viajan como archivos separados dentro de la carpeta `assets/` del paquete.
 
+La sección **Diagramas** también incluye el dibujo guardado de **Relaciones entre objetos de negocio**. La importación conserva las posiciones de los nodos cuando las fichas y las relaciones reciben nuevos identificadores en el destino. Los borradores se quedan en el navegador donde se editaron. Las eliminaciones pendientes del inventario se quedan en la sesión de edición original.
+
 ## Qué nunca se incluye
 
 Por seguridad, **los secretos nunca se exportan**:
@@ -49,6 +51,8 @@ Algunos otros elementos se quedan atrás por diseño:
 4. Revise la vista previa y, a continuación, haga clic en **Aplicar importación**.
 
 La importación es **idempotente**: el metamodelo y la configuración se emparejan por clave, las tarjetas por id externo o por tipo + ruta de jerarquía, y los usuarios por correo electrónico. Volver a importar el mismo paquete es seguro — las entidades ya presentes se omiten en lugar de duplicarse. Los tipos de metamodelo built-in existentes conservan su identidad; solo se fusiona su esquema editable. Esto también vale para las tarjetas archivadas incluidas en el paquete: se reconocen en lugar de crearse de nuevo.
+
+La primera importación de un dibujo guardado de **Relaciones entre objetos de negocio** puede incorporarlo a un destino en el que nunca se haya guardado un dibujo de este tipo. Si el destino ya tiene uno guardado, aunque esté vacío, la importación conserva el dibujo y sus posiciones. Consulte el desglose de **Referencias** para ver los objetos de negocio o los vínculos que la importación no pudo resolver. Si en el destino ya hay otra aplicación maestra para un objeto de negocio, el conflicto se indica en los resultados de **Relaciones** y el vínculo nuevo conserva su configuración CRUD.
 
 ### Cómo leer la vista previa
 

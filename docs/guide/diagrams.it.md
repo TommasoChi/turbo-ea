@@ -153,6 +153,32 @@ Il pulsante Sync della barra strumenti mostra una pillola pulsante «N non sincr
 
 I diagrammi possono essere collegati a **qualsiasi scheda** dalla scheda **Risorse** della scheda stessa (vedi [Dettaglio scheda](card-details.it.md#scheda-risorse)). Quando un diagramma è collegato a una scheda **Iniziativa**, appare anche nel modulo [EA Delivery](delivery.md) accanto ai documenti SoAW.
 
+## Verificare le relazioni tra oggetti di business rispetto all’inventario
+
+Dal menu **Application & Data Architecture**, aprite **Relazioni tra oggetti di business**. La tela mostra l’ultimo disegno condiviso. La pagina lo confronta con l’inventario ed elenca in **Modifiche all’inventario** le variazioni che potete vedere. Selezionate **Verifica aggiornamenti** per ripetere il confronto.
+
+![Diagramma delle relazioni tra oggetti di business con i ruoli delle applicazioni e la scheda dell’oggetto selezionato](../assets/img/it/105_relazioni_oggetti_business.png)
+
+1. Esaminate gli oggetti di business e i collegamenti aggiunti, aggiornati o rimossi.
+2. Se potete modificare il diagramma, selezionate le variazioni da recepire e scegliete **Sincronizza**. Le modifiche compaiono sulla tela. Per esempio, un oggetto rinominato e passato al sottotipo **Documento** mostra il nuovo nome e l’angolo ripiegato nella stessa posizione.
+3. Selezionate **Salva** per condividere il disegno aggiornato. Gli altri utenti vedono il disegno precedente fino al salvataggio. Se un elemento dell’inventario è cambiato di nuovo, verificate gli aggiornamenti prima di accettare la nuova versione.
+
+La verifica e questa sincronizzazione leggono i dati dall’inventario. Le rimozioni di linee già confermate compaiono in un elenco separato. Per eliminare dall’inventario le relative relazioni, usate il comando di sincronizzazione delle rimozioni.
+
+### Recuperare una bozza delle relazioni tra oggetti di business
+
+L’editor conserva una bozza nel browser e la aggiorna ogni cinque secondi circa mentre lavorate. Quando riaprite **Relazioni tra oggetti di business** nello stesso browser con lo stesso account, la tela mostra l’ultimo disegno condiviso. Se è disponibile una bozza, scegliete **Ripristina** per riportare le modifiche sulla tela oppure **Scarta** per eliminare la bozza. Gli altri utenti vedono le modifiche dopo aver completato **Salva** o **Salva ed esci**.
+
+Ogni editor aperto conserva la propria bozza. Se sono disponibili più bozze, quando scartate quella mostrata l’editor propone la successiva. Dopo averne ripristinata una, potete riaprire l’editor per recuperarne un’altra.
+
+Se **Salva** segnala un oggetto di business o un collegamento a un’applicazione rifiutato, selezionate **Scarta** accanto all’elemento. Scartando un nuovo oggetto di business si rimuovono dalla bozza anche la sua posizione e i collegamenti che ne dipendono. A quel punto potete salvare le altre modifiche.
+
+Se un oggetto di business diventa indisponibile durante la modifica, **Salva** salta la sua posizione e salva quelle che potete ancora aggiornare.
+
+Una linea rimossa può rimanere assente dal disegno ripristinato. Quando riaprite l’editor, la coda delle rimozioni dall’inventario è vuota. Se la relazione esiste ancora ed è visibile, potete ripristinare la linea da **Modifiche all’inventario**. Per eliminare una relazione dall’inventario, confermate una nuova rimozione nella sessione corrente e sincronizzatela.
+
+**Salva ed esci** lascia aperto l’editor se ci sono ancora modifiche da sistemare. Se ci sono rimozioni dall’inventario in attesa, l’editor vi avvisa prima di uscire.
+
 ## Condividere un diagramma fuori da Turbo EA
 
 Un diagramma può essere pubblicato come **collegamento in sola lettura che si apre senza accedere**, così da poter essere incorporato in una pagina wiki come Confluence.

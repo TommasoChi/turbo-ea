@@ -3661,7 +3661,38 @@ TYPES = [
         "category": "Application & Data",
         "has_hierarchy": True,
         "has_successors": True,
-        "subtypes": [{"key": "data", "label": "Data"}, {"key": "document", "label": "Document"}],
+        "subtypes": [
+            {
+                "key": "data",
+                "label": "Data",
+                "translations": {
+                    "de": "Daten",
+                    "fr": "Données",
+                    "es": "Datos",
+                    "it": "Dati",
+                    "pt": "Dados",
+                    "zh": "数据",
+                    "ru": "Данные",
+                    "da": "Data",
+                    "ar": "بيانات",
+                },
+            },
+            {
+                "key": "document",
+                "label": "Document",
+                "translations": {
+                    "de": "Dokument",
+                    "fr": "Document",
+                    "es": "Documento",
+                    "it": "Documento",
+                    "pt": "Documento",
+                    "zh": "文档",
+                    "ru": "Документ",
+                    "da": "Dokument",
+                    "ar": "مستند",
+                },
+            },
+        ],
         "sort_order": 9,
         "fields_schema": [
             {
@@ -3683,6 +3714,17 @@ TYPES = [
                         "label": "Contains Payment Data",
                         "type": "boolean",
                         "weight": 1,
+                        "translations": {
+                            "de": "Enthält Zahlungsdaten",
+                            "fr": "Contient des données de paiement",
+                            "es": "Contiene datos de pago",
+                            "it": "Contiene dati di pagamento",
+                            "pt": "Contém dados de pagamento",
+                            "zh": "包含支付数据",
+                            "ru": "Содержит платёжные данные",
+                            "da": "Indeholder betalingsoplysninger",
+                            "ar": "يحتوي على بيانات الدفع",
+                        },
                     },
                     {
                         "key": "dataSensitivity",
@@ -5164,7 +5206,34 @@ RELATIONS = [
                 "key": "dataOwnership",
                 "label": "Data Ownership",
                 "type": "single_select",
-                "options": [{"key": "master", "label": "Master"}],
+                "translations": {
+                    "de": "Datenverantwortung",
+                    "fr": "Responsabilité des données",
+                    "es": "Responsabilidad sobre los datos",
+                    "it": "Titolarità dei dati",
+                    "pt": "Responsabilidade pelos dados",
+                    "zh": "数据归属",
+                    "ru": "Владение данными",
+                    "da": "Dataejerskab",
+                    "ar": "ملكية البيانات",
+                },
+                "options": [
+                    {
+                        "key": "master",
+                        "label": "Master",
+                        "translations": {
+                            "de": "Führendes System",
+                            "fr": "Application de référence",
+                            "es": "Aplicación maestra",
+                            "it": "Applicazione master",
+                            "pt": "Aplicação mestre",
+                            "zh": "主应用",
+                            "ru": "Основное приложение",
+                            "da": "Master",
+                            "ar": "التطبيق الرئيسي",
+                        },
+                    }
+                ],
             },
         ],
         "translations": {
@@ -6010,11 +6079,54 @@ RELATIONS = [
                 "key": "cardinality",
                 "label": "Cardinality",
                 "type": "single_select",
+                "translations": {
+                    "de": "Kardinalität",
+                    "fr": "Cardinalité",
+                    "es": "Cardinalidad",
+                    "it": "Cardinalità",
+                    "pt": "Cardinalidade",
+                    "zh": "基数",
+                    "ru": "Кратность",
+                    "da": "Kardinalitet",
+                    "ar": "التعددية",
+                },
                 "options": [
-                    {"key": value, "label": value} for value in ("1:1", "1:n", "n:1", "n:m")
+                    {
+                        "key": value,
+                        "label": value,
+                        "translations": {
+                            locale: value
+                            for locale in ("de", "fr", "es", "it", "pt", "zh", "ru", "da", "ar")
+                        },
+                    }
+                    for value in ("1:1", "1:n", "n:1", "n:m")
                 ],
             }
         ],
+        "translations": {
+            "label": {
+                "de": "steht in Beziehung zu",
+                "fr": "est lié à",
+                "es": "se relaciona con",
+                "it": "è in relazione con",
+                "pt": "está relacionado com",
+                "zh": "关联",
+                "ru": "связан с",
+                "da": "er relateret til",
+                "ar": "يرتبط بـ",
+            },
+            "reverse_label": {
+                "de": "steht in Beziehung zu",
+                "fr": "est lié à",
+                "es": "se relaciona con",
+                "it": "è in relazione con",
+                "pt": "está relacionado com",
+                "zh": "关联",
+                "ru": "связан с",
+                "da": "er relateret til",
+                "ar": "يرتبط بـ",
+            },
+        },
     },
     _successor_relation("relDataObjectSuccessor", "DataObject", 46),
     _successor_relation("relBusinessContextSuccessor", "BusinessContext", 49),

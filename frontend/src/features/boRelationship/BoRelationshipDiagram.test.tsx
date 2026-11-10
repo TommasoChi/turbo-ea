@@ -19,6 +19,26 @@ it("provides a real pointer hit target for diagram nodes", () => {
   expect(container.querySelector(".djs-shape .djs-visual")).toHaveStyle({ pointerEvents: "all" });
 });
 
+it("keeps the canvas coordinate direction independent of an RTL page", () => {
+  const { container } = render(
+    <div dir="rtl">
+      <BoRelationshipDiagram
+        nodes={[
+          { id: "a", name: "سجل العميل", subtype: "Data", isPersonalData: true, isPaymentData: false },
+          { id: "b", name: "Order", subtype: "Document", isPersonalData: false, isPaymentData: true },
+        ]}
+        edges={[{ id: "link", source: "a", target: "b", cardinality: "1:n" }]}
+        positions={{ a: { x: 20, y: 20 }, b: { x: 350, y: 20 } }}
+        onActivate={vi.fn()}
+      />
+    </div>,
+  );
+  expect(screen.getByRole("region").closest("[dir]")).toHaveAttribute("dir", "rtl");
+  expect(container.querySelector(".djs-shape text")?.closest("[dir]")).toHaveAttribute("dir", "ltr");
+  expect(container.querySelector(".djs-connection text")?.closest("[dir]")).toHaveAttribute("dir", "ltr");
+  expect(container.querySelector(".djs-connection text")).toHaveTextContent("1:n");
+});
+
 it("reports the moved position once and keeps a drag separate from card activation", () => {
   const onMove = vi.fn();
   const onActivate = vi.fn();

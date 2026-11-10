@@ -30,6 +30,7 @@
   "editor.notFound": "未找到图表",
   "editor.saved": "图表已保存",
   "editor.syncComplete": "同步完成",
+  "editor.subtypeRequired": "同步前，请为待处理的数据对象选择子类型。",
   "editor.allUpToDate": "所有卡片均为最新",
   "editor.noRelatedCards": "无关联卡片",
   "editor.relationsRestored": "已从资产清单恢复关系",

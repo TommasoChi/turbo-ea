@@ -19,6 +19,8 @@ L'esportazione cattura il workspace completo come bundle `.zip` contenente una c
 - **Dati dei moduli** — BPM (diagrammi di processo, elementi, versioni di flusso, valutazioni), PPM (report di stato, costi, budget, rischi, attività, WBS, dipendenze), il registro dei rischi GRC (rischi, attività di mitigazione e relative occorrenze, collegamenti alle carte), le rilevazioni di conformità GRC (con le esecuzioni di analisi a cui fanno riferimento), decisioni architetturali e Statement of Architecture Work, diagrammi a mano libera, report salvati, segnalibri (viste salvate dell'inventario, incluse le loro condivisioni), portali web e sondaggi.
 - **Asset** — gli allegati binari, l'XML dei diagrammi e BPMN e il logo/favicon viaggiano come file separati all'interno della cartella `assets/` del bundle.
 
+La sezione **Diagrammi** include anche il disegno salvato di **Relazioni tra oggetti di business**. L’importazione conserva le posizioni dei nodi quando le card e le relazioni ricevono nuovi ID nell’istanza di destinazione. Le bozze restano nel browser di chi modifica il disegno. Le rimozioni dall’inventario accodate restano nella sessione di modifica originale.
+
 ## Cosa non è mai incluso
 
 Per ragioni di sicurezza, **i segreti non vengono mai esportati**:
@@ -49,6 +51,8 @@ Alcune altre cose restano indietro per progettazione:
 4. Revisionate l'anteprima, poi cliccate **Applica importazione**.
 
 L'importazione è **idempotente**: il metamodello e la configurazione sono abbinati per chiave, le carte per id esterno o per tipo + percorso gerarchico, e gli utenti per email. Reimportare lo stesso bundle è sicuro — le entità già presenti vengono saltate invece che duplicate. I tipi di metamodello built-in esistenti mantengono la loro identità; solo il loro schema modificabile viene unito. Vale anche per le carte archiviate incluse nel bundle: vengono riconosciute invece di essere create di nuovo.
+
+Il disegno salvato di **Relazioni tra oggetti di business** può essere importato in un’istanza di destinazione che non ne ha ancora salvato uno. Se la destinazione ha già un disegno salvato, anche vuoto, l’importazione conserva il disegno e le posizioni della destinazione. Consultate il dettaglio **Riferimenti** per individuare gli oggetti di business o i collegamenti che l’importazione non ha potuto risolvere. Se a destinazione un oggetto di business ha già un’altra applicazione master, la sezione **Relazioni** dei risultati segnala il conflitto e il nuovo collegamento conserva le proprie impostazioni CRUD.
 
 ### Come leggere l'anteprima
 

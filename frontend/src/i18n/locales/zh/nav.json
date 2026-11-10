@@ -22,6 +22,7 @@
   "valueChain": "价值链",
   "businessDiagram": "业务图",
   "applicationDiagram": "应用图",
+  "boRelationship": "业务对象关系",
   "technologyDiagram": "技术图",
   "swotAnalysis": "SWOT 分析",
   "whatIfAnalysis": "假设分析",

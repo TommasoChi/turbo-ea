@@ -30,6 +30,7 @@
   "editor.notFound": "Diagram ikke fundet",
   "editor.saved": "Diagram gemt",
   "editor.syncComplete": "Synkronisering fuldført",
+  "editor.subtypeRequired": "Vælg en undertype for de dataobjekter, der afventer synkronisering.",
   "editor.allUpToDate": "Alle kort er opdaterede",
   "editor.noRelatedCards": "Ingen relaterede kort",
   "editor.relationsRestored": "Relationer gendannet fra lageret",

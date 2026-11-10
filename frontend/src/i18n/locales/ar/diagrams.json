@@ -42,6 +42,7 @@
   "editor.notFound": "لم يتم العثور على المخطّط",
   "editor.saved": "تم حفظ المخطّط",
   "editor.syncComplete": "اكتملت المزامنة",
+  "editor.subtypeRequired": "اختر نوعًا فرعيًا لكائنات البيانات التي تنتظر المزامنة.",
   "editor.allUpToDate": "جميع البطاقات محدّثة",
   "editor.noRelatedCards": "لا توجد بطاقات ذات صلة",
   "editor.relationsRestored": "تمت استعادة العلاقات من المخزون",

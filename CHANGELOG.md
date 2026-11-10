@@ -5,6 +5,12 @@ All notable changes to Turbo EA are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.191.0] - 2026-11-10
+
+### Added
+
+- **BO Relationship.** Explore Data and Document cards in a shared ER diagram, assign a Master application per business object, and sync inventory changes while preserving the saved layout.
+
 ## [2.190.0] - 2026-11-06
 
 ### Added

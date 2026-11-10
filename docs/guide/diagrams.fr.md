@@ -153,6 +153,32 @@ Le bouton Sync de la barre d'outils affiche une pastille pulsée « N non synchr
 
 Les diagrammes peuvent être liés à **n'importe quelle fiche** depuis l'onglet **Ressources** de la fiche (voir [Détail des fiches](card-details.fr.md#onglet-ressources)). Lorsqu'un diagramme est lié à une fiche **Initiative**, il apparaît également dans le module [EA Delivery](delivery.md) aux côtés des documents SoAW.
 
+## Comparer les relations entre objets métier avec l’inventaire
+
+Ouvrez **Relations entre objets métier** dans **Application & Data Architecture**. Le canevas affiche le dernier dessin partagé. La page le compare à l’inventaire et répertorie les changements que vous pouvez consulter sous **Modifications de l’inventaire**. Cliquez sur **Vérifier les mises à jour** pour relancer la comparaison.
+
+![Diagramme des relations entre objets métier avec l’application de référence et la fiche de l’objet métier sélectionné](../assets/img/fr/105_relations_objets_metier.png)
+
+1. Passez en revue les objets métier et les liens ajoutés, mis à jour ou supprimés.
+2. Si vous pouvez modifier le diagramme, cliquez sur **Synchroniser** pour les changements que vous souhaitez reprendre. Ils apparaissent sur votre canevas. Par exemple, un objet métier renommé et passé au sous-type **Document** affiche son nouveau nom et un coin replié, tout en gardant sa position.
+3. Cliquez sur **Enregistrer** pour partager le dessin mis à jour. Les autres utilisateurs voient le dessin précédent tant que vous n’enregistrez pas. Si un élément de l’inventaire a de nouveau changé, vérifiez-le avant d’accepter la nouvelle version.
+
+La vérification et la synchronisation des changements lisent les données de l’inventaire. Les lignes dont vous avez confirmé le retrait et dont les relations restent à supprimer de l’inventaire figurent dans une liste séparée. Synchronisez ces suppressions séparément.
+
+### Restaurer un brouillon des relations entre objets métier
+
+L’éditeur conserve un brouillon dans votre navigateur et l’actualise environ toutes les cinq secondes pendant que vous travaillez. Si vous rouvrez **Relations entre objets métier** dans le même navigateur avec le même compte, le canevas affiche le dernier dessin partagé. Si un brouillon est disponible, choisissez **Restaurer** pour retrouver vos modifications sur le canevas ou **Abandonner** pour effacer le brouillon. Les autres utilisateurs voient vos modifications une fois l’enregistrement effectué via **Enregistrer** ou **Enregistrer et quitter**.
+
+Chaque éditeur ouvert conserve son propre brouillon. Si plusieurs brouillons sont disponibles, l’abandon du brouillon affiché fait apparaître le suivant. Après avoir restauré un brouillon, vous pouvez rouvrir l’éditeur pour en restaurer un autre.
+
+Si **Enregistrer** indique qu’un objet métier ou un lien vers une application a été rejeté, cliquez sur **Abandonner** à côté de cet élément. Si vous abandonnez un nouvel objet métier, sa position et les liens qui en dépendent sont aussi retirés du brouillon. Vous pouvez ensuite enregistrer vos autres modifications.
+
+Si un objet métier devient indisponible pendant la modification, **Enregistrer** ignore sa position et enregistre celles que vous pouvez encore mettre à jour.
+
+Une ligne que vous avez retirée peut rester absente du dessin restauré. À la réouverture, la liste des suppressions en attente est vide. Si la relation existe encore et que vous pouvez la consulter, vous pouvez rétablir la ligne depuis **Modifications de l’inventaire**. Pour supprimer la relation de l’inventaire, confirmez de nouveau le retrait dans la session en cours, puis cliquez sur **Synchroniser la suppression**.
+
+**Enregistrer et quitter** laisse l’éditeur ouvert si des modifications restent à traiter. Si des suppressions de l’inventaire sont en attente, l’éditeur vous avertit avant de quitter.
+
 ## Partager un diagramme en dehors de Turbo EA
 
 Un diagramme peut être publié sous forme de **lien en lecture seule qui s'ouvre sans connexion**, afin d'être intégré dans une page de wiki telle que Confluence.

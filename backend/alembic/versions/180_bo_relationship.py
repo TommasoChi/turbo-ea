@@ -20,21 +20,142 @@ branch_labels = None
 depends_on = None
 
 BO_RELATIONSHIP_DIAGRAM_ID = uuid.UUID("b0000000-0000-4000-8000-000000000001")
-SUBTYPES = [{"key": "data", "label": "Data"}, {"key": "document", "label": "Document"}]
-PAYMENT = {"key": "isPaymentData", "label": "Contains Payment Data", "type": "boolean", "weight": 1}
+# Keep these defaults frozen so upgrading a workspace is independent of the current seed.
+SUBTYPES = [
+    {
+        "key": "data",
+        "label": "Data",
+        "translations": {
+            "de": "Daten",
+            "fr": "Données",
+            "es": "Datos",
+            "it": "Dati",
+            "pt": "Dados",
+            "zh": "数据",
+            "ru": "Данные",
+            "da": "Data",
+            "ar": "بيانات",
+        },
+    },
+    {
+        "key": "document",
+        "label": "Document",
+        "translations": {
+            "de": "Dokument",
+            "fr": "Document",
+            "es": "Documento",
+            "it": "Documento",
+            "pt": "Documento",
+            "zh": "文档",
+            "ru": "Документ",
+            "da": "Dokument",
+            "ar": "مستند",
+        },
+    },
+]
+PAYMENT = {
+    "key": "isPaymentData",
+    "label": "Contains Payment Data",
+    "type": "boolean",
+    "weight": 1,
+    "translations": {
+        "de": "Enthält Zahlungsdaten",
+        "fr": "Contient des données de paiement",
+        "es": "Contiene datos de pago",
+        "it": "Contiene dati di pagamento",
+        "pt": "Contém dados de pagamento",
+        "zh": "包含支付数据",
+        "ru": "Содержит платёжные данные",
+        "da": "Indeholder betalingsoplysninger",
+        "ar": "يحتوي على بيانات الدفع",
+    },
+}
 OWNERSHIP = {
     "key": "dataOwnership",
     "label": "Data Ownership",
     "type": "single_select",
-    "options": [{"key": "master", "label": "Master", "built_in": True}],
+    "translations": {
+        "de": "Datenverantwortung",
+        "fr": "Responsabilité des données",
+        "es": "Responsabilidad sobre los datos",
+        "it": "Titolarità dei dati",
+        "pt": "Responsabilidade pelos dados",
+        "zh": "数据归属",
+        "ru": "Владение данными",
+        "da": "Dataejerskab",
+        "ar": "ملكية البيانات",
+    },
+    "options": [
+        {
+            "key": "master",
+            "label": "Master",
+            "translations": {
+                "de": "Führendes System",
+                "fr": "Application de référence",
+                "es": "Aplicación maestra",
+                "it": "Applicazione master",
+                "pt": "Aplicação mestre",
+                "zh": "主应用",
+                "ru": "Основное приложение",
+                "da": "Master",
+                "ar": "التطبيق الرئيسي",
+            },
+            "built_in": True,
+        }
+    ],
     "built_in": True,
 }
 CARDINALITY = {
     "key": "cardinality",
     "label": "Cardinality",
     "type": "single_select",
-    "options": [{"key": v, "label": v, "built_in": True} for v in ("1:1", "1:n", "n:1", "n:m")],
+    "translations": {
+        "de": "Kardinalität",
+        "fr": "Cardinalité",
+        "es": "Cardinalidad",
+        "it": "Cardinalità",
+        "pt": "Cardinalidade",
+        "zh": "基数",
+        "ru": "Кратность",
+        "da": "Kardinalitet",
+        "ar": "التعددية",
+    },
+    "options": [
+        {
+            "key": value,
+            "label": value,
+            "translations": {
+                locale: value for locale in ("de", "fr", "es", "it", "pt", "zh", "ru", "da", "ar")
+            },
+            "built_in": True,
+        }
+        for value in ("1:1", "1:n", "n:1", "n:m")
+    ],
     "built_in": True,
+}
+ER_TRANSLATIONS = {
+    "label": {
+        "de": "steht in Beziehung zu",
+        "fr": "est lié à",
+        "es": "se relaciona con",
+        "it": "è in relazione con",
+        "pt": "está relacionado com",
+        "zh": "关联",
+        "ru": "связан с",
+        "da": "er relateret til",
+        "ar": "يرتبط بـ",
+    },
+    "reverse_label": {
+        "de": "steht in Beziehung zu",
+        "fr": "est lié à",
+        "es": "se relaciona con",
+        "it": "è in relazione con",
+        "pt": "está relacionado com",
+        "zh": "关联",
+        "ru": "связан с",
+        "da": "er relateret til",
+        "ar": "يرتبط بـ",
+    },
 }
 
 
@@ -183,8 +304,12 @@ def _upgrade_body(conn):
         )
     conn.execute(
         sa.text("""INSERT INTO relation_types (id, key, label, reverse_label, source_type_key, target_type_key, cardinality, attributes_schema, built_in, is_hidden, sort_order, translations)
-        VALUES (:id, 'relDataObjectToDataObject', 'relates to', 'relates to', 'DataObject', 'DataObject', 'n:m', CAST(:attrs AS jsonb), true, false, 0, '{}'::jsonb) ON CONFLICT (key) DO NOTHING"""),
-        {"id": uuid.uuid4(), "attrs": json.dumps([CARDINALITY])},
+        VALUES (:id, 'relDataObjectToDataObject', 'relates to', 'relates to', 'DataObject', 'DataObject', 'n:m', CAST(:attrs AS jsonb), true, false, 0, CAST(:translations AS jsonb)) ON CONFLICT (key) DO NOTHING"""),
+        {
+            "id": uuid.uuid4(),
+            "attrs": json.dumps([CARDINALITY]),
+            "translations": json.dumps(ER_TRANSLATIONS),
+        },
     )
     conn.execute(
         sa.text("""INSERT INTO diagrams (id, name, kind, data, is_published, access_mode)

@@ -153,6 +153,32 @@ El botón Sync de la barra de herramientas muestra una pastilla pulsante «N sin
 
 Los diagramas pueden vincularse a **cualquier tarjeta** desde la pestaña **Recursos** de la tarjeta (ver [Detalle de tarjetas](card-details.es.md#pestaña-recursos)). Cuando un diagrama está vinculado a una tarjeta **Iniciativa**, también aparece en el módulo [EA Delivery](delivery.md) junto a los documentos SoAW.
 
+## Comparar las relaciones entre objetos de negocio con el inventario
+
+Abra **Relaciones entre objetos de negocio** en **Application & Data Architecture**. El lienzo muestra el último dibujo compartido. La página lo compara con el inventario y enumera los cambios que puede consultar en **Cambios en el inventario**. Use **Buscar actualizaciones** para repetir la comparación.
+
+![Diagrama de relaciones entre objetos de negocio con la aplicación maestra y la ficha del objeto de negocio seleccionado](../assets/img/es/105_relaciones_objetos_negocio.png)
+
+1. Revise los objetos de negocio y los vínculos nuevos, actualizados o eliminados.
+2. Si puede editar el diagrama, haga clic en **Sincronizar** junto a los cambios que quiera incorporar. Los cambios aparecerán en el lienzo. Por ejemplo, si un objeto de negocio cambia de nombre y pasa al subtipo **Documento**, aparecerá en la misma posición con el nuevo nombre y una esquina doblada.
+3. Haga clic en **Guardar** para compartir el dibujo actualizado. Los demás usuarios seguirán viendo el dibujo anterior hasta que lo guarde. Si un elemento del inventario ha vuelto a cambiar, compruébelo antes de aceptar la nueva versión.
+
+La comprobación y la sincronización de cambios leen los datos del inventario. Las líneas cuya retirada confirmó y cuyas relaciones aún deben eliminarse del inventario aparecen en una lista aparte. Sincronice esas eliminaciones por separado.
+
+### Restaurar un borrador de las relaciones entre objetos de negocio
+
+El editor conserva un borrador en el navegador y lo actualiza aproximadamente cada cinco segundos mientras trabaja. Al volver a abrir **Relaciones entre objetos de negocio** en el mismo navegador con la misma cuenta, el lienzo muestra el último dibujo compartido. Si hay un borrador disponible, seleccione **Restaurar** para recuperar sus cambios en el lienzo o **Descartar** para eliminar el borrador. Los demás usuarios ven los cambios cuando la acción **Guardar** o **Guardar y salir** se completa correctamente.
+
+Cada editor abierto conserva su propio borrador. Si hay varios borradores disponibles, al descartar el que se muestra se ofrece el siguiente. Después de restaurar un borrador, puede volver a abrir el editor para recuperar otro.
+
+Si **Guardar** indica que se ha rechazado un objeto de negocio o un vínculo con una aplicación, haga clic en **Descartar** junto al elemento. Al descartar un objeto de negocio nuevo también se quitan del borrador su posición y los vínculos que dependen de él. A continuación, puede guardar los demás cambios.
+
+Si un objeto de negocio deja de estar disponible mientras edita, **Guardar** omite su posición y guarda las posiciones que todavía puede actualizar.
+
+Una línea que haya quitado puede seguir ausente del dibujo restaurado. Al volver a abrir el editor, la lista de eliminaciones pendientes del inventario está vacía. Si la relación sigue existiendo y puede verla, puede recuperar la línea desde **Cambios en el inventario**. Para eliminar la relación del inventario, confirme de nuevo la retirada en la sesión actual y haga clic en **Sincronizar eliminación**.
+
+**Guardar y salir** mantiene abierto el editor si quedan cambios por atender. Si hay eliminaciones pendientes del inventario, el editor avisa antes de salir.
+
 ## Compartir un diagrama fuera de Turbo EA
 
 Un diagrama puede publicarse como un **enlace de solo lectura que se abre sin iniciar sesión**, para insertarlo en una página wiki como Confluence.

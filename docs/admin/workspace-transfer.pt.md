@@ -19,6 +19,8 @@ A exportação captura o workspace completo como um pacote `.zip` contendo uma p
 - **Dados de módulos** — BPM (diagramas de processo, elementos, versões de fluxo, avaliações), PPM (relatórios de status, custos, orçamentos, riscos, tarefas, WBS, dependências), o registro de riscos do GRC (riscos, tarefas de mitigação e ocorrências, vínculos de card), as descobertas de conformidade do GRC (com as execuções de análise que elas referenciam), decisões de arquitetura e Statements of Architecture Work, diagramas de desenho livre, relatórios salvos, marcadores (visualizações salvas do inventário, incluindo seus compartilhamentos), portais web e pesquisas.
 - **Assets** — anexos de arquivo binários, XML de diagramas e BPMN, e o logo/favicon viajam como arquivos separados dentro da pasta `assets/` do pacote.
 
+A secção **Diagramas** também inclui o desenho guardado de **Relações entre objetos de negócio**. A importação conserva as posições dos nós quando os cards e as relações recebem novos IDs no destino. Os rascunhos ficam no navegador de quem edita o desenho. As remoções do inventário em fila ficam na sessão de edição original.
+
 ## O que nunca está incluído
 
 Por segurança, **os segredos nunca são exportados**:
@@ -49,6 +51,8 @@ Algumas outras coisas ficam para trás por design:
 4. Revise a pré-visualização e então clique em **Aplicar importação**.
 
 A importação é **idempotente**: metamodelo e configuração são correspondidos por chave, cards por external id ou por tipo + caminho de hierarquia, e usuários por e-mail. Reimportar o mesmo pacote é seguro — entidades já presentes são ignoradas em vez de duplicadas. Tipos de metamodelo built-in existentes mantêm sua identidade; apenas seu schema editável é mesclado. Isso também vale para os cards arquivados incluídos no pacote: eles são reconhecidos em vez de criados novamente.
+
+O desenho guardado de **Relações entre objetos de negócio** pode ser importado para um destino que ainda não tenha guardado um desenho. Se já houver um desenho guardado no destino, mesmo que esteja vazio, a importação mantém o desenho e as posições do destino. Consulte o detalhe **Referências** para identificar os objetos de negócio ou as associações que a importação não conseguiu resolver. Se um objeto de negócio já tiver outra aplicação mestre no destino, a secção **Relações** dos resultados indica o conflito e a nova associação conserva as suas definições CRUD.
 
 ### Lendo a pré-visualização
 

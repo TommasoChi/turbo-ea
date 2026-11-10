@@ -30,6 +30,7 @@
   "editor.notFound": "Diagramm nicht gefunden",
   "editor.saved": "Diagramm gespeichert",
   "editor.syncComplete": "Synchronisation abgeschlossen",
+  "editor.subtypeRequired": "Wählen Sie für ausstehende Datenobjekte vor der Synchronisierung einen Untertyp aus.",
   "editor.allUpToDate": "Alle Karten sind aktuell",
   "editor.noRelatedCards": "Keine verknüpften Karten",
   "editor.relationsRestored": "Beziehungen aus Inventar wiederhergestellt",

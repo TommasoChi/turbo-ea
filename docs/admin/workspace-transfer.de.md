@@ -19,6 +19,8 @@ Der Export erfasst den vollständigen Workspace als `.zip`-Bundle, das eine Exce
 - **Moduldaten** — BPM (Prozessdiagramme, Elemente, Flow-Versionen, Assessments), PPM (Statusberichte, Kosten, Budgets, Risiken, Aufgaben, WBS, Abhängigkeiten), das GRC-Risikoregister (Risiken, Mitigationsaufgaben und -occurrences, Kartenverknüpfungen), GRC-Compliance-Befunde (mit den Analyseläufen, auf die sie verweisen), Architektur-Entscheidungen und Statements of Architecture Work, Freihand-Diagramme, gespeicherte Berichte, Lesezeichen (gespeicherte Inventar-Ansichten, einschließlich ihrer Freigaben), Web-Portale und Umfragen.
 - **Assets** — binäre Datei-Anhänge, Diagramm- und BPMN-XML sowie Logo/Favicon reisen als separate Dateien im `assets/`-Ordner des Bundles.
 
+Der Abschnitt **Diagramme** enthält auch das gespeicherte Diagramm **Beziehungen zwischen Geschäftsobjekten**. Beim Import bleiben die Knotenpositionen erhalten, wenn Karten und Beziehungen auf dem Ziel neue IDs bekommen. Entwürfe verbleiben im Browser des Editors. Vorgemerkte Löschungen aus dem Inventar verbleiben in der ursprünglichen Bearbeitungssitzung.
+
 ## Was niemals enthalten ist
 
 Aus Sicherheitsgründen werden **Geheimnisse niemals exportiert**:
@@ -49,6 +51,8 @@ Einige weitere Dinge bleiben absichtlich zurück:
 4. Überprüfen Sie die Vorschau und klicken Sie dann auf **Import anwenden**.
 
 Der Import ist **idempotent**: Metamodell und Konfiguration werden über den Schlüssel abgeglichen, Karten über die externe ID oder über Typ + Hierarchiepfad, und Benutzer über die E-Mail. Ein erneuter Import desselben Bundles ist sicher — bereits vorhandene Entitäten werden übersprungen statt dupliziert. Bestehende Built-in-Metamodell-Typen behalten ihre Identität; nur ihr editierbares Schema wird zusammengeführt. Das gilt auch für archivierte Karten im Bundle: Sie werden wiedererkannt statt erneut angelegt.
+
+Beim ersten Import eines gespeicherten Diagramms **Beziehungen zwischen Geschäftsobjekten** kann es übernommen werden, wenn auf dem Ziel noch kein Diagramm dieser Art gespeichert wurde. Gibt es auf dem Ziel bereits ein gespeichertes Diagramm, bleibt es mitsamt seinen Positionen erhalten. Das gilt auch für ein leer gespeichertes Diagramm. Unter **Verweise** sehen Sie die Geschäftsobjekte oder Verknüpfungen, die beim Import nicht zugeordnet werden konnten. Ist auf dem Ziel bereits ein anderes führendes System für ein Geschäftsobjekt festgelegt, wird der Konflikt in den Ergebnissen für **Beziehungen** angezeigt. Die neue Verknüpfung behält ihre CRUD-Einstellungen.
 
 ### Die Vorschau lesen
 

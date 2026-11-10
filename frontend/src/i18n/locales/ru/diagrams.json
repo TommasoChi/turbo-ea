@@ -36,6 +36,7 @@
   "editor.notFound": "Диаграмма не найдена",
   "editor.saved": "Диаграмма сохранена",
   "editor.syncComplete": "Синхронизация завершена",
+  "editor.subtypeRequired": "Выберите подтип для ожидающих синхронизации объектов данных.",
   "editor.allUpToDate": "Все карточки актуальны",
   "editor.noRelatedCards": "Нет связанных карточек",
   "editor.relationsRestored": "Связи восстановлены из инвентаря",

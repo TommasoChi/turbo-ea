@@ -306,6 +306,7 @@ export default function BoRelationshipDiagram({
       </Stack>
       <Box
         ref={container}
+        dir="ltr"
         sx={{
           width: "100%", height: 600, border: 1, borderColor: "divider", overflow: "hidden",
           "& .bo-relation-selected .djs-visual": { color: "primary.main" },

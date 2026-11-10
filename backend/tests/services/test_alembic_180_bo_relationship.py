@@ -20,6 +20,8 @@ pytestmark = pytest.mark.anyio
 
 
 async def test_upgrade_is_additive_and_idempotent(db):
+    from app.services.seed import TYPES
+
     await create_card_type(
         db,
         key="DataObject",
@@ -42,6 +44,15 @@ async def test_upgrade_is_additive_and_idempotent(db):
     obj = (await db.execute(select(CardType).where(CardType.key == "DataObject"))).scalar_one()
     assert {s["key"] for s in obj.subtypes} == {"custom", "data", "document"}
     assert {f["key"] for s in obj.fields_schema for f in s["fields"]} == {"custom", "isPaymentData"}
+    defaults = next(entry for entry in TYPES if entry["key"] == "DataObject")
+    installed_subtypes = {entry["key"]: entry for entry in obj.subtypes}
+    for subtype in defaults["subtypes"]:
+        assert installed_subtypes[subtype["key"]]["translations"] == subtype["translations"]
+    payment = next(f for s in obj.fields_schema for f in s["fields"] if f["key"] == "isPaymentData")
+    seed_payment = next(
+        f for s in defaults["fields_schema"] for f in s["fields"] if f["key"] == "isPaymentData"
+    )
+    assert payment["translations"] == seed_payment["translations"]
     app = (
         await db.execute(select(RelationType).where(RelationType.key == "relAppToDataObj"))
     ).scalar_one()
@@ -84,7 +95,7 @@ async def test_fresh_seed_installs_bo_defaults(db):
     assert diagrams[0].data == {"positions": {}}
 
 
-async def test_upgrade_relation_attributes_match_fresh_builtin_flags(db):
+async def test_upgrade_relation_attributes_match_fresh_builtin_flags_and_translations(db):
     from app.services.seed import RELATIONS, _mark_builtin_attributes_schema
 
     await create_relation_type(
@@ -103,13 +114,19 @@ async def test_upgrade_relation_attributes_match_fresh_builtin_flags(db):
     ).scalar_one()
     for row in (app, er):
         defaults = next(x for x in RELATIONS if x["key"] == row.key)
+        if row is er:
+            assert row.translations == defaults["translations"]
         expected = _mark_builtin_attributes_schema(defaults["attributes_schema"])
         for field in row.attributes_schema:
             matching = next((x for x in expected if x["key"] == field["key"]), None)
             if matching:
                 assert field.get("built_in") == matching["built_in"]
+                assert field.get("translations") == matching.get("translations")
                 assert [x.get("built_in") for x in field.get("options", [])] == [
                     x["built_in"] for x in matching.get("options", [])
+                ]
+                assert [x.get("translations") for x in field.get("options", [])] == [
+                    x.get("translations") for x in matching.get("options", [])
                 ]
 
 

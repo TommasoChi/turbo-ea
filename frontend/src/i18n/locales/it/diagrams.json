@@ -30,6 +30,7 @@
   "editor.notFound": "Diagramma non trovato",
   "editor.saved": "Diagramma salvato",
   "editor.syncComplete": "Sincronizzazione completata",
+  "editor.subtypeRequired": "Scegli un sottotipo per gli Oggetti dati in attesa prima di sincronizzarli.",
   "editor.allUpToDate": "Tutte le schede sono aggiornate",
   "editor.noRelatedCards": "Nessuna scheda correlata",
   "editor.relationsRestored": "Relazioni ripristinate dall'inventario",

@@ -22,7 +22,7 @@ function StageDialog({
   onStage: () => void;
   children: ReactNode;
 }) {
-  const { t } = useTranslation("common");
+  const { t: tCommon } = useTranslation("common");
   const titleId = useId();
   return (
     <Dialog open onClose={onClose} aria-labelledby={titleId} fullWidth maxWidth="xs">
@@ -35,7 +35,7 @@ function StageDialog({
           <Stack spacing={2} sx={{ pt: 1 }}>{children}</Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={onClose}>{t("actions.cancel")}</Button>
+          <Button onClick={onClose}>{tCommon("actions.cancel")}</Button>
           <Button type="submit" variant="contained" disabled={!ready}>{action}</Button>
         </DialogActions>
       </form>
