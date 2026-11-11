@@ -1,0 +1,109 @@
+"""``_role_response`` and ``_role_snapshot`` of the roles API: the payload a non-admin may see,
+what only an admin gets, and the snapshot an audit row diffs."""
+
+from __future__ import annotations
+
+import uuid
+from datetime import datetime, timezone
+from types import SimpleNamespace
+
+from app.api.v1.roles import _role_response, _role_snapshot
+
+WHEN = datetime(2026, 11, 3, 10, 30, tzinfo=timezone.utc)
+PERMS = {"inventory.view": True, "admin.users": False}
+
+
+def _role(**over):
+    base = {
+        "id": uuid.UUID("11111111-1111-1111-1111-111111111111"),
+        "key": "auditor",
+        "label": "Auditor",
+        "description": "reads logs",
+        "is_system": False,
+        "is_default": True,
+        "is_archived": True,
+        "color": "#123456",
+        "sort_order": 7,
+        "created_at": WHEN,
+        "updated_at": WHEN,
+        "archived_at": WHEN,
+        "archived_by": uuid.UUID("22222222-2222-2222-2222-222222222222"),
+        "permissions": PERMS,
+    }
+    base.update(over)
+    return SimpleNamespace(**base)
+
+
+def test_full_payload_adds_the_matrix_and_the_user_count():
+    assert _role_response(_role(), 4) == {
+        "id": "11111111-1111-1111-1111-111111111111",
+        "key": "auditor",
+        "label": "Auditor",
+        "description": "reads logs",
+        "is_system": False,
+        "is_default": True,
+        "is_archived": True,
+        "color": "#123456",
+        "sort_order": 7,
+        "created_at": WHEN.isoformat(),
+        "updated_at": WHEN.isoformat(),
+        "archived_at": WHEN.isoformat(),
+        "archived_by": "22222222-2222-2222-2222-222222222222",
+        "permissions": PERMS,
+        "user_count": 4,
+    }
+
+
+def test_full_is_the_default_and_a_zero_count_is_kept():
+    out = _role_response(_role(), 0)
+    assert out["permissions"] == PERMS
+    assert out["user_count"] == 0
+    assert "user_count" not in _role_response(_role())
+    assert _role_response(_role())["permissions"] == PERMS
+
+
+def test_the_lite_payload_never_carries_the_matrix_or_the_count():
+    out = _role_response(_role(), 4, full=False)
+    assert "permissions" not in out and "user_count" not in out
+    assert out["key"] == "auditor" and out["label"] == "Auditor" and out["color"] == "#123456"
+    assert set(out) == {
+        "id",
+        "key",
+        "label",
+        "description",
+        "is_system",
+        "is_default",
+        "is_archived",
+        "color",
+        "sort_order",
+        "created_at",
+        "updated_at",
+        "archived_at",
+        "archived_by",
+    }
+
+
+def test_missing_timestamps_and_archiver_read_as_none():
+    out = _role_response(
+        _role(created_at=None, updated_at=None, archived_at=None, archived_by=None), full=False
+    )
+    assert out["created_at"] is None and out["updated_at"] is None
+    assert out["archived_at"] is None and out["archived_by"] is None
+
+
+def test_snapshot_is_the_five_audited_fields_with_a_copied_matrix():
+    role = _role()
+    snap = _role_snapshot(role)
+    assert snap == {
+        "label": "Auditor",
+        "color": "#123456",
+        "permissions": PERMS,
+        "is_default": True,
+        "sort_order": 7,
+    }
+    snap["permissions"]["new.key"] = True
+    assert "new.key" not in role.permissions  # a copy: a later edit cannot rewrite "before"
+
+
+def test_snapshot_of_a_role_without_permissions_is_an_empty_matrix():
+    assert _role_snapshot(_role(permissions=None))["permissions"] == {}
