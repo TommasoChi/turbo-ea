@@ -270,3 +270,83 @@ def test_audit_label_maps_translate_known_keys_and_pass_the_rest():
     assert "rel1" not in items
     for builtin in wp.portal_visibility.BUILT_IN_TOGGLES.values():
         assert items[builtin] == builtin
+
+
+# --- who may open a portal ------------------------------------------------------
+
+
+async def _make_portal(db, **over):
+    from app.models.web_portal import WebPortal
+
+    base = {"name": "P", "slug": f"p-{uuid.uuid4().hex[:6]}", "card_type": "Application"}
+    base.update(over)
+    portal = WebPortal(**base)
+    db.add(portal)
+    await db.flush()
+    return portal
+
+
+class _Request:
+    def __init__(self, cookies=None):
+        self.cookies = cookies or {}
+
+
+async def _portal_404(coro):
+    with pytest.raises(HTTPException) as exc:
+        await coro
+    assert exc.value.status_code == 404
+    assert exc.value.detail == "Portal not found"
+
+
+async def test_only_a_published_portal_with_that_slug_loads(db):
+    live = await _make_portal(db, is_published=True)
+    draft = await _make_portal(db, is_published=False)
+    assert (await wp._load_published_portal(live.slug, db)).id == live.id
+    await _portal_404(wp._load_published_portal(draft.slug, db))
+    await _portal_404(wp._load_published_portal("nope", db))
+
+
+async def test_navigator_routes_need_the_view_and_the_bpm_module(db):
+    nav = SimpleNamespace(view="process_navigator")
+    await wp._require_navigator_portal(nav, db)  # BPM defaults to on
+    for view in ("cards", "ppm_portfolio", None):
+        await _portal_404(wp._require_navigator_portal(SimpleNamespace(view=view), db))
+    await _settings(db, bpmEnabled=False)
+    await _portal_404(wp._require_navigator_portal(nav, db))
+
+
+async def test_a_public_portal_needs_no_session(db):
+    portal = await _make_portal(db, is_published=True, access_mode="public")
+    got = await wp.require_portal_access(portal.slug, _Request(), db)
+    assert got.id == portal.id
+    legacy = await _make_portal(db, is_published=True, access_mode=None)
+    assert (await wp.require_portal_access(legacy.slug, _Request(), db)).id == legacy.id
+
+
+async def test_an_unpublished_portal_is_404_even_with_a_session(db):
+    portal = await _make_portal(db, is_published=False, access_mode="sso")
+    await _portal_404(wp.require_portal_access(portal.slug, _Request(), db))
+
+
+async def test_an_sso_portal_wants_a_session_for_that_very_portal(db):
+    from app.core.security import create_portal_token
+
+    portal = await _make_portal(db, is_published=True, access_mode="sso")
+    other = await _make_portal(db, is_published=True, access_mode="sso")
+
+    async def locked(request):
+        with pytest.raises(HTTPException) as exc:
+            await wp.require_portal_access(portal.slug, request, db)
+        assert exc.value.status_code == 401
+        assert exc.value.detail == "portal_locked"
+
+    await locked(_Request())
+    await locked(_Request({wp.PORTAL_COOKIE: ""}))
+    await locked(_Request({wp.PORTAL_COOKIE: "garbage"}))
+    foreign = create_portal_token(other.id, other.slug, "u@x.com", resource="portal")
+    await locked(_Request({wp.PORTAL_COOKIE: foreign}))
+    wrong_family = create_portal_token(portal.id, portal.slug, "u@x.com", resource="diagram")
+    await locked(_Request({wp.PORTAL_COOKIE: wrong_family}))
+    mine = create_portal_token(portal.id, portal.slug, "u@x.com", resource="portal")
+    got = await wp.require_portal_access(portal.slug, _Request({wp.PORTAL_COOKIE: mine}), db)
+    assert got.id == portal.id
