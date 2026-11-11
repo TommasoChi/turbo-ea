@@ -39,6 +39,7 @@ from app.models.card_type import CardType
 from app.models.relation import Relation
 from app.models.relation_type import RelationType
 from app.models.tag import CardTag, Tag, TagGroup
+from app.services.bo_relationship_constants import APPLICATION_RELATION, OWNERSHIP_KEY
 
 #: The "(empty)" option of every filter (``EMPTY_FILTER_KEY`` in
 #: ``FilterSelect.tsx``): a card with no value, no relation, no subtype.
@@ -273,6 +274,9 @@ def relation_subtype_condition(
     real, want_empty = _split(values)
     if not real and not want_empty:
         return None
+    if rel_key == APPLICATION_RELATION and field_key == OWNERSHIP_KEY:
+        # Never widen an existing portal preset by ignoring its reserved filter.
+        return false()
     col = Relation.attributes[field_key]
     value_clauses: list[ColumnElement[bool]] = []
     if real:

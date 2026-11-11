@@ -348,6 +348,7 @@ const CARD_DETAIL_ATTR = "cardDetail";
  * strips it like every other card stamp.
  */
 const CARD_DESCRIPTION_ATTR = "cardDescription";
+const CARD_SUBTYPE_ATTR = "cardSubtype";
 
 /** Escape a string for safe inclusion in an HTML label. Card names and
  *  attribute values are user data and must never be able to inject markup
@@ -909,6 +910,7 @@ export function insertPendingCard(
     name: string;
     /** The description typed alongside the name; waits on the cell until Sync. */
     description?: string;
+    subtype?: string;
     color: string;
     icon?: string;
     x: number;
@@ -932,6 +934,7 @@ export function insertPendingCard(
   obj.setAttribute("cardType", opts.type);
   obj.setAttribute("pending", "1");
   setPendingDescription(obj, opts.description);
+  if (opts.subtype) obj.setAttribute(CARD_SUBTYPE_ATTR, opts.subtype);
 
   model.beginUpdate();
   try {
@@ -949,6 +952,20 @@ export function insertPendingCard(
     model.endUpdate();
   }
   return cellId;
+}
+
+/** Classify an existing pending cell without changing its identity or edges. */
+export function setPendingCardSubtype(iframe: HTMLIFrameElement, cellId: string, subtype: string): boolean {
+  const ctx = getMxGraph(iframe);
+  if (!ctx) return false;
+  const model = ctx.graph.getModel();
+  const cell = model.getCell(cellId);
+  if (!cell?.value?.getAttribute || cell.value.getAttribute("pending") !== "1" || cell.value.getAttribute("cardType") !== "DataObject") return false;
+  const value = cell.value.cloneNode(true);
+  value.setAttribute(CARD_SUBTYPE_ATTR, subtype);
+  model.beginUpdate();
+  try { model.setValue(cell, value); } finally { model.endUpdate(); }
+  return true;
 }
 
 /**
@@ -1033,6 +1050,7 @@ export function markCellSynced(
         // The card now owns its description; the cell must not keep a copy
         // that would go stale, or ride into a saved diagram.
         obj.removeAttribute(CARD_DESCRIPTION_ATTR);
+        obj.removeAttribute(CARD_SUBTYPE_ATTR);
       }
     }
     // Carry the pending cell's icon tokens across the dashed→solid restyle.
@@ -1070,6 +1088,8 @@ export function markEdgeSynced(
     const obj = edge.value;
     if (obj?.removeAttribute) obj.removeAttribute("pending");
     if (relationId && obj?.setAttribute) obj.setAttribute("relationId", relationId);
+    if (incoming) obj?.setAttribute?.("reversed", "1");
+    else obj?.removeAttribute?.("reversed");
     // Read the flow back off the edge rather than taking it as an argument —
     // stampEdgeAsRelation already stamped it, so the two cannot disagree.
     const flow = readFlowDirection(obj?.getAttribute?.("flowDirection"));
@@ -1138,6 +1158,7 @@ export interface ScannedPendingFS {
   name: string;
   /** The description typed in the Create-card dialog, when one was (#1210). */
   description?: string;
+  subtype?: string;
 }
 
 export interface ScannedPendingRel {
@@ -1214,6 +1235,7 @@ export function scanDiagramItems(iframe: HTMLIFrameElement): {
         type: cell.value.getAttribute("cardType") || "",
         name: readCardName(cell.value),
         description: cell.value.getAttribute(CARD_DESCRIPTION_ATTR) || undefined,
+        subtype: cell.value.getAttribute(CARD_SUBTYPE_ATTR) || undefined,
       });
     } else if (fsId && !isPending) {
       // Synced card vertex — top-level or expanded-group child
@@ -3152,6 +3174,7 @@ export function convertShapeToPendingCard(
     type: string;
     name: string;
     description?: string;
+    subtype?: string;
     color: string;
     icon?: string;
   },
@@ -3173,6 +3196,7 @@ export function convertShapeToPendingCard(
     obj.setAttribute("cardType", opts.type);
     obj.setAttribute("pending", "1");
     setPendingDescription(obj, opts.description);
+    if (opts.subtype) obj.setAttribute(CARD_SUBTYPE_ATTR, opts.subtype);
     model.setValue(cell, obj);
     model.setStyle(cell, buildPendingStyle(opts.color, opts.icon));
     graph.refresh(cell);

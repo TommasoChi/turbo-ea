@@ -167,7 +167,7 @@ describe("NAV_ITEM_DEFS — Business/Application/Technology Architecture rework"
   it("gives app_data its Application & Data Architecture static children", () => {
     const item = NAV_ITEM_DEFS.find((i) => i.labelKey === "app_data");
     expect(item).toBeDefined();
-    expect(item?.children?.map((c) => c.labelKey)).toEqual(["dataFlow", "applicationDiagram"]);
+    expect(item?.children?.map((c) => c.labelKey)).toEqual(["dataFlow", "applicationDiagram", "boRelationship"]);
   });
 
   it("adds a new top-level Technology Architecture item with a Technology Diagram child", () => {
@@ -457,6 +457,15 @@ describe("AppLayout — extension nav placement", () => {
     await user.click(screen.getByRole("button", { name: /application & data architecture/i }));
     const item = await screen.findByRole("menuitem", { name: /What-If Analysis/i });
     expect(item).toHaveAttribute("href", "/ext/product-technology-what-if/analysis");
+  });
+
+  it.each([true, false])("shows Data Modeller only with view permission: %s", async (allowed) => {
+    const user = userEvent.setup();
+    renderLayout({ ...viewerUser, permissions: { ...viewerUser.permissions, "boRelationship.view": allowed } });
+    await user.click(screen.getByRole("button", { name: /application & data architecture/i }));
+    const item = screen.queryByRole("menuitem", { name: /Data Modeller/i });
+    if (allowed) expect(item).toHaveAttribute("href", "/application-architecture/bo-relationship");
+    else expect(item).not.toBeInTheDocument();
   });
 
   it("keeps the static Application & Data Architecture children even when no extension targets the group", () => {

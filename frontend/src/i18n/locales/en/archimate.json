@@ -62,6 +62,9 @@
     "label": "Note"
   },
   "toolbar": {
+    "linkedBadge": "Linked card indicator",
+    "linkedName": "Linked card name",
+    "inventoryRefreshed": "Linked cards refreshed.",
     "back": "Back",
     "undo": "Undo",
     "redo": "Redo",

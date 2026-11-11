@@ -25,6 +25,12 @@ async def test_seed_maps_relations_with_direction_and_access(db):
     assert (uses.archimate_type, uses.archimate_reversed) == ("Serving", True)
     crud = rels["relAppToDataObj"]
     assert (crud.archimate_type, crud.archimate_access) == ("Access", "crud")
+    er = rels["relDataObjectToDataObject"]
+    assert (er.archimate_type, er.archimate_reversed, er.archimate_access) == (
+        "Association",
+        False,
+        None,
+    )
     assert rels["relAppSuccessor"].archimate_type == "Association"
 
 

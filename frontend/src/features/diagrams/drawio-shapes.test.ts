@@ -1221,6 +1221,16 @@ describe("edge builders all delegate to relationEdgeStyle", () => {
     markEdgeSynced(frame, "e", true, "rel-1");
     expect(edge._style).toBe(relationEdgeStyle({ incoming: true }));
   });
+
+  it("persists the stored orientation when syncing an edge", () => {
+    const edge = edgeCell({ relationType: "relDataObjectToDataObject" }, "");
+    edge.value = document.createElement("object");
+    const frame = viewFrame({ e: edge });
+    markEdgeSynced(frame, "e", true, "rel-1");
+    expect(edge.value.getAttribute("reversed")).toBe("1");
+    markEdgeSynced(frame, "e", false, "rel-1");
+    expect(edge.value.getAttribute("reversed")).toBeNull();
+  });
 });
 
 /* ---------------------------------------------------------------------- */

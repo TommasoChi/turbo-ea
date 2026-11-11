@@ -653,3 +653,18 @@ describe("CreateCardDialog — per-card-type create permissions", () => {
     expect(screen.getByRole("option", { name: /Objective/ })).toBeInTheDocument();
   });
 });
+
+it("requires a declared DataObject subtype before creating", async () => {
+  const dataType = { ...MOCK_TYPES[1], key: "DataObject", label: "Data Object", translations: {}, subtypes: [{ key: "data", label: "Data" }] };
+  vi.mocked(useMetamodel).mockReturnValue({
+    types: [dataType], relationTypes: [], loading: false, getType: () => dataType,
+    getRelationsForType: () => [], invalidateCache: vi.fn(),
+  });
+  const user = userEvent.setup();
+  renderDialog({ initialType: "DataObject" });
+  await user.type(screen.getByRole("textbox", { name: /name/i }), "Invoice");
+  expect(screen.getByRole("button", { name: /^create$/i })).toBeDisabled();
+  await user.click(screen.getByRole("combobox", { name: /subtype/i }));
+  await user.click(within(screen.getByRole("listbox")).getByRole("option", { name: "Data" }));
+  expect(screen.getByRole("button", { name: /^create$/i })).toBeEnabled();
+});

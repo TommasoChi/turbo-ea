@@ -16,9 +16,17 @@ from app.models.notification import Notification
 from app.models.relation import Relation
 from app.models.stakeholder import Stakeholder
 from app.services import survey_apply as sa
+from app.services.bo_relationship_constants import BO_TYPE, ER_RELATION
 from app.services.card_write_service import WriteActor, update_card
 from app.services.rollback_service import _apply_restore_card_fields, _plan_card_updated
-from tests.conftest import create_card, create_card_type, create_stakeholder_role_def, create_user
+from tests.conftest import (
+    create_card,
+    create_card_type,
+    create_relation,
+    create_relation_type,
+    create_stakeholder_role_def,
+    create_user,
+)
 
 
 class TestFieldKinds:
@@ -573,6 +581,36 @@ async def test_apply_relation_change_adds_a_new_peer(db):
     )
     targets = {r.target_id for r in rels}
     assert new_peer.id in targets
+
+
+@pytest.mark.parametrize("same_end", [False, True])
+async def test_apply_relation_change_skips_reverse_or_self_er_links(db, same_end):
+    await create_card_type(db, key=BO_TYPE, label="Business Object")
+    await create_relation_type(
+        db, key=ER_RELATION, source_type_key=BO_TYPE, target_type_key=BO_TYPE
+    )
+    first = await create_card(db, card_type=BO_TYPE, name="First")
+    second = await create_card(db, card_type=BO_TYPE, name="Second")
+    present = await create_relation(
+        db,
+        type_key=ER_RELATION,
+        source_id=first.id,
+        target_id=second.id,
+        attributes={"cardinality": "1:n"},
+    )
+    actor = await create_user(db, email="surveyor-er@test.com")
+    changed = await sa.apply_relation_change(
+        db,
+        second,
+        {"relation_type_key": ER_RELATION, "direction": "outgoing"},
+        [{"id": str(second.id if same_end else first.id)}],
+        actor.id,
+    )
+    assert changed is False
+    (stored,) = (await db.scalars(select(Relation))).all()
+    assert (stored.id, stored.source_id, stored.target_id) == (present.id, first.id, second.id)
+    assert stored.attributes == {"cardinality": "1:n"}
+    assert not (await db.scalars(select(Event))).all()
 
 
 async def test_apply_relation_change_removes_a_dropped_peer(db):

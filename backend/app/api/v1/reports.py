@@ -28,6 +28,7 @@ from app.models.todo import Todo
 from app.models.user import User
 from app.models.user_favorite import UserFavorite
 from app.schemas.licenses import LicenseReportOut
+from app.services.bo_relationship_constants import APPLICATION_RELATION, OWNERSHIP_KEY
 from app.services.card_costs import COST_EVENT, COST_ITEM_TYPES, DERIVED_KEY
 from app.services.card_flags import (
     EOL_BUCKETS,
@@ -87,6 +88,7 @@ from app.services.portfolio_payload import (
     has_timeline_dates,
     roadmap_from_portfolio,
 )
+from app.services.relation_attributes import public_relation_attributes
 from app.services.value_chain_report import (
     STREAM_RELATED_CARD_TYPE,
     STREAM_RELATED_MODES,
@@ -115,7 +117,7 @@ def _current_lifecycle_phase(lifecycle: dict | None) -> str | None:
 async def dashboard(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     await PermissionService.require_permission(db, user, "reports.ea_dashboard")
     # Every aggregate below counts only the cards the caller may read.
-    read_scope = await CardReadScope.load(db, user)
+    read_scope = await CardReadScope.load(db, user, include_subtype_denials=True)
     readable = read_scope.where(Card, mode="module")
     # Count by type
     type_counts = await db.execute(
@@ -599,9 +601,10 @@ async def admin_dashboard_summary(
     approval_pipeline.sort(key=lambda r: r["total"], reverse=True)
 
     # ---- Recent system activity (50 events) ------------------------------
+    activity_scope = await CardReadScope.load(db, user, include_subtype_denials=True)
     sys_events_result = await db.execute(
         select(Event)
-        .where(*event_read_filters(await CardReadScope.load(db, user)))
+        .where(*event_read_filters(activity_scope))
         .options(selectinload(Event.user))
         .order_by(Event.created_at.desc())
         .limit(50)
@@ -621,9 +624,7 @@ async def admin_dashboard_summary(
             return sys_name_by_card_id.get(e.card_id)
         return None
 
-    sys_payloads = await scrub_event_payloads(
-        db, await CardReadScope.load(db, user), [e.data for e in sys_events_list]
-    )
+    sys_payloads = await scrub_event_payloads(db, activity_scope, [e.data for e in sys_events_list])
     sys_payloads = await redact_cost_events(db, user, sys_events_list, sys_payloads)
     recent_activity = [
         {
@@ -1183,6 +1184,13 @@ async def matrix(
         )
     ).all()
     all_schemas = {key: (schema or []) for key, schema, _, _ in rt_rows}
+    if APPLICATION_RELATION in all_schemas:
+        # The BO module projects ownership after applying its card visibility rules.
+        all_schemas[APPLICATION_RELATION] = [
+            field
+            for field in all_schemas[APPLICATION_RELATION]
+            if field.get("key") != OWNERSHIP_KEY
+        ]
     declared_keys = [
         key
         for key, _, src, tgt in rt_rows
@@ -1936,7 +1944,7 @@ async def dependencies(
     # reader may see. Filtering this one load removes hidden cards from the
     # nodes, from every edge (both ends must be visible) and from ancestor
     # paths, and stops the BFS from bridging through a hidden card.
-    read_scope = await CardReadScope.load(db, user)
+    read_scope = await CardReadScope.load(db, user, include_subtype_denials=True)
     full_result = await db.execute(
         select(Card).where(Card.status == "ACTIVE", *read_scope.where(Card, mode="module"))
     )
@@ -2062,7 +2070,7 @@ async def dependencies(
                         "label": rt_info.get("label", r.type),
                         "reverse_label": rt_info.get("reverse_label"),
                         "description": r.description,
-                        "attributes": r.attributes,
+                        "attributes": public_relation_attributes(r.type, r.attributes),
                     }
                 )
 

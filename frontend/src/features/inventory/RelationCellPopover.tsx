@@ -14,12 +14,14 @@ import Alert from "@mui/material/Alert";
 import CircularProgress from "@mui/material/CircularProgress";
 import MaterialSymbol from "@/components/MaterialSymbol";
 import CardPicker from "@/components/CardPicker";
+import RequiredCardSubtypeSelect from "@/components/RequiredCardSubtypeSelect";
 import { expandSides, onSide, otherEnd, sideKey, sortRelationsByName } from "@/lib/relationSort";
 import { api } from "@/api/client";
 import { useMetamodel } from "@/hooks/useMetamodel";
 import { hasTypePermission } from "@/components/RequirePermission";
 import { useAuthContext } from "@/hooks/AuthContext";
 import { useTypeLabel, useRelationLabel } from "@/hooks/useResolveLabel";
+import { useRequiredCardSubtype } from "@/hooks/useRequiredCardSubtype";
 import type { Relation, RelationType } from "@/types";
 
 interface RelationCellPopoverProps {
@@ -101,6 +103,8 @@ function RelationTypeSection({
   const [createMode, setCreateMode] = useState(false);
   const [createName, setCreateName] = useState("");
   const [createLoading, setCreateLoading] = useState(false);
+  const { subtype, subtypeValid, subtypeField, resetSubtype } = useRequiredCardSubtype(targetTypeKey, targetTypeConfig?.subtypes);
+  const canQuickCreate = !!createName.trim() && subtypeValid && !createLoading;
 
   useEffect(() => {
     if (open) {
@@ -163,12 +167,13 @@ function RelationTypeSection({
   };
 
   const handleQuickCreate = async () => {
-    if (!createName.trim()) return;
+    if (!canQuickCreate) return;
     setCreateLoading(true);
     try {
       const created = await api.post<SearchResult>("/cards", {
         type: targetTypeKey,
         name: createName.trim(),
+        ...(subtype ? { subtype } : {}),
       });
       // Immediately create the relation
       await api.post("/relations", {
@@ -293,6 +298,7 @@ function RelationTypeSection({
               onClick={() => {
                 setCreateMode(true);
                 setCreateName(targetSearch);
+                resetSubtype();
               }}
             >
               {t("relation.createNew", { type: typeLabel(targetTypeConfig) || targetTypeKey })}
@@ -322,12 +328,13 @@ function RelationTypeSection({
             autoFocus
             sx={{ mb: 1 }}
           />
+          {subtypeField && <RequiredCardSubtypeSelect {...subtypeField} sx={{ mb: 1 }} />}
           <Box sx={{ display: "flex", gap: 1 }}>
             <Button
               size="small"
               variant="contained"
               onClick={handleQuickCreate}
-              disabled={!createName.trim() || createLoading}
+              disabled={!canQuickCreate}
               sx={{ textTransform: "none" }}
             >
               {createLoading ? (

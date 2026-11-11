@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import uuid
 
-from sqlalchemy import ForeignKey, Text
+from sqlalchemy import ForeignKey, Index, Text, and_, func
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -27,3 +27,20 @@ class Relation(Base, UUIDMixin, TimestampMixin):
 
     source = relationship("Card", foreign_keys=[source_id], lazy="noload")
     target = relationship("Card", foreign_keys=[target_id], lazy="noload")
+
+
+Index(
+    "uq_bo_er_pair",
+    func.least(Relation.source_id, Relation.target_id),
+    func.greatest(Relation.source_id, Relation.target_id),
+    unique=True,
+    postgresql_where=Relation.type == "relDataObjectToDataObject",
+)
+Index(
+    "uq_bo_master",
+    Relation.target_id,
+    unique=True,
+    postgresql_where=and_(
+        Relation.type == "relAppToDataObj", Relation.attributes["dataOwnership"].astext == "master"
+    ),
+)

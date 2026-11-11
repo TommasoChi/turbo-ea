@@ -18,6 +18,8 @@ from app.models.relation import Relation
 from app.models.relation_type import RelationType
 from app.models.turbolens import TurboLensAnalysisRun, TurboLensAssessment
 from app.services import adr_service
+from app.services.bo_relationship_constants import ER_RELATION
+from app.services.card_write_service import find_relation, lock_bo_relation_writes
 from app.services.data_quality import calc_data_quality
 from app.services.relation_orientation import orient_endpoints
 
@@ -317,7 +319,7 @@ async def execute_commit(db: AsyncSession, run_id: str, data: dict[str, Any]) ->
         },
     )
 
-    relations_created = 0
+    resolved_relations: list[tuple[str, uuid.UUID, uuid.UUID]] = []
     for rel_def in rels_to_create:
         source_id_str = rel_def.get("sourceId", "")
         target_id_str = rel_def.get("targetId", "")
@@ -344,6 +346,16 @@ async def execute_commit(db: AsyncSession, run_id: str, data: dict[str, Any]) ->
         # The ends come from model output; store them the way the relation
         # type runs whichever order the model gave them in (#1140).
         source_uuid, target_uuid = await orient_endpoints(db, rel_type, source_uuid, target_uuid)
+        resolved_relations.append((rel_type, source_uuid, target_uuid))
+
+    await lock_bo_relation_writes(db, resolved_relations)
+    relations_created = 0
+    for rel_type, source_uuid, target_uuid in resolved_relations:
+        if rel_type == ER_RELATION and (
+            source_uuid == target_uuid
+            or await find_relation(db, rel_type, source_uuid, target_uuid)
+        ):
+            continue
         rel = Relation(
             id=uuid.uuid4(),
             type=rel_type,

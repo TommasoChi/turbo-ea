@@ -9,6 +9,7 @@ import Typography from "@mui/material/Typography";
 import { useTranslation } from "react-i18next";
 import MaterialSymbol from "@/components/MaterialSymbol";
 import { useFieldLabel, useOptionLabel, useRelationLabel } from "@/hooks/useResolveLabel";
+import { BO_ER_RELATION_TYPE, isBoOwnershipAttribute } from "@/lib/relationAttributes";
 import type { FieldDef, RelationType } from "@/types";
 
 export type RelationAttributes = Record<string, unknown>;
@@ -42,11 +43,11 @@ export default function RelationAttributesEditor({
   const optLabel = useOptionLabel();
   const relLabel = useRelationLabel();
 
-  const schema = relationType.attributes_schema ?? [];
+  const schema = (relationType.attributes_schema ?? []).filter((f) => !isBoOwnershipAttribute(relationType.key, f.key));
   if (schema.length === 0) return null;
 
   const setField = (field: FieldDef) => (next: unknown) => {
-    const merged = { ...value };
+    const merged = genericRelationAttributes(relationType, value);
     if (next === undefined || next === "" || next === null) {
       delete merged[field.key];
     } else {
@@ -275,7 +276,7 @@ export function hasEditableRelationAttributes(relationType: RelationType | undef
     !!relationType &&
     (relationType.attributes_schema ?? []).some(
       (f) =>
-        f.type === "boolean" || (f.type === "single_select" && (f.options ?? []).length > 0),
+        !isBoOwnershipAttribute(relationType.key, f.key) && (f.type === "boolean" || (f.type === "single_select" && (f.options ?? []).length > 0)),
     )
   );
 }
@@ -313,7 +314,7 @@ export function relationAttributeBadges(
   if (!relationType) return [];
   const badges: RelationAttributeBadge[] = [];
   for (const field of relationType.attributes_schema ?? []) {
-    if (field.key === "flowDirection") continue;
+    if (field.key === "flowDirection" || (relationType.key === BO_ER_RELATION_TYPE && field.key === "cardinality") || isBoOwnershipAttribute(relationType.key, field.key)) continue;
     const v = attributes?.[field.key];
 
     if (field.type === "boolean") {
@@ -345,4 +346,25 @@ export function relationAttributeBadges(
     });
   }
   return badges;
+}
+
+export function genericRelationAttributes(rt: RelationType, value: RelationAttributes): RelationAttributes {
+  const result = { ...value };
+  if (isBoOwnershipAttribute(rt.key, "dataOwnership")) delete result.dataOwnership;
+  return result;
+}
+
+export function orientCardinality(value: RelationAttributes, viewedFromSourceSide: boolean): RelationAttributes {
+  const result = { ...value };
+  if (!viewedFromSourceSide) {
+    if (result.cardinality === "1:n") result.cardinality = "n:1";
+    else if (result.cardinality === "n:1") result.cardinality = "1:n";
+  }
+  return result;
+}
+
+export function cardinalityBadge(rt: RelationType | undefined, attributes: RelationAttributes | undefined, viewedFromSourceSide: boolean): { icon: string; value: string } | null {
+  if (rt?.key !== BO_ER_RELATION_TYPE || !rt.attributes_schema?.some((f) => f.key === "cardinality")) return null;
+  const value = orientCardinality(attributes ?? {}, viewedFromSourceSide).cardinality;
+  return typeof value === "string" && ["1:1", "1:n", "n:1", "n:m"].includes(value) ? { icon: "label", value } : null;
 }

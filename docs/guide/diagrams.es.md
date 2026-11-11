@@ -153,6 +153,42 @@ El botón Sync de la barra de herramientas muestra una pastilla pulsante «N sin
 
 Los diagramas pueden vincularse a **cualquier tarjeta** desde la pestaña **Recursos** de la tarjeta (ver [Detalle de tarjetas](card-details.es.md#pestaña-recursos)). Cuando un diagrama está vinculado a una tarjeta **Iniciativa**, también aparece en el módulo [EA Delivery](delivery.md) junto a los documentos SoAW.
 
+## Data Modeller
+
+En **Application & Data Architecture**, abre **Data Modeller**. La primera fila contiene el color, el contenido de las fichas y la sincronización. La barra inferior contiene las herramientas de edición, los paneles, el zoom, los filtros y la exportación SVG. El diagrama muestra el último dibujo compartido. Usa la sincronización para volver a consultar los cambios del inventario.
+
+![Diagrama de relaciones entre objetos de negocio con la aplicación maestra y la ficha del objeto de negocio seleccionado](../assets/img/es/105_relaciones_objetos_negocio.png)
+
+Arrastra la línea o sus controles para mover un segmento, añadir un codo o cambiar el punto de anclaje en el borde de un objeto. Guarda el nuevo recorrido para compartirlo. Una línea simple indica uno. La pata de cuervo indica muchos (N o M). Usa **Cuadrícula de puntos** para mostrar u ocultar los puntos del fondo. El navegador recuerda tu elección para cada diagrama.
+
+Haz clic con el botón derecho en un conector y elige **Recto** u **Ortogonal**. El conector mantiene su trazado al mover un nodo y al guardar y volver a abrir el diagrama.
+
+Para desplazarse por el diagrama, mantenga pulsado el botón izquierdo del ratón sobre el fondo y arrastre. Use la rueda para desplazarse en vertical, **Mayús** con la rueda para desplazarse en horizontal y **Ctrl** con la rueda para ajustar el zoom. También puede poner el foco en el lienzo y utilizar las teclas de flecha.
+
+Abra **Atajos de teclado** en la barra de herramientas para ver los comandos disponibles. Use el botón del panel para mostrar u ocultar los detalles de la ficha. Al seleccionar un objeto de negocio, se vuelven a abrir sus detalles.
+
+Si puede editar el diagrama, **Deshacer** y **Rehacer** se aplican a los cambios del borrador actual. **Eliminar** quita del dibujo los objetos de negocio seleccionados cuando guarda. Sus fichas y vínculos siguen disponibles en el inventario. Para una línea seleccionada, se aplican la confirmación y la sincronización habituales. **Copiar** y **Pegar** abren un nuevo borrador por cada objeto de negocio copiado para que pueda cambiar su nombre antes de añadirlo. Cambiar el nombre de una ficha guardada actualiza el inventario. Sincronice el cambio para incorporar el nuevo nombre al dibujo.
+
+1. Revise los objetos de negocio y los vínculos nuevos, actualizados o eliminados.
+2. Si puede editar el diagrama, haga clic en **Sincronizar** junto a los cambios que quiera incorporar. Los cambios aparecerán en el lienzo. Por ejemplo, si un objeto de negocio cambia de nombre y pasa al subtipo **Documento**, aparecerá en la misma posición con el nuevo nombre y una esquina doblada.
+3. Haga clic en **Guardar** para compartir el dibujo actualizado. Los demás usuarios seguirán viendo el dibujo anterior hasta que lo guarde. Si un elemento del inventario ha vuelto a cambiar, compruébelo antes de aceptar la nueva versión.
+
+La comprobación y la sincronización de cambios leen los datos del inventario. Las líneas cuya retirada confirmó y cuyas relaciones aún deben eliminarse del inventario aparecen en una lista aparte. Sincronice esas eliminaciones por separado.
+
+### Restaurar un borrador de las relaciones entre objetos de negocio
+
+El editor conserva un borrador en el navegador y lo actualiza aproximadamente cada cinco segundos mientras trabaja. Al volver a abrir **Relaciones entre objetos de negocio** en el mismo navegador con la misma cuenta, el lienzo muestra el último dibujo compartido. Si hay un borrador disponible, seleccione **Restaurar** para recuperar sus cambios en el lienzo o **Descartar** para eliminar el borrador. Los demás usuarios ven los cambios cuando la acción **Guardar** o **Guardar y salir** se completa correctamente.
+
+Cada editor abierto conserva su propio borrador. Si hay varios borradores disponibles, al descartar el que se muestra se ofrece el siguiente. Después de restaurar un borrador, puede volver a abrir el editor para recuperar otro.
+
+Si **Guardar** indica que se ha rechazado un objeto de negocio o un vínculo con una aplicación, haga clic en **Descartar** junto al elemento. Al descartar un objeto de negocio nuevo también se quitan del borrador su posición y los vínculos que dependen de él. A continuación, puede guardar los demás cambios.
+
+Si un objeto de negocio deja de estar disponible mientras edita, **Guardar** omite su posición y guarda las posiciones que todavía puede actualizar.
+
+Una línea que haya quitado puede seguir ausente del dibujo restaurado. Al volver a abrir el editor, la lista de eliminaciones pendientes del inventario está vacía. Si la relación sigue existiendo y puede verla, puede recuperar la línea desde **Cambios en el inventario**. Para eliminar la relación del inventario, confirme de nuevo la retirada en la sesión actual y haga clic en **Sincronizar eliminación**.
+
+**Guardar y salir** mantiene abierto el editor si quedan cambios por atender. Si hay eliminaciones pendientes del inventario, el editor avisa antes de salir.
+
 ## Compartir un diagrama fuera de Turbo EA
 
 Un diagrama puede publicarse como un **enlace de solo lectura que se abre sin iniciar sesión**, para insertarlo en una página wiki como Confluence.

@@ -15,6 +15,7 @@ from app.models.architecture_decision_card import ArchitectureDecisionCard
 from app.models.card import Card
 from app.models.relation import Relation
 from app.models.turbolens import TurboLensAnalysisRun, TurboLensAssessment
+from app.services.bo_relationship_constants import BO_TYPE, ER_RELATION
 from app.services.turbolens_commit import (
     _build_initiative_description,
     _generate_description,
@@ -23,6 +24,7 @@ from app.services.turbolens_commit import (
 from tests.conftest import (
     create_card,
     create_card_type,
+    create_relation,
     create_relation_type,
     create_role,
     create_user,
@@ -243,6 +245,46 @@ class TestExecuteCommit:
                 "initiative_id": str(initiative.id),
             }
         }
+
+    @pytest.mark.parametrize("same_end", [False, True])
+    async def test_does_not_add_reverse_or_self_er_link(self, db, env, same_end):
+        await create_card_type(db, key=BO_TYPE, label="Business Object")
+        await create_relation_type(
+            db, key=ER_RELATION, source_type_key=BO_TYPE, target_type_key=BO_TYPE
+        )
+        first = await create_card(db, card_type=BO_TYPE, name="First")
+        second = await create_card(db, card_type=BO_TYPE, name="Second")
+        present = await create_relation(
+            db,
+            type_key=ER_RELATION,
+            source_id=first.id,
+            target_id=second.id,
+            attributes={"cardinality": "1:n"},
+        )
+        assessment = env["assessment"]
+        session = assessment.session_data
+        architecture = session["capabilityMapping"]
+        assessment.session_data = {
+            **session,
+            "capabilityMapping": {
+                **architecture,
+                "proposedRelations": [
+                    {
+                        "sourceId": str(second.id),
+                        "targetId": str(second.id if same_end else first.id),
+                        "relationType": ER_RELATION,
+                    }
+                ],
+            },
+        }
+        await db.flush()
+        result = await execute_commit(
+            db, str(env["run"].id), {**env["data"], "selected_relation_indices": [0]}
+        )
+        assert result["relation_count"] == 0
+        (stored,) = (await db.scalars(select(Relation).where(Relation.type == ER_RELATION))).all()
+        assert (stored.id, stored.source_id, stored.target_id) == (present.id, first.id, second.id)
+        assert stored.attributes == {"cardinality": "1:n"}
 
     async def test_descriptions_come_from_the_ai_when_it_is_configured(self, db, env, monkeypatch):
         await ai_settings(db)

@@ -325,6 +325,39 @@ class TestRelations:
 
 
 class TestRelationSubtypes:
+    async def test_only_the_bo_master_field_is_excluded_from_public_filters(self, db, land):
+        await create_card_type(db, key="DataObject")
+        for relation_type in ("relAppToDataObj", "appHandlesData"):
+            await create_relation_type(
+                db, key=relation_type, source_type_key="Application", target_type_key="DataObject"
+            )
+        obj = await create_card(db, card_type="DataObject", name="Account")
+        await create_relation(
+            db,
+            type_key="relAppToDataObj",
+            source_id=land.alpha.id,
+            target_id=obj.id,
+            attributes={"dataOwnership": "master", "crudRead": True},
+        )
+        await create_relation(
+            db,
+            type_key="appHandlesData",
+            source_id=land.beta.id,
+            target_id=obj.id,
+            attributes={"dataOwnership": "external"},
+        )
+
+        assert (
+            await _names(db, _cf(relSubtypeFilters={"relAppToDataObj::dataOwnership": ["master"]}))
+            == set()
+        )
+        assert await _names(db, _cf(relSubtypeFilters={"relAppToDataObj::crudRead": ["true"]})) == {
+            "Alpha"
+        }
+        assert await _names(
+            db, _cf(relSubtypeFilters={"appHandlesData::dataOwnership": ["external"]})
+        ) == {"Beta"}
+
     async def test_picked_value(self, db, land):
         filters = _cf(relSubtypeFilters={"orgUsesApp::usage": ["daily"]})
         assert await _names(db, filters) == {"Beta"}

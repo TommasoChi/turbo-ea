@@ -338,3 +338,14 @@ describe("DiagramSyncPanel", () => {
     ).toBeInTheDocument();
   });
 });
+
+it("lets a legacy unclassified DataObject choose a subtype before pushing", async () => {
+  const onSetSubtype = vi.fn();
+  const { user } = renderPanel({ pendingCards: [{ ...CARD, type: "DataObject", typeLabel: "Data Object" }],
+    dataObjectSubtypes: [{ key: "data", label: "Data" }], onSetSubtype });
+  const row = rowOf("Billing Portal");
+  expect(within(row).getByRole("button", { name: "Push to inventory" })).toBeDisabled();
+  await user.click(within(row).getByRole("combobox", { name: /subtype/i }));
+  await user.click(within(screen.getByRole("listbox")).getByRole("option", { name: "Data" }));
+  expect(onSetSubtype).toHaveBeenCalledWith("cell-1", "data");
+});

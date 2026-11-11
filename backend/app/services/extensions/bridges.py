@@ -1600,7 +1600,11 @@ class _DiagramArtifactBridge(DiagramArtifactGateway):
     async def get_diagram(self, diagram_id: UUID) -> DiagramRef | None:
         await self._require_manage()
         diagram = await self._db.get(Diagram, diagram_id)
-        return await self._diagram_ref(diagram) if diagram is not None else None
+        return (
+            await self._diagram_ref(diagram)
+            if diagram is not None and diagram.kind != "boRelationship"
+            else None
+        )
 
     async def create_diagram(
         self,
@@ -1654,7 +1658,7 @@ class _DiagramArtifactBridge(DiagramArtifactGateway):
         if not normalized:
             raise ExtensionBridgeError("invalid_diagram", "Diagram name is required")
         diagram = await self._db.get(Diagram, diagram_id)
-        if diagram is None:
+        if diagram is None or diagram.kind == "boRelationship":
             raise ExtensionBridgeError("diagram_not_found", "Diagram was not found")
         diagram.name = normalized
         await self._db.flush()
@@ -1663,7 +1667,7 @@ class _DiagramArtifactBridge(DiagramArtifactGateway):
     async def delete_diagram(self, diagram_id: UUID) -> bool:
         await self._require_manage()
         diagram = await self._db.get(Diagram, diagram_id)
-        if diagram is None:
+        if diagram is None or diagram.kind == "boRelationship":
             return False
         await self._db.delete(diagram)
         await self._db.flush()

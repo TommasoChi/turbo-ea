@@ -1142,6 +1142,28 @@ export const DOC_PAGES: PageDef[] = [
     },
   },
 
+  // ── Data Modeller ─────────────────────────────────────────────────────
+  {
+    id: "105_bo_relationship",
+    route: "/application-architecture/bo-relationship",
+    viewport: { width: 1560, height: 1050 },
+    waitFor: 'main header h1',
+    actions: [
+      { type: "click", selector: '.djs-shape[role="button"]', nth: 0 },
+      { type: "wait", ms: 600 },
+    ],
+    filenames: {
+      en: "105_bo_relationship",
+      de: "105_beziehungen_geschaeftsobjekte",
+      fr: "105_relations_objets_metier",
+      es: "105_relaciones_objetos_negocio",
+      it: "105_relazioni_oggetti_business",
+      pt: "105_relacoes_objetos_negocio",
+      zh: "105_bo_relationship",
+      ru: "105_svyazi_biznes_obektov",
+    },
+  },
+
   // ── Admin Settings: ServiceNow ──────────────────────────────────────────
   {
     id: "31_admin_settings_servicenow",

@@ -21,6 +21,12 @@ from app.models.comment import Comment
 from app.models.relation import Relation
 from app.models.tag import Tag, TagGroup
 from app.models.user import User
+from app.services.bo_relationship_constants import (
+    APPLICATION_RELATION,
+    BO_RELATIONSHIP_KIND,
+    BO_TYPE,
+    ER_RELATION,
+)
 from app.services.card_resolver import CardResolver
 from app.services.workspace_io import applier, apply_bundle, build_bundle, parse_bundle, schema
 from app.services.workspace_io import remap as rm
@@ -358,7 +364,7 @@ def _card_row(name: str, *, source_id=..., parent_path: str = "", ctype: str = "
 
 
 async def _load(db, bundle, sheets, ids=None) -> rm.RemapContext:
-    resolver = await CardResolver.load(db, {"Application", "BusinessProcess"})
+    resolver = await CardResolver.load(db, {"Application", "BusinessProcess", BO_TYPE})
     return await applier._load_remap_context(
         db, bundle, ids if ids is not None else rm.IdMap(), resolver, [sheet(s) for s in sheets]
     )
@@ -511,6 +517,114 @@ async def test_diagrams_load_every_relation_by_its_ends(db):
     assert ctx.relations_by_ends == {} and ctx.ids.relations == {}
 
 
+async def test_bo_diagram_only_import_remaps_cards_by_identity_and_archived_path(db):
+    await _metamodel(db)
+    await create_card_type(db, key=BO_TYPE)
+    customer = await create_card(db, card_type=BO_TYPE, name="Customer")
+    replacement = await create_card(db, card_type=BO_TYPE, name="Former Customer Name")
+    archived = await _archived(db, "Same path", reference="OLD-1", external_id="src-1")
+    twin = await _archived(db, "Same path", reference="OLD-2", external_id="src-2")
+    original = await _archived(db, "Original", reference="OLD-3")
+    away, by_ref, by_external, active, missing = (uid() for _ in range(5))
+    bundle = _bundle(
+        Diagrams=[{"kind": BO_RELATIONSHIP_KIND}],
+        Cards=[
+            _card_row("Missing", source_id="invalid", ctype=BO_TYPE),
+            _card_row("Former Customer Name", source_id=str(customer.id), ctype=BO_TYPE),
+            _card_row("Former Customer Name", source_id=away, ctype=BO_TYPE),
+            {
+                **_card_row("Same path", source_id=by_ref),
+                "status": "ARCHIVED",
+                "reference": "OLD-1",
+            },
+            {
+                **_card_row("Same path", source_id=by_external),
+                "status": "ARCHIVED",
+                "external_id": "src-2",
+            },
+            {
+                **_card_row("Same path", source_id=str(original.id)),
+                "status": "ARCHIVED",
+                "reference": "OLD-2",
+            },
+            _card_row("Original", source_id=active),
+            {**_card_row("Missing", source_id=missing), "status": "ARCHIVED"},
+        ],
+    )
+
+    ctx = await _load(db, bundle, ["Diagrams"])
+
+    assert ctx.ids.cards == {
+        str(customer.id): str(customer.id),
+        away: str(replacement.id),
+        by_ref: str(archived.id),
+        by_external: str(twin.id),
+        str(original.id): str(original.id),
+    }
+    assert ctx.card_types == {
+        str(customer.id): BO_TYPE,
+        str(replacement.id): BO_TYPE,
+        str(archived.id): "Application",
+        str(twin.id): "Application",
+        str(original.id): "Application",
+    }
+    assert (await _load(db, bundle, ["Todos"])).card_types == {}
+
+
+async def test_bo_diagram_only_import_resolves_reverse_er_ids_and_keeps_source_direction(db):
+    await _metamodel(db)
+    await create_card_type(db, key=BO_TYPE)
+    await create_relation_type(
+        db, key=ER_RELATION, source_type_key=BO_TYPE, target_type_key=BO_TYPE
+    )
+    customer = await create_card(db, card_type=BO_TYPE, name="Customer")
+    account = await create_card(db, card_type=BO_TYPE, name="Account")
+    invoice = await create_card(db, card_type=BO_TYPE, name="Invoice")
+    crm = await create_card(db, name="CRM")
+    billing = await create_card(db, name="Billing")
+    er = Relation(type=ER_RELATION, source_id=account.id, target_id=customer.id)
+    app = Relation(type="relAppToApp", source_id=crm.id, target_id=billing.id)
+    db.add_all([er, app])
+    await db.flush()
+    old_er, old_app, absent, unresolved = (uid() for _ in range(4))
+    er_row = {
+        "type": ER_RELATION,
+        "source_type": BO_TYPE,
+        "source_ref": "Customer",
+        "target_type": BO_TYPE,
+        "target_ref": "Account",
+    }
+    bundle = _bundle(
+        Diagrams=[{"kind": BO_RELATIONSHIP_KIND}],
+        Relations=[
+            {**er_row, "source_id": "invalid"},
+            {
+                "type": "relAppToApp",
+                "source_type": "Application",
+                "source_ref": "CRM",
+                "target_type": "Application",
+                "target_ref": "Billing",
+                "source_id": old_app,
+            },
+            {**er_row, "source_id": old_er},
+            {**er_row, "source_id": absent, "target_ref": "Invoice"},
+            {**er_row, "source_id": unresolved, "target_ref": "Unknown"},
+        ],
+    )
+
+    ctx = await _load(db, bundle, ["Diagrams"])
+
+    assert ctx.ids.relations == {old_er: str(er.id), old_app: str(app.id)}
+    assert ctx.relation_details == {
+        str(er.id): (ER_RELATION, str(account.id), str(customer.id)),
+        str(app.id): ("relAppToApp", str(crm.id), str(billing.id)),
+    }
+    assert ctx.source_er_ends == {
+        old_er: (str(customer.id), str(account.id)),
+        absent: (str(customer.id), str(invoice.id)),
+    }
+
+
 async def test_a_legacy_bundle_with_diagrams_builds_the_name_fallback(db):
     await _metamodel(db)
     alpha = await create_card(db, card_type="Application", name="Alpha")
@@ -567,6 +681,93 @@ async def test_two_relation_rows_for_one_relation_both_map_to_it(db):
     created = (await db.execute(select(Relation))).scalar_one()
     assert (sr.created, sr.skipped) == (1, 1)
     assert ids.relations == {first: str(created.id), second: str(created.id)}
+
+
+async def test_import_maps_both_new_and_conflicting_master_links_to_persisted_relations(db):
+    await _metamodel(db)
+    await create_card_type(db, key=BO_TYPE)
+    await create_relation_type(
+        db, key=APPLICATION_RELATION, source_type_key="Application", target_type_key=BO_TYPE
+    )
+    current, crm, billing, reader = [
+        await create_card(db, name=name) for name in ("Current", "CRM", "Billing", "Reader")
+    ]
+    customer = await create_card(db, card_type=BO_TYPE, name="Customer")
+    invoice = await create_card(db, card_type=BO_TYPE, name="Invoice")
+    db.add(
+        Relation(
+            type=APPLICATION_RELATION,
+            source_id=current.id,
+            target_id=customer.id,
+            attributes={"dataOwnership": "master"},
+        )
+    )
+    await db.flush()
+    source_master, source_conflict, source_duplicate, source_reader, source_other = (
+        uid() for _ in range(5)
+    )
+    ownership_row = {
+        "type": APPLICATION_RELATION,
+        "source_type": "Application",
+        "target_type": BO_TYPE,
+        "description": "Imported link",
+        "attributes": {"dataOwnership": "master", "update": True},
+    }
+    rows = [
+        {**ownership_row, "source_id": source_master, "source_ref": "CRM", "target_ref": "Invoice"},
+        {
+            **ownership_row,
+            "source_id": source_conflict,
+            "source_ref": "Billing",
+            "target_ref": "Customer",
+        },
+        {
+            **ownership_row,
+            "source_id": source_duplicate,
+            "source_ref": "Billing",
+            "target_ref": "Customer",
+        },
+        {
+            **ownership_row,
+            "source_id": source_reader,
+            "source_ref": "Reader",
+            "target_ref": "Customer",
+            "attributes": {"dataOwnership": "slave", "read": True},
+        },
+        {
+            **ownership_row,
+            "source_id": source_other,
+            "type": "relAppToApp",
+            "source_ref": "Billing",
+            "target_type": "Application",
+            "target_ref": "CRM",
+        },
+    ]
+    ids = rm.IdMap()
+    sr = applier.SectionResult(sheet="Relations")
+
+    await applier._apply_relations(db, _bundle(Relations=rows), sr, False, id_map=ids)
+
+    links = {
+        (rel.source_id, rel.target_id): rel for rel in (await db.scalars(select(Relation))).all()
+    }
+    assert {ends: rel.attributes for ends, rel in links.items()} == {
+        (current.id, customer.id): {"dataOwnership": "master"},
+        (crm.id, invoice.id): {"dataOwnership": "master", "update": True},
+        (billing.id, customer.id): {"update": True},
+        (reader.id, customer.id): {"dataOwnership": "slave", "read": True},
+        (billing.id, crm.id): {"dataOwnership": "master", "update": True},
+    }
+    assert links[crm.id, invoice.id].description == "Imported link"
+    assert ids.relations == {
+        source_master: str(links[crm.id, invoice.id].id),
+        source_conflict: str(links[billing.id, customer.id].id),
+        source_duplicate: str(links[billing.id, customer.id].id),
+        source_reader: str(links[reader.id, customer.id].id),
+        source_other: str(links[billing.id, crm.id].id),
+    }
+    assert (sr.created, sr.skipped, sr.references) == (4, 1, {"bo_master_conflict": 1})
+    assert sr.errors == ["Imported the Application link and kept the target's existing Master"]
 
 
 async def test_a_user_with_a_role_this_instance_lacks_lands_as_a_member(db):

@@ -88,6 +88,14 @@ describe("RelationPickerDialog", () => {
     expect(onSelect).toHaveBeenCalledWith(REL_APP_TO_ITC, "reversed");
   });
 
+  it("shows reversed ER endpoints in the same order as the submitted cardinality", async () => {
+    const er = makeRelationType({ key: "relDataObjectToDataObject", source_type_key: "DataObject", target_type_key: "DataObject", label: "relates", attributes_schema: [{ key: "cardinality", label: "Cardinality", type: "single_select", options: [{ key: "1:n", label: "1:n" }] }] });
+    const { user } = renderDialog({ endpoints: { ...APP_TO_BC, sourceType: "DataObject", targetType: "DataObject", sourceName: "A", targetName: "B" } }, [er]);
+    await user.click(screen.getAllByRole("button", { name: /relates/ })[1]);
+    const dialog = screen.getByRole("dialog");
+    expect(dialog.textContent?.indexOf("B")).toBeLessThan(dialog.textContent?.indexOf("A") ?? 0);
+  });
+
   it("skips hidden relation types and explains when nothing fits", () => {
     const hidden = makeRelationType({
       key: "relHidden",

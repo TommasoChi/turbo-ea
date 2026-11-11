@@ -5,6 +5,8 @@ O editor **ArchiMate** desenha diagramas [ArchiMate 3](https://pubs.opengroup.or
 !!! warning "Estado da versão"
     Esta versão inclui a base do ArchiMate como uma **sandbox para administradores**. O módulo está desativado por predefinição, os diagramas não aparecem no menu [Diagramas](diagrams.md) e ainda não podem ser publicados nem incorporados. Consulte os [Limites conhecidos](#known-limits).
 
+A primeira linha mostra o nome do diagrama, as opções de cor e conteúdo dos cartões e a sincronização. A sincronização atualiza os dados dos cartões vinculados. A segunda linha contém ferramentas de desenho, zoom, exportação SVG e o painel de propriedades. Use **Grade de pontos** para mostrar ou ocultar os pontos no fundo. O navegador lembra sua escolha para cada diagrama.
+
 ## Ativar o módulo
 
 1. Abra **Admin → Configurações** e procure o cartão **Diagramas ArchiMate** (junto aos outros interruptores de módulos).
@@ -124,6 +126,8 @@ Numa relação Access, `crud` significa que o tipo de acesso segue os indicadore
 | Processo de negócio → Contexto de negócio, *realiza* | `Realization` | — |
 | Objetivo → Contexto de negócio, *é objetivo para* | `Association` | — |
 | Contexto de negócio → Contexto de negócio, *sucede a* | `Triggering` | desenhada do destino para a origem |
+
+Clique com o botão direito num conector e escolha **Reto** ou **Ortogonal**. O traçado mantém-se ao mover um nó e ao guardar e voltar a abrir o diagrama.
 
 ## O ficheiro Exchange {#exchange-file}
 

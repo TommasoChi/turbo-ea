@@ -5,6 +5,8 @@ The **ArchiMate** editor draws [ArchiMate 3](https://pubs.opengroup.org/architec
 !!! warning "Release status"
     This release ships the ArchiMate foundation as a **sandbox for administrators**. The module is off by default, the diagrams are not listed in the [Diagrams](diagrams.md) menu, and they cannot yet be published or embedded. See [Known limits](#known-limits).
 
+The top row shows the diagram name, **Card colors**, **Show on card** and **Sync**. Use **Sync** to refresh data from linked inventory cards. It preserves the ArchiMate element names. The row below holds the drawing tools, including zoom, SVG export and the properties panel. Use **Dot grid** to show or hide the dots behind the diagram. The browser remembers your choice for each diagram.
+
 ## Turn the module on
 
 1. Open **Admin → Settings** and find the **ArchiMate diagrams** card (next to the other module switches).
@@ -124,6 +126,8 @@ For an Access relationship, `crud` means the access type follows the relation's 
 | Business Process → Business Context, *realizes* | `Realization` | — |
 | Objective → Business Context, *is goal for* | `Association` | — |
 | Business Context → Business Context, *succeeds* | `Triggering` | drawn from the target to the source |
+
+Right-click a connector and choose **Straight** or **Orthogonal**. The connector keeps its routing when you move a node and when you save and reopen the diagram.
 
 ## The Exchange file {#exchange-file}
 

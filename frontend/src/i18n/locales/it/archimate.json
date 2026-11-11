@@ -62,6 +62,9 @@
     "label": "Nota"
   },
   "toolbar": {
+    "linkedBadge": "Indicatore della card collegata",
+    "linkedName": "Nome della card collegata",
+    "inventoryRefreshed": "Card collegate aggiornate.",
     "back": "Indietro",
     "undo": "Annulla",
     "redo": "Ripeti",

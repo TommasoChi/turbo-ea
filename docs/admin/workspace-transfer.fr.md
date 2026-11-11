@@ -19,6 +19,8 @@ L'export capture le workspace complet dans un bundle `.zip` contenant un classeu
 - **Données des modules** — BPM (diagrammes de processus, éléments, versions de flux, évaluations), PPM (rapports de statut, coûts, budgets, risques, tâches, WBS, dépendances), le registre des risques GRC (risques, tâches d'atténuation et occurrences, liaisons de fiches), les constats de conformité GRC (avec les exécutions d'analyse qu'ils référencent), décisions d'architecture et Statements of Architecture Work, diagrammes en dessin libre, rapports enregistrés, favoris (vues enregistrées de l'inventaire, y compris leurs partages), portails web et enquêtes.
 - **Assets** — les pièces jointes binaires, le XML des diagrammes et BPMN, ainsi que le logo/favicon voyagent sous forme de fichiers séparés dans le dossier `assets/` du bundle.
 
+La section **Diagrammes** inclut aussi le dessin enregistré des **Relations entre objets métier**. L’import conserve la position des nœuds lorsque les fiches et les relations reçoivent de nouveaux identifiants sur la cible. Les brouillons restent dans le navigateur où ils ont été modifiés. Les suppressions de l’inventaire en attente restent dans la session de modification d’origine.
+
 ## Ce qui n'est jamais inclus
 
 Pour des raisons de sécurité, **les secrets ne sont jamais exportés** :
@@ -49,6 +51,8 @@ Quelques autres éléments restent volontairement sur place :
 4. Examinez l'aperçu, puis cliquez sur **Appliquer l'import**.
 
 L'import est **idempotent** : le métamodèle et la configuration sont appariés par clé, les fiches par identifiant externe ou par type + chemin hiérarchique, et les utilisateurs par e-mail. Réimporter le même bundle est sans risque — les entités déjà présentes sont ignorées plutôt que dupliquées. Les types de métamodèle built-in existants conservent leur identité ; seul leur schéma modifiable est fusionné. C'est aussi vrai pour les fiches archivées incluses dans le bundle : elles sont reconnues au lieu d'être créées à nouveau.
+
+Le premier import d’un dessin enregistré des **Relations entre objets métier** l’ajoute à la cible si celle-ci ne possède encore aucun dessin de ce type. Si la cible possède déjà un dessin enregistré, même vide, l’import conserve ce dessin et ses positions. Consultez le détail **Références** pour voir les objets métier ou les liens que l’import n’a pas pu associer. Si la cible a déjà une autre application de référence pour un objet métier, le conflit figure dans les résultats de la section **Relations** et le nouveau lien conserve ses réglages CRUD.
 
 ### Lire l'aperçu
 

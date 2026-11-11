@@ -2,10 +2,9 @@
  * Turns a relation type's `attributes_schema` into the things the Matrix report
  * can draw, filter and export.
  *
- * Everything here is derived from the schema at runtime. No attribute key is
- * ever named in code: a CRUD-style set of booleans, a usage-type select and an
- * admin's own dimension added last week all travel the same path. The seeded
- * relation types are just the ones that happen to exist today.
+ * Dimensions are derived from the schema at runtime. A CRUD-style set of
+ * booleans, a usage-type select and custom fields all travel the same path.
+ * BO ownership is reserved for the BO Relationship module.
  *
  * Two levels:
  *
@@ -18,6 +17,7 @@
  */
 
 import { categoricalColor } from "@/lib/color";
+import { isBoOwnershipAttribute } from "@/lib/relationAttributes";
 import type { FieldDef, FieldOption, RelationType } from "@/types";
 
 export type DimensionKind = "flag" | "enum" | "scalar";
@@ -77,6 +77,7 @@ export function buildDimensions(relationTypes: RelationType[]): MatrixDimension[
   const dimensions: MatrixDimension[] = [];
   for (const rt of relationTypes) {
     for (const field of rt.attributes_schema ?? []) {
+      if (isBoOwnershipAttribute(rt.key, field.key)) continue;
       const kind: DimensionKind =
         field.type === "boolean" ? "flag" : isEnum(field) ? "enum" : "scalar";
       dimensions.push({ id: `${rt.key}.${field.key}`, relationTypeKey: rt.key, field, kind });

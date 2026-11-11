@@ -25,3 +25,13 @@ export function relationCreatePayload(
   }
   return payload;
 }
+
+/** Read direction from the returned row when a reverse ER upsert reused it. */
+export function storedRelationReversed(
+  rel: Pick<ScannedPendingRel, "sourceCardId" | "targetCardId" | "reversed">,
+  created: { source_id?: string; target_id?: string },
+): boolean {
+  if (created.source_id === rel.sourceCardId && created.target_id === rel.targetCardId) return false;
+  if (created.source_id === rel.targetCardId && created.target_id === rel.sourceCardId) return true;
+  return rel.reversed;
+}

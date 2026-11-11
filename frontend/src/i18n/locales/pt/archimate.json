@@ -62,6 +62,9 @@
     "label": "Nota"
   },
   "toolbar": {
+    "linkedBadge": "Indicador de cartão vinculado",
+    "linkedName": "Nome do cartão vinculado",
+    "inventoryRefreshed": "Cartões vinculados atualizados.",
     "back": "Voltar",
     "undo": "Anular",
     "redo": "Refazer",

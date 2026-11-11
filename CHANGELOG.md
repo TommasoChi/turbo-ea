@@ -5,6 +5,18 @@ All notable changes to Turbo EA are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.191.0] - 2026-11-10
+
+### Added
+
+- **Data Modeller.** Explore Data and Document cards in a shared ER diagram, navigate and edit with keyboard shortcuts, assign a Master application per business object, and sync inventory changes while preserving the saved layout.
+- **Connector routing.** Right-click a connection in Data Modeller or ArchiMate to switch between straight and orthogonal routing. In Data Modeller, drag segments, bends and attachment points, and read the many side from the crow’s foot.
+
+### Changed
+
+- **Diagram toolbars.** Data Modeller and ArchiMate group diagram navigation and inventory controls above the canvas tools.
+- **Diagram grid.** Show or hide the dot grid in Data Modeller and ArchiMate. Your browser remembers the choice for each diagram.
+
 ## [2.190.0] - 2026-11-06
 
 ### Added

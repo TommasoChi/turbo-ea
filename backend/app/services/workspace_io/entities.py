@@ -48,6 +48,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.services.bo_relationship_constants import BO_RELATIONSHIP_DIAGRAM_ID, BO_RELATIONSHIP_KIND
 from app.services.card_resolver import CardResolver
 from app.services.workspace_io import schema
 from app.services.workspace_io.bundle import WorkspaceBundle
@@ -237,10 +238,24 @@ async def export_entity_section(
     if section.export_where is not None:
         stmt = stmt.where(section.export_where)
     objs: list[Any] = list((await db.execute(stmt)).scalars().all())
+    private_diagrams: set[Any] = set()
+    if section.sheet == "DiagramFavorites":
+        from app.models.diagram import Diagram
+
+        private_diagrams = set(
+            (
+                await db.execute(sa.select(Diagram.id).where(Diagram.kind == BO_RELATIONSHIP_KIND))
+            ).scalars()
+        )
     value_cols = section.value_columns()
     pk0 = section.pk_columns()[0]
     rows: list[dict[str, Any]] = []
     for obj in objs:
+        if section.sheet == "DiagramFavorites" and obj.diagram_id in private_diagrams:
+            continue
+        if section.sheet == "Diagrams" and obj.kind == BO_RELATIONSHIP_KIND:
+            if not (obj.data or {}).get("snapshot_revision"):
+                continue
         out: dict[str, Any] = {}
         for col in value_cols:
             out[col] = _to_cell(getattr(obj, col), _kind(section.model, col))
@@ -271,6 +286,12 @@ async def export_entity_section(
         for col, subkey, ext in section.json_asset_columns:
             content = getattr(obj, col)
             data = content if isinstance(content, dict) else {}
+            if section.sheet == "Diagrams" and obj.kind == BO_RELATIONSHIP_KIND:
+                from app.services.bo_relationship import BoSnapshot
+
+                data = BoSnapshot.model_validate(data).model_dump(
+                    mode="json", exclude={"snapshot_revision"}
+                )
             sub = data.get(subkey)
             meta = {k: v for k, v in data.items() if k != subkey}
             out[f"{col}__meta"] = json.dumps(meta, ensure_ascii=False) if meta else None
@@ -390,6 +411,15 @@ async def apply_entity_section(
 
     existing_by_pk: dict[tuple, Any] = {}
     existing_objs: list[Any] = list((await db.execute(sa.select(model))).scalars().all())
+    private_diagrams: set[Any] = set()
+    if section.sheet == "DiagramFavorites":
+        from app.models.diagram import Diagram
+
+        private_diagrams = set(
+            (
+                await db.execute(sa.select(Diagram.id).where(Diagram.kind == BO_RELATIONSHIP_KIND))
+            ).scalars()
+        )
     for obj in existing_objs:
         existing_by_pk[tuple(getattr(obj, c) for c in pk_cols)] = obj
 
@@ -446,6 +476,59 @@ async def apply_entity_section(
             if sub is not None:
                 data[subkey] = sub
             kwargs[col] = data
+
+        if section.sheet == "Diagrams":
+            is_bo = kwargs.get("kind") == BO_RELATIONSHIP_KIND
+            if is_bo:
+                from app.services.bo_relationship import _bo_diagram
+
+                current_bo = await _bo_diagram(db, lock=True)
+                assert current_bo is not None and rewrite is not None and remap is not None
+                if current_bo.data and current_bo.data.get("snapshot_revision"):
+                    sr.skip("already_present")
+                    continue
+                incoming = kwargs.get("data") or {}
+                if "snapshot_revision" in incoming and incoming["snapshot_revision"] is None:
+                    sr.skip("already_present")
+                    continue
+                if not all(
+                    k in incoming for k in ("nodes", "edges", "positions", "application_links")
+                ):
+                    sr.skip("already_present")
+                    continue
+                from pydantic import ValidationError
+
+                from app.services.bo_relationship import BoSnapshot
+
+                try:
+                    kwargs["data"] = BoSnapshot.model_validate(incoming).model_dump(mode="json")
+                except ValidationError:
+                    sr.conflict += 1
+                    sr.errors.append("Diagrams: invalid BO snapshot")
+                    continue
+                tally = rewrite(kwargs, remap)
+                sr.note_references(tally)
+                had_items = any(
+                    incoming.get(k) for k in ("nodes", "edges", "positions", "application_links")
+                )
+                has_items = any(
+                    kwargs["data"].get(k)
+                    for k in ("nodes", "edges", "positions", "application_links")
+                )
+                if had_items and not has_items:
+                    sr.skip("unresolved")
+                    continue
+                current_bo.data = kwargs["data"]
+                sr.updated += 1
+                continue
+            if kwargs.get("id") == BO_RELATIONSHIP_DIAGRAM_ID:
+                sr.conflict += 1
+                sr.errors.append("Diagrams: reserved BO diagram id")
+                continue
+
+        if section.sheet == "DiagramFavorites" and kwargs.get("diagram_id") in private_diagrams:
+            sr.skip("unresolved")
+            continue
 
         pk_vals = tuple(kwargs.get(c) for c in pk_cols)
         if any(v is None for v in pk_vals):

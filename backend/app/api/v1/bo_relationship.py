@@ -1,0 +1,163 @@
+"""BO Relationship graph, card panel, and shared drawing writes."""
+
+import uuid
+
+from fastapi import APIRouter, Depends, Query
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.api.deps import get_current_user, require_permission
+from app.api.v1.cards import card_detail_response, redact_bo_card_references
+from app.database import get_db
+from app.models.user import User
+from app.schemas.bo_relationship import (
+    BoApplicationGroup,
+    BoApplicationLink,
+    BoApplicationLinkDraft,
+    BoApplicationPage,
+    BoDetail,
+    BoDraftComparison,
+    BoDraftComparisonResult,
+    BoEdge,
+    BoGraph,
+    BoInventoryChanges,
+    BoLayoutResult,
+    BoLayoutUpdate,
+    BoMasterUpdate,
+    BoNode,
+    BoObjectDraft,
+    BoRelationDraft,
+)
+from app.services import bo_relationship as service
+from app.services import bo_relationship_writes as writes
+from app.services.permission_service import PermissionService
+
+router = APIRouter(
+    prefix="/bo-relationship",
+    tags=["bo-relationship"],
+    dependencies=[Depends(require_permission("boRelationship.view"))],
+)
+
+
+@router.get("", response_model=BoGraph)
+async def get_graph(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    return await service.get_bo_graph(db, user)
+
+
+@router.get("/changes", response_model=BoInventoryChanges)
+async def get_changes(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    return await service.compare_bo_inventory(db, user)
+
+
+@router.post("/changes/draft", response_model=BoDraftComparisonResult)
+async def compare_draft(
+    body: BoDraftComparison,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_permission("boRelationship.edit")),
+):
+    return await service.compare_bo_draft(db, user, body)
+
+
+@router.put("/layout", response_model=BoLayoutResult)
+async def save_layout(
+    body: BoLayoutUpdate,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_permission("boRelationship.edit")),
+):
+    result = await service.save_bo_layout(db, user, body)
+    await db.commit()
+    return result
+
+
+@router.put("/objects/{draft_id}", response_model=BoNode)
+async def create_object_draft(
+    draft_id: uuid.UUID,
+    body: BoObjectDraft,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_permission("boRelationship.edit")),
+):
+    node = await writes.create_object_draft(db, user, draft_id, body)
+    await db.commit()
+    return node
+
+
+@router.put("/relation-drafts/{draft_id}", response_model=BoEdge)
+async def create_relation_draft(
+    draft_id: uuid.UUID,
+    body: BoRelationDraft,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_permission("boRelationship.edit")),
+):
+    edge = await writes.create_er_draft(db, user, draft_id, body)
+    await db.commit()
+    return edge
+
+
+@router.put("/application-link-drafts/{draft_id}", response_model=BoApplicationLink)
+async def create_application_link_draft(
+    draft_id: uuid.UUID,
+    body: BoApplicationLinkDraft,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_permission("boRelationship.edit")),
+):
+    link = await writes.create_application_link_draft(db, user, draft_id, body)
+    await db.commit()
+    return link
+
+
+@router.delete("/relations/{relation_id}", status_code=204)
+async def delete_er_relation(
+    relation_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_permission("boRelationship.edit")),
+):
+    await writes.delete_er_relation(db, user, relation_id)
+    await db.commit()
+
+
+@router.put("/objects/{object_id}/master", response_model=BoApplicationGroup)
+async def update_master(
+    object_id: uuid.UUID,
+    body: BoMasterUpdate,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_permission("boRelationship.edit")),
+):
+    grouping = await service.set_bo_master(db, user, object_id, body.application_id)
+    await db.commit()
+    return grouping
+
+
+@router.get("/objects/{object_id}/detail", response_model=BoDetail)
+async def get_object_detail(
+    object_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    read_scope = await service.bo_read_scope(db, user)
+    card = await service.get_bo_card(db, read_scope, object_id, detail=True)
+    response = await card_detail_response(db, user, card)
+    await redact_bo_card_references(db, user, card, response, read_scope)
+    effective = (await PermissionService.get_effective_card_permissions(db, user, object_id))[
+        "effective"
+    ]
+    may_edit = await PermissionService.has_app_permission(db, user, "boRelationship.edit")
+    permissions = {key: may_edit and value for key, value in effective.items()}
+    permissions["can_view"] = True
+    permissions["can_view_costs"] = effective["can_view_costs"]
+    return BoDetail(card=response, permissions=permissions)
+
+
+@router.get("/applications", response_model=BoApplicationPage)
+async def search_applications(
+    search: str | None = Query(None, max_length=200),
+    page: int = Query(1, ge=1, le=10_000),
+    page_size: int = Query(20, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_permission("boRelationship.edit")),
+):
+    return await service.search_bo_applications(db, user, search, page, page_size)

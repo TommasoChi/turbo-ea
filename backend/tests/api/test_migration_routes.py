@@ -16,10 +16,21 @@ from sqlalchemy import select
 import app.api.v1.migration as migration_api
 from app.core.permissions import VIEWER_PERMISSIONS
 from app.models.card import Card
-from app.models.migration import Migration, StagedRecord
+from app.models.migration import IdentityMap, Migration, StagedRecord
+from app.models.relation import Relation
+from app.services.bo_relationship_constants import APPLICATION_RELATION, BO_TYPE
 from app.services.migration.registry import register_source
-from app.services.migration.snapshot import MetamodelField
-from tests.conftest import auth_headers, create_role, create_user
+from app.services.migration.snapshot import MetamodelField, SourceEntity
+from app.services.migration.snapshot import Relation as SourceRelation
+from tests.conftest import (
+    auth_headers,
+    create_card,
+    create_card_type,
+    create_relation,
+    create_relation_type,
+    create_role,
+    create_user,
+)
 from tests.migration_helpers import (
     InMemorySource,
     make_migration,
@@ -168,6 +179,86 @@ class TestUpload:
         assert stats["documents"]["create"] == 1 and stats["comments"]["create"] == 1
         assert stats["parse_errors"] == 0
         assert len(await _staged_records(db, body["id"])) > 7
+
+    async def test_upload_stages_crud_without_importing_master_designations(self, client, db, env):
+        await create_card_type(db, key=BO_TYPE, label="Business Object")
+        await create_relation_type(
+            db, key=APPLICATION_RELATION, source_type_key="Application", target_type_key=BO_TYPE
+        )
+        app = await create_card(db, name="Salesforce", user_id=env["admin"].id)
+        obj = await create_card(db, card_type=BO_TYPE, name="Account", user_id=env["admin"].id)
+        for source_id, card in (("app-1", app), ("obj-1", obj)):
+            db.add(
+                IdentityMap(
+                    source_id=source_id, source_type="inmem", entity_kind="card", target_id=card.id
+                )
+            )
+        master = await create_relation(
+            db,
+            type_key=APPLICATION_RELATION,
+            source_id=app.id,
+            target_id=obj.id,
+            attributes={"dataOwnership": "master"},
+        )
+        await db.commit()
+
+        native_type = "applicationDataObjectRelation"
+        env["source"].type_mapping[BO_TYPE] = BO_TYPE
+        env["source"].relation_mapping[native_type] = APPLICATION_RELATION
+        env["snapshot"].entities.append(
+            SourceEntity(source_id="obj-1", type=BO_TYPE, name="Account")
+        )
+        env["snapshot"].relations.extend(
+            [
+                SourceRelation(
+                    "kept-master", native_type, "app-1", "obj-1", {"dataOwnership": None}
+                ),
+                SourceRelation(
+                    "new-crud",
+                    native_type,
+                    "app-2",
+                    "obj-1",
+                    {"dataOwnership": "master", "crudRead": True},
+                ),
+                SourceRelation(
+                    "missing-bo", native_type, "app-2", "absent", {"dataOwnership": "master"}
+                ),
+            ]
+        )
+        env["snapshot"].relations[3].attributes["dataOwnership"] = "ordinary value"
+
+        uploaded = await _upload(client, env["admin"])
+        assert uploaded.status_code == 201, uploaded.text
+        mid = uploaded.json()["id"]
+        headers = auth_headers(env["admin"])
+        preview = await client.get(f"{BASE}/{mid}/preview?entity_kind=relation", headers=headers)
+        assert preview.status_code == 200, preview.text
+        rows = {r["source_id"]: r for r in preview.json()["items"]}
+        assert rows["kept-master"]["action"] == "skip"
+        assert rows["kept-master"]["diff"] is None
+        assert rows["new-crud"]["action"] == "create"
+        assert rows["missing-bo"]["action"] == "conflict"
+
+        staged = {r.source_id: r for r in await _staged_records(db, mid)}
+        assert staged["kept-master"].source_data["attributes"] == {}
+        assert staged["new-crud"].source_data["attributes"] == {"crudRead": True}
+        assert staged["missing-bo"].source_data["attributes"] == {}
+        assert staged["rel-4"].source_data["attributes"]["dataOwnership"] == "ordinary value"
+
+        applied = await client.post(f"{BASE}/{mid}/apply", headers=headers)
+        assert applied.status_code == 202, applied.text
+        result = await _get(client, env["admin"], mid)
+        assert result["status"] == "applied" and result["stats"]["apply"]["errors"] == 0
+        links = (
+            await db.scalars(select(Relation).where(Relation.type == APPLICATION_RELATION))
+        ).all()
+        assert len(links) == 2
+        by_source = {link.source_id: link for link in links}
+        crm = await db.scalar(select(Card).where(Card.name == "New CRM"))
+        assert by_source[app.id].id == master.id
+        assert by_source[app.id].attributes == {"dataOwnership": "master"}
+        assert by_source[crm.id].target_id == obj.id
+        assert by_source[crm.id].attributes == {"crudRead": True}
 
     async def test_the_same_bytes_return_the_existing_migration(self, client, db, env):
         first = (await _upload(client, env["admin"])).json()

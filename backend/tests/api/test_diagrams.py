@@ -550,3 +550,78 @@ class TestDiagramEvents:
         assert result["status"] == "ok"
         gone = await client.get(f"{DIAGRAMS}/{did}", headers=auth_headers(admin))
         assert gone.status_code == 404
+
+
+@pytest.mark.parametrize(
+    "method,path,body",
+    [
+        ("GET", "", None),
+        ("PATCH", "", {"name": "changed"}),
+        ("DELETE", "", None),
+        ("POST", "/favorite", None),
+        ("POST", "/publish", {"access_mode": "public"}),
+        ("DELETE", "/publish", None),
+        ("POST", "/cards", {"card_id": "00000000-0000-0000-0000-000000000001"}),
+        ("PUT", "/groups", {"group_ids": []}),
+    ],
+)
+async def test_private_bo_diagram_direct_routes_are_hidden(
+    client, db, diagrams_env, method, path, body
+):
+    diagram = Diagram(name="Private BO", kind="boRelationship", data={"positions": {}})
+    db.add(diagram)
+    await db.flush()
+    await create_card_type(db, key="Application")
+    card = await create_card(db, card_type="Application", name="Visible")
+    if path == "/cards":
+        body = {"card_id": str(card.id)}
+    response = await client.request(
+        method,
+        f"/api/v1/diagrams/{diagram.id}{path}",
+        json=body,
+        headers=auth_headers(diagrams_env["admin"]),
+    )
+    assert response.status_code == 404
+
+
+async def test_private_bo_diagram_hidden_from_all_list(client, db, diagrams_env):
+    diagram = Diagram(name="Private BO", kind="boRelationship", data={"positions": {}})
+    db.add(diagram)
+    await db.flush()
+    response = await client.get(
+        "/api/v1/diagrams?kind=all", headers=auth_headers(diagrams_env["admin"])
+    )
+    assert response.status_code == 200
+    assert str(diagram.id) not in [d["id"] for d in response.json()]
+
+
+async def test_private_bo_diagram_stale_associations_are_hidden(client, db, diagrams_env):
+    from app.models.diagram_favorite import DiagramFavorite
+    from app.models.diagram_group import DiagramGroup, diagram_group_members
+
+    admin = diagrams_env["admin"]
+    diagram = Diagram(name="Private BO", kind="boRelationship", data={"positions": {}})
+    group = DiagramGroup(name="Group")
+    await create_card_type(db, key="Application")
+    card = await create_card(db, card_type="Application", name="Visible")
+    db.add_all([diagram, group])
+    await db.flush()
+    db.add(DiagramFavorite(user_id=admin.id, diagram_id=diagram.id))
+    await db.execute(diagram_cards.insert().values(diagram_id=diagram.id, card_id=card.id))
+    await db.execute(
+        diagram_group_members.insert().values(diagram_id=diagram.id, group_id=group.id)
+    )
+    await db.flush()
+    headers = auth_headers(admin)
+    assert (
+        str(diagram.id)
+        not in (await client.get("/api/v1/diagrams/favorites", headers=headers)).json()
+    )
+    assert (
+        await client.delete(f"/api/v1/diagrams/{diagram.id}/favorite", headers=headers)
+    ).status_code == 404
+    assert (
+        await client.delete(f"/api/v1/diagrams/{diagram.id}/cards/{card.id}", headers=headers)
+    ).status_code == 404
+    groups = (await client.get("/api/v1/diagram-groups", headers=headers)).json()
+    assert next(g for g in groups if g["id"] == str(group.id))["diagram_count"] == 0

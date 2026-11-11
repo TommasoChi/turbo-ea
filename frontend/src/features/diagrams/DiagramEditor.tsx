@@ -48,6 +48,7 @@ import {
   getGroupChildRelationIds,
   refreshCardOverlays,
   insertPendingCard,
+  setPendingCardSubtype,
   stampEdgeAsRelation,
   markCellSynced,
   markEdgeSynced,
@@ -111,8 +112,8 @@ import type {
   RemovedRelationTombstone,
 } from "./drawio-shapes";
 import { edgeIncoming, groupRelationsByOtherCard, pruneDeletedRelations } from "./expandChildren";
-import { relationCreatePayload } from "./relationSync";
-import { cardCreatePayload } from "./cardSync";
+import { relationCreatePayload, storedRelationReversed } from "./relationSync";
+import { cardCreatePayload, canSyncPendingCard, syncAllMessageKey } from "./cardSync";
 import ExpandMenu from "./ExpandMenu";
 import type { ExpandMenuPick, ExpandMenuTarget } from "./ExpandMenu";
 import ColorBySelector from "./ColorBySelector";
@@ -2305,6 +2306,7 @@ export default function DiagramEditor() {
           typeColor: typeInfo?.color || "#999",
           name: p.name,
           description: p.description,
+          subtype: p.subtype,
         };
       }),
     );
@@ -2331,7 +2333,7 @@ export default function DiagramEditor() {
 
   /* ---------- Create new (pending) card ---------- */
   const handleCreateCard = useCallback(
-    (data: { type: string; name: string; description?: string }) => {
+    (data: { type: string; name: string; description?: string; subtype?: string }) => {
       const frame = iframeRef.current;
       if (!frame) return;
 
@@ -2348,6 +2350,7 @@ export default function DiagramEditor() {
           type: data.type,
           name: data.name,
           description: data.description,
+          subtype: data.subtype,
           color,
           icon: typeInfo?.icon,
         });
@@ -2380,6 +2383,7 @@ export default function DiagramEditor() {
         type: data.type,
         name: data.name,
         description: data.description,
+        subtype: data.subtype,
         color,
         icon: typeInfo?.icon,
         x,
@@ -2458,7 +2462,7 @@ export default function DiagramEditor() {
       const frame = iframeRef.current;
       if (!frame) return;
       const item = pendingCards.find((p) => p.cellId === cellId);
-      if (!item) return;
+      if (!item || !canSyncPendingCard(item, fsTypesRef.current.find((t) => t.key === "DataObject")?.subtypes || [])) return;
 
       setSyncing(true);
       try {
@@ -2526,7 +2530,7 @@ export default function DiagramEditor() {
         markEdgeSynced(
           frame,
           edgeCellId,
-          rel.reversed,
+          storedRelationReversed(rel, created),
           created.id,
           hideRelationLabelsRef.current,
         );
@@ -2567,6 +2571,7 @@ export default function DiagramEditor() {
       // 1. Sync all pending cards first
       const { pendingCards: pfs } = scanDiagramItems(frame);
       for (const p of pfs) {
+        if (!canSyncPendingCard(p, fsTypesRef.current.find((t) => t.key === "DataObject")?.subtypes || [])) continue;
         const typeInfo = fsTypesRef.current.find((t) => t.key === p.type);
         try {
           const resp = await api.post<Card>("/cards", cardCreatePayload(p));
@@ -2601,7 +2606,7 @@ export default function DiagramEditor() {
           markEdgeSynced(
             frame,
             r.edgeCellId,
-            r.reversed,
+            storedRelationReversed(r, created),
             created.id,
             hideRelationLabelsRef.current,
           );
@@ -2656,7 +2661,7 @@ export default function DiagramEditor() {
       if (parentChanges.length > 0) setPendingParentChanges([]);
 
       refreshSyncPanel();
-      setSnackMsg(t("editor.syncComplete"));
+      setSnackMsg(t(syncAllMessageKey(pfs, fsTypesRef.current.find((type) => type.key === "DataObject")?.subtypes || [])));
     } finally {
       setSyncing(false);
     }
@@ -3914,6 +3919,11 @@ export default function DiagramEditor() {
         open={syncOpen}
         onClose={() => setSyncOpen(false)}
         pendingCards={pendingCards}
+        dataObjectSubtypes={fsTypes.find((t) => t.key === "DataObject")?.subtypes || []}
+        onSetSubtype={(cellId, subtype) => {
+          const frame = iframeRef.current;
+          if (frame && setPendingCardSubtype(frame, cellId, subtype)) refreshSyncPanel();
+        }}
         pendingRels={pendingRels}
         pendingRelRemovals={pendingRelRemovals}
         pendingParentChanges={pendingParentChanges}

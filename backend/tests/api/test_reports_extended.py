@@ -227,6 +227,39 @@ class TestLandscape:
 
 
 class TestPortfolio:
+    async def test_portfolio_does_not_expose_bo_ownership(self, client, db, env):
+        await create_card_type(db, key="DataObject")
+        await create_relation_type(
+            db,
+            key="relAppToDataObj",
+            source_type_key="Application",
+            target_type_key="DataObject",
+            attributes_schema=[
+                {"key": "dataOwnership", "type": "single_select"},
+                {"key": "crudRead", "type": "boolean"},
+            ],
+        )
+        app = await create_card(db, card_type="Application", name="CRM")
+        obj = await create_card(db, card_type="DataObject", name="Customer")
+        await create_relation(
+            db,
+            type_key="relAppToDataObj",
+            source_id=app.id,
+            target_id=obj.id,
+            attributes={"dataOwnership": "master", "crudRead": True},
+        )
+
+        response = await client.get(
+            "/api/v1/reports/app-portfolio",
+            params={"type": "Application"},
+            headers=auth_headers(env["admin"]),
+        )
+        assert response.status_code == 200, response.text
+        data = response.json()
+        assert data["items"][0]["relations"][0]["attributes"] == {"crudRead": True}
+        relation_type = next(rt for rt in data["relation_types"] if rt["key"] == "relAppToDataObj")
+        assert [field["key"] for field in relation_type["attributes_schema"]] == ["crudRead"]
+
     async def test_portfolio_empty(self, client, db, env):
         """Portfolio returns empty items list with no cards."""
         resp = await client.get(
@@ -588,6 +621,43 @@ class TestMatrixRelationSemantics:
 
         attr_idx = _cell(data, e["app_a"].id, e["do_x"].id)["e"][0][2]
         assert data["attr_sets"][attr_idx] == {"usage": "user"}
+
+    async def test_matrix_does_not_expose_or_filter_the_bo_master_marker(
+        self, client, db, matrix_env
+    ):
+        e = matrix_env
+        await create_relation_type(
+            db,
+            key="relAppToDataObj",
+            source_type_key="Application",
+            target_type_key="DataObject",
+            attributes_schema=[
+                {"key": "dataOwnership", "type": "single_select"},
+                {"key": "crudRead", "type": "boolean"},
+            ],
+        )
+        await create_relation(
+            db,
+            type_key="relAppToDataObj",
+            source_id=e["app_a"].id,
+            target_id=e["do_x"].id,
+            attributes={"dataOwnership": "master", "crudRead": True},
+        )
+
+        data = await _matrix(client, e["admin"])
+        attr_idx = _cell(data, e["app_a"].id, e["do_x"].id)["e"][0][2]
+        assert data["attr_sets"][attr_idx] == {"crudRead": True}
+
+        response = await client.get(
+            "/api/v1/reports/matrix",
+            params={
+                "row_type": "Application",
+                "col_type": "DataObject",
+                "attr": "relAppToDataObj.dataOwnership:master",
+            },
+            headers=auth_headers(e["admin"]),
+        )
+        assert response.status_code == 400
 
     async def test_self_matrix_diagonal_carries_no_edges(self, client, db, env):
         """The diagonal of a same-type matrix is structure, not a relationship."""

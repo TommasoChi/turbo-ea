@@ -9,19 +9,25 @@ import TableBody from "@mui/material/TableBody";
 import TableCell from "@mui/material/TableCell";
 import TableRow from "@mui/material/TableRow";
 import { useTranslation } from "react-i18next";
+import { useId } from "react";
 import { EDITOR_SHORTCUTS } from "./engine/keyboardConfig";
 
-interface Props { open: boolean; onClose: () => void }
+interface Props {
+  open: boolean;
+  onClose: () => void;
+  actions?: ReadonlySet<string>;
+}
 
-export default function ShortcutsDialog({ open, onClose }: Props) {
+export default function ShortcutsDialog({ open, onClose, actions }: Props) {
   const { t } = useTranslation(["archimate", "common"]);
+  const titleId = useId();
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth>
-      <DialogTitle>{t("archimate:shortcuts.title")}</DialogTitle>
+    <Dialog open={open} onClose={onClose} aria-labelledby={titleId} maxWidth="xs" fullWidth>
+      <DialogTitle id={titleId}>{t("archimate:shortcuts.title")}</DialogTitle>
       <DialogContent>
         <Table size="small">
           <TableBody>
-            {Object.entries(EDITOR_SHORTCUTS).map(([action, keys]) => (
+            {Object.entries(EDITOR_SHORTCUTS).filter(([action]) => !actions || actions.has(action)).map(([action, keys]) => (
               <TableRow key={action}>
                 <TableCell>{t(`archimate:shortcuts.${action}`)}</TableCell>
                 <TableCell sx={{ fontFamily: "monospace" }}>{keys}</TableCell>

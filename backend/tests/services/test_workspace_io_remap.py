@@ -10,6 +10,13 @@ import uuid
 
 import pytest
 
+from app.services.bo_relationship_constants import (
+    APPLICATION_RELATION,
+    APPLICATION_TYPE,
+    BO_RELATIONSHIP_KIND,
+    BO_TYPE,
+    ER_RELATION,
+)
 from app.services.compliance_scanner import compute_finding_key
 from app.services.workspace_io import remap as rm
 
@@ -36,6 +43,243 @@ def _ids() -> rm.IdMap:
 
 def _ctx(**kw) -> rm.RemapContext:
     return rm.RemapContext(ids=kw.pop("ids", _ids()), **kw)
+
+
+def test_bo_snapshot_keeps_verified_links_before_their_nodes_are_accepted():
+    old_link, new_link = str(uuid.uuid4()), str(uuid.uuid4())
+    ids = _ids()
+    ids.record(rm.CARDS, OLD_C, NEW_C)
+    ids.record(rm.RELATIONS, old_link, new_link)
+    ctx = _ctx(
+        ids=ids,
+        card_types={NEW_A: BO_TYPE, NEW_B: BO_TYPE, NEW_C: APPLICATION_TYPE},
+        relation_details={
+            NEW_REL: (ER_RELATION, NEW_A, NEW_B),
+            new_link: (APPLICATION_RELATION, NEW_C, NEW_A),
+        },
+    )
+    row = {
+        "kind": BO_RELATIONSHIP_KIND,
+        "data": {
+            "nodes": {},
+            "edges": {
+                OLD_REL: {"id": OLD_REL, "source": OLD_A, "target": OLD_B, "cardinality": "1:n"}
+            },
+            "application_links": {
+                old_link: {
+                    "id": old_link,
+                    "object_id": OLD_A,
+                    "application": {"id": OLD_C, "name": "CRM"},
+                    "is_master": True,
+                }
+            },
+            "positions": {},
+        },
+    }
+    tally = rm.rewrite_diagram_row(row, ctx)
+
+    assert row["data"]["nodes"] == {}
+    assert row["data"]["edges"] == {
+        NEW_REL: {"id": NEW_REL, "source": NEW_A, "target": NEW_B, "cardinality": "1:n"}
+    }
+    assert row["data"]["application_links"] == {
+        new_link: {
+            "id": new_link,
+            "object_id": NEW_A,
+            "application": {"id": NEW_C, "name": "CRM"},
+            "is_master": True,
+        }
+    }
+    assert tally.counts == {rm.REMAPPED: 2}
+
+
+def test_bo_snapshot_preserves_valid_nodes_and_positions_after_rejected_entries():
+    ctx = _ctx(card_types={NEW_A: BO_TYPE, NEW_B: APPLICATION_TYPE})
+    revision = str(uuid.uuid4())
+    row = {
+        "data": {
+            "snapshot_revision": revision,
+            "nodes": {
+                OLD_B: {"id": OLD_B, "name": "Wrong card type"},
+                OLD_C: {"id": OLD_C, "name": "Missing card"},
+                OLD_A: {"id": OLD_A, "name": "Customer"},
+            },
+            "positions": {OLD_B: {"x": 1, "y": 2}, OLD_A: {"x": 3.5, "y": -2}},
+        }
+    }
+
+    tally = rm.rewrite_bo_snapshot(row, ctx)
+
+    assert row["data"]["nodes"] == {NEW_A: {"id": NEW_A, "name": "Customer"}}
+    assert row["data"]["positions"] == {NEW_A: {"x": 3.5, "y": -2}}
+    imported_revision = uuid.UUID(row["data"]["snapshot_revision"])
+    assert imported_revision.version == 4
+    assert str(imported_revision) != revision
+    assert tally.counts == {rm.UNRESOLVED: 3, rm.REMAPPED: 1}
+    assert tally.messages == ["BO diagram reference not found on destination"] * 3
+
+
+@pytest.mark.parametrize(
+    ("cardinality", "reversed_cardinality"), [("1:n", "n:1"), ("n:1", "1:n"), ("1:1", "1:1")]
+)
+def test_bo_snapshot_flips_asymmetric_cardinality_in_destination_direction(
+    cardinality, reversed_cardinality
+):
+    ctx = _ctx(
+        card_types={NEW_A: BO_TYPE, NEW_B: BO_TYPE},
+        relation_details={NEW_REL: (ER_RELATION, NEW_B, NEW_A)},
+    )
+    row = {
+        "data": {"edges": {OLD_REL: {"source": OLD_A, "target": OLD_B, "cardinality": cardinality}}}
+    }
+
+    assert rm.rewrite_bo_snapshot(row, ctx).counts == {rm.REMAPPED: 1}
+    assert row["data"]["edges"] == {
+        NEW_REL: {
+            "id": NEW_REL,
+            "source": NEW_B,
+            "target": NEW_A,
+            "cardinality": reversed_cardinality,
+        }
+    }
+
+
+def test_bo_snapshot_rejects_unverified_edges_and_application_links_before_valid_ones():
+    old_app, new_app = str(uuid.uuid4()), str(uuid.uuid4())
+    old_link, new_link = str(uuid.uuid4()), str(uuid.uuid4())
+    ids = _ids()
+    ids.record(rm.CARDS, old_app, new_app)
+    ids.record(rm.CARDS, OLD_C, NEW_C)
+    ids.record(rm.RELATIONS, old_link, new_link)
+    ctx = _ctx(
+        ids=ids,
+        card_types={NEW_A: BO_TYPE, NEW_B: BO_TYPE, NEW_C: BO_TYPE, new_app: APPLICATION_TYPE},
+        relation_details={
+            NEW_REL: (ER_RELATION, NEW_A, NEW_B),
+            new_link: (APPLICATION_RELATION, new_app, NEW_A),
+        },
+    )
+    edges = {}
+    for details, source, target in [
+        (None, OLD_A, OLD_B),
+        ((APPLICATION_RELATION, NEW_A, NEW_B), OLD_A, OLD_B),
+        ((ER_RELATION, NEW_A, NEW_C), OLD_A, OLD_B),
+        ((ER_RELATION, NEW_A, NEW_B), old_app, OLD_B),
+        ((ER_RELATION, NEW_A, NEW_B), OLD_A, old_app),
+    ]:
+        old, new = str(uuid.uuid4()), str(uuid.uuid4())
+        ids.record(rm.RELATIONS, old, new)
+        if details is not None:
+            ctx.relation_details[new] = details
+        edges[old] = {"source": source, "target": target}
+    edges[str(uuid.uuid4())] = {"source": OLD_A, "target": OLD_B}
+    edges[OLD_REL] = {"source": OLD_A, "target": OLD_B}
+
+    links = {}
+    for details, obj, app in [
+        ((APPLICATION_RELATION, new_app, NEW_A), OLD_A, OLD_B),
+        ((APPLICATION_RELATION, new_app, NEW_A), old_app, old_app),
+        ((APPLICATION_RELATION, new_app, NEW_B), OLD_A, old_app),
+        ((ER_RELATION, new_app, NEW_A), OLD_A, old_app),
+    ]:
+        old, new = str(uuid.uuid4()), str(uuid.uuid4())
+        ids.record(rm.RELATIONS, old, new)
+        ctx.relation_details[new] = details
+        links[old] = {"object_id": obj, "application": {"id": app}}
+    links[str(uuid.uuid4())] = {"object_id": OLD_A, "application": {"id": old_app}}
+    links[old_link] = {"object_id": OLD_A, "application": {"id": old_app, "name": "CRM"}}
+    row = {"data": {"edges": edges, "application_links": links}}
+
+    tally = rm.rewrite_bo_snapshot(row, ctx)
+
+    assert set(row["data"]["edges"]) == {NEW_REL}
+    assert row["data"]["application_links"] == {
+        new_link: {
+            "id": new_link,
+            "object_id": NEW_A,
+            "application": {"id": new_app, "name": "CRM"},
+        }
+    }
+    assert tally.counts == {rm.UNRESOLVED: 11, rm.REMAPPED: 2}
+
+
+def test_bo_snapshot_remaps_route_only_and_geometry_only_links_in_destination_direction():
+    old_route, new_route = str(uuid.uuid4()), str(uuid.uuid4())
+    old_geometry, new_geometry = str(uuid.uuid4()), str(uuid.uuid4())
+    ids = _ids()
+    ids.record(rm.RELATIONS, old_route, new_route)
+    ids.record(rm.RELATIONS, old_geometry, new_geometry)
+    ctx = _ctx(
+        ids=ids,
+        card_types={NEW_A: BO_TYPE, NEW_B: BO_TYPE},
+        relation_details={
+            NEW_REL: (ER_RELATION, NEW_B, NEW_A),
+            new_route: (ER_RELATION, NEW_A, NEW_B),
+            new_geometry: (ER_RELATION, NEW_B, NEW_A),
+        },
+        source_er_ends={old_route: (NEW_A, NEW_B), old_geometry: (NEW_A, NEW_B)},
+    )
+    geometry = {
+        "source": {"x": 1, "y": 2},
+        "target": {"x": 3, "y": 4},
+        "bends": [{"x": 5, "y": 6}, {"x": 7, "y": 8}],
+    }
+    row = {
+        "data": {
+            "edges": {OLD_REL: {"source": OLD_A, "target": OLD_B}},
+            "edge_routes": {OLD_REL: "orthogonal", old_route: "straight"},
+            "edge_geometry": {old_geometry: geometry},
+        }
+    }
+
+    tally = rm.rewrite_bo_snapshot(row, ctx)
+
+    assert row["data"]["edge_routes"] == {NEW_REL: "orthogonal", new_route: "straight"}
+    assert row["data"]["edge_geometry"] == {
+        new_geometry: {
+            "source": geometry["target"],
+            "target": geometry["source"],
+            "bends": geometry["bends"][::-1],
+        }
+    }
+    assert tally.counts == {rm.REMAPPED: 3}
+
+
+def test_bo_snapshot_drops_layout_for_unverified_relation_ends():
+    ctx = _ctx(
+        card_types={NEW_A: BO_TYPE, NEW_B: BO_TYPE},
+        relation_details={NEW_REL: (ER_RELATION, NEW_A, NEW_B)},
+        source_er_ends={OLD_REL: (NEW_A, NEW_B)},
+    )
+    routes = {OLD_REL: "straight"}
+    for details, ends in [
+        ((ER_RELATION, NEW_A, NEW_B), (NEW_A, NEW_C)),
+        ((ER_RELATION, NEW_A, NEW_B), (NEW_B, NEW_C)),
+        ((APPLICATION_RELATION, NEW_A, NEW_B), (NEW_A, NEW_B)),
+        (None, (NEW_A, NEW_B)),
+        ((ER_RELATION, NEW_A, NEW_B), None),
+    ]:
+        old, new = str(uuid.uuid4()), str(uuid.uuid4())
+        ctx.ids.record(rm.RELATIONS, old, new)
+        routes[old] = "orthogonal"
+        if details is not None:
+            ctx.relation_details[new] = details
+        if ends is not None:
+            ctx.source_er_ends[old] = ends
+    routes[str(uuid.uuid4())] = "straight"
+    row = {
+        "data": {
+            # Reject this visible edge and its route even though the bundle relation is valid.
+            "edges": {OLD_REL: {"source": OLD_A, "target": OLD_C}},
+            "edge_routes": routes,
+        }
+    }
+
+    tally = rm.rewrite_bo_snapshot(row, ctx)
+
+    assert row["data"]["edges"] == {}
+    assert "edge_routes" not in row["data"]
+    assert tally.counts == {rm.UNRESOLVED: 8}
 
 
 # ── canonical_uuid / IdMap ──────────────────────────────────────────────────

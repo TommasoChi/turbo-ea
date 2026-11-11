@@ -19,6 +19,8 @@ The export captures the full workspace as a `.zip` bundle containing one Excel w
 - **Module data** — BPM (process diagrams, elements, flow versions, assessments), PPM (status reports, costs, budgets, risks, tasks, WBS, dependencies), the GRC risk register (risks, mitigation tasks and occurrences, card links), GRC compliance findings (with the analysis runs they reference), architecture decisions and Statements of Architecture Work, free-draw diagrams, saved reports, bookmarks (saved inventory views, including their shares), web portals, and surveys.
 - **Assets** — binary file attachments, diagram and BPMN XML, and the logo/favicon travel as separate files inside the bundle's `assets/` folder.
 
+The **Diagrams** section also carries the saved **BO Relationship** drawing. The import keeps node positions when cards and relations receive new IDs on the target. Drafts stay in the editor's browser. Queued inventory removals stay in the original editing session.
+
 ## What's never included
 
 For security, **secrets are never exported**:
@@ -49,6 +51,8 @@ A few other things stay behind by design:
 4. Review the preview, then click **Apply import**.
 
 Import is **idempotent**: metamodel and configuration are matched by key, cards by external id or by type + hierarchy path, and users by email. Re-importing the same bundle is safe — already-present entities are skipped rather than duplicated. Existing built-in metamodel types keep their identity; only their editable schema is merged. This also holds for archived cards included in the bundle: they are recognised rather than created again.
+
+The first import of a saved **BO Relationship** drawing can fill a target that has never saved its drawing. If the target already has a saved drawing, including one saved empty, the import keeps the target drawing and positions. Check the **References** breakdown for BOs or links the import could not resolve. If the target already has a different Master for a BO, the Relations results report the conflict and the new link keeps its CRUD settings.
 
 ### Reading the preview
 

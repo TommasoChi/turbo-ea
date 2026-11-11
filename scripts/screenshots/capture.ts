@@ -20,6 +20,7 @@
 import { chromium, type Browser, type Page } from "playwright";
 import * as path from "path";
 import * as fs from "fs";
+import { fileURLToPath } from "node:url";
 import {
   DOC_PAGES,
   MARKETING_PAGES,
@@ -140,7 +141,7 @@ Environment variables:
 
 function getProjectRoot(): string {
   // Walk up from this script to find VERSION file
-  let dir = path.dirname(new URL(import.meta.url).pathname);
+  let dir = path.dirname(fileURLToPath(import.meta.url));
   for (let i = 0; i < 10; i++) {
     if (fs.existsSync(path.join(dir, "VERSION"))) return dir;
     dir = path.dirname(dir);

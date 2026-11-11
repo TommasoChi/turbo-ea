@@ -42,8 +42,13 @@ def test_access_defaults_say_how_to_derive_the_access_type():
         assert ("access" in d) == (d["type"] == "Access"), key
 
 
-def test_the_migration_embeds_exactly_the_module_defaults():
+def test_migration_158_embeds_the_defaults_for_its_metamodel():
     assert mig.CARD_TYPE_DEFAULTS == dm.CARD_TYPE_DEFAULTS
     assert mig.SUBTYPE_DEFAULTS == dm.SUBTYPE_DEFAULTS
-    assert mig.RELATION_DEFAULTS == dm.RELATION_DEFAULTS
+    # Migration 180 creates the ER relation and seeds its mapping on upgrade.
+    assert mig.RELATION_DEFAULTS == {
+        key: default
+        for key, default in dm.RELATION_DEFAULTS.items()
+        if key != "relDataObjectToDataObject"
+    }
     assert mig.SUCCESSOR_DEFAULT == dm.SUCCESSOR_DEFAULT

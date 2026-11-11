@@ -19,6 +19,8 @@ The top of the card shows:
 
 ![Data quality breakdown panel](../assets/img/en/63_card_data_quality_breakdown.png)
 
+When you create a **Data Object**, choose one of the subtypes configured for that card type. The same choice is available when you create a Data Object from the hierarchy, a predecessor or successor, an inventory relation cell, or an ArchiMate element.
+
 When an administrator turns on [TurboRPG](../admin/settings.md#turborpg-gamified-data-quality) mode (gamified data quality), every save that raises the score is celebrated like gaining health in a game: a glowing **+X%** leaves the section you just saved, flies to the score and hits it — the ring flashes and glows, its fill grows to the new score and the figure counts up. Once you scroll past the header, a slim score bar pinned under the top bar keeps the score in view and the gain lands on it instead. Click the bar's score — the chip with the chevron — to open the same breakdown as the ring. Reaching the green band (80%) and reaching 100% are milestones with a short burst of confetti. Clearing or removing data plays the toned-down reverse: a red **−X%** flies off the score back to the section, and the bar drains and counts down, with no flash or confetti. With reduced motion turned on in your operating system nothing flies; you see a static **+X%** or **−X%** instead.
 
 - **Actions menu** — Archive, delete, and approval actions. Also includes a one-click **Observe this card** toggle (when the card type defines an Observer role) so any user with view access can follow the card without going through the Stakeholders tab.

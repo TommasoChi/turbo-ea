@@ -11,7 +11,7 @@
 import type { SxProps, Theme } from "@mui/material/styles";
 import { ARCHIMATE_TEXT_COLOR } from "@/theme/tokens";
 
-export function archimateCanvasSx(theme: Theme): SxProps<Theme> {
+export function archimateCanvasSx(theme: Theme, showGrid = false): SxProps<Theme> {
   const { palette } = theme;
   const tokens = {
     "--canvas-fill-color": palette.background.default,
@@ -34,6 +34,10 @@ export function archimateCanvasSx(theme: Theme): SxProps<Theme> {
     "& .bjs-powered-by": { display: "none" },
     "& .bio-theme-parent, & .djs-parent": tokens,
     "& .djs-container, & .djs-container svg": { backgroundColor: palette.background.default },
+    "& .djs-container > svg": {
+      backgroundImage: showGrid ? `radial-gradient(${palette.divider} 0.85px, transparent 0.85px)` : "none",
+      backgroundSize: "15px 15px",
+    },
     // Compact palette: three columns of 22px entries, scrolling when the canvas is short.
     "& .djs-palette, & .djs-palette.two-column.open": { width: 100, maxHeight: "calc(100% - 40px)", overflowX: "hidden", overflowY: "auto" },
     "& .archimate-palette-label": {

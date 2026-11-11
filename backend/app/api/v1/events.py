@@ -136,6 +136,7 @@ async def list_my_card_events(
     favorite_cards = select(UserFavorite.card_id).where(UserFavorite.user_id == user.id)
     stakeholder_cards = select(Stakeholder.card_id).where(Stakeholder.user_id == user.id).distinct()
     relevant_card_ids = union(favorite_cards, stakeholder_cards).subquery()
+    read_scope = await CardReadScope.load(db, user, include_subtype_denials=True)
 
     q = (
         select(Event)
@@ -143,7 +144,7 @@ async def list_my_card_events(
         .where(Event.card_id.in_(select(relevant_card_ids.c.card_id)))
         # Same activity-feed rule as the dashboard's: no event about a card,
         # or naming a peer, hidden from the reader.
-        .where(*event_read_filters(await CardReadScope.load(db, user)))
+        .where(*event_read_filters(read_scope))
         .order_by(Event.created_at.desc())
         .limit(limit)
     )
@@ -165,9 +166,7 @@ async def list_my_card_events(
             return name_by_card_id.get(e.card_id)
         return None
 
-    payloads = await scrub_event_payloads(
-        db, await CardReadScope.load(db, user), [e.data for e in events_list]
-    )
+    payloads = await scrub_event_payloads(db, read_scope, [e.data for e in events_list])
     payloads = await redact_cost_events(db, user, events_list, payloads)
     return [
         {

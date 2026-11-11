@@ -46,6 +46,7 @@ import {
   makeCardType,
   makeField,
   makeOption,
+  makeRelationType,
   makeSection,
 } from "@/test/fixtures/metamodel";
 import { exportCurrentViewToExcel, exportToExcel } from "./excelExport";
@@ -1030,6 +1031,57 @@ describe("InventoryPage mass edit — relations", () => {
 });
 
 describe("InventoryPage mass edit — relation attributes (#1293)", () => {
+  it("edits a reverse BO link in its stored direction and keeps its other details", async () => {
+    const a = makeCard({ type: "DataObject", name: "Customer" });
+    const b = makeCard({ type: "DataObject", name: "Order" });
+    const boType = makeCardType({ key: "DataObject", label: "Data Object" });
+    const erType = makeRelationType({
+      key: "relDataObjectToDataObject",
+      source_type_key: "DataObject",
+      target_type_key: "DataObject",
+      attributes_schema: [
+        makeField({
+          key: "cardinality",
+          label: "Cardinality",
+          type: "single_select",
+          options: [makeOption({ key: "1:n", label: "1:n" })],
+        }),
+      ],
+    });
+    withMetamodel([...CARD_TYPES, boType], [...RELATION_TYPES, erType]);
+    scriptCards([a, b]);
+    mockApi.on("get", /^\/relations\?type=relDataObjectToDataObject/, [
+      {
+        id: "er-1",
+        type: erType.key,
+        source_id: a.id,
+        target_id: b.id,
+        attributes: { cardinality: "1:1", note: "keep me" },
+      },
+    ]);
+    mockApi.on("post", "/relations", {});
+
+    const { user } = renderInventory("/inventory?type=DataObject");
+    await waitForRows(2);
+    const dialog = await openMassEdit(user, [b]);
+    await chooseField(user, "relates to → Data Object");
+    await user.click(within(dialog).getByRole("combobox", { name: "Data Object cards" }));
+    await user.click(await screen.findByRole("option", { name: "Customer" }));
+    await user.click(within(dialog).getByRole("combobox", { name: "Cardinality" }));
+    await user.click(await screen.findByRole("option", { name: "1:n" }));
+    await apply(user);
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(mockApi.callsOf("post", "/relations").map((call) => call.body)).toEqual([
+      {
+        type: erType.key,
+        source_id: a.id,
+        target_id: b.id,
+        attributes: { cardinality: "n:1", note: "keep me" },
+      },
+    ]);
+  });
+
   /** relAppToApp is a self-pair carrying `flowDirection`; pick its outgoing side. */
   async function openFlowField(user: ReturnType<typeof userEvent.setup>, rows: Card[]) {
     await openMassEdit(user, rows);

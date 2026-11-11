@@ -7,20 +7,33 @@ reference fidelity on import, idempotent re-import, and secret exclusion.
 
 from __future__ import annotations
 
+import asyncio
 import io
+import json
+import uuid
 
 import pytest
-from sqlalchemy import delete, select
+from sqlalchemy import delete, event, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.encryption import encrypt_value
 from app.models.app_settings import AppSettings
 from app.models.card import Card
 from app.models.card_type import CardType
 from app.models.comment import Comment
+from app.models.diagram import Diagram
+from app.models.event import Event
+from app.models.mutation_batch import MutationBatch
 from app.models.relation import Relation
 from app.models.relation_type import RelationType
 from app.models.risk import Risk, RiskCard
+from app.models.role import Role
+from app.models.user import User
+from app.schemas.bo_relationship import BoLayoutUpdate
+from app.services.bo_relationship import save_bo_layout, set_bo_master
+from app.services.bo_relationship_constants import BO_RELATIONSHIP_DIAGRAM_ID, BO_RELATIONSHIP_KIND
 from app.services.licensing_migration import licensing_section
+from app.services.permission_service import PermissionService
 from app.services.workspace_io import (
     apply_bundle,
     build_bundle,
@@ -30,14 +43,254 @@ from app.services.workspace_io import (
 )
 from app.services.workspace_io import bundle as bundle_io
 from app.services.workspace_io import exporter as exp
+from app.services.workspace_io.applier import apply_selected
 from tests.conftest import (
     create_card,
     create_card_type,
+    create_relation,
+    create_relation_type,
     create_role,
     create_user,
 )
 
 pytestmark = pytest.mark.asyncio
+
+
+async def test_import_keeps_target_master_and_imports_incoming_crud(db):
+    relation_type = "relAppToDataObj"
+    actor = await create_user(db)
+    await create_card_type(db, key="DataObject")
+    await create_card_type(db, key="Application")
+    await create_relation_type(
+        db, key=relation_type, source_type_key="Application", target_type_key="DataObject"
+    )
+    target = await create_card(db, card_type="DataObject", name="Customer")
+    master = await create_card(db, name="Current Master")
+    incoming = await create_card(db, name="New Link")
+    await create_relation(
+        db,
+        type_key=relation_type,
+        source_id=master.id,
+        target_id=target.id,
+        attributes={"dataOwnership": "master"},
+    )
+    bundle = bundle_io.WorkspaceBundle(
+        manifest={},
+        sheets={
+            schema.SHEET_RELATIONS: [
+                {
+                    "type": relation_type,
+                    "source_type": "Application",
+                    "source_ref": incoming.name,
+                    "target_type": "DataObject",
+                    "target_ref": target.name,
+                    "attributes": {"dataOwnership": "master", "update": True},
+                }
+            ]
+        },
+    )
+    preview = await apply_selected(db, bundle, actor, sheets={schema.SHEET_RELATIONS}, dry_run=True)
+    assert preview.sections[0].references == {"bo_master_conflict": 1}
+    assert await db.scalar(select(Relation).where(Relation.source_id == incoming.id)) is None
+    result = await apply_selected(db, bundle, actor, sheets={schema.SHEET_RELATIONS}, dry_run=False)
+    assert result.sections[0].created == 1
+    assert result.sections[0].references == {"bo_master_conflict": 1}
+    relations = await db.scalars(select(Relation).where(Relation.target_id == target.id))
+    assert {rel.source_id: rel.attributes for rel in relations} == {
+        master.id: {"dataOwnership": "master"},
+        incoming.id: {"update": True},
+    }
+    replay = await apply_selected(db, bundle, actor, sheets={schema.SHEET_RELATIONS}, dry_run=False)
+    assert replay.sections[0].skipped == 1
+    assert replay.sections[0].references == {}
+
+
+async def test_import_waits_for_live_master_assignment(test_engine):
+    relation_key = "relAppToDataObj"
+    async with AsyncSession(test_engine, expire_on_commit=False) as setup, setup.begin():
+        role = await create_role(setup, key="workspace-master-concurrency")
+        actor = await create_user(setup, role=role.key)
+        bo_type = await create_card_type(setup, key="DataObject")
+        app_type = await create_card_type(setup, key="Application")
+        relation_type = await create_relation_type(
+            setup, key=relation_key, source_type_key="Application", target_type_key="DataObject"
+        )
+        target = await create_card(setup, card_type="DataObject", name="Customer")
+        master = await create_card(setup, name="Current Master")
+        incoming = await create_card(setup, name="New Link")
+        await create_relation(
+            setup, type_key=relation_key, source_id=master.id, target_id=target.id
+        )
+
+    bundle = bundle_io.WorkspaceBundle(
+        manifest={},
+        sheets={
+            schema.SHEET_RELATIONS: [
+                {
+                    "type": relation_key,
+                    "source_type": "Application",
+                    "source_ref": incoming.name,
+                    "target_type": "DataObject",
+                    "target_ref": target.name,
+                    "attributes": {"dataOwnership": "master", "update": True},
+                }
+            ]
+        },
+    )
+    try:
+        importer_reached_lock = asyncio.Event()
+        lock_parameters = []
+
+        def observe_lock(_conn, _cursor, statement, params, _context, _executemany):
+            if "pg_advisory_xact_lock" in statement:
+                lock_parameters.append(params)
+                if len(lock_parameters) == 2:
+                    importer_reached_lock.set()
+
+        async def import_relations():
+            async with AsyncSession(test_engine) as session, session.begin():
+                connection = await session.connection()
+                event.listen(connection.sync_connection, "before_cursor_execute", observe_lock)
+                return await apply_selected(
+                    session, bundle, actor, sheets={schema.SHEET_RELATIONS}, dry_run=False
+                )
+
+        async with AsyncSession(test_engine, expire_on_commit=False) as writer:
+            connection = await writer.connection()
+            event.listen(connection.sync_connection, "before_cursor_execute", observe_lock)
+            await set_bo_master(writer, actor, target.id, master.id)
+            importer = asyncio.create_task(import_relations())
+            try:
+                await asyncio.wait_for(importer_reached_lock.wait(), timeout=5)
+                assert lock_parameters[0] == lock_parameters[1]
+                assert not importer.done()
+                await writer.commit()
+                result = await asyncio.wait_for(importer, timeout=10)
+            finally:
+                if not importer.done():
+                    importer.cancel()
+                await asyncio.gather(importer, return_exceptions=True)
+
+        assert result.sections[0].created == 1
+        assert result.sections[0].references == {"bo_master_conflict": 1}
+        async with AsyncSession(test_engine) as verify:
+            relations = list(
+                await verify.scalars(select(Relation).where(Relation.target_id == target.id))
+            )
+            assert {rel.source_id: rel.attributes for rel in relations} == {
+                master.id: {"dataOwnership": "master"},
+                incoming.id: {"update": True},
+            }
+    finally:
+        async with AsyncSession(test_engine) as cleanup, cleanup.begin():
+            await cleanup.execute(delete(Event).where(Event.user_id == actor.id))
+            await cleanup.execute(
+                delete(MutationBatch).where(MutationBatch.actor_user_id == actor.id)
+            )
+            await cleanup.execute(
+                delete(Card).where(Card.id.in_([target.id, master.id, incoming.id]))
+            )
+            await cleanup.execute(delete(RelationType).where(RelationType.id == relation_type.id))
+            await cleanup.execute(
+                delete(CardType).where(CardType.id.in_([bo_type.id, app_type.id]))
+            )
+            await cleanup.execute(delete(User).where(User.id == actor.id))
+            await cleanup.execute(delete(Role).where(Role.id == role.id))
+        PermissionService.invalidate_role_cache(role.key)
+        PermissionService.invalidate_type_permission_cache()
+
+
+async def test_diagram_import_waits_for_save_and_keeps_saved_positions(test_engine):
+    async with AsyncSession(test_engine, expire_on_commit=False) as setup, setup.begin():
+        role = await create_role(setup, key="workspace-diagram-concurrency")
+        actor = await create_user(setup, role=role.key)
+        bo_type = await create_card_type(setup, key="DataObject")
+        card = await create_card(setup, card_type="DataObject", name="Customer")
+        setup.add(
+            Diagram(
+                id=BO_RELATIONSHIP_DIAGRAM_ID,
+                name="BO Relationship",
+                kind=BO_RELATIONSHIP_KIND,
+            )
+        )
+
+    source_id = str(uuid.uuid4())
+    data = {
+        "nodes": {
+            source_id: {
+                "id": source_id,
+                "name": card.name,
+                "subtype": None,
+                "isPersonalData": False,
+                "isPaymentData": False,
+            }
+        },
+        "edges": {},
+        "positions": {source_id: {"x": 1, "y": 2}},
+        "application_links": {},
+    }
+    bundle = bundle_io.WorkspaceBundle(
+        manifest={},
+        sheets={
+            schema.SHEET_CARDS: [{"source_id": source_id, "type": "DataObject", "name": card.name}],
+            "Diagrams": [
+                {
+                    "id": str(BO_RELATIONSHIP_DIAGRAM_ID),
+                    "name": "BO Relationship",
+                    "kind": BO_RELATIONSHIP_KIND,
+                    "data__meta": json.dumps(data),
+                }
+            ],
+        },
+    )
+    try:
+        importer_reached_lock = asyncio.Event()
+
+        def observe_lock(_conn, _cursor, statement, _params, _context, _executemany):
+            if "FROM diagrams" in statement and "FOR UPDATE" in statement:
+                importer_reached_lock.set()
+
+        async def import_diagram():
+            async with AsyncSession(test_engine) as session, session.begin():
+                connection = await session.connection()
+                event.listen(connection.sync_connection, "before_cursor_execute", observe_lock)
+                return await apply_selected(
+                    session, bundle, actor, sheets={"Diagrams"}, dry_run=False
+                )
+
+        async with AsyncSession(test_engine, expire_on_commit=False) as writer:
+            await save_bo_layout(
+                writer, actor, BoLayoutUpdate(positions={card.id: {"x": 8, "y": 9}})
+            )
+            importer = asyncio.create_task(import_diagram())
+            try:
+                await asyncio.wait_for(importer_reached_lock.wait(), timeout=5)
+                assert not importer.done()
+                await writer.commit()
+                result = await asyncio.wait_for(importer, timeout=10)
+            finally:
+                if not importer.done():
+                    importer.cancel()
+                await asyncio.gather(importer, return_exceptions=True)
+
+        assert result.sections[0].skipped == 1
+        assert result.sections[0].updated == 0
+        async with AsyncSession(test_engine) as verify:
+            diagram = await verify.get(Diagram, BO_RELATIONSHIP_DIAGRAM_ID)
+            assert diagram.data["positions"] == {str(card.id): {"x": 8, "y": 9}}
+    finally:
+        async with AsyncSession(test_engine) as cleanup, cleanup.begin():
+            await cleanup.execute(delete(Event).where(Event.user_id == actor.id))
+            await cleanup.execute(
+                delete(MutationBatch).where(MutationBatch.actor_user_id == actor.id)
+            )
+            await cleanup.execute(delete(Diagram).where(Diagram.id == BO_RELATIONSHIP_DIAGRAM_ID))
+            await cleanup.execute(delete(Card).where(Card.id == card.id))
+            await cleanup.execute(delete(CardType).where(CardType.id == bo_type.id))
+            await cleanup.execute(delete(User).where(User.id == actor.id))
+            await cleanup.execute(delete(Role).where(Role.id == role.id))
+        PermissionService.invalidate_role_cache(role.key)
+        PermissionService.invalidate_type_permission_cache()
 
 
 def _make_bundle(sheets: dict[str, tuple[tuple[str, ...], frozenset[str], list[dict]]]) -> bytes:
@@ -538,6 +791,83 @@ async def test_diagram_groups_and_favorites_roundtrip(db):
 
     favs = (await db.execute(select(DiagramFavorite))).scalars().all()
     assert any(f.user_id == user.id and f.diagram_id == diag_id for f in favs)
+
+
+async def test_bo_diagram_transfers_without_generic_associations(db):
+    from app.models.diagram import diagram_cards
+    from app.models.diagram_favorite import DiagramFavorite
+    from app.models.diagram_group import DiagramGroup, diagram_group_members
+
+    user = await create_user(db)
+    await create_card_type(db, key="DataObject")
+    card = await create_card(db, card_type="DataObject", name="Customer")
+    saved_data = {
+        "snapshot_revision": str(uuid.uuid4()),
+        "nodes": {
+            str(card.id): {
+                "id": str(card.id),
+                "name": card.name,
+                "subtype": None,
+                "isPersonalData": False,
+                "isPaymentData": False,
+            }
+        },
+        "edges": {},
+        "positions": {str(card.id): {"x": 3, "y": 4}},
+        "application_links": {},
+    }
+    diagram = Diagram(
+        id=BO_RELATIONSHIP_DIAGRAM_ID,
+        name="BO Relationship",
+        kind=BO_RELATIONSHIP_KIND,
+        data=saved_data,
+    )
+    group = DiagramGroup(name="Domain", color="#60a5fa", sort_order=0, created_by=user.id)
+    db.add_all([diagram, group])
+    await db.flush()
+    db.add(DiagramFavorite(user_id=user.id, diagram_id=diagram.id))
+    await db.execute(diagram_cards.insert().values(diagram_id=diagram.id, card_id=card.id))
+    await db.execute(
+        diagram_group_members.insert().values(diagram_id=diagram.id, group_id=group.id)
+    )
+    await db.flush()
+
+    bundle = parse_bundle(await build_bundle(db))
+    assert any(row["kind"] == BO_RELATIONSHIP_KIND for row in bundle.rows("Diagrams"))
+    for sheet in ("DiagramFavorites", "DiagramCards", "DiagramGroupMembers"):
+        assert not bundle.rows(sheet)
+
+    await db.execute(delete(DiagramFavorite))
+    await db.execute(delete(diagram_cards))
+    await db.execute(delete(diagram_group_members))
+    diagram.data = {}
+    await db.flush()
+    bundle.sheets["DiagramFavorites"] = [
+        {"id": str(uuid.uuid4()), "diagram_id": str(diagram.id), "user_id__email": user.email}
+    ]
+    bundle.sheets["DiagramCards"] = [
+        {"diagram_id": str(diagram.id), "card_type": card.type, "card_ref": card.name}
+    ]
+    bundle.sheets["DiagramGroupMembers"] = [
+        {"diagram_id": str(diagram.id), "group_id": str(group.id)}
+    ]
+    result = await apply_selected(
+        db,
+        bundle,
+        user,
+        sheets={"Diagrams", "DiagramFavorites", "DiagramCards", "DiagramGroupMembers"},
+        dry_run=False,
+    )
+    assert next(section for section in result.sections if section.sheet == "Diagrams").updated == 1
+    await db.refresh(diagram)
+    assert diagram.data["snapshot_revision"]
+    assert diagram.data["snapshot_revision"] != saved_data["snapshot_revision"]
+    assert {key: value for key, value in diagram.data.items() if key != "snapshot_revision"} == {
+        key: value for key, value in saved_data.items() if key != "snapshot_revision"
+    }
+    assert not (await db.execute(select(DiagramFavorite))).scalars().all()
+    assert not (await db.execute(select(diagram_cards))).all()
+    assert not (await db.execute(select(diagram_group_members))).all()
 
 
 async def test_bookmark_column_state_roundtrips(db):

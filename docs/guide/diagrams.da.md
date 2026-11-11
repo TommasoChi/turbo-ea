@@ -153,6 +153,42 @@ Synkroniseringsknappen i værktøjslinjen viser en pulserende "N usynkroniseret"
 
 Diagrammer kan linkes til **et hvilket som helst kort** fra kortets fane **Resources** (se [Kortdetaljer](card-details.md#resources-tab)). Når et diagram er linket til et **Initiative**-kort, vises det også i [EA Delivery](delivery.md)-modulet sammen med SoAW-dokumenter.
 
+## Data Modeller
+
+Åbn **Data Modeller** under **Application & Data Architecture**. Den øverste række viser kortfarver, kortindhold og synkronisering. Rækken nedenunder indeholder tegneværktøjer, sidepaneler, zoom, filtre og SVG-eksport. Diagrammet viser den senest delte tegning. Brug synkroniseringen til at kontrollere ændringer i lageret igen.
+
+![Diagram over forretningsobjekters relationer med applikationsroller og kortet for det valgte objekt](../assets/img/da/105_bo_relationship.png)
+
+Træk i linjen eller dens håndtag for at flytte et segment, tilføje et knæk eller flytte tilslutningen langs objektets kant. Gem for at dele den nye linjeføring. En almindelig linje viser én. En kragefod viser mange (N eller M). Brug **Punktgitter** til at vise eller skjule prikkerne i baggrunden. Browseren husker dit valg for hvert diagram.
+
+Højreklik på en forbindelseslinje, og vælg **Lige** eller **Retvinklet**. Linjen beholder ruten, når du flytter en node, og når du gemmer og genåbner diagrammet.
+
+Hold venstre museknap nede på baggrunden, og træk for at flytte visningen i diagrammet. Brug musehjulet til at rulle lodret, **Skift** med musehjulet til at rulle vandret og **Ctrl** med musehjulet til at zoome. Du kan også sætte fokus på lærredet og bruge piletasterne.
+
+Åbn **Tastaturgenveje** på værktøjslinjen for at se de tilgængelige kommandoer. Brug panelknappen til at vise eller skjule kortets detaljer. Når du vælger et forretningsobjekt, åbnes detaljerne igen.
+
+Hvis du kan redigere diagrammet, gælder **Fortryd** og **Gentag** for ændringer i den aktuelle diagramkladde. **Slet** fjerner de valgte forretningsobjekter fra diagrammet, når du gemmer. Deres kort og relationer er stadig tilgængelige i lageret. For en valgt linje gælder den sædvanlige bekræftelse og synkronisering. **Kopiér** og **Indsæt** åbner en ny kladde for hvert kopieret forretningsobjekt, så du kan ændre navnet, før du tilføjer det. Når du omdøber et gemt kort, opdateres lageret. Synkronisér ændringen for at få det nye navn ind i diagrammet.
+
+1. Gennemgå de tilføjede, opdaterede eller fjernede forretningsobjekter og relationer.
+2. Hvis du har ret til at redigere diagrammet, skal du vælge de ønskede ændringer og vælge **Synkronisér**. Ændringerne vises på lærredet. Hvis et forretningsobjekt for eksempel har fået nyt navn og undertypen Dokument, vises det med det nye navn og et foldet hjørne på samme sted.
+3. Vælg **Gem** for at dele det opdaterede diagram. Andre brugere ser den tidligere version, indtil du gemmer. Hvis et element i lageret har ændret sig igen, skal du tjekke opdateringer, før du accepterer den nye version.
+
+Sammenligningen og denne synkronisering læser data fra lageret. Bekræftede fjernelser af linjer, der afventer sletning fra lageret, vises separat og skal synkroniseres med deres egen handling.
+
+### Gendan en kladde til forretningsobjekters relationer
+
+Editoren gemmer en kladde i din browser og opdaterer den ca. hvert femte sekund, mens du arbejder. Når du genåbner **Forretningsobjekters relationer** i samme browser med samme konto, viser lærredet den senest delte version af diagrammet. Hvis der er en kladde, der kan gendannes, kan du vælge **Gendan** for at få dine ændringer tilbage på lærredet eller **Kassér** for at slette kladden. Andre brugere ser dine ændringer, når du har valgt **Gem** eller **Gem og afslut**, og diagrammet er gemt.
+
+Hver åben editor har sin egen kladde. Hvis der er flere kladder, vises den næste, når du kasserer den viste kladde. Når du har gendannet en kladde, kan du genåbne editoren for at gendanne en anden.
+
+Hvis **Gem** afviser et forretningsobjekt eller en applikationstilknytning, skal du vælge **Kassér** ud for den pågældende post. Når du kasserer et nyt forretningsobjekt, fjernes dets placering og tilhørende relationer også fra kladden. Derefter kan du gemme de øvrige ændringer.
+
+Hvis et forretningsobjekt bliver utilgængeligt under redigeringen, springer **Gem** dets placering over og gemmer de placeringer, du stadig kan opdatere.
+
+En linje, du har fjernet, kan fortsat mangle i det gendannede diagram. Køen med fjernelser fra lageret er tom, når du genåbner editoren. Hvis relationen stadig findes, og du kan se den, kan du få linjen tilbage via **Ændringer i lageret**. Hvis du vil slette en relation fra lageret, skal du bekræfte en ny fjernelse i den aktuelle session og synkronisere den.
+
+**Gem og afslut** lader editoren stå åben, hvis der stadig er ændringer, som kræver din opmærksomhed. Hvis der er fjernelser fra lageret, der afventer synkronisering, advarer editoren dig, inden du forlader den.
+
 ## Del et diagram uden for Turbo EA
 
 Et diagram kan udgives som et **skrivebeskyttet link, der åbnes uden login**, så det kan indlejres på en wiki-side som Confluence.

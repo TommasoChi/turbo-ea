@@ -5,11 +5,17 @@ from __future__ import annotations
 
 import uuid
 from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 import pytest
+from sqlalchemy import select
 
+from app.models.relation import Relation
 from app.models.stakeholder import Stakeholder
+from app.models.survey import SurveyResponse
+from app.services import card_write_service
 from app.services import survey_apply as sa
+from app.services.bo_relationship_constants import ER_RELATION
 from tests.conftest import (
     create_card,
     create_card_type,
@@ -207,3 +213,107 @@ async def test_current_value_reads_the_right_source_for_each_kind(db):
     bare = SimpleNamespace(id=card.id, attributes=None, lifecycle=None)
     assert await sa.current_value(db, bare, {"key": "cost"}) is None
     assert await sa.current_value(db, bare, {"kind": "lifecycle", "phase": "plan"}) is None
+
+
+@pytest.mark.parametrize(
+    ("fields", "has_response_ids"),
+    [
+        (None, True),
+        ([None, {"key": "other", "relation_type_key": "relOther"}], True),
+        ([{"key": "er", "relation_type_key": ER_RELATION}], False),
+    ],
+)
+async def test_lock_survey_er_pairs_skips_batches_without_er_work(fields, has_response_ids):
+    db = SimpleNamespace(scalars=AsyncMock())
+    survey = SimpleNamespace(id=uuid.uuid4(), fields=fields)
+    response_ids = [str(uuid.uuid4())] if has_response_ids else []
+
+    await sa.lock_survey_er_pairs(db, survey, response_ids)
+
+    db.scalars.assert_not_awaited()
+
+
+async def test_lock_survey_er_pairs_only_locks_pending_er_changes(monkeypatch):
+    lock = AsyncMock()
+    monkeypatch.setattr("app.services.card_write_service.lock_bo_relation_writes", lock)
+    survey = SimpleNamespace(
+        id=uuid.uuid4(),
+        fields=[
+            None,
+            *(
+                {"key": key, "relation_type_key": ER_RELATION}
+                for key in (
+                    "er",
+                    "second_er",
+                    "confirmed",
+                    "malformed",
+                    "not_a_dict",
+                    "missing_value",
+                )
+            ),
+            {"key": "other", "relation_type_key": "relOther"},
+        ],
+    )
+    card, peer, second_peer, ignored_peer = (uuid.uuid4() for _ in range(4))
+    ignored = {"new_value": [str(ignored_peer)]}
+    responses = [
+        SimpleNamespace(card_id=card, status="pending", applied=False, responses={"er": ignored}),
+        SimpleNamespace(card_id=card, status="completed", applied=True, responses={"er": ignored}),
+        SimpleNamespace(card_id=card, status="completed", applied=False, responses=None),
+        SimpleNamespace(
+            card_id=card,
+            status="completed",
+            applied=False,
+            responses={
+                "other": ignored,
+                "confirmed": {**ignored, "confirmed": True},
+                "malformed": {"new_value": ["invalid-id", str(ignored_peer)]},
+                "missing_value": {"previous_value": [str(ignored_peer)]},
+                "not_a_dict": [str(ignored_peer)],
+                "er": {"new_value": [str(peer)]},
+                "second_er": {"new_value": [{"id": str(second_peer)}]},
+            },
+        ),
+    ]
+    db = SimpleNamespace(scalars=AsyncMock(return_value=responses))
+    requested = [uuid.uuid4(), uuid.uuid4()]
+
+    await sa.lock_survey_er_pairs(db, survey, [str(item) for item in requested])
+
+    lock.assert_awaited_once_with(db, [(ER_RELATION, card, peer), (ER_RELATION, card, second_peer)])
+    db.scalars.assert_awaited_once()
+    statement = db.scalars.await_args.args[0]
+    assert statement.column_descriptions[0]["entity"] is SurveyResponse
+    query = statement.compile()
+    assert list(query.params.values()) == [requested, survey.id]
+    assert "survey_responses.survey_id =" in str(query)
+    assert "ORDER BY survey_responses.id FOR UPDATE" in str(query)
+
+
+async def test_apply_er_relation_change_keeps_reverse_pair_and_adds_next_peer(db, monkeypatch):
+    await create_card_type(db, key="DataObject")
+    await create_relation_type(
+        db, key=ER_RELATION, source_type_key="DataObject", target_type_key="DataObject"
+    )
+    actor = await create_user(db)
+    card = await create_card(db, card_type="DataObject")
+    first = await create_card(db, card_type="DataObject")
+    second = await create_card(db, card_type="DataObject")
+    existing_peer, new_peer = sorted([first, second], key=lambda item: item.id)
+    await create_relation(db, type_key=ER_RELATION, source_id=existing_peer.id, target_id=card.id)
+    lock = AsyncMock(wraps=card_write_service.lock_bo_relation_writes)
+    monkeypatch.setattr(card_write_service, "lock_bo_relation_writes", lock)
+
+    assert await sa.apply_relation_change(
+        db,
+        card,
+        {"relation_type_key": ER_RELATION, "direction": "outgoing"},
+        [str(existing_peer.id), str(new_peer.id)],
+        actor.id,
+    )
+
+    lock.assert_awaited_once()
+    rows = await db.execute(
+        select(Relation.source_id, Relation.target_id).where(Relation.type == ER_RELATION)
+    )
+    assert set(rows) == {(existing_peer.id, card.id), (card.id, new_peer.id)}

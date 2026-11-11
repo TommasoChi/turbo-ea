@@ -6,6 +6,7 @@ from app.api.v1 import (
     archimate,
     audit_log,
     auth,
+    bo_relationship,
     bookmarks,
     bpm,
     bpm_assessments,
@@ -68,6 +69,7 @@ api_router.include_router(cost_item_types.router)
 api_router.include_router(license_types.router)
 api_router.include_router(cards.router)
 api_router.include_router(relations.router)
+api_router.include_router(bo_relationship.router)
 api_router.include_router(stakeholders.router)
 api_router.include_router(comments.router)
 api_router.include_router(todos.router)

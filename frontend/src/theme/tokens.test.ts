@@ -234,7 +234,7 @@ describeSourceScan("card-type fallbacks match the seeded card types", () => {
 
   /** `{ TypeKey: "#rrggbb" }` for every seeded card type, read off `seed.py` as text. */
   function seededTypeColors(): Record<string, string> {
-    const text = fs.readFileSync(SEED_FILE, "utf-8");
+    const text = fs.readFileSync(SEED_FILE, "utf-8").replace(/\r\n/g, "\n");
     const colors: Record<string, string> = {};
     // A card type entry opens with its key and names its colour a few lines on.
     const entry = /"key": "([A-Z]\w+)",\n(?:[^\n]*\n){0,6}?\s*"color": "(#[0-9a-fA-F]{6})"/g;

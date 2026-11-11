@@ -66,6 +66,8 @@ import {
   removeEdgeCellsByIds,
   restoreRemovedEdge,
   revertParentChange,
+  scanDiagramItems,
+  setPendingCardSubtype,
   scanForDuplicateCells,
   updateCellLabel,
   type ParentChangeEvent,
@@ -1393,3 +1395,27 @@ describe("attachCardLabelEditListener", () => {
 // Type-level check that the fake cell satisfies what the helpers expect.
 const _typeCheck: FakeCell = cardCell("t", { cardId: "x", cardType: "y" });
 void _typeCheck;
+
+it("retains a pending subtype through insertion, scanning and sync", () => {
+  const f = fakeIframe();
+  const id = insertPendingCard(f.iframe, { tempId: "pending-1", type: "DataObject", name: "Invoice", subtype: "document", color: "#000", x: 0, y: 0 })!;
+  expect(f.model.getCell(id)!.value.getAttribute("cardSubtype")).toBe("document");
+  expect(scanDiagramItems(f.iframe).pendingCards[0].subtype).toBe("document");
+  markCellSynced(f.iframe, id, "real-id", "#000");
+  expect(f.model.getCell(id)!.value.getAttribute("cardSubtype")).toBeNull();
+});
+
+
+it("retains subtype when converting an existing shape into a pending card", () => {
+  const shape = plainCell("shape");
+  const f = fakeIframe({ cells: [shape] });
+  expect(convertShapeToPendingCard(f.iframe, "shape", { tempId: "pending-2", type: "DataObject", name: "Invoice", subtype: "data", color: "#000" })).toBe(true);
+  expect(scanDiagramItems(f.iframe).pendingCards[0].subtype).toBe("data");
+});
+
+it("classifies a legacy pending cell without changing its identity", () => {
+  const f = fakeIframe();
+  const id = insertPendingCard(f.iframe, { tempId: "pending-legacy", type: "DataObject", name: "Invoice", color: "#000", x: 0, y: 0 })!;
+  expect(setPendingCardSubtype(f.iframe, id, "data")).toBe(true);
+  expect(scanDiagramItems(f.iframe).pendingCards[0]).toMatchObject({ tempId: "pending-legacy", subtype: "data" });
+});

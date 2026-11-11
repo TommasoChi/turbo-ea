@@ -80,6 +80,8 @@ from app.services import (
     card_write_service,
     notification_service,
 )
+from app.services.bo_inventory_deletions import record_inventory_card_deletions
+from app.services.bo_relationship_constants import BO_TYPE
 from app.services.calculation_engine import run_calculations_for_card
 from app.services.card_completeness import missing_mandatory
 from app.services.card_costs import COST_EVENT
@@ -868,12 +870,15 @@ async def bulk_create_cards(
         ).all()
     }
 
-    async def _bulk_assign_reference(card: Card, row) -> None:
-        if row.type not in _ref_types:
-            _ref_types[row.type] = (
-                await db.execute(select(CardType).where(CardType.key == row.type))
+    async def _bulk_type(type_key: str) -> CardType | None:
+        if type_key not in _ref_types:
+            _ref_types[type_key] = (
+                await db.execute(select(CardType).where(CardType.key == type_key))
             ).scalar_one_or_none()
-        await allocator.assign(db, card, _ref_types[row.type])
+        return _ref_types[type_key]
+
+    async def _bulk_assign_reference(card: Card, row) -> None:
+        await allocator.assign(db, card, await _bulk_type(row.type))
 
     for row_idx in order:
         r = rows_by_index[row_idx]
@@ -949,6 +954,11 @@ async def bulk_create_cards(
             await _validate_hierarchy_label(
                 db, r.type, r.parent_label, None, has_parent=resolved_parent is not None
             )
+
+            if r.type == "DataObject":
+                card_write_service.validate_dataobject_subtype(
+                    r.type, r.subtype, await _bulk_type(r.type)
+                )
 
             card = Card(
                 type=r.type,
@@ -1135,6 +1145,11 @@ async def get_card(
     card = result.scalar_one_or_none()
     if not card:
         raise HTTPException(404, "Card not found")
+    return await card_detail_response(db, user, card)
+
+
+async def card_detail_response(db: AsyncSession, user: User, card: Card) -> CardResponse:
+    """Project a loaded, authorized card for the inventory and module panels."""
     response = await _card_response_with_cost_check(db, user, card)
     # The header's provenance chip names the person beside the channel: one
     # query for both ids, and only ``display_name`` — never more of the user.
@@ -1142,6 +1157,26 @@ async def get_card(
     response.created_by_name = names.get(card.created_by)
     response.updated_by_name = names.get(card.updated_by)
     return response
+
+
+async def redact_bo_card_references(
+    db: AsyncSession,
+    user: User,
+    card: Card,
+    response: CardResponse,
+    read_scope: CardReadScope | None = None,
+) -> None:
+    """Apply the same BO visibility rules to both read and write responses."""
+    if response.stakeholders and not await PermissionService.has_app_permission(
+        db, user, "admin.users"
+    ):
+        for stakeholder in response.stakeholders:
+            stakeholder.user_email = None
+    if card.parent_id:
+        scope = read_scope or await CardReadScope.load(db, user, include_subtype_denials=True)
+        if card.parent_id not in await scope.readable_card_ids(db, {card.parent_id}, mode="module"):
+            response.parent_id = None
+            response.parent_label = None
 
 
 async def _user_display_names(
@@ -1750,6 +1785,16 @@ async def bulk_update(
         )
     updates = body.updates.model_dump(exclude_unset=True)
     strict_attrs = updates.pop("strict_attributes", False)
+    if "subtype" in updates and any(
+        card.type == "DataObject"
+        and updates["subtype"] != card.subtype
+        and (updates["subtype"] or card.subtype)
+        for card in sheets
+    ):
+        data_type = (
+            await db.execute(select(CardType).where(CardType.key == "DataObject"))
+        ).scalar_one_or_none()
+        card_write_service.validate_dataobject_subtype("DataObject", updates["subtype"], data_type)
     # The human-readable reference is per-card and uniqueness-gated; it is never
     # editable in bulk (auto refs are write-once, manual refs must stay unique).
     updates.pop("reference", None)
@@ -2343,6 +2388,7 @@ async def bulk_delete_cards(
         background_tasks=background_tasks,
     )
 
+    await record_inventory_card_deletions(db, user.id, target_objs)
     for did, dtype, dname in deleted_payload:
         await event_bus.publish(
             "card.deleted",
@@ -2540,7 +2586,10 @@ async def update_card(
         )
         card = result.scalar_one()
 
-    return await _card_response_with_cost_check(db, user, card)
+    response = await _card_response_with_cost_check(db, user, card)
+    if card.type == BO_TYPE:
+        await redact_bo_card_references(db, user, card, response)
+    return response
 
 
 @router.get("/{card_id}/archive-impact", response_model=ArchiveImpactResponse)
@@ -3012,6 +3061,7 @@ async def delete_card(
         background_tasks=background_tasks,
     )
 
+    await record_inventory_card_deletions(db, user.id, target_objs)
     for did, dtype, dname in deleted_payload:
         await event_bus.publish(
             "card.deleted",
@@ -3096,13 +3146,15 @@ async def get_history(
     await _require_card_read(db, user, card_uuid)
     # A relation event names its peer; drop the ones whose peer is hidden from
     # the caller, so History does not list a card the Relations section omits.
-    read_scope = await CardReadScope.load(db, user)
+    read_scope = await CardReadScope.load(db, user, include_subtype_denials=True)
+    if card_uuid not in await read_scope.readable_card_ids(db, {card_uuid}, mode="module"):
+        raise HTTPException(404, "Card not found")
     peer_ok = read_scope.ref_clause(
         Event.data["peer_type"].astext, Event.data["peer_id"].astext, mode="module"
     )
     q = (
         select(Event)
-        .where(Event.card_id == parse_uuid(card_id))
+        .where(Event.card_id == card_uuid)
         .where(*(() if peer_ok is None else (peer_ok,)))
         .options(selectinload(Event.user))
         .order_by(Event.created_at.desc())

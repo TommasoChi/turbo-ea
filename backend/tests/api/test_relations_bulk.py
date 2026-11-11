@@ -68,6 +68,61 @@ async def rel_env(db):
     }
 
 
+async def test_bulk_reverse_er_reuses_stored_direction(client, db, rel_env):
+    admin = rel_env["admin"]
+    await create_card_type(db, key="DataObject", label="Data Object")
+    await create_relation_type(
+        db,
+        key="relDataObjectToDataObject",
+        label="relates",
+        source_type_key="DataObject",
+        target_type_key="DataObject",
+    )
+    a = await create_card(db, card_type="DataObject", name="A", user_id=admin.id)
+    b = await create_card(db, card_type="DataObject", name="B", user_id=admin.id)
+    existing = await create_relation(
+        db,
+        type_key="relDataObjectToDataObject",
+        source_id=a.id,
+        target_id=b.id,
+        attributes={"cardinality": "1:n"},
+    )
+    await db.commit()
+    response = await client.post(
+        "/api/v1/relations/bulk",
+        headers=auth_headers(admin),
+        json={
+            "operations": [
+                {
+                    "row_index": 1,
+                    "action": "upsert",
+                    "type": "relDataObjectToDataObject",
+                    "source": {"id": str(b.id)},
+                    "target": {"id": str(a.id)},
+                    "attributes": {"cardinality": "1:n"},
+                }
+            ]
+        },
+    )
+    assert response.status_code == 200
+    assert response.json()["failed"] == 0
+    rows = (
+        (
+            await db.execute(
+                select(Relation)
+                .where(Relation.type == "relDataObjectToDataObject")
+                .execution_options(populate_existing=True)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert len(rows) == 1
+    assert rows[0].id == existing.id
+    assert rows[0].source_id == a.id
+    assert rows[0].attributes["cardinality"] == "n:1"
+
+
 async def test_bulk_upsert_creates_new_relation(client, db, rel_env):
     admin = rel_env["admin"]
     payload = {

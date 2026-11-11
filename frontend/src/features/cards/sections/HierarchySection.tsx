@@ -26,6 +26,7 @@ import Popover from "@mui/material/Popover";
 import Tooltip from "@mui/material/Tooltip";
 import MaterialSymbol from "@/components/MaterialSymbol";
 import CardPicker, { type CardOption } from "@/components/CardPicker";
+import RequiredCardSubtypeSelect from "@/components/RequiredCardSubtypeSelect";
 import ClickableCardName from "@/components/ClickableCardName";
 import OptionChip from "@/components/OptionChip";
 import { useMetamodel } from "@/hooks/useMetamodel";
@@ -34,6 +35,7 @@ import { useAuthContext } from "@/hooks/AuthContext";
 import { useOptionLabel, useSubtypeLabel, useTypeLabel } from "@/hooks/useResolveLabel";
 import { useSyncedExpanded } from "@/hooks/useSyncedExpanded";
 import { useLatestRequest } from "@/hooks/useLatestRequest";
+import { useRequiredCardSubtype } from "@/hooks/useRequiredCardSubtype";
 import { api } from "@/api/client";
 import { sectionAnchor } from "@/features/cards/dataQualityJump";
 import type { Card, FieldOption, HierarchyData, HierarchyNode, SubtypeDef } from "@/types";
@@ -257,6 +259,8 @@ function HierarchySection({
   const canCreateOwnType = hasTypePermission(user, "inventory.create", card.type);
   const [createName, setCreateName] = useState("");
   const [createLoading, setCreateLoading] = useState(false);
+  const { subtype, subtypeValid, subtypeField, resetSubtype } = useRequiredCardSubtype(card.type, typeConfig?.subtypes);
+  const canQuickCreate = !!createName.trim() && subtypeValid && !createLoading;
   const [hierarchyError, setHierarchyError] = useState("");
   // A failed load: shown instead of a progress bar that would never end.
   const [loadError, setLoadError] = useState("");
@@ -356,13 +360,14 @@ function HierarchySection({
   };
 
   const handleQuickCreate = async () => {
-    if (!createName.trim()) return;
+    if (!canQuickCreate) return;
     setCreateLoading(true);
     setHierarchyError("");
     try {
       const created = await api.post<{ id: string; name: string }>("/cards", {
         type: card.type,
         name: createName.trim(),
+        ...(subtype ? { subtype } : {}),
         ...(createMode === "child" ? { parent_id: card.id } : {}),
       });
       if (createMode === "parent") {
@@ -599,7 +604,7 @@ function HierarchySection({
                         size="small"
                         sx={{ mt: 1 }}
                         startIcon={<MaterialSymbol icon="add" size={16} />}
-                        onClick={() => { setCreateMode("parent"); setCreateName(parentSearch); }}
+                        onClick={() => { setCreateMode("parent"); setCreateName(parentSearch); resetSubtype(); }}
                       >
                         {t("hierarchy.createNew", { type: typeLabel(typeConfig) || card.type })}
                       </Button>
@@ -616,8 +621,9 @@ function HierarchySection({
                       onKeyDown={(e) => e.key === "Enter" && handleQuickCreate()}
                       autoFocus sx={{ mb: 1 }}
                     />
+                    {subtypeField && <RequiredCardSubtypeSelect {...subtypeField} sx={{ mb: 1 }} />}
                     <Box sx={{ display: "flex", gap: 1 }}>
-                      <Button size="small" variant="contained" onClick={handleQuickCreate} disabled={!createName.trim() || createLoading}>
+                      <Button size="small" variant="contained" onClick={handleQuickCreate} disabled={!canQuickCreate}>
                         {t("hierarchy.createAndSetParent")}
                       </Button>
                       <Button size="small" onClick={() => setCreateMode(null)}>{t("hierarchy.backToSearch")}</Button>
@@ -738,7 +744,7 @@ function HierarchySection({
                         size="small"
                         sx={{ mt: 1 }}
                         startIcon={<MaterialSymbol icon="add" size={16} />}
-                        onClick={() => { setCreateMode("child"); setCreateName(childSearch); }}
+                        onClick={() => { setCreateMode("child"); setCreateName(childSearch); resetSubtype(); }}
                       >
                         {t("hierarchy.createNew", { type: typeLabel(typeConfig) || card.type })}
                       </Button>
@@ -755,8 +761,9 @@ function HierarchySection({
                       onKeyDown={(e) => e.key === "Enter" && handleQuickCreate()}
                       autoFocus sx={{ mb: 1 }}
                     />
+                    {subtypeField && <RequiredCardSubtypeSelect {...subtypeField} sx={{ mb: 1 }} />}
                     <Box sx={{ display: "flex", gap: 1 }}>
-                      <Button size="small" variant="contained" onClick={handleQuickCreate} disabled={!createName.trim() || createLoading}>
+                      <Button size="small" variant="contained" onClick={handleQuickCreate} disabled={!canQuickCreate}>
                         {t("hierarchy.createAndAddChild")}
                       </Button>
                       <Button size="small" onClick={() => setCreateMode(null)}>{t("hierarchy.backToSearch")}</Button>

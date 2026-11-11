@@ -67,6 +67,7 @@ from app.services import (
     stakeholder_service,
     tag_service,
 )
+from app.services.bo_relationship_constants import APPLICATION_RELATION, OWNERSHIP_KEY
 from app.services.card_search import card_search_filter, card_search_rank
 from app.services.card_write_service import WriteActor
 from app.services.eol_service import resolve_eol_statuses
@@ -225,12 +226,15 @@ def _to_ext_card(card: Card) -> ExtCard:
 
 
 def _to_ext_relation(rel: Relation) -> ExtRelation:
+    attributes = dict(rel.attributes or {})
+    if rel.type == APPLICATION_RELATION:
+        attributes.pop(OWNERSHIP_KEY, None)
     return ExtRelation(
         id=str(rel.id),
         type=rel.type,
         source_id=str(rel.source_id),
         target_id=str(rel.target_id),
-        attributes=dict(rel.attributes or {}),
+        attributes=attributes,
         description=rel.description,
         created_at=rel.created_at.isoformat() if rel.created_at else None,
     )

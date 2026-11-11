@@ -153,6 +153,42 @@ Die Sync-Schaltfläche der Symbolleiste zeigt eine pulsierende «N unsynchron»-
 
 Diagramme können von der Registerkarte **Ressourcen** einer Karte aus mit **jeder beliebigen Karte** verknüpft werden (siehe [Karten-Details](card-details.de.md#registerkarte-ressourcen)). Wenn ein Diagramm mit einer **Initiative**-Karte verknüpft ist, erscheint es auch im Modul [EA Delivery](delivery.md) zusammen mit SoAW-Dokumenten.
 
+## Data Modeller
+
+Öffnen Sie unter **Application & Data Architecture** den **Data Modeller**. Die erste Zeile enthält Kartenfarben, Karteninhalte und Synchronisierung. Die zweite enthält Zeichenwerkzeuge, Seitenleisten, Zoom, Filter und SVG-Export. Das Diagramm zeigt die zuletzt freigegebene Zeichnung. Starten Sie die Synchronisierung, um Änderungen im Inventar erneut zu prüfen.
+
+![Diagramm der Beziehungen zwischen Geschäftsobjekten mit dem führenden System und der Karte des ausgewählten Geschäftsobjekts](../assets/img/de/105_beziehungen_geschaeftsobjekte.png)
+
+Ziehen Sie an der Linie oder ihren Griffen, um ein Segment zu verschieben, einen Knick hinzuzufügen oder den Anschluss am Rand eines Objekts zu versetzen. Speichern Sie den neuen Verlauf. Eine einfache Linie steht für eins. Ein Krähenfuß steht für viele (N oder M). Über **Punktraster** blenden Sie die Punkte im Hintergrund ein oder aus. Der Browser speichert Ihre Auswahl für jedes Diagramm.
+
+Klicken Sie mit der rechten Maustaste auf eine Verbindungslinie und wählen Sie **Gerade** oder **Rechtwinklig**. Die Linienführung bleibt beim Verschieben eines Knotens sowie nach dem Speichern und erneuten Öffnen des Diagramms erhalten.
+
+Halten Sie die linke Maustaste auf dem Hintergrund gedrückt und ziehen Sie, um die Ansicht zu verschieben. Mit dem Mausrad scrollen Sie vertikal, mit **Umschalt** und dem Mausrad horizontal und mit **Strg** und dem Mausrad zoomen Sie. Sie können auch den Fokus auf die Arbeitsfläche setzen und die Pfeiltasten verwenden.
+
+Öffnen Sie **Tastenkürzel** in der Symbolleiste, um die verfügbaren Befehle zu sehen. Mit der Schaltfläche für den Seitenbereich blenden Sie die Kartendetails ein oder aus. Wenn Sie ein Geschäftsobjekt auswählen, werden seine Details wieder angezeigt.
+
+Mit Bearbeitungsrechten können Sie Änderungen am aktuellen Diagrammentwurf mit **Rückgängig** und **Wiederholen** zurücknehmen oder erneut anwenden. Mit **Löschen** entfernen Sie ausgewählte Geschäftsobjekte beim Speichern aus dem Diagramm. Ihre Karten und Verknüpfungen bleiben im Inventar verfügbar. Für eine ausgewählte Linie gelten die übliche Bestätigung und Synchronisierung. **Kopieren** und **Einfügen** öffnen für jedes kopierte Geschäftsobjekt einen neuen Entwurf, sodass Sie vor dem Hinzufügen seinen Namen ändern können. Wenn Sie eine gespeicherte Karte umbenennen, wird das Inventar aktualisiert. Synchronisieren Sie die Änderung, um den neuen Namen in das Diagramm zu übernehmen.
+
+1. Prüfen Sie die hinzugefügten, aktualisierten oder entfernten Geschäftsobjekte und Verknüpfungen.
+2. Wenn Sie das Diagramm bearbeiten dürfen, klicken Sie bei den gewünschten Änderungen auf **Synchronisieren**. Die Änderungen erscheinen auf Ihrer Leinwand. Wurde beispielsweise ein Geschäftsobjekt umbenannt und dem Untertyp **Dokument** zugeordnet, erhält es an derselben Position den neuen Namen und eine gefaltete Ecke.
+3. Klicken Sie auf **Speichern**, um den aktualisierten Stand freizugeben. Bis dahin sehen andere Benutzer den vorherigen Stand. Wurde ein Inventareintrag inzwischen erneut geändert, prüfen Sie ihn, bevor Sie die neue Fassung übernehmen.
+
+Bei diesem Abgleich und dieser Synchronisierung werden die Daten aus dem Inventar gelesen. Bestätigte Entfernungen von Linien, deren Beziehungen noch aus dem Inventar gelöscht werden sollen, erscheinen in einer separaten Liste. Synchronisieren Sie diese Entfernungen separat.
+
+### Einen Entwurf für Beziehungen zwischen Geschäftsobjekten wiederherstellen
+
+Der Editor hält einen Entwurf in Ihrem Browser vor und aktualisiert ihn während der Bearbeitung etwa alle fünf Sekunden. Wenn Sie **Beziehungen zwischen Geschäftsobjekten** im selben Browser mit demselben Konto erneut öffnen, erscheint der zuletzt freigegebene Stand. Ist ein Entwurf verfügbar, wählen Sie **Wiederherstellen**, um Ihre Änderungen auf die Leinwand zu übernehmen, oder **Verwerfen**, um den Entwurf zu löschen. Andere Benutzer sehen Ihre Änderungen erst, wenn **Speichern** oder **Speichern und schließen** erfolgreich war.
+
+Jeder geöffnete Editor hält einen eigenen Entwurf vor. Sind mehrere Entwürfe verfügbar, wird nach dem Verwerfen des angezeigten Entwurfs der nächste angeboten. Wenn Sie einen Entwurf wiederhergestellt haben, können Sie den Editor erneut öffnen, um einen weiteren Entwurf wiederherzustellen.
+
+Wenn **Speichern** meldet, dass ein Geschäftsobjekt oder eine Verknüpfung mit einer Anwendung abgelehnt wurde, klicken Sie neben dem Eintrag auf **Verwerfen**. Wenn Sie ein neues Geschäftsobjekt verwerfen, werden auch seine Position und die davon abhängigen Verknüpfungen aus dem Entwurf entfernt. Anschließend können Sie Ihre übrigen Änderungen speichern.
+
+Ist ein Geschäftsobjekt während der Bearbeitung nicht mehr verfügbar, überspringt **Speichern** dessen Position und speichert die Positionen, die Sie weiterhin aktualisieren können.
+
+Eine entfernte Linie kann auch im wiederhergestellten Diagramm fehlen. Beim erneuten Öffnen ist die Liste der vorgemerkten Löschungen leer. Wenn die Beziehung noch vorhanden und für Sie sichtbar ist, können Sie die Linie über **Änderungen im Inventar** zurückholen. Um die Beziehung aus dem Inventar zu löschen, bestätigen Sie die Entfernung in der aktuellen Sitzung erneut und klicken Sie auf **Entfernung synchronisieren**.
+
+**Speichern und schließen** lässt den Editor geöffnet, wenn Sie noch Änderungen prüfen müssen. Bei vorgemerkten Löschungen aus dem Inventar warnt der Editor Sie vor dem Schließen.
+
 ## Ein Diagramm außerhalb von Turbo EA teilen
 
 Ein Diagramm kann als **schreibgeschützter Link veröffentlicht werden, der sich ohne Anmeldung öffnet** — so lässt es sich in eine Wiki-Seite wie Confluence einbetten.

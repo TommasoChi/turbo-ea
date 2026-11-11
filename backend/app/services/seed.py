@@ -3661,7 +3661,38 @@ TYPES = [
         "category": "Application & Data",
         "has_hierarchy": True,
         "has_successors": True,
-        "subtypes": [],
+        "subtypes": [
+            {
+                "key": "data",
+                "label": "Data",
+                "translations": {
+                    "de": "Daten",
+                    "fr": "Données",
+                    "es": "Datos",
+                    "it": "Dati",
+                    "pt": "Dados",
+                    "zh": "数据",
+                    "ru": "Данные",
+                    "da": "Data",
+                    "ar": "بيانات",
+                },
+            },
+            {
+                "key": "document",
+                "label": "Document",
+                "translations": {
+                    "de": "Dokument",
+                    "fr": "Document",
+                    "es": "Documento",
+                    "it": "Documento",
+                    "pt": "Documento",
+                    "zh": "文档",
+                    "ru": "Документ",
+                    "da": "Dokument",
+                    "ar": "مستند",
+                },
+            },
+        ],
         "sort_order": 9,
         "fields_schema": [
             {
@@ -3678,6 +3709,23 @@ TYPES = [
                     "ar": "معلومات البيانات",
                 },
                 "fields": [
+                    {
+                        "key": "isPaymentData",
+                        "label": "Contains Payment Data",
+                        "type": "boolean",
+                        "weight": 1,
+                        "translations": {
+                            "de": "Enthält Zahlungsdaten",
+                            "fr": "Contient des données de paiement",
+                            "es": "Contiene datos de pago",
+                            "it": "Contiene dati di pagamento",
+                            "pt": "Contém dados de pagamento",
+                            "zh": "包含支付数据",
+                            "ru": "Содержит платёжные данные",
+                            "da": "Indeholder betalingsoplysninger",
+                            "ar": "يحتوي على بيانات الدفع",
+                        },
+                    },
                     {
                         "key": "dataSensitivity",
                         "label": "Data Sensitivity",
@@ -5152,7 +5200,42 @@ RELATIONS = [
         "target_type_key": "DataObject",
         "cardinality": "n:m",
         "sort_order": 20,
-        "attributes_schema": CRUD_RELATION_ATTRIBUTES,
+        "attributes_schema": [
+            *CRUD_RELATION_ATTRIBUTES,
+            {
+                "key": "dataOwnership",
+                "label": "Data Ownership",
+                "type": "single_select",
+                "translations": {
+                    "de": "Datenverantwortung",
+                    "fr": "Responsabilité des données",
+                    "es": "Responsabilidad sobre los datos",
+                    "it": "Titolarità dei dati",
+                    "pt": "Responsabilidade pelos dados",
+                    "zh": "数据归属",
+                    "ru": "Владение данными",
+                    "da": "Dataejerskab",
+                    "ar": "ملكية البيانات",
+                },
+                "options": [
+                    {
+                        "key": "master",
+                        "label": "Master",
+                        "translations": {
+                            "de": "Führendes System",
+                            "fr": "Application de référence",
+                            "es": "Aplicación maestra",
+                            "it": "Applicazione master",
+                            "pt": "Aplicação mestre",
+                            "zh": "主应用",
+                            "ru": "Основное приложение",
+                            "da": "Master",
+                            "ar": "التطبيق الرئيسي",
+                        },
+                    }
+                ],
+            },
+        ],
         "translations": {
             "label": {
                 "de": "CRUD",
@@ -5986,6 +6069,68 @@ RELATIONS = [
     _successor_relation("relInterfaceSuccessor", "Interface", 45),
     _successor_relation("relDataObjectSuccessor", "DataObject", 46),
     _successor_relation("relBusinessContextSuccessor", "BusinessContext", 49),
+    {
+        "key": "relDataObjectToDataObject",
+        "label": "relates to",
+        "reverse_label": "relates to",
+        "source_type_key": "DataObject",
+        "target_type_key": "DataObject",
+        "cardinality": "n:m",
+        "sort_order": 50,
+        "attributes_schema": [
+            {
+                "key": "cardinality",
+                "label": "Cardinality",
+                "type": "single_select",
+                "translations": {
+                    "de": "Kardinalität",
+                    "fr": "Cardinalité",
+                    "es": "Cardinalidad",
+                    "it": "Cardinalità",
+                    "pt": "Cardinalidade",
+                    "zh": "基数",
+                    "ru": "Кратность",
+                    "da": "Kardinalitet",
+                    "ar": "التعددية",
+                },
+                "options": [
+                    {
+                        "key": value,
+                        "label": value,
+                        "translations": {
+                            locale: value
+                            for locale in ("de", "fr", "es", "it", "pt", "zh", "ru", "da", "ar")
+                        },
+                    }
+                    for value in ("1:1", "1:n", "n:1", "n:m")
+                ],
+            }
+        ],
+        "translations": {
+            "label": {
+                "de": "steht in Beziehung zu",
+                "fr": "est lié à",
+                "es": "se relaciona con",
+                "it": "è in relazione con",
+                "pt": "está relacionado com",
+                "zh": "关联",
+                "ru": "связан с",
+                "da": "er relateret til",
+                "ar": "يرتبط بـ",
+            },
+            "reverse_label": {
+                "de": "steht in Beziehung zu",
+                "fr": "est lié à",
+                "es": "se relaciona con",
+                "it": "è in relazione con",
+                "pt": "está relacionado com",
+                "zh": "关联",
+                "ru": "связан с",
+                "da": "er relateret til",
+                "ar": "يرتبط بـ",
+            },
+        },
+    },
 ]
 
 
@@ -6467,7 +6612,7 @@ async def seed_metamodel(db: AsyncSession) -> None:
 
     # ── Seed RBAC roles ──────────────────────────────────────────────────
     existing_roles_result = await db.execute(select(Role))
-    existing_roles = {r.key for r in existing_roles_result.scalars().all()}
+    existing_roles = {r.key: r for r in existing_roles_result.scalars()}
 
     seed_roles = [
         {
@@ -6513,8 +6658,18 @@ async def seed_metamodel(db: AsyncSession) -> None:
     ]
 
     for r in seed_roles:
-        if r["key"] not in existing_roles:
+        existing = existing_roles.get(r["key"])
+        if existing is None:
             db.add(Role(**r))
+            continue
+        permissions = existing.permissions
+        if (
+            r["permissions"].get("boRelationship.view")
+            and isinstance(permissions, dict)
+            and not permissions.get("*")
+            and "boRelationship.view" not in permissions
+        ):
+            existing.permissions = {**permissions, "boRelationship.view": True}
 
     # ── Seed stakeholder role definitions ──────────────────────────────────
     # Flush first so that any newly-inserted card_types rows are
@@ -6980,5 +7135,22 @@ async def seed_metamodel(db: AsyncSession) -> None:
     from app.services.dashboard_service import seed_dashboards
 
     await seed_dashboards(db)
+
+    from app.models.diagram import Diagram
+    from app.services.bo_relationship_constants import (
+        BO_RELATIONSHIP_DIAGRAM_ID,
+        BO_RELATIONSHIP_KIND,
+    )
+
+    existing_bo = await db.execute(select(Diagram.id).where(Diagram.kind == BO_RELATIONSHIP_KIND))
+    if existing_bo.first() is None:
+        db.add(
+            Diagram(
+                id=BO_RELATIONSHIP_DIAGRAM_ID,
+                name="BO Relationship",
+                kind=BO_RELATIONSHIP_KIND,
+                data={"positions": {}},
+            )
+        )
 
     await db.commit()

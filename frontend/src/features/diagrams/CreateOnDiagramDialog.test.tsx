@@ -187,3 +187,17 @@ describe("CreateOnDiagramDialog", () => {
     expect(nameField()).toHaveValue("Legacy Box");
   });
 });
+
+it("requires a declared DataObject subtype and passes it to the pending card", async () => {
+  const dataType = { ...CARD_TYPES[0], key: "DataObject", label: "Data Object", subtypes: [
+    { key: "data", label: "Data" }, { key: "document", label: "Document" },
+  ] };
+  const { user, onCreate } = renderDialog({ types: [dataType] });
+  await pickType(user, "Data Object");
+  await user.type(nameField(), "Invoice");
+  expect(addButton()).toBeDisabled();
+  await user.click(screen.getByRole("combobox", { name: "Subtype" }));
+  await user.click(within(await screen.findByRole("listbox")).getByRole("option", { name: "Document" }));
+  await user.click(addButton());
+  expect(onCreate).toHaveBeenCalledWith(expect.objectContaining({ type: "DataObject", subtype: "document" }));
+});

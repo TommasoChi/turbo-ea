@@ -70,6 +70,7 @@ _PRIVATE_CELL_ATTRS = (
     # Create-card dialog, held until Sync posts it (#1210). Not part of the
     # picture any more than the name stamp is.
     "cardDescription",
+    "cardSubtype",
     "cardType",
     "relationId",
     "relationType",
@@ -306,7 +307,9 @@ async def _get_group_ids_bulk(db: AsyncSession) -> dict[str, list[str]]:
 async def _get_favorite_ids(db: AsyncSession, user_id: uuid.UUID) -> set[str]:
     """Return the set of diagram_ids the user has favorited."""
     result = await db.execute(
-        select(DiagramFavorite.diagram_id).where(DiagramFavorite.user_id == user_id)
+        select(DiagramFavorite.diagram_id)
+        .join(Diagram, Diagram.id == DiagramFavorite.diagram_id)
+        .where(DiagramFavorite.user_id == user_id, Diagram.kind.in_(DIAGRAM_KINDS))
     )
     return {str(row[0]) for row in result.all()}
 
@@ -344,7 +347,9 @@ async def _diagram_for(db: AsyncSession, user: User, diagram_id: str, action: st
     """Load a diagram behind its kind's permission: ``diagrams.<action>`` for
     DrawIO (checked before the lookup, as always), the per-layer
     ``archimatediagrams.<tab>.<action>`` for ArchiMate."""
-    result = await db.execute(select(Diagram).where(Diagram.id == uuid.UUID(diagram_id)))
+    result = await db.execute(
+        select(Diagram).where(Diagram.id == uuid.UUID(diagram_id), Diagram.kind.in_(DIAGRAM_KINDS))
+    )
     d = result.scalar_one_or_none()
     if d is not None and d.kind == "archimate":
         await require_archimate_permission(db, user, d.viewpoint_key, action)
@@ -387,7 +392,7 @@ async def list_diagrams(
     if kind != "all" and kind not in DIAGRAM_KINDS:
         raise HTTPException(422, "kind must be 'drawio', 'archimate' or 'all'")
 
-    stmt = select(Diagram)
+    stmt = select(Diagram).where(Diagram.kind.in_(DIAGRAM_KINDS))
     if kind != "all":
         # Default drawio: every existing consumer (Diagrams page, card
         # Resources tab, MCP) keeps seeing only DrawIO diagrams.
@@ -544,7 +549,9 @@ async def add_diagram_favorite(
     """Add a diagram to favorites. Idempotent."""
     await PermissionService.require_permission(db, user, "diagrams.view")
     d_id = uuid.UUID(diagram_id)
-    result = await db.execute(select(Diagram).where(Diagram.id == d_id))
+    result = await db.execute(
+        select(Diagram).where(Diagram.id == d_id, Diagram.kind.in_(DIAGRAM_KINDS))
+    )
     if not result.scalar_one_or_none():
         raise HTTPException(404, "Diagram not found")
     existing = await db.execute(
@@ -570,6 +577,9 @@ async def remove_diagram_favorite(
     await PermissionService.require_permission(db, user, "diagrams.view")
     result = await db.execute(
         delete(DiagramFavorite).where(
+            DiagramFavorite.diagram_id.in_(
+                select(Diagram.id).where(Diagram.kind.in_(DIAGRAM_KINDS))
+            ),
             DiagramFavorite.user_id == user.id,
             DiagramFavorite.diagram_id == uuid.UUID(diagram_id),
         )
@@ -1133,7 +1143,9 @@ async def publish_diagram(
     more narrowly.
     """
     await PermissionService.require_permission(db, user, "diagrams.publish")
-    result = await db.execute(select(Diagram).where(Diagram.id == uuid.UUID(diagram_id)))
+    result = await db.execute(
+        select(Diagram).where(Diagram.id == uuid.UUID(diagram_id), Diagram.kind.in_(DIAGRAM_KINDS))
+    )
     d = result.scalar_one_or_none()
     if not d:
         raise HTTPException(404, "Diagram not found")
@@ -1186,7 +1198,9 @@ async def unpublish_diagram(
     an already-issued SSO cookie stops working the moment this returns.
     """
     await PermissionService.require_permission(db, user, "diagrams.publish")
-    result = await db.execute(select(Diagram).where(Diagram.id == uuid.UUID(diagram_id)))
+    result = await db.execute(
+        select(Diagram).where(Diagram.id == uuid.UUID(diagram_id), Diagram.kind.in_(DIAGRAM_KINDS))
+    )
     d = result.scalar_one_or_none()
     if not d:
         raise HTTPException(404, "Diagram not found")
@@ -1230,7 +1244,9 @@ async def link_card_to_diagram(
     c_id = uuid.UUID(card_id)
 
     # Check diagram exists
-    result = await db.execute(select(Diagram).where(Diagram.id == d_id))
+    result = await db.execute(
+        select(Diagram).where(Diagram.id == d_id, Diagram.kind.in_(DIAGRAM_KINDS))
+    )
     if not result.scalar_one_or_none():
         raise HTTPException(404, "Diagram not found")
 
@@ -1263,6 +1279,9 @@ async def unlink_card_from_diagram(
 
     result = await db.execute(
         delete(diagram_cards).where(
+            diagram_cards.c.diagram_id.in_(
+                select(Diagram.id).where(Diagram.kind.in_(DIAGRAM_KINDS))
+            ),
             diagram_cards.c.diagram_id == d_id,
             diagram_cards.c.card_id == c_id,
         )
@@ -1289,7 +1308,9 @@ async def set_diagram_groups(
     """Replace a diagram's group memberships (multi-group)."""
     await PermissionService.require_permission(db, user, "diagrams.manage")
     d_id = uuid.UUID(diagram_id)
-    result = await db.execute(select(Diagram).where(Diagram.id == d_id))
+    result = await db.execute(
+        select(Diagram).where(Diagram.id == d_id, Diagram.kind.in_(DIAGRAM_KINDS))
+    )
     if not result.scalar_one_or_none():
         raise HTTPException(404, "Diagram not found")
 

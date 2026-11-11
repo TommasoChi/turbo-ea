@@ -153,6 +153,42 @@ O botão Sync da barra mostra uma pílula pulsante «N por sincronizar» sempre 
 
 Os diagramas podem ser vinculados a **qualquer cartão** a partir do separador **Recursos** do cartão (ver [Detalhes do cartão](card-details.pt.md#separador-recursos)). Quando um diagrama está vinculado a um cartão **Iniciativa**, aparece também no módulo [EA Delivery](delivery.md) ao lado dos documentos SoAW.
 
+## Data Modeller
+
+Em **Application & Data Architecture**, abra o **Data Modeller**. A primeira linha reúne as cores, o conteúdo dos cartões e a sincronização. A barra inferior reúne as ferramentas de desenho, os painéis, o zoom, os filtros e a exportação SVG. O diagrama mostra o último desenho compartilhado. Use a sincronização para consultar novamente as alterações do inventário.
+
+![Diagrama de relações entre objetos de negócio com os papéis das aplicações e o cartão do objeto selecionado](../assets/img/pt/105_relacoes_objetos_negocio.png)
+
+Arraste a linha ou as alças para mover um segmento, adicionar uma dobra ou mudar o ponto de conexão na borda de um objeto. Salve para compartilhar o novo trajeto. Uma linha simples indica um. Um pé de galinha indica muitos (N ou M). Use **Grade de pontos** para mostrar ou ocultar os pontos no fundo. O navegador lembra sua escolha para cada diagrama.
+
+Clique com o botão direito num conector e escolha **Reto** ou **Ortogonal**. O traçado mantém-se ao mover um nó e ao guardar e voltar a abrir o diagrama.
+
+Para se deslocar pelo diagrama, mantenha premido o botão esquerdo do rato sobre o fundo e arraste. Use a roda do rato para se deslocar na vertical, **Shift** com a roda para se deslocar na horizontal e **Ctrl** com a roda para ajustar o zoom. Também pode colocar o foco na tela e usar as teclas de seta.
+
+Abra **Atalhos de teclado** na barra de ferramentas para consultar os comandos disponíveis. Use o botão do painel para mostrar ou ocultar os detalhes do cartão. Ao selecionar um objeto de negócio, os respetivos detalhes voltam a abrir.
+
+Se puder editar o diagrama, **Anular** e **Refazer** atuam sobre as alterações do rascunho atual. **Eliminar** retira os objetos de negócio selecionados do desenho ao guardá-lo. Os respetivos cartões e associações continuam disponíveis no inventário. Para uma linha selecionada, aplicam-se a confirmação e a sincronização habituais. **Copiar** e **Colar** abrem um novo rascunho por cada objeto de negócio copiado, para que possa mudar o nome antes de o adicionar. Mudar o nome de um cartão guardado atualiza o inventário. Sincronize a alteração para aplicar o novo nome no desenho.
+
+1. Reveja os objetos de negócio e as associações adicionados, atualizados ou removidos.
+2. Se puder editar o diagrama, selecione as alterações pretendidas e escolha **Sincronizar**. As alterações aparecem na tela. Por exemplo, se um objeto de negócio mudar de nome e passar para o subtipo **Documento**, permanece no mesmo lugar, com o novo nome e o canto dobrado.
+3. Selecione **Salvar** para partilhar o desenho atualizado. Os outros utilizadores continuam a ver o desenho anterior até que o guarde. Se um item do inventário voltar a mudar, verifique as atualizações antes de aceitar a nova versão.
+
+A verificação e esta sincronização leem os dados do inventário. As remoções de linhas já confirmadas aparecem numa lista separada. Para eliminar as relações correspondentes do inventário, use a ação de sincronização das remoções.
+
+### Recuperar um rascunho de relações entre objetos de negócio
+
+O editor mantém um rascunho no navegador e atualiza-o aproximadamente a cada cinco segundos enquanto trabalha. Ao reabrir **Relações entre objetos de negócio** no mesmo navegador e com a mesma conta, a tela mostra o último desenho partilhado. Se houver um rascunho recuperável, escolha **Restaurar** para voltar a ver as suas alterações na tela ou **Descartar** para eliminar o rascunho. Os outros utilizadores veem as suas alterações depois de concluir **Salvar** ou **Salvar e sair**.
+
+Cada editor aberto mantém o seu próprio rascunho. Se houver vários rascunhos, ao descartar o que está visível, o editor apresenta o seguinte. Depois de restaurar um rascunho, pode reabrir o editor para recuperar outro.
+
+Se **Salvar** indicar a rejeição de um objeto de negócio ou de uma associação a uma aplicação, selecione **Descartar** junto do item. Ao descartar um objeto de negócio novo, também remove do rascunho a sua posição e as associações que dependem dele. Pode então guardar as restantes alterações.
+
+Se um objeto de negócio ficar indisponível durante a edição, **Salvar** ignora a sua posição e guarda as que ainda pode atualizar.
+
+Uma linha removida pode continuar ausente do desenho restaurado. Ao reabrir o editor, a fila de remoções do inventário começa vazia. Se a relação ainda existir e estiver visível, pode repor a linha em **Alterações no inventário**. Para eliminar uma relação do inventário, confirme uma nova remoção na sessão atual e sincronize-a.
+
+**Salvar e sair** mantém o editor aberto se houver alterações por resolver. Se houver remoções do inventário pendentes, o editor avisa antes de sair.
+
 ## Partilhar um diagrama fora do Turbo EA
 
 Um diagrama pode ser publicado como uma **ligação só de leitura que abre sem iniciar sessão**, para ser incorporado numa página wiki como o Confluence.

@@ -56,6 +56,7 @@ async def _counts_by_kind(
             func.count(diagram_group_members.c.diagram_id),
         )
         .join(Diagram, Diagram.id == diagram_group_members.c.diagram_id)
+        .where(Diagram.kind.in_(("drawio", "archimate")))
         .group_by(diagram_group_members.c.group_id, Diagram.kind)
     )
     if group_id is not None:

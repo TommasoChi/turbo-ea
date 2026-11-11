@@ -9,6 +9,7 @@ from app.models.architecture_decision import ArchitectureDecision
 from app.models.architecture_decision_card import ArchitectureDecisionCard
 from app.models.audit_log import AuditLogEntry
 from app.models.base import Base
+from app.models.bo_operation_receipt import BoOperationReceipt
 from app.models.bookmark import Bookmark
 from app.models.calculation import Calculation
 from app.models.card import Card
@@ -190,6 +191,7 @@ __all__ = [
     "LicenseType",
     "Dashboard",
     "DashboardKpiSnapshot",
+    "BoOperationReceipt",
     "OpsRequestNonce",
     "AuditLogEntry",
 ]

@@ -2,6 +2,10 @@ import { useTranslation } from "react-i18next";
 import Box from "@mui/material/Box";
 import Drawer from "@mui/material/Drawer";
 import Typography from "@mui/material/Typography";
+import TextField from "@mui/material/TextField";
+import MenuItem from "@mui/material/MenuItem";
+import { useSubtypeLabel } from "@/hooks/useResolveLabel";
+import { canSyncPendingCard } from "./cardSync";
 import Button from "@mui/material/Button";
 import IconButton from "@mui/material/IconButton";
 import Divider from "@mui/material/Divider";
@@ -26,6 +30,7 @@ export interface PendingCard {
   typeColor: string;
   name: string;
   description?: string;
+  subtype?: string;
 }
 
 export interface PendingRelation {
@@ -45,6 +50,8 @@ interface Props {
   open: boolean;
   onClose: () => void;
   pendingCards: PendingCard[];
+  dataObjectSubtypes?: { key: string; label: string }[];
+  onSetSubtype?: (cellId: string, subtype: string) => void;
   pendingRels: PendingRelation[];
   pendingRelRemovals: RemovedRelationTombstone[];
   pendingParentChanges: PendingParentChange[];
@@ -76,6 +83,8 @@ export default function DiagramSyncPanel({
   open,
   onClose,
   pendingCards,
+  dataObjectSubtypes = [],
+  onSetSubtype,
   pendingRels,
   pendingRelRemovals,
   pendingParentChanges,
@@ -99,6 +108,7 @@ export default function DiagramSyncPanel({
   checkingUpdates,
 }: Props) {
   const { t } = useTranslation(["diagrams", "common"]);
+  const subtypeLabel = useSubtypeLabel();
   const totalPending =
     pendingCards.length +
     pendingRels.length +
@@ -167,9 +177,15 @@ export default function DiagramSyncPanel({
                   <Typography variant="caption" color="text.disabled">
                     {card.typeLabel}
                   </Typography>
+                  {card.type === "DataObject" && !canSyncPendingCard(card, dataObjectSubtypes) && (
+                    <TextField select required size="small" fullWidth label={t("common:labels.subtype")}
+                      value="" disabled={syncing} onChange={(e) => onSetSubtype?.(card.cellId, e.target.value)}>
+                      {dataObjectSubtypes.map((st) => <MenuItem key={st.key} value={st.key}>{subtypeLabel(st)}</MenuItem>)}
+                    </TextField>
+                  )}
                 </Box>
                 <Tooltip title={t("sync.pushToInventory")}>
-                  <IconButton size="small" onClick={() => onSyncFS(card.cellId)} disabled={syncing}>
+                  <IconButton size="small" onClick={() => onSyncFS(card.cellId)} disabled={syncing || !canSyncPendingCard(card, dataObjectSubtypes)}>
                     <MaterialSymbol icon="cloud_upload" size={16} />
                   </IconButton>
                 </Tooltip>

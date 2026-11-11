@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
+import { searchBoApplications } from "@/features/boRelationship/boRelationshipSearch";
 import CardPicker, { type CardOption } from "./CardPicker";
 
 vi.mock("@/api/client", () => ({
@@ -81,6 +82,21 @@ describe("CardPicker", () => {
       const urls = vi.mocked(api.get).mock.calls.map((c) => c[0] as string);
       expect(urls.some((u) => u.includes("search=beta"))).toBe(true);
     });
+  });
+
+  it("uses a scoped Application search source instead of inventory search", async () => {
+    vi.mocked(api.get).mockResolvedValue({ items: [{ id: "crm", name: "Scoped CRM" }], total: 1 });
+
+    render(<Harness searchSource={searchBoApplications} />);
+    const input = screen.getByPlaceholderText("Search Application");
+    await userEvent.click(input);
+    expect(await screen.findByRole("option", { name: "Scoped CRM" })).toBeInTheDocument();
+    expect(api.get).toHaveBeenCalledWith("/bo-relationship/applications?page=1&page_size=50");
+    await userEvent.type(input, "CRM");
+    await waitFor(() => expect(api.get).toHaveBeenCalledWith(
+      "/bo-relationship/applications?page=1&page_size=50&search=CRM",
+    ));
+    expect(vi.mocked(api.get).mock.calls.every(([path]) => path.startsWith("/bo-relationship/applications?"))).toBe(true);
   });
 
   it("filters the visible list from the first character typed", async () => {

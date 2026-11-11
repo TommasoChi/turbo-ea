@@ -20,7 +20,7 @@ import type {
 } from "../exchange/exchangeModel";
 import { isCustomEnterpriseObject, isNoteObject } from "../exchange/exchangeModel";
 import type ArchimateElementFactory from "./ArchimateElementFactory";
-import { cropConnection } from "./ModelSync";
+import { connectionBends, cropConnection, restoreOrthogonalWaypoints, type RoutedConnection } from "./ModelSync";
 import type { EditedView } from "./reconcile";
 
 export interface ViewServices {
@@ -30,7 +30,7 @@ export interface ViewServices {
   connectionDocking: CroppingConnectionDocking;
 }
 
-export function importView(services: ViewServices, model: ArchimateModel, view: ModelView): void {
+export function importView(services: ViewServices, model: ArchimateModel, view: ModelView, orthogonalIds?: ReadonlySet<string>): void {
   const { canvas, elementFactory, connectionDocking } = services;
   const root = canvas.getRootElement();
   const elements = new Map(model.elements.map((e) => [e.id, e]));
@@ -78,10 +78,13 @@ export function importView(services: ViewServices, model: ArchimateModel, view: 
       const rel = relationships.get(c.relationshipRef);
       const [source, target] = [drawn.get(c.source), drawn.get(c.target)];
       if (!rel || !source || !target) return true;
+      const orthogonal = orthogonalIds?.has(c.id);
       const connection = elementFactory.createConnection({
         id: c.id, businessObject: rel, source, target,
-        waypoints: [getMid(source), ...c.bendpoints.map(({ x, y }) => ({ x, y })), getMid(target)], fromModel: true,
-      });
+        waypoints: orthogonal ? restoreOrthogonalWaypoints(source, target, c.bendpoints)
+          : [getMid(source), ...c.bendpoints.map(({ x, y }) => ({ x, y })), getMid(target)], fromModel: true,
+      }) as RoutedConnection;
+      if (orthogonal) connection.orthogonal = true;
       cropConnection(connectionDocking, connection);
       canvas.addConnection(connection, root);
       drawn.set(c.id, connection);
@@ -108,7 +111,7 @@ export function extractEdited(services: ViewServices, baseView: ModelView): Edit
       relationships.set(c.businessObject.id, c.businessObject);
       connections.push({
         id: c.id, relationshipRef: c.businessObject.id, source: c.source!.id, target: c.target!.id,
-        bendpoints: c.waypoints.slice(1, -1).map((p) => ({ x: Math.round(p.x), y: Math.round(p.y) })),
+        bendpoints: connectionBends(c).map((p) => ({ x: Math.round(p.x), y: Math.round(p.y) })),
       });
     } else {
       const s = e as Shape;

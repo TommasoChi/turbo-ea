@@ -49,7 +49,9 @@ vi.mock("@/features/cards/sections", async () => {
     LifecycleSection: stub,
     HierarchySection: stub,
     SuccessorsSection: stub,
-    RelationsSection: stub,
+    RelationsSection: ({ initialExpanded }: { initialExpanded: boolean }) => (
+      <div data-testid="relations" data-expanded={initialExpanded} />
+    ),
     LayeredDependencySection: stub,
     CommentsTab: stub,
     TodosTab: stub,
@@ -119,10 +121,10 @@ function hideProvider(keys: string[]) {
   };
 }
 
-function renderContent() {
+function renderContent(boScoped = false) {
   return render(
     <MemoryRouter>
-      <CardDetailContent card={card} perms={perms} onCardUpdate={() => {}} showLdvSection={false} />
+      <CardDetailContent card={card} perms={perms} onCardUpdate={() => {}} showLdvSection={false} boScoped={boScoped} />
     </MemoryRouter>,
   );
 }
@@ -140,6 +142,29 @@ beforeEach(() => {
 });
 
 describe("CardDetailContent extension field visibility", () => {
+  it("shows the BO relationships above the other sections in the diagram panel", async () => {
+    renderContent(true);
+    const relations = screen.getByTestId("relations");
+    const attributes = await screen.findByText("Indicators");
+    expect(relations).toHaveAttribute("data-expanded", "true");
+    expect(relations.compareDocumentPosition(attributes) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("keeps inventory extension providers and header slots out of a scoped card", async () => {
+    registerExtension("daaf", {
+      key: "daaf",
+      sdkVersion: UI_SDK_VERSION,
+      fieldVisibility: hideProvider(["fieldB"]),
+      slots: [{ slot: "card.detail.header", id: "scoped", component: () => <span>Inventory slot</span> }],
+    });
+
+    renderContent(true);
+
+    expect(await screen.findByText("Indicator A")).toBeInTheDocument();
+    expect(screen.getByText("Indicator B")).toBeInTheDocument();
+    expect(screen.queryByText("Inventory slot")).not.toBeInTheDocument();
+  });
+
   it("shows all fields when no provider hides anything", async () => {
     renderContent();
     expect(await screen.findByText("Indicator A")).toBeInTheDocument();

@@ -8,7 +8,7 @@ import Typography from "@mui/material/Typography";
 import type { SxProps, Theme } from "@mui/material/styles";
 import { useTranslation } from "react-i18next";
 import { useMetamodel } from "@/hooks/useMetamodel";
-import { useCardSearch, useFillVisible } from "@/hooks/useCardSearch";
+import { useCardSearch, useFillVisible, type CardSearchSource } from "@/hooks/useCardSearch";
 import {
   bestRankBySubtree,
   buildChildIndex,
@@ -82,6 +82,8 @@ interface CardPickerBaseProps {
   onBlur?: () => void;
   /** First-page size. Scrolling to the bottom fetches more. Defaults to 50. */
   pageSize?: number;
+  /** Search a module-scoped catalogue instead of the inventory. */
+  searchSource?: CardSearchSource;
   placeholder?: string;
   label?: string;
   autoFocus?: boolean;
@@ -148,6 +150,7 @@ export default function CardPicker(props: CardPickerProps) {
   onInputChange,
   onBlur,
   pageSize = 50,
+  searchSource,
   placeholder,
   label,
   autoFocus,
@@ -211,6 +214,7 @@ export default function CardPicker(props: CardPickerProps) {
     search: treeAttempt ? "" : debouncedInput,
     enabled,
     pageSize: treeAttempt ? TREE_PAGE_SIZE : pageSize,
+    searchSource,
   });
 
   // A different type gets its own budget.

@@ -26,6 +26,17 @@ beforeEach(() => {
 });
 
 describe("useCardTabActivity", () => {
+  it("does not load inventory history or record visits when disabled", () => {
+    vi.mocked(api.get).mockResolvedValue([]);
+    const { result, unmount } = renderHook(() => useCardTabActivity(CARD_A, USER_ME, false));
+
+    result.current.noteVisit("card");
+    unmount();
+
+    expect(api.get).not.toHaveBeenCalled();
+    expect(localStorage.getItem(STORAGE_KEY)).toBeNull();
+  });
+
   it("returns no dots on a first-ever visit, even when activity exists", async () => {
     vi.mocked(api.get).mockResolvedValueOnce([
       { id: "1", event_type: "comment.created", created_at: isoMinus(60) },

@@ -16,6 +16,7 @@ import {
   matchesFacet,
   rawValues,
 } from "@/lib/fieldFacets";
+import { isBoOwnershipAttribute } from "@/lib/relationAttributes";
 import { parseSideKey } from "@/lib/relationSort";
 
 /* ------------------------------------------------------------------ */
@@ -190,7 +191,9 @@ export function extractRelSubtypes(
     if (rt.source_type_key !== cardType && rt.target_type_key !== cardType) continue;
     // Stryker disable next-line ArrayDeclaration: a string entry has no type and is skipped like none
     for (const f of rt.attributes_schema ?? []) {
-      if (f.type === "single_select") out.push({ relType: rt, field: f });
+      if (f.type === "single_select" && !isBoOwnershipAttribute(rt.key, f.key)) {
+        out.push({ relType: rt, field: f });
+      }
     }
   }
   return out;

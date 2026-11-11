@@ -57,7 +57,9 @@ import {
   CARD_TYPES,
   RELATION_TYPES,
   cardById,
+  makeCardType,
   makeRelationType,
+  makeSubtype,
 } from "@/test/fixtures/metamodel";
 import type { Card, Relation } from "@/types";
 import SuccessorsSection from "./SuccessorsSection";
@@ -467,6 +469,43 @@ describe("SuccessorsSection", () => {
     await user.click(screen.getByRole("button", { name: /Add Successor/ }));
     const dialog = await screen.findByRole("dialog");
     expect(within(dialog).getByRole("button", { name: /Create new Application/ })).toBeInTheDocument();
+  });
+
+  it.each([
+    ["Predecessor", CARD.id, "data-new"],
+    ["Successor", "data-new", CARD.id],
+  ])("requires a declared subtype when creating a Data Object %s", async (direction, source, target) => {
+    const relation = makeRelationType({
+      key: "relDataObjectSuccessor",
+      source_type_key: "DataObject",
+      target_type_key: "DataObject",
+    });
+    withMetamodel([makeCardType({
+      key: "DataObject",
+      label: "Data Object",
+      has_successors: true,
+      subtypes: [makeSubtype({ key: "customer_record", label: "Customer record" })],
+    })], [relation]);
+    mockApi.on("get", `/relations?card_id=${CARD.id}&type=relDataObjectSuccessor`, []);
+    mockApi.on("post", "/cards", { id: "data-new", name: "Customer" });
+    const { user } = renderSection({ card: { ...CARD, type: "DataObject" } });
+    await user.click(await screen.findByRole("button", { name: new RegExp(`Add ${direction}`) }));
+    const dialog = within(await screen.findByRole("dialog"));
+    await user.click(dialog.getByRole("button", { name: /Create new Data Object/ }));
+    await user.type(dialog.getByLabelText("Name"), "Customer{Enter}");
+    expect(mockApi.callsOf("post", "/cards")).toHaveLength(0);
+    const submit = dialog.getByRole("button", { name: "Create & Add" });
+    expect(submit).toBeDisabled();
+
+    await user.click(dialog.getByRole("combobox", { name: /^Subtype/ }));
+    await user.click(screen.getByRole("option", { name: "Customer record" }));
+    await user.click(submit);
+    await waitFor(() => expect(mockApi.callsOf("post", "/relations").map((call) => call.body)).toEqual([
+      { type: "relDataObjectSuccessor", source_id: source, target_id: target },
+    ]));
+    expect(mockApi.callsOf("post", "/cards").map((call) => call.body)).toEqual([
+      { type: "DataObject", name: "Customer", subtype: "customer_record" },
+    ]);
   });
 
   it("creates a new card of the same type and links it, seeded with the typed search", async () => {

@@ -33,14 +33,17 @@ Contract notes:
 
 from __future__ import annotations
 
+import hashlib
 import math
 import uuid
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
 from fastapi import BackgroundTasks, HTTPException
-from sqlalchemy import exists, select
+from sqlalchemy import and_, any_, bindparam, exists, func, or_, select
+from sqlalchemy.dialects.postgresql import ARRAY, UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.card import Card
@@ -49,6 +52,8 @@ from app.models.ppm_cost_line import PpmBudgetLine, PpmCostLine
 from app.models.relation import Relation
 from app.models.relation_type import RelationType
 from app.services import card_approval, card_lifecycle, card_reference, notification_service
+from app.services.bo_inventory_deletions import record_inventory_relation_deletion
+from app.services.bo_relationship_constants import APPLICATION_RELATION, ER_RELATION, OWNERSHIP_KEY
 from app.services.calculation_engine import run_calculations_for_card
 from app.services.card_costs import COST_ITEM_TYPES, DERIVED_KEY, recompute_derived
 from app.services.card_uniqueness import check_sibling_name_unique
@@ -771,6 +776,14 @@ async def _recalc_changed_descendants(
 # ---------------------------------------------------------------------------
 
 
+def validate_dataobject_subtype(type_key: str, subtype: str | None, row: CardType | None) -> None:
+    """Require a declared subtype for a newly classified DataObject."""
+    if type_key != "DataObject":
+        return
+    if not subtype or not row or subtype not in {item.get("key") for item in (row.subtypes or [])}:
+        raise HTTPException(422, "DataObject subtype must be a declared option")
+
+
 async def create_card(
     db: AsyncSession,
     actor: WriteActor,
@@ -796,6 +809,10 @@ async def create_card(
     number its cards with one global scan per prefix instead of one per
     card; without it the reference is allocated exactly as before.
     """
+    card_type_row = (
+        await db.execute(select(CardType).where(CardType.key == type_key))
+    ).scalar_one_or_none()
+    validate_dataobject_subtype(type_key, subtype, card_type_row)
     await _validate_url_attributes(db, type_key, attributes or {})
     await _validate_percentage_attributes(db, type_key, attributes or {})
     await _validate_boolean_attributes(db, type_key, attributes or {})
@@ -826,9 +843,6 @@ async def create_card(
     await db.flush()
 
     # Assign the human-readable reference (auto-generated or manual) per type config.
-    card_type_row = (
-        await db.execute(select(CardType).where(CardType.key == type_key))
-    ).scalar_one_or_none()
     if reference_allocator is not None:
         await reference_allocator.assign(db, card, card_type_row)
     else:
@@ -898,6 +912,15 @@ async def update_card(
     # update (defensive: CardUpdate no longer carries it, but drop any stray).
     updates = dict(updates)
     updates.pop("reference", None)
+    if (
+        "subtype" in updates
+        and updates["subtype"] != card.subtype
+        and (updates["subtype"] or card.subtype)
+    ):
+        row = (
+            await db.execute(select(CardType).where(CardType.key == card.type))
+        ).scalar_one_or_none()
+        validate_dataobject_subtype(card.type, updates["subtype"], row)
 
     # Validate URL- and percentage-typed attributes
     if "attributes" in updates and updates["attributes"]:
@@ -1322,6 +1345,8 @@ async def _emit_relation_events(
     label, reverse_label = await _resolve_relation_labels(db, rel.type)
     forward = label or rel.type
     backward = reverse_label or label or rel.type
+    if event_type == "relation.deleted":
+        await record_inventory_relation_deletion(db, actor_id, rel)
 
     source_name = source_card.name if source_card else None
     target_name = target_card.name if target_card else None
@@ -1384,15 +1409,132 @@ async def find_relation(
 
     The ends must already be in the relation type's direction.
     """
-    return (
-        await db.execute(
-            select(Relation).where(
-                Relation.type == type_key,
-                Relation.source_id == source_id,
-                Relation.target_id == target_id,
-            )
+    stmt = select(Relation).where(
+        Relation.type == type_key, Relation.source_id == source_id, Relation.target_id == target_id
+    )
+    if type_key == ER_RELATION:
+        stmt = select(Relation).where(
+            Relation.type == type_key,
+            or_(
+                and_(Relation.source_id == source_id, Relation.target_id == target_id),
+                and_(Relation.source_id == target_id, Relation.target_id == source_id),
+            ),
         )
-    ).scalar_one_or_none()
+    if type_key == APPLICATION_RELATION:
+        stmt = stmt.with_for_update().execution_options(populate_existing=True)
+    return await db.scalar(stmt)
+
+
+def orient_er_attributes(
+    type_key: str, rel: Relation | None, source_id: uuid.UUID, attributes: dict | None
+) -> dict | None:
+    if type_key != ER_RELATION or rel is None or rel.source_id == source_id or attributes is None:
+        return attributes
+    result = dict(attributes)
+    if result.get("cardinality") == "1:n":
+        result["cardinality"] = "n:1"
+    elif result.get("cardinality") == "n:1":
+        result["cardinality"] = "1:n"
+    return result
+
+
+async def lock_bo_master(db: AsyncSession, object_id: uuid.UUID) -> None:
+    """Serialize decisions and edits on Application links for one BO."""
+    await lock_bo_relation_writes(db, [(APPLICATION_RELATION, object_id, object_id)])
+
+
+async def lock_bo_relation_writes(
+    db: AsyncSession, pairs: Iterable[tuple[str, uuid.UUID, uuid.UUID]]
+) -> None:
+    """Lock unordered ER pairs and BO ownership, in one order across batches."""
+    keys: set[int] = set()
+    for type_key, source, target in pairs:
+        if type_key == APPLICATION_RELATION:
+            lock_bytes = target.bytes
+        elif type_key == ER_RELATION:
+            first, second = sorted((source, target))
+            lock_bytes = hashlib.sha256(b"bo-er" + first.bytes + second.bytes).digest()
+        else:
+            continue
+        keys.add(int.from_bytes(lock_bytes[:8], "big", signed=True))
+    for key in sorted(keys):
+        await db.execute(select(func.pg_advisory_xact_lock(key)))
+
+
+async def lock_relation_endpoints(
+    db: AsyncSession, card_ids: Iterable[uuid.UUID]
+) -> set[uuid.UUID]:
+    """Lock endpoints in card ID order before taking any relation row locks."""
+    ids = set(card_ids)
+    if not ids:
+        return set()
+    # Hard deletes lock cards before cascading to relations. The NO KEY UPDATE
+    # lock also covers the later recalculation writes without locking out FKs.
+    candidates = bindparam("relation_endpoints", list(ids), type_=ARRAY(UUID(as_uuid=True)))
+    locked = await db.scalars(
+        select(Card.id)
+        .where(Card.id == any_(candidates))
+        .order_by(Card.id)
+        .with_for_update(key_share=True)
+    )
+    return set(locked)
+
+
+async def lock_relation_for_write(db: AsyncSession, rel: Relation) -> Relation | None:
+    """Re-read the relation after locking its endpoints, so a hard delete can win."""
+    await lock_bo_relation_writes(db, [(rel.type, rel.source_id, rel.target_id)])
+    await lock_relation_endpoints(db, (rel.source_id, rel.target_id))
+    return await db.scalar(
+        select(Relation)
+        .where(Relation.id == rel.id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+
+
+async def delete_relation(db: AsyncSession, actor_id: uuid.UUID, rel: Relation) -> None:
+    """Delete a relation and publish both endpoint events in the current transaction."""
+    source_card = await db.get(Card, rel.source_id)
+    target_card = await db.get(Card, rel.target_id)
+    await _emit_relation_events(
+        db,
+        event_type="relation.deleted",
+        rel=rel,
+        source_card=source_card,
+        target_card=target_card,
+        actor_id=actor_id,
+    )
+    await db.delete(rel)
+    # Flush before rescoring so a mandatory relation check sees the deletion.
+    await db.flush()
+    for card in (source_card, target_card):
+        if card:
+            await run_calculations_for_card(db, card)
+            card.data_quality = await calc_data_quality(db, card)
+
+
+def relation_attributes_for_write(
+    type_key: str, attributes: dict | None, previous: dict | None = None
+) -> dict | None:
+    """Validate supplied ER labels and preserve ownership on ordinary writes."""
+    if type_key == ER_RELATION and attributes is not None:
+        cardinality = attributes.get("cardinality")
+        if cardinality is not None and cardinality not in ("1:1", "1:n", "n:1", "n:m"):
+            raise HTTPException(422, "ER cardinality must be 1:1, 1:n, n:1, or n:m")
+    if type_key != APPLICATION_RELATION:
+        return attributes
+    if attributes is not None and OWNERSHIP_KEY in attributes:
+        raise HTTPException(422, "Data ownership must be set through BO Relationship")
+    if previous is not None and OWNERSHIP_KEY in previous:
+        return {**(attributes or {}), OWNERSHIP_KEY: previous[OWNERSHIP_KEY]}
+    return attributes
+
+
+def validate_new_relation_endpoints(
+    type_key: str, source_id: uuid.UUID, target_id: uuid.UUID
+) -> None:
+    if type_key == ER_RELATION and source_id == target_id:
+        raise HTTPException(422, "An ER relation must link two different objects")
 
 
 def add_relation(
@@ -1405,11 +1547,12 @@ def add_relation(
     description: str | None,
 ) -> Relation:
     """Stage a new relation row in the session (not flushed)."""
+    validate_new_relation_endpoints(type_key, source_id, target_id)
     rel = Relation(
         type=type_key,
         source_id=source_id,
         target_id=target_id,
-        attributes=attributes or {},
+        attributes=relation_attributes_for_write(type_key, attributes) or {},
         description=description,
     )
     db.add(rel)
@@ -1425,9 +1568,11 @@ def merge_relation_fields(
     Returns the fields whose value changed, in a fixed order.
     """
     changed: list[str] = []
-    if attributes is not None and attributes != (rel.attributes or {}):
-        rel.attributes = attributes
-        changed.append("attributes")
+    if attributes is not None:
+        replacement = relation_attributes_for_write(rel.type, attributes, rel.attributes)
+        if replacement != (rel.attributes or {}):
+            rel.attributes = replacement
+            changed.append("attributes")
     if description is not None and description != rel.description:
         rel.description = description
         changed.append("description")
@@ -1444,6 +1589,7 @@ async def upsert_relation(
     attributes: dict | None = None,
     description: str | None = None,
     dry_run: bool = False,
+    create_only: bool = False,
 ) -> tuple[Relation, bool, list[str]]:
     """Idempotent single-relation upsert on ``(type, source, target)`` —
     the ``POST /relations`` semantics (#905): reuse an existing row and merge
@@ -1455,7 +1601,16 @@ async def upsert_relation(
     (``relation_orientation``), so a request sent the other way round merges
     into the existing row instead of forking a backwards one (#1140)."""
     source_id, target_id = await orient_endpoints(db, type_key, source_id, target_id)
+    await lock_bo_relation_writes(db, [(type_key, source_id, target_id)])
+    endpoints = {source_id, target_id}
+    if await lock_relation_endpoints(db, endpoints) != endpoints:
+        raise HTTPException(404, "Card not found")
     rel = await find_relation(db, type_key, source_id, target_id)
+    if rel is not None and create_only:
+        return rel, True, []
+    attributes = orient_er_attributes(type_key, rel, source_id, attributes)
+    if rel is not None:
+        source_id, target_id = rel.source_id, rel.target_id
     reused = rel is not None
     changed: list[str] = []
 

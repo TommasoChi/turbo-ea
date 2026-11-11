@@ -16,6 +16,29 @@ from app.models.role import Role
 from app.models.stakeholder_role_definition import StakeholderRoleDefinition
 from app.services.hierarchy import HIERARCHY_LEVEL_KEY
 from app.services.seed import RELATIONS, TYPES, seed_metamodel
+from tests.conftest import create_role
+
+
+async def test_bo_relationship_role_defaults_preserve_explicit_overrides(db):
+    member = await create_role(
+        db, key="member", permissions={"inventory.view": True, "boRelationship.view": False}
+    )
+    viewer = await create_role(db, key="viewer", permissions={"inventory.view": True})
+    await seed_metamodel(db)
+    assert member.permissions == {"inventory.view": True, "boRelationship.view": False}
+    assert viewer.permissions == {"inventory.view": True, "boRelationship.view": True}
+    admin = await db.scalar(select(Role).where(Role.key == "admin"))
+    bpm_admin = await db.scalar(select(Role).where(Role.key == "bpm_admin"))
+    assert admin.permissions == {"*": True}
+    assert bpm_admin.permissions["boRelationship.view"] is True
+    assert not bpm_admin.permissions.get("boRelationship.edit")
+
+
+async def test_bo_relationship_seed_keeps_existing_wildcard_role(db):
+    member = await create_role(db, key="member", permissions={"*": True})
+    await seed_metamodel(db)
+    assert member.permissions == {"*": True}
+
 
 # ---------------------------------------------------------------------------
 # Card types

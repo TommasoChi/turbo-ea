@@ -69,6 +69,10 @@ UNMAPPED_PARAMS = {
         "tests/api/test_bpm_element_organizations.py::TestProcessesByOrganization"
     ),
     "migration_id": "migration admin",
+    "object_id": (
+        "BO Relationship detail — no DataObject seeded; scoped detail is covered by "
+        "test_bo_relationship_api.py::test_first_restricted_save_preserves_hidden_snapshot_and_positions"
+    ),
     "portal_id": "portal admin",
     "process_id": "BPM — no process seeded",
     "product": "endoflife.date proxy (network)",

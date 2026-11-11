@@ -46,6 +46,7 @@ def scope(
     allowed: tuple[str, ...] = (),
     held: tuple[uuid.UUID, ...] = (),
     wildcard: bool = False,
+    subtype_denials: tuple[tuple[str, frozenset[str]], ...] = (),
 ) -> CardReadScope:
     return CardReadScope(
         role_key="r",
@@ -54,6 +55,7 @@ def scope(
         denied_types=frozenset(denied),
         allowed_types=frozenset(allowed),
         stakeholder_card_ids=frozenset(held),
+        subtype_denials=subtype_denials,
     )
 
 
@@ -108,6 +110,36 @@ class TestRefClause:
         assert await ref(db, s, "Open", str(HELD), mode="inventory") is True
         assert await ref(db, s, "Open", str(uuid.uuid4()), mode="inventory") is False
 
+    async def test_subtype_restricted_reference_must_resolve_to_the_recorded_type(
+        self, db, landscape
+    ):
+        read_scope = scope(subtype_denials=(("Open", frozenset({"Restricted"})),))
+        open_id = str(landscape["open"].id)
+        assert await ref(db, read_scope, "Open", open_id, mode="module") is True
+        assert await ref(db, read_scope, "Open", open_id.upper(), mode="module") is True
+        assert (
+            await ref(db, read_scope, "Open", str(landscape["secret"].id), mode="module") is False
+        )
+
+    async def test_reference_subtype_filter_respects_type_grants_and_stakeholder_access(
+        self, db, landscape
+    ):
+        open_card = landscape["open"]
+        open_card.subtype = "Restricted"
+        unheld = await create_card(db, card_type="Open", name="Published", subtype="Published")
+        secret_id = str(landscape["secret"].id)
+        read_scope = scope(
+            base_view=False,
+            denied=("Secret",),
+            allowed=("Open",),
+            held=(open_card.id,),
+            subtype_denials=(("Open", frozenset({"Restricted"})),),
+        )
+        assert await ref(db, read_scope, "Open", str(open_card.id).upper(), mode="inventory")
+        assert await ref(db, read_scope, "Open", str(unheld.id), mode="inventory")
+        assert await ref(db, read_scope, "Secret", secret_id, mode="inventory") is False
+        assert await ref(db, read_scope, "Secret", secret_id, mode="module") is False
+
 
 @pytest.fixture
 async def landscape(db):
@@ -161,6 +193,39 @@ class TestEventReadFilters:
             "peer_open",
             "peer_held",
         }
+
+    @pytest.mark.parametrize("side", ["source", "target"])
+    async def test_relation_events_filter_both_stored_ends_without_the_event_card(
+        self, db, landscape, side
+    ):
+        hidden = landscape["secret"]
+        hidden.subtype = "Restricted"
+        visible = landscape["held"]
+        open_id = str(landscape["open"].id)
+        other = "target" if side == "source" else "source"
+        for name, identifier in [
+            ("restricted", str(hidden.id)),
+            ("missing", str(uuid.uuid4())),
+            ("visible", str(visible.id)),
+        ]:
+            db.add(
+                Event(
+                    event_type=f"relation.{name}",
+                    data={
+                        f"{side}_type": "Secret",
+                        f"{side}_id": identifier,
+                        f"{other}_type": "Open",
+                        f"{other}_id": open_id,
+                        "peer_type": "Open",
+                        "peer_id": open_id,
+                    },
+                )
+            )
+        await db.flush()
+
+        read_scope = scope(subtype_denials=(("Secret", frozenset({"Restricted"})),))
+        kept = await db.scalars(select(Event.event_type).where(*event_read_filters(read_scope)))
+        assert list(kept) == ["relation.visible"]
 
 
 class TestScrubEventPayloads:
@@ -426,6 +491,52 @@ class TestStakeholderCarveOut:
         await _hold(db, other, user, "viewer")
         read_scope = await CardReadScope.load(db, user)
         assert read_scope.stakeholder_card_ids == frozenset({carve["secret"].id, other.id})
+
+    async def test_subtype_restrictions_and_stakeholder_carve_outs_agree_across_reads(
+        self, db, carve
+    ):
+        user = await _reader(db, base_view=True)
+        await _cells(db, "Secret", {"r": {"inventory.view": {"value": False, "subtypes": ["R"]}}})
+        await _cells(db, "Open", {"r": {"inventory.view": {"value": True, "subtypes": ["R"]}}})
+        await create_card_type(db, key="Denied", label="Denied")
+        await _cells(db, "Denied", {"r": {"inventory.view": False}})
+        await create_stakeholder_role_def(
+            db, card_type_key="Denied", key="viewer", permissions={"card.view": True}
+        )
+        held = await create_card(db, card_type="Secret", name="Held", subtype="R")
+        unheld = await create_card(db, card_type="Secret", name="Unheld", subtype="R")
+        published = await create_card(db, card_type="Secret", name="Published", subtype="P")
+        denied = await create_card(db, card_type="Denied", name="Denied")
+        denied_unheld = await create_card(db, card_type="Denied", name="Unheld denied")
+        outside_selection = await create_card(db, card_type="Open", name="Outside selection")
+        await _hold(db, held, user)
+        await _hold(db, denied, user)
+        await _hold(db, carve["secret"], user)
+        carve["open"].subtype = "R"
+        await _hold(db, carve["open"], user)
+        visible = {carve["open"].id, carve["secret"].id, published.id}
+        hidden = {unheld.id, denied_unheld.id}
+        stakeholder_ids = {held.id, denied.id}
+        requested = visible | hidden | stakeholder_ids | {uuid.uuid4()}
+
+        restricted = await CardReadScope.load(db, user, include_subtype_denials=True)
+        assert restricted.stakeholder_card_ids == stakeholder_ids
+        assert await restricted.readable_card_ids(db, requested, mode="inventory") == (
+            visible | stakeholder_ids
+        )
+        assert await restricted.hidden_card_ids(db, requested, mode="inventory") == hidden
+        assert restricted.readable(held.id, "Secret", subtype="R", mode="inventory") is True
+        assert restricted.readable(unheld.id, "Secret", subtype="R", mode="inventory") is False
+        assert restricted.readable(outside_selection.id, "Open", mode="inventory") is True
+
+        landscape_only = await CardReadScope.load(
+            db, user, include_subtype_denials=True, include_stakeholders=False
+        )
+        assert await landscape_only.hidden_card_ids(db, requested, mode="module") == (
+            hidden | stakeholder_ids
+        )
+        default = await CardReadScope.load(db, user)
+        assert await default.hidden_card_ids(db, requested, mode="module") == {denied_unheld.id}
 
 
 class TestSingleCardGuards:

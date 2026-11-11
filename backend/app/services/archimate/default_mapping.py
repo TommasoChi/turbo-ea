@@ -1,9 +1,8 @@
 """Default mapping from Turbo EA types to ArchiMate 3.x concepts.
 
-Seed data and migration 158 both read these tables, and ``test_archimate_default_mapping``
-pins that the migration's embedded copy equals this module. An admin edits the
-live values in Admin -> Metamodel -> ARCHI MAP (branch 2); nothing here overrides
-an admin-set value. Element and relationship names are the Open Group XSD 3.1 names.
+Seed data reads these tables. Migrations embed the defaults they apply, beginning
+with migration 158. An admin edits the live values in Admin -> Metamodel -> ARCHI MAP.
+Element and relationship names are the Open Group XSD 3.1 names.
 """
 
 from __future__ import annotations
@@ -95,6 +94,7 @@ RELATION_DEFAULTS: dict[str, RelationDefault] = {
     "relProcessToBizCtx": {"type": "Realization"},
     "relObjectiveToBizCtx": {"type": "Association"},
     "relBusinessContextSuccessor": {"type": "Triggering", "reversed": True},
+    "relDataObjectToDataObject": {"type": "Association"},
 }
 
 # Successor relations exist per card type; they all read "A succeeds B".

@@ -15,12 +15,20 @@ from datetime import date, datetime, timezone
 
 import pytest
 from fastapi import BackgroundTasks, HTTPException
-from sqlalchemy import select
+from sqlalchemy import event as sa_event
+from sqlalchemy import select, update
 
+from app.models.bo_operation_receipt import BoOperationReceipt
+from app.models.event import Event
 from app.models.relation import Relation
 from app.models.stakeholder import Stakeholder
 from app.models.tag import CardTag, Tag, TagGroup
 from app.services import card_write_service as svc
+from app.services.bo_relationship_constants import (
+    APPLICATION_RELATION,
+    ER_RELATION,
+    INVENTORY_RELATION_DELETE,
+)
 from app.services.card_write_service import WriteActor
 from tests.conftest import (
     create_budget_line,
@@ -127,6 +135,38 @@ def steps(monkeypatch):
     return calls
 
 
+@pytest.fixture
+def executed_sql(db):
+    statements = []
+    bind = db.sync_session.get_bind()
+
+    def record(conn, cursor, statement, parameters, context, executemany):
+        statements.append((" ".join(statement.split()), parameters))
+
+    sa_event.listen(bind, "before_cursor_execute", record)
+    yield statements
+    sa_event.remove(bind, "before_cursor_execute", record)
+
+
+@pytest.fixture
+async def data_object_type(db):
+    await create_card_type(db, key="DataObject", subtypes=[{"key": "Data"}, {"key": "Document"}])
+
+
+@pytest.fixture
+async def data_objects(db, env, data_object_type):
+    await create_relation_type(
+        db, key=ER_RELATION, source_type_key="DataObject", target_type_key="DataObject"
+    )
+    await create_relation_type(
+        db, key=APPLICATION_RELATION, source_type_key="Application", target_type_key="DataObject"
+    )
+    return [
+        await create_card(db, card_type="DataObject", name=name, subtype="Data")
+        for name in ("Customer", "Order", "Product")
+    ]
+
+
 # ── create ──────────────────────────────────────────────────────────────────
 
 
@@ -166,6 +206,33 @@ async def test_a_bare_create_takes_the_defaults(db, env):
     assert card.lifecycle == {} and card.attributes == {}
     assert card.parent_id is None and card.parent_label is None
     assert card.created_by is None and card.updated_by is None
+
+
+@pytest.mark.parametrize("subtype", [None, "", "Retired"])
+async def test_a_new_data_object_requires_a_declared_subtype(db, env, data_object_type, subtype):
+    with pytest.raises(HTTPException) as error:
+        await svc.create_card(
+            db, env["actor"], type_key="DataObject", name="Invoice", subtype=subtype
+        )
+    assert (error.value.status_code, error.value.detail) == (
+        422,
+        "DataObject subtype must be a declared option",
+    )
+
+
+async def test_a_data_object_is_created_with_its_declared_subtype(db, env, data_object_type):
+    card = await svc.create_card(
+        db, env["actor"], type_key="DataObject", name="Invoice", subtype="Document"
+    )
+    assert card.subtype == "Document"
+
+
+async def test_a_data_object_cannot_be_classified_without_its_type_configuration(db, env):
+    with pytest.raises(HTTPException) as error:
+        await svc.create_card(
+            db, env["actor"], type_key="DataObject", name="Invoice", subtype="Document"
+        )
+    assert error.value.status_code == 422
 
 
 async def test_an_empty_label_without_a_parent_is_dropped(db, env):
@@ -1249,3 +1316,220 @@ async def test_a_dry_run_relation_is_written_but_not_announced(db, env, publishe
         dry_run=True,
     )
     assert published == []
+
+
+async def test_er_lookup_is_unordered_and_matches_both_endpoints_and_type(db, data_objects):
+    source, target, peer = data_objects
+    relation = await create_relation(
+        db, type_key=ER_RELATION, source_id=source.id, target_id=target.id
+    )
+    await create_relation(db, type_key="custom", source_id=source.id, target_id=peer.id)
+    assert await svc.find_relation(db, ER_RELATION, source.id, target.id) is relation
+    assert await svc.find_relation(db, ER_RELATION, target.id, source.id) is relation
+    for first, second in ((source, peer), (peer, source), (target, peer), (peer, target)):
+        assert await svc.find_relation(db, ER_RELATION, first.id, second.id) is None
+    assert await svc.find_relation(db, "custom", peer.id, source.id) is None
+
+
+@pytest.mark.parametrize(
+    "existing_cardinality,reversed_cardinality",
+    [
+        ("1:n", "n:1"),
+        ("n:1", "1:n"),
+        ("1:1", "1:1"),
+        ("n:m", "n:m"),
+    ],
+)
+async def test_er_upsert_interprets_cardinality_from_the_callers_end(
+    db, env, data_objects, existing_cardinality, reversed_cardinality
+):
+    source, target, _ = data_objects
+    relation, reused, changed = await svc.upsert_relation(
+        db,
+        env["actor"],
+        type_key=ER_RELATION,
+        source_id=source.id,
+        target_id=target.id,
+        attributes={"cardinality": existing_cardinality},
+    )
+    assert reused is False and changed == []
+    assert relation.attributes == {"cardinality": existing_cardinality}
+
+    replacement = {"cardinality": reversed_cardinality, "note": "Required"}
+    found, reused, changed = await svc.upsert_relation(
+        db,
+        env["actor"],
+        type_key=ER_RELATION,
+        source_id=target.id,
+        target_id=source.id,
+        attributes=replacement,
+    )
+    assert found.id == relation.id
+    assert (found.source_id, found.target_id) == (source.id, target.id)
+    assert reused is True and changed == ["attributes"]
+    assert found.attributes == {"cardinality": existing_cardinality, "note": "Required"}
+    assert replacement == {"cardinality": reversed_cardinality, "note": "Required"}
+    found, reused, changed = await svc.upsert_relation(
+        db,
+        env["actor"],
+        type_key=ER_RELATION,
+        source_id=source.id,
+        target_id=target.id,
+        attributes={"cardinality": existing_cardinality, "note": "Required"},
+    )
+    assert (found.id, reused, changed) == (relation.id, True, [])
+
+
+async def test_create_only_er_upsert_returns_the_existing_relation_without_edits(
+    db, env, data_objects, published
+):
+    source, target, _ = data_objects
+    relation = await create_relation(
+        db,
+        type_key=ER_RELATION,
+        source_id=source.id,
+        target_id=target.id,
+        attributes={"cardinality": "1:n"},
+    )
+    existing, reused, changed = await svc.upsert_relation(
+        db,
+        env["actor"],
+        type_key=ER_RELATION,
+        source_id=target.id,
+        target_id=source.id,
+        attributes={"cardinality": "n:m"},
+        description="Do not overwrite",
+        create_only=True,
+    )
+    assert (existing.id, reused, changed) == (relation.id, True, [])
+    assert existing.attributes == {"cardinality": "1:n"}
+    assert existing.description is None
+    assert published == []
+
+
+@pytest.mark.parametrize(
+    "type_key,attributes,message",
+    [
+        (ER_RELATION, {"cardinality": "many"}, "ER cardinality must be 1:1, 1:n, n:1, or n:m"),
+        (
+            APPLICATION_RELATION,
+            {"dataOwnership": "master"},
+            "Data ownership must be set through BO Relationship",
+        ),
+    ],
+)
+def test_bo_relation_rejects_invalid_inventory_attributes(type_key, attributes, message):
+    with pytest.raises(HTTPException) as error:
+        svc.relation_attributes_for_write(type_key, attributes)
+    assert (error.value.status_code, error.value.detail) == (422, message)
+
+
+async def test_er_upsert_rejects_a_self_link(db, env, data_objects):
+    source, _, _ = data_objects
+    with pytest.raises(HTTPException) as error:
+        await svc.upsert_relation(
+            db, env["actor"], type_key=ER_RELATION, source_id=source.id, target_id=source.id
+        )
+    assert (error.value.status_code, error.value.detail) == (
+        422,
+        "An ER relation must link two different objects",
+    )
+
+
+async def test_upsert_reports_a_missing_endpoint(db, env, data_objects):
+    source, _, _ = data_objects
+    with pytest.raises(HTTPException) as error:
+        await svc.upsert_relation(
+            db, env["actor"], type_key=ER_RELATION, source_id=source.id, target_id=uuid.uuid4()
+        )
+    assert (error.value.status_code, error.value.detail) == (404, "Card not found")
+
+
+async def test_bo_advisory_locks_use_stable_keys_in_order(db, executed_sql):
+    source = uuid.UUID(int=1)
+    target = uuid.UUID(int=2)
+    owner_target = uuid.UUID("80000000-0000-0000-0000-000000000001")
+    pairs = [
+        ("custom", source, target),
+        (APPLICATION_RELATION, source, target),
+        (ER_RELATION, target, source),
+        (APPLICATION_RELATION, target, owner_target),
+        (ER_RELATION, source, target),
+        (APPLICATION_RELATION, source, owner_target),
+    ]
+    await svc.lock_bo_relation_writes(db, pairs)
+
+    # Advisory keys are signed PostgreSQL bigints. ER directions share the
+    # same digest key, and all ownership writers share a key per target.
+    assert [parameters for statement, parameters in executed_sql if "pg_advisory" in statement] == [
+        (-0x8000000000000000,),
+        (-0x6ECB34770E3A6286,),
+        (0,),
+    ]
+
+
+async def test_relation_endpoint_locks_avoid_blocking_foreign_keys(db, data_objects, executed_sql):
+    source, target, _ = data_objects
+    candidates = [target.id, source.id, uuid.uuid4(), source.id]
+    assert await svc.lock_relation_endpoints(db, candidates) == {source.id, target.id}
+    [(statement, parameters)] = executed_sql
+    assert "::UUID[]" in statement
+    assert "ORDER BY cards.id FOR NO KEY UPDATE" in statement
+    assert len(parameters) == 1
+    assert set(parameters[0]) == set(candidates)
+
+
+@pytest.mark.parametrize("lookup", ["find_application", "lock_for_write"])
+async def test_locked_relation_reads_refresh_a_loaded_row(db, data_objects, executed_sql, lookup):
+    target, _, _ = data_objects
+    source = await create_card(db, name="Billing")
+    relation = await create_relation(
+        db, type_key=APPLICATION_RELATION, source_id=source.id, target_id=target.id
+    )
+    await db.execute(
+        update(Relation)
+        .where(Relation.id == relation.id)
+        .values(description="Committed by another writer")
+        .execution_options(synchronize_session=False)
+    )
+    assert relation.description is None
+    executed_sql.clear()
+    if lookup == "find_application":
+        found = await svc.find_relation(db, APPLICATION_RELATION, source.id, target.id)
+    else:
+        found = await svc.lock_relation_for_write(db, relation)
+    assert found is relation
+    assert found.description == "Committed by another writer"
+    assert [statement for statement, _ in executed_sql if "FROM relations" in statement][
+        0
+    ].endswith("FOR UPDATE")
+
+
+async def test_er_delete_preserves_inventory_evidence_and_endpoint_history(
+    db, env, data_objects, steps
+):
+    source, target, _ = data_objects
+    actor = env["actor"]
+    relation, _, _ = await svc.upsert_relation(
+        db, actor, type_key=ER_RELATION, source_id=source.id, target_id=target.id
+    )
+    receipt_query = select(BoOperationReceipt).where(BoOperationReceipt.result_id == relation.id)
+    assert await db.scalar(receipt_query) is None
+    steps.clear()
+    await svc.delete_relation(db, actor.user_id, relation)
+    assert await db.get(Relation, relation.id) is None
+
+    receipt = await db.scalar(receipt_query)
+    assert (receipt.kind, receipt.actor_id) == (INVENTORY_RELATION_DELETE, actor.user_id)
+    events = (await db.scalars(select(Event).where(Event.event_type == "relation.deleted"))).all()
+    assert {event.card_id for event in events} == {source.id, target.id}
+    assert {
+        (event.data["direction"], event.data["peer_name"], event.data["peer_type"])
+        for event in events
+    } == {("outgoing", target.name, target.type), ("incoming", source.name, source.type)}
+    assert steps == [
+        ("calc", source.id, None),
+        ("score", source.id),
+        ("calc", target.id, None),
+        ("score", target.id),
+    ]

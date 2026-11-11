@@ -154,6 +154,42 @@ The toolbar Sync button shows a pulsing "N unsynced" pill whenever pending work 
 
 Diagrams can be linked to **any card** from the card's **Resources** tab (see [Card Details](card-details.md#resources-tab)). When linked to an **Initiative** card, the diagram also appears in the [EA Delivery](delivery.md) module alongside SoAW documents.
 
+## Data Modeller
+
+Open **Data Modeller** from **Application & Data Architecture**. The top row contains **Card colors**, **Show on card** and **Sync**. The canvas toolbar below contains the drawing actions, panel toggles, zoom, filters and SVG export. The diagram starts from the last shared drawing. Use **Sync** to check inventory again and review the results under **Inventory changes**.
+
+![BO Relationship diagram with Application ownership and the selected business object card](../assets/img/en/105_bo_relationship.png)
+
+Drag a line or its handles to adjust a segment, add a bend or move its attachment along the edge of a business object. Save to share the new path. A plain line denotes one at an end. A crow’s foot denotes many (N or M). Use **Dot grid** to show or hide the dots behind the diagram. The browser remembers your choice for each diagram.
+
+Right-click a connector and choose **Straight** or **Orthogonal**. The connector keeps its routing when you move a node and when you save and reopen the diagram.
+
+To move around the diagram, hold the left mouse button on the background and drag. Use the mouse wheel to scroll vertically, **Shift** with the wheel to scroll horizontally, and **Ctrl** with the wheel to zoom. You can also focus the canvas and use the arrow keys.
+
+Open **Keyboard shortcuts** from the toolbar for the commands available to you. Use the panel button to show or hide the card details. Selecting a business object opens its details again.
+
+For editors, **Undo** and **Redo** work on edits in the current drawing draft. **Delete** removes selected business objects from the drawing when you save. Their inventory cards and links remain available in inventory. For a selected line, the usual confirmation and Sync apply. **Copy** and **Paste** open a new draft for each copied business object so you can change its name before adding it. Renaming a saved card updates inventory. Sync the change to bring the new name into the drawing.
+
+1. Review the new, updated, or removed business objects and links.
+2. If you can edit the diagram, select the changes you want and choose **Sync**. The changes appear on your canvas. For example, a renamed business object with a new Document subtype gets its new name and folded corner in the same position.
+3. Choose **Save** to share the updated drawing. Other users still see the previous drawing until you save. If an inventory item changed again, recheck it before accepting the new version.
+
+The inventory check and this Sync flow read from inventory. Confirmed line removals waiting to be deleted from inventory appear separately and still require their own Sync action.
+
+### Recovering a Data Modeller draft
+
+The editor keeps a draft in your browser and refreshes it about every five seconds while you work. When you reopen Data Modeller in the same browser with the same account, the canvas shows the last shared drawing. If you have a recoverable draft, choose **Restore** to bring your edits back to the canvas or **Discard** to clear the draft. Other users see your changes after a successful **Save** or **Save and Exit**.
+
+Each open editor keeps its own draft. If several drafts are available, discarding the one shown offers the next one. After restoring a draft, you can reopen the editor to recover another.
+
+If **Save** reports a rejected business object or Application link, use **Discard** next to that item. Discarding a new business object also removes the draft links and position that depend on it. You can then save your other changes.
+
+If a business object becomes unavailable while you edit, **Save** skips its position and saves the positions you can still update.
+
+A line you removed can remain absent from the restored drawing. The inventory removal queue starts empty on reopening. If the relation still exists and you can see it, you can bring the line back through **Inventory changes**. To delete a relation from inventory, confirm a new removal in the current session and use its removal sync action.
+
+**Save and Exit** keeps the editor open if any edits still need attention. If inventory removals are pending, the editor warns you before leaving.
+
 ## Sharing a diagram outside Turbo EA
 
 A diagram can be published as a **read-only link that opens without signing in**, so it can be embedded in a wiki page such as Confluence.

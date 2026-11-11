@@ -4,8 +4,32 @@ import userEvent from "@testing-library/user-event";
 import RelationAttributesEditor, {
   hasEditableRelationAttributes,
   relationAttributeBadges,
+  cardinalityBadge,
 } from "./RelationAttributesEditor";
 import type { RelationType } from "@/types";
+
+describe("directional cardinality", () => {
+  const rt = { key: "relDataObjectToDataObject", attributes_schema: [{ key: "cardinality", label: "Cardinality", type: "single_select", options: ["1:1", "1:n", "n:1", "n:m"].map(key => ({ key, label: key })) }] } as unknown as RelationType;
+  it("shows cardinality relative to the viewed side", () => {
+    expect(cardinalityBadge(rt, { cardinality: "1:n" }, true)?.value).toBe("1:n");
+    expect(cardinalityBadge(rt, { cardinality: "1:n" }, false)?.value).toBe("n:1");
+    expect(cardinalityBadge(rt, { cardinality: "n:1" }, false)?.value).toBe("1:n");
+    expect(cardinalityBadge(rt, { cardinality: "1:1" }, false)?.value).toBe("1:1");
+    expect(cardinalityBadge(rt, { cardinality: "n:m" }, false)?.value).toBe("n:m");
+    expect(cardinalityBadge(rt, {}, true)).toBeNull();
+    expect(cardinalityBadge({ ...rt, attributes_schema: [] }, { cardinality: "1:n" }, true)).toBeNull();
+  });
+  it("hides the reserved ownership field only for the built-in application relation", () => {
+    const ownership = { key: "dataOwnership", label: "Ownership", type: "boolean" };
+    const builtIn = { ...rt, key: "relAppToDataObj", attributes_schema: [ownership] } as RelationType;
+    expect(hasEditableRelationAttributes(builtIn)).toBe(false);
+    expect(relationAttributeBadges(builtIn, { dataOwnership: true })).toEqual([]);
+    expect(hasEditableRelationAttributes({ ...builtIn, key: "custom" })).toBe(true);
+    expect(relationAttributeBadges({ ...builtIn, key: "custom" }, { dataOwnership: true })).toHaveLength(1);
+    const customCardinality = { ...rt, key: "custom" };
+    expect(relationAttributeBadges(customCardinality, { cardinality: "1:n" })).toHaveLength(1);
+  });
+});
 
 const usageType: RelationType = {
   key: "relOrgToApp",

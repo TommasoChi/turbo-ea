@@ -15,7 +15,7 @@ from datetime import date, datetime, timedelta, timezone
 from types import SimpleNamespace
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import event, select, update
 
 from app.models.card import Card
 from app.models.card_type import CardType
@@ -27,6 +27,7 @@ from app.models.relation_type import RelationType
 from app.models.stakeholder import Stakeholder
 from app.models.tag import CardTag, Tag, TagGroup
 from app.models.user import User
+from app.services.bo_relationship_constants import APPLICATION_RELATION, BO_TYPE, ER_RELATION
 from app.services.migration import apply as ap
 from tests.conftest import (
     create_card,
@@ -820,6 +821,292 @@ async def test_a_relation_already_present_takes_the_new_attributes(db, env, ends
     assert present.attributes == {"a": 1, "k": 1}
     assert staged.target_id == again.target_id == present.id
     assert len((await db.execute(select(Relation))).scalars().all()) == 1
+
+
+@pytest.fixture
+async def business_object(db):
+    await create_card_type(db, key=BO_TYPE, label="Business Object")
+    await create_relation_type(
+        db, key=APPLICATION_RELATION, source_type_key="Application", target_type_key=BO_TYPE
+    )
+    obj = await create_card(db, card_type=BO_TYPE, name="Account")
+    await identity(db, "account", obj.id)
+    return obj
+
+
+@pytest.mark.parametrize("has_other_master", [False, True])
+async def test_legacy_staged_application_link_does_not_assign_master(
+    db, env, ends, business_object, has_other_master
+):
+    if has_other_master:
+        master = await create_relation(
+            db,
+            type_key=APPLICATION_RELATION,
+            source_id=ends.other.id,
+            target_id=business_object.id,
+            attributes={"dataOwnership": "master"},
+        )
+    staged = await stage(
+        db,
+        env,
+        "relation",
+        "legacy-app-link",
+        data={
+            "tea_type": APPLICATION_RELATION,
+            "from_entity_id": "app",
+            "to_entity_id": "account",
+            "attributes": {"dataOwnership": "master", "crudRead": True},
+        },
+    )
+    unrelated = await stage(
+        db,
+        env,
+        "relation",
+        "unrelated-link",
+        data={
+            "tea_type": "app_to_itc",
+            "from_entity_id": "app",
+            "to_entity_id": "server",
+            "attributes": {"dataOwnership": "ordinary value"},
+        },
+    )
+
+    assert await ap._apply_relation_pass(db, env.m, env.admin) == zero(created=2)
+    imported = await db.get(Relation, staged.target_id)
+    assert (imported.source_id, imported.target_id) == (ends.app.id, business_object.id)
+    assert imported.attributes == {"crudRead": True}
+    assert (await db.get(Relation, unrelated.target_id)).attributes == {
+        "dataOwnership": "ordinary value"
+    }
+    if has_other_master:
+        await db.refresh(master)
+        assert master.attributes == {"dataOwnership": "master"}
+
+
+@pytest.mark.parametrize("action", ["create", "update"])
+async def test_legacy_staged_application_link_preserves_current_master(
+    db, env, ends, business_object, action
+):
+    master = await create_relation(
+        db,
+        type_key=APPLICATION_RELATION,
+        source_id=ends.app.id,
+        target_id=business_object.id,
+        attributes={"dataOwnership": "master", "crudRead": True, "crudUpdate": False},
+    )
+    staged = await stage(
+        db,
+        env,
+        "relation",
+        "legacy-app-link",
+        action=action,
+        target_id=master.id if action == "update" else None,
+        data={
+            "tea_type": APPLICATION_RELATION,
+            "from_entity_id": "app",
+            "to_entity_id": "account",
+            "attributes": {"dataOwnership": None, "crudUpdate": True},
+        },
+    )
+
+    assert await ap._apply_relation_pass(db, env.m, env.admin) == zero(updated=1)
+    assert staged.target_id == master.id
+    await db.refresh(master)
+    assert master.attributes == {"dataOwnership": "master", "crudRead": True, "crudUpdate": True}
+
+
+@pytest.mark.parametrize("action", ["create", "update"])
+@pytest.mark.parametrize("reverse", [False, True])
+async def test_er_migration_merges_in_the_stored_orientation(db, env, action, reverse):
+    await create_card_type(db, key=BO_TYPE, label="Business Object")
+    await create_relation_type(
+        db, key=ER_RELATION, source_type_key=BO_TYPE, target_type_key=BO_TYPE
+    )
+    first = await create_card(db, card_type=BO_TYPE, name="First")
+    second = await create_card(db, card_type=BO_TYPE, name="Second")
+    await identity(db, "first", first.id)
+    await identity(db, "second", second.id)
+    present = await create_relation(
+        db,
+        type_key=ER_RELATION,
+        source_id=first.id,
+        target_id=second.id,
+        attributes={"cardinality": "1:1", "custom": "keep"},
+    )
+    staged = await stage(
+        db,
+        env,
+        "relation",
+        "er",
+        action=action,
+        target_id=present.id if action == "update" else None,
+        data={
+            "tea_type": ER_RELATION,
+            "from_entity_id": "second" if reverse else "first",
+            "to_entity_id": "first" if reverse else "second",
+            "attributes": {"cardinality": "1:n"},
+        },
+    )
+    assert await ap._apply_relation_pass(db, env.m, env.admin) == zero(updated=1)
+    assert staged.target_id == present.id
+    (stored,) = (await db.scalars(select(Relation))).all()
+    assert (stored.id, stored.source_id, stored.target_id) == (present.id, first.id, second.id)
+    assert stored.attributes == {"cardinality": "n:1" if reverse else "1:n", "custom": "keep"}
+
+
+@pytest.mark.parametrize("action", ["create", "update", "skip"])
+async def test_application_link_import_locks_only_writes_and_refreshes_ownership(
+    db, env, ends, business_object, action
+):
+    present = await create_relation(
+        db,
+        type_key=APPLICATION_RELATION,
+        source_id=ends.app.id,
+        target_id=business_object.id,
+        attributes={"crudRead": False},
+    )
+    # Advance the database row while keeping the session's cached copy stale,
+    # as it would be after a concurrent master assignment commits.
+    await db.execute(
+        update(Relation)
+        .where(Relation.id == present.id)
+        .values(attributes={"crudRead": False, "dataOwnership": "master"})
+        .execution_options(synchronize_session=False)
+    )
+    await stage(
+        db,
+        env,
+        "relation",
+        "app-link",
+        action=action,
+        target_id=present.id if action != "create" else None,
+        data={
+            "tea_type": APPLICATION_RELATION,
+            "from_entity_id": "app",
+            "to_entity_id": "account",
+            "attributes": {"crudRead": True},
+        },
+    )
+    statements = []
+    connection = (await db.connection()).sync_connection
+
+    def record(_conn, _cursor, statement, parameters, _context, _executemany):
+        statements.append((statement, parameters))
+
+    event.listen(connection, "before_cursor_execute", record)
+    try:
+        result = await ap._apply_relation_pass(db, env.m, env.admin)
+    finally:
+        event.remove(connection, "before_cursor_execute", record)
+
+    advisory_locks = [params for sql, params in statements if "pg_advisory_xact_lock" in sql]
+    relation_locks = [
+        sql for sql, _ in statements if "FROM relations" in sql and "FOR UPDATE" in sql
+    ]
+    await db.refresh(present)
+    if action == "skip":
+        assert result == zero(skipped=1)
+        assert advisory_locks == relation_locks == []
+        assert present.attributes == {"crudRead": False, "dataOwnership": "master"}
+    else:
+        assert result == zero(updated=1)
+        assert advisory_locks == [
+            (int.from_bytes(business_object.id.bytes[:8], "big", signed=True),)
+        ]
+        assert len(relation_locks) == 1
+        assert present.attributes == {"crudRead": True, "dataOwnership": "master"}
+
+
+async def test_invalid_staged_er_update_is_reported_but_skipped_rows_are_not_validated(db, env):
+    await create_card_type(db, key=BO_TYPE)
+    await create_relation_type(
+        db, key=ER_RELATION, source_type_key=BO_TYPE, target_type_key=BO_TYPE
+    )
+    first = await create_card(db, card_type=BO_TYPE, name="First")
+    second = await create_card(db, card_type=BO_TYPE, name="Second")
+    await identity(db, "first", first.id)
+    await identity(db, "second", second.id)
+    relation = await create_relation(
+        db,
+        type_key=ER_RELATION,
+        source_id=first.id,
+        target_id=second.id,
+        attributes={"cardinality": "1:1"},
+    )
+    data = {
+        "tea_type": ER_RELATION,
+        "from_entity_id": "first",
+        "to_entity_id": "second",
+        "attributes": {"cardinality": "invalid"},
+    }
+    invalid = await stage(
+        db, env, "relation", "invalid", action="update", target_id=relation.id, data=data
+    )
+    skipped = await stage(
+        db, env, "relation", "skipped", action="skip", target_id=relation.id, data=data
+    )
+
+    assert await ap._apply_relation_pass(db, env.m, env.admin) == zero(skipped=1, errors=1)
+    assert invalid.status == "error"
+    assert "ER cardinality" in invalid.error_message
+    assert skipped.status == "applied"
+    await db.refresh(relation)
+    assert relation.attributes == {"cardinality": "1:1"}
+
+
+async def test_staged_update_without_a_relation_type_cannot_write_attributes(db, env, ends):
+    present = await create_relation(
+        db, source_id=ends.app.id, target_id=ends.server.id, attributes={"existing": True}
+    )
+    invalid = await stage(
+        db,
+        env,
+        "relation",
+        "missing-type",
+        action="update",
+        target_id=present.id,
+        data={"from_entity_id": "app", "to_entity_id": "server", "attributes": {"new": True}},
+    )
+
+    assert await ap._apply_relation_pass(db, env.m, env.admin) == zero(errors=1)
+    assert invalid.status == "error"
+    assert "tea_type" in invalid.error_message
+    await db.refresh(present)
+    assert present.attributes == {"existing": True}
+
+
+@pytest.mark.parametrize(
+    ("target", "attributes", "error"),
+    [
+        ("first", {}, "two different objects"),
+        ("second", {"cardinality": "2:2"}, "ER cardinality"),
+    ],
+)
+async def test_invalid_staged_er_relation_is_reported(db, env, target, attributes, error):
+    await create_card_type(db, key=BO_TYPE)
+    await create_relation_type(
+        db, key=ER_RELATION, source_type_key=BO_TYPE, target_type_key=BO_TYPE
+    )
+    first = await create_card(db, card_type=BO_TYPE, name="First")
+    second = await create_card(db, card_type=BO_TYPE, name="Second")
+    await identity(db, "first", first.id)
+    await identity(db, "second", second.id)
+    staged = await stage(
+        db,
+        env,
+        "relation",
+        "invalid-er",
+        data={
+            "tea_type": ER_RELATION,
+            "from_entity_id": "first",
+            "to_entity_id": target,
+            "attributes": attributes,
+        },
+    )
+    assert await ap._apply_relation_pass(db, env.m, env.admin) == zero(errors=1)
+    assert staged.status == "error"
+    assert error in staged.error_message
+    assert await db.scalar(select(Relation.id)) is None
 
 
 async def test_only_a_relation_of_the_same_type_and_ends_is_reused(db, env, ends):
