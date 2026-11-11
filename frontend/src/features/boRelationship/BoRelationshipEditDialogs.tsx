@@ -4,11 +4,11 @@ import {
   FormControlLabel, Stack, TextField, Typography,
 } from "@mui/material";
 import { useTranslation } from "react-i18next";
-import { api } from "@/api/client";
 import CardPicker, { type CardOption } from "@/components/CardPicker";
 import { useMetamodel } from "@/hooks/useMetamodel";
 import { useSubtypeLabel } from "@/hooks/useResolveLabel";
 import type { BoApplication, BoNode } from "./BoRelationshipPage";
+import { searchBoApplications } from "./boRelationshipSearch";
 import { CARDINALITIES, type BoApplicationInput, type BoLinkInput, type BoObjectInput, type BoRole } from "./useBoDrawing";
 
 type DialogProps = { onClose: () => void };
@@ -160,15 +160,6 @@ export function BoObjectLinkDialog({
   );
 }
 
-async function searchApplications(params: URLSearchParams) {
-  const query = new URLSearchParams(params);
-  query.delete("type");
-  const { items, total } = await api.get<{ items: BoApplication[]; total: number }>(
-    `/bo-relationship/applications?${query}`,
-  );
-  return { items: items.map((item) => ({ ...item, type: "Application" })), total };
-}
-
 export function BoApplicationLinkDialog({
   object, excludeIds, canManageMaster, master, pendingMaster, onClose, onStage,
 }: DialogProps & {
@@ -201,7 +192,7 @@ export function BoApplicationLinkDialog({
       <Typography>{object.name}</Typography>
       <CardPicker
         types="Application"
-        searchSource={searchApplications}
+        searchSource={searchBoApplications}
         label={t("boRelationship.application")}
         value={application}
         onChange={setApplication}

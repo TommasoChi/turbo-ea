@@ -24,6 +24,9 @@ it("recovers both independent writers after they close, discarding one at a time
   expect(first.result.current.blocked || second.result.current.blocked).toBe(false);
   act(() => vi.advanceTimersByTime(5000));
   expect(localStorage.length).toBe(2);
+  expect(Object.keys(JSON.parse(localStorage.getItem(localStorage.key(0)!)!)).sort()).toEqual([
+    "accepted", "draft", "version",
+  ]);
   first.unmount(); second.unmount();
   vi.useRealTimers();
   const recover = renderHook(() => useBoRecovery(graph, "editor", true, empty, [], vi.fn(), false, permissions));

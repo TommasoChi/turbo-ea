@@ -532,9 +532,9 @@ async def _load_remap_context(
             source_id = rm.canonical_uuid(row.get(schema.SOURCE_ID_COLUMN))
             if source_id is None or row.get("type") != ER_RELATION:
                 continue
-            key = _relation_key(row, id_map, resolver, rt_by_key)
-            if key is not None:
-                ctx.source_er_ends[source_id] = str(key[1]), str(key[2])
+            relation_key = _relation_key(row, id_map, resolver, rt_by_key)
+            if relation_key is not None:
+                ctx.source_er_ends[source_id] = str(relation_key[1]), str(relation_key[2])
 
     if ctx.legacy:
         cards = (await db.execute(select(Card.id, Card.type, Card.name, Card.status))).all()

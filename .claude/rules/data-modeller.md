@@ -1,0 +1,22 @@
+---
+paths:
+  - "backend/app/api/v1/bo_relationship.py"
+  - "backend/app/models/bo_operation_receipt.py"
+  - "backend/app/schemas/bo_relationship.py"
+  - "backend/app/services/bo_relationship*.py"
+  - "backend/app/services/bo_inventory_deletions.py"
+  - "backend/app/services/workspace_io/**"
+  - "backend/alembic/versions/*_bo_*.py"
+  - "backend/tests/**/*bo_relationship*.py"
+  - "frontend/src/features/boRelationship/**"
+---
+
+# Data Modeller
+
+- **Metamodel and direction.** Business objects are `DataObject` cards. Resolve installed `Data` and `Document` subtype keys through the metamodel and preserve existing cards. An ER pair has one `relDataObjectToDataObject` relation. Its reverse view uses the same row with reversed cardinality (`1:n` ↔ `n:1`). Cardinality is descriptive. Keep connector geometry in source-to-target order and reverse anchors and bends when import reverses the relation.
+- **Visibility and writes.** `boRelationship.view` gates the private shared diagram and `boRelationship.edit` gates editing. Apply `CardReadScope` with subtype denials to both relation endpoints, card details and layout metadata. Preserve hidden items during scoped saves. Changing Master requires full visibility of the linked applications and the underlying relation permission. Keep the reserved `dataOwnership` attribute out of generic relation and report payloads.
+- **One Master per BO.** Preserve the per-BO lock and database uniqueness guard on `relAppToDataObj`. When a Master exists, the other linked applications are Slave. Without a Master, links are Unclassified. Workspace import preserves an existing Master and reports a conflicting incoming designation while retaining the link and its CRUD values.
+- **Save and Sync.** Use stable draft IDs and operation receipts so a retry after partial failure can publish the same objects and links. Merge layout deltas under the snapshot lock so concurrent changes to different items survive. Removing a BO from the drawing preserves the inventory card. A saved line removal hides the relation from the drawing. Only accepting the removal during Sync deletes the inventory relation. Checking for inventory updates and applying Sync to the drawing preserve positions and connector geometry. Save publishes the updated drawing. Recovery of a browser-local draft does not publish it.
+- **Editor and transfer.** A left-click on a node opens the card in the right-hand panel. Right-clicking a connector or its drag handle opens the routing menu. Workspace export/import carries the saved positions, routing and geometry, including retained geometry for hidden edges. Exclude local drafts and removal operations from workspace transfer. Keep an already saved destination drawing on reimport.
+
+The [design](../../docs/superpowers/specs/2026-10-28-data-relationship-design.md) and [implementation plan](../../docs/superpowers/plans/2026-10-28-bo-relationship.md) describe the agreed interactions. Regression coverage lives in `test_bo_relationship_api.py`, `test_bo_inventory_deletions.py`, `test_workspace_io_id_remap.py` and the Vitest tests under `frontend/src/features/boRelationship/`.

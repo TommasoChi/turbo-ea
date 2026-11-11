@@ -15,6 +15,7 @@ from sqlalchemy import ColumnElement, any_, bindparam, func, select
 from sqlalchemy.dialects.postgresql import ARRAY, UUID, insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
+from sqlalchemy.types import TypeEngine
 
 from app.core.permissions import VIEW_PERMISSION, resolve_cell
 from app.models.bo_operation_receipt import BoOperationReceipt
@@ -145,7 +146,8 @@ class SavedDraft:
 
 def _uuid_array(ids: Collection[uuid.UUID]) -> ColumnElement[list[uuid.UUID]]:
     # Workspace-sized sets can exceed asyncpg's limit on bind parameters.
-    return bindparam(None, list(ids), type_=ARRAY(UUID(as_uuid=True)))
+    array_type = cast(TypeEngine[list[uuid.UUID]], ARRAY(UUID(as_uuid=True)))
+    return bindparam(None, list(ids), type_=array_type)
 
 
 async def bo_read_scope(db: AsyncSession, user: User) -> CardReadScope:

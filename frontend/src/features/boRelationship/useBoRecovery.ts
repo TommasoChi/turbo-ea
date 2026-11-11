@@ -7,8 +7,6 @@ import { validBoEdgeGeometry } from "./boConnectorGeometry";
 
 type Recovery = {
   version: 1;
-  revision: string | null;
-  original: { positions: BoGraph["positions"]; edges: BoEdge[] };
   draft: DrawingDraft;
   accepted: InventoryChange[];
 };
@@ -32,15 +30,9 @@ function removeStoredEntry(entry: StoredEntry | null) {
   } catch { /* Local storage is optional. */ }
 }
 
-function projectRecovery(draft: DrawingDraft, accepted: InventoryChange[], graph: BoGraph): Recovery {
+function projectRecovery(draft: DrawingDraft, accepted: InventoryChange[]): Recovery {
   return {
     version: 1,
-    revision: graph.snapshot_revision,
-    original: {
-      positions: Object.fromEntries(Object.keys(draft.moves)
-        .filter((id) => graph.positions[id]).map((id) => [id, graph.positions[id]])),
-      edges: graph.edges.filter((edge) => draft.removed.includes(edge.id)),
-    },
     draft: {
       ...draft,
       objects: draft.objects.map(({ id, input }) => ({ id, input })),
@@ -232,7 +224,7 @@ export function useBoRecovery(
       if (!hasDrawingChanges(currentDraft, currentAccepted)) {
         clear();
       } else {
-        const raw = JSON.stringify(projectRecovery(currentDraft, currentAccepted, currentGraph));
+        const raw = JSON.stringify(projectRecovery(currentDraft, currentAccepted));
         localStorage.setItem(key, raw);
         ownedEntry.current = { key, raw };
       }
@@ -273,7 +265,7 @@ export function useBoRecovery(
         const shared = current.current.graph;
         try {
           if (key && entry && shared) {
-            const raw = JSON.stringify(projectRecovery(draft, accepted, shared));
+            const raw = JSON.stringify(projectRecovery(draft, accepted));
             localStorage.setItem(key, raw);
             ownedEntry.current = { key, raw };
             removeStoredEntry(entry);
