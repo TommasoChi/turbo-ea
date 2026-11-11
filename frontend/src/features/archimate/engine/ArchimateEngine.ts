@@ -17,6 +17,7 @@ import { getMid } from "diagram-js/lib/layout/LayoutUtil";
 import type CroppingConnectionDocking from "diagram-js/lib/layout/CroppingConnectionDocking";
 import { innerSVG } from "tiny-svg";
 import type { ConnectorRouting } from "@/lib/connectorRouting";
+import { bindBendpointContextMenu } from "@/lib/diagramBendpointContextMenu";
 import type { EnterpriseObject } from "@/types";
 import {
   CARD_ID_DEFINITION, getCardId, isCustomEnterpriseObject, isNoteObject, newIdentifier,
@@ -105,6 +106,7 @@ export class ArchimateEngine {
       if (e.trigger !== "clear") this.onChange?.();
     });
     this.get<EventBus>("eventBus").on("selection.changed", () => opts.onSelect?.());
+    if (opts.onConnectionContextMenu) bindBendpointContextMenu(this.diagram);
     this.get<EventBus>("eventBus").on("element.contextmenu", ({ element, originalEvent }: { element: Element; originalEvent: MouseEvent }) => {
       if (!opts.onConnectionContextMenu || !element.waypoints) return;
       originalEvent.preventDefault();

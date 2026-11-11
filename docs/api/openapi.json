@@ -1706,6 +1706,7 @@
             "items": {
               "$ref": "#/components/schemas/BoAcceptedInventoryChange"
             },
+            "maxItems": 5000,
             "title": "Accepted Inventory Changes",
             "type": "array"
           },
@@ -1713,6 +1714,7 @@
             "additionalProperties": {
               "$ref": "#/components/schemas/BoPosition"
             },
+            "maxProperties": 50000,
             "propertyNames": {
               "format": "uuid"
             },
@@ -1756,6 +1758,7 @@
             "additionalProperties": {
               "$ref": "#/components/schemas/BoPosition"
             },
+            "maxProperties": 50000,
             "propertyNames": {
               "format": "uuid"
             },
@@ -1778,6 +1781,7 @@
               "format": "uuid",
               "type": "string"
             },
+            "maxItems": 5000,
             "title": "Removed Relation Ids",
             "type": "array",
             "uniqueItems": true
@@ -1787,6 +1791,7 @@
               "format": "uuid",
               "type": "string"
             },
+            "maxItems": 5000,
             "title": "Restored Relation Ids",
             "type": "array",
             "uniqueItems": true
@@ -1926,10 +1931,14 @@
       "BoPosition": {
         "properties": {
           "x": {
+            "maximum": 10000000.0,
+            "minimum": -10000000.0,
             "title": "X",
             "type": "number"
           },
           "y": {
+            "maximum": 10000000.0,
+            "minimum": -10000000.0,
             "title": "Y",
             "type": "number"
           }
@@ -23404,6 +23413,7 @@
             "required": false,
             "schema": {
               "default": 1,
+              "maximum": 10000,
               "minimum": 1,
               "title": "Page",
               "type": "integer"

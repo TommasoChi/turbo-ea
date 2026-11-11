@@ -7,11 +7,11 @@ import { CheckRow, ChoiceRow } from "@/components/cardDisplay/menuRows";
 export function DiagramEditorHeader({ title, onBack, children }: {
   title: string; onBack?: () => void; children?: ReactNode;
 }) {
-  const { t } = useTranslation("archimate");
+  const { t: tArchimate } = useTranslation("archimate");
   return (
     <Stack component="header" direction="row" alignItems="center" gap={1} useFlexGap flexWrap="wrap"
       sx={{ px: 1, py: 0.5, minHeight: 48, borderBottom: 1, borderColor: "divider", bgcolor: "background.paper" }}>
-      {onBack && <DiagramTool label={t("toolbar.back")} icon="arrow_back" onClick={onBack} />}
+      {onBack && <DiagramTool label={tArchimate("toolbar.back")} icon="arrow_back" onClick={onBack} />}
       <Typography component="h1" variant="subtitle1" fontWeight={600} noWrap sx={{ flex: "1 1 8rem" }}>
         {title}
       </Typography>

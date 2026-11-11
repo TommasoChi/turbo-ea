@@ -247,6 +247,42 @@ class TestReports:
         assert str(env["secret"].id) not in {n["id"] for n in body["nodes"]}
         assert all(str(env["secret"].id) not in (e["source"], e["target"]) for e in body["edges"])
 
+    async def test_dependencies_respect_bo_subtypes_and_redact_ownership(self, client, db, env):
+        await create_card_type(db, key="DataObject", label="Data Object")
+        await set_overrides(
+            db,
+            "DataObject",
+            {"member": {"inventory.view": {"value": False, "subtypes": ["Document"]}}},
+        )
+        await create_relation_type(
+            db,
+            key="relAppToDataObj",
+            label="uses",
+            source_type_key="Application",
+            target_type_key="DataObject",
+        )
+        visible = await create_card(db, card_type="DataObject", name="Visible", subtype="Data")
+        hidden = await create_card(db, card_type="DataObject", name="Hidden", subtype="Document")
+        for target in (visible, hidden):
+            await create_relation(
+                db,
+                type_key="relAppToDataObj",
+                source_id=env["app"].id,
+                target_id=target.id,
+                attributes={"dataOwnership": "master", "ordinary": "retained"},
+            )
+        response = await client.get(
+            "/api/v1/reports/dependencies", headers=auth_headers(env["member"])
+        )
+        assert response.status_code == 200
+        body = response.json()
+        assert str(visible.id) in {node["id"] for node in body["nodes"]}
+        assert str(hidden.id) not in {node["id"] for node in body["nodes"]}
+        links = [edge for edge in body["edges"] if edge["type"] == "relAppToDataObj"]
+        assert [(edge["target"], edge["attributes"]) for edge in links] == [
+            (str(visible.id), {"ordinary": "retained"})
+        ]
+
     async def test_reports_role_without_inventory_view_is_unaffected(self, client, db, env):
         """Module surfaces subtract only explicit denies — no regression for such roles."""
         await create_role(

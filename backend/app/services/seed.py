@@ -6067,6 +6067,8 @@ RELATIONS = [
     _successor_relation("relPlatformSuccessor", "Platform", 43),
     _successor_relation("relProcessSuccessor", "BusinessProcess", 44),
     _successor_relation("relInterfaceSuccessor", "Interface", 45),
+    _successor_relation("relDataObjectSuccessor", "DataObject", 46),
+    _successor_relation("relBusinessContextSuccessor", "BusinessContext", 49),
     {
         "key": "relDataObjectToDataObject",
         "label": "relates to",
@@ -6074,6 +6076,7 @@ RELATIONS = [
         "source_type_key": "DataObject",
         "target_type_key": "DataObject",
         "cardinality": "n:m",
+        "sort_order": 50,
         "attributes_schema": [
             {
                 "key": "cardinality",
@@ -6128,8 +6131,6 @@ RELATIONS = [
             },
         },
     },
-    _successor_relation("relDataObjectSuccessor", "DataObject", 46),
-    _successor_relation("relBusinessContextSuccessor", "BusinessContext", 49),
 ]
 
 

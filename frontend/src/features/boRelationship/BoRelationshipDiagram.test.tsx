@@ -1,8 +1,13 @@
 import { fireEvent, render, screen } from "@testing-library/react";
+import { createRef } from "react";
 import { vi, it, expect, beforeAll } from "vitest";
+import { downloadText } from "@/features/archimate/download";
 import { installElementFromPoint } from "@/test/dom";
 import { installSvgStubs } from "@/test/svgStubs";
-import BoRelationshipDiagram from "./BoRelationshipDiagram";
+import BoRelationshipDiagram, { type BoCanvasControls } from "./BoRelationshipDiagram";
+
+vi.mock("@/features/archimate/download", () => ({ downloadText: vi.fn() }));
+
 beforeAll(installSvgStubs);
 
 it("opens the routing menu on a single connection and redraws its right angles after a move", () => {
@@ -11,7 +16,7 @@ it("opens the routing menu on a single connection and redraws its right angles a
     { id: "b", name: "Order", subtype: "Data", isPersonalData: false, isPaymentData: false },
   ];
   const edge = { id: "link", source: "a", target: "b", cardinality: "1:n" };
-  const props = { nodes, positions: { a: { x: 20, y: 20 }, b: { x: 350, y: 170 } }, onActivate: vi.fn(), onChangeRouting: vi.fn() };
+  const props = { nodes, positions: { a: { x: 20, y: 20 }, b: { x: 350, y: 170 } }, onActivate: vi.fn(), onChangeRouting: vi.fn(), onChangeGeometry: vi.fn() };
   const { container, rerender } = render(<BoRelationshipDiagram {...props} edges={[edge]} />);
   const line = () => container.querySelector(".bo-edge-line")!;
   fireEvent.contextMenu(line().closest(".djs-connection")!, { button: 2, clientX: 250, clientY: 130 });
@@ -25,6 +30,10 @@ it("opens the routing menu on a single connection and redraws its right angles a
     expect(points.length).toBeGreaterThan(2);
     expect(points.slice(1).every(([x, y], i) => x === points[i][0] || y === points[i][1])).toBe(true);
   }
+  fireEvent.mouseOver(line());
+  const handle = container.querySelector('.djs-bendpoints[data-element-id="link"] .djs-segment-dragger')!;
+  fireEvent.contextMenu(handle, { button: 2, clientX: 250, clientY: 130 });
+  expect(screen.getByRole("menuitemradio", { name: "Orthogonal" })).toBeChecked();
 });
 
 it("activates a node with left click and keyboard", () => {
@@ -176,6 +185,85 @@ const shortcutDiagram = {
   edges: [{ id: "link", source: "a", target: "b", cardinality: "1:n" }],
   positions: { a: { x: 20, y: 20 }, b: { x: 350, y: 20 } },
 };
+
+it("keeps the shifted attachments of a single dragged segment after rebuilding the drawing", () => {
+  const onChangeGeometry = vi.fn();
+  const props = { ...shortcutDiagram, onActivate: vi.fn(), onChangeGeometry };
+  const { container, rerender } = render(<BoRelationshipDiagram {...props} />);
+  const line = () => container.querySelector(".bo-edge-line")!;
+  const restore = installElementFromPoint(() => null);
+  try {
+    fireEvent.mouseDown(line().closest(".djs-connection")!, { button: 0, clientX: 285, clientY: 70 });
+    fireEvent.mouseMove(document, { buttons: 1, clientX: 285, clientY: 90 });
+    expect(line()).toHaveAttribute("points", "220,90 350,90");
+    fireEvent.mouseUp(document, { button: 0, clientX: 285, clientY: 90 });
+  } finally {
+    restore();
+  }
+  expect(onChangeGeometry).toHaveBeenCalledExactlyOnceWith("link", {
+    bends: [], source: { x: 200, y: 70 }, target: { x: 0, y: 70 },
+  });
+  const geometry = onChangeGeometry.mock.calls[0][1];
+  rerender(<BoRelationshipDiagram {...props} edges={[{ ...props.edges[0], geometry }]} />);
+  expect(line()).toHaveAttribute("points", "220,90 350,90");
+});
+
+it("leaves the other attachment automatic when a segment drag moves only one end", () => {
+  const onChangeGeometry = vi.fn();
+  const { container } = render(<BoRelationshipDiagram
+    {...shortcutDiagram}
+    positions={{ ...shortcutDiagram.positions, b: { x: 350, y: 90 } }}
+    edges={[{
+      ...shortcutDiagram.edges[0],
+      routing: "orthogonal",
+      geometry: { bends: [{ x: 280, y: 70 }, { x: 280, y: 140 }] },
+    }]}
+    onActivate={vi.fn()}
+    onChangeGeometry={onChangeGeometry}
+  />);
+  const restore = installElementFromPoint(() => null);
+  try {
+    fireEvent.mouseDown(container.querySelector(".djs-connection")!, { button: 0, clientX: 250, clientY: 70 });
+    fireEvent.mouseMove(document, { buttons: 1, clientX: 250, clientY: 90 });
+    fireEvent.mouseUp(document, { button: 0, clientX: 250, clientY: 90 });
+  } finally {
+    restore();
+  }
+  expect(onChangeGeometry).toHaveBeenCalledExactlyOnceWith("link", {
+    bends: [{ x: 280, y: 90 }, { x: 280, y: 140 }], source: { x: 200, y: 70 },
+  });
+});
+
+it("keeps automatic attachments when dragging an individual bend", () => {
+  const onChangeGeometry = vi.fn();
+  const props = { ...shortcutDiagram, onActivate: vi.fn(), onChangeGeometry };
+  const edges = [{ ...props.edges[0], geometry: { bends: [{ x: 280, y: 120 }] } }];
+  const { container } = render(<BoRelationshipDiagram {...props} edges={edges} />);
+  const restore = installElementFromPoint(() => null);
+  try {
+    fireEvent.mouseDown(container.querySelector(".djs-connection")!, { button: 0, clientX: 280, clientY: 120 });
+    fireEvent.mouseMove(document, { buttons: 1, clientX: 280, clientY: 145 });
+    fireEvent.mouseUp(document, { button: 0, clientX: 280, clientY: 145 });
+  } finally {
+    restore();
+  }
+  expect(onChangeGeometry).toHaveBeenCalledExactlyOnceWith("link", { bends: [{ x: 280, y: 145 }] });
+});
+
+it("exports node labels without icon ligature text in the standalone SVG", () => {
+  const controls = createRef<BoCanvasControls>();
+  render(<BoRelationshipDiagram {...shortcutDiagram} ref={controls} onActivate={vi.fn()} />);
+
+  controls.current!.exportSvg("Objects");
+
+  expect(downloadText).toHaveBeenCalledTimes(1);
+  const [filename, svg, mime] = vi.mocked(downloadText).mock.calls[0];
+  expect(filename).toBe("Objects.svg");
+  expect(mime).toBe("image/svg+xml");
+  const drawing = new DOMParser().parseFromString(svg, "image/svg+xml");
+  expect([...drawing.querySelectorAll("text")].map((label) => label.textContent))
+    .toEqual(["Customer", "Data", "Order", "Document"]);
+});
 
 it.each([
   ["1:1", []], ["1:n", ["target"]], ["n:1", ["source"]], ["n:m", ["source", "target"]],

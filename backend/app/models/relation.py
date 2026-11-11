@@ -1,9 +1,8 @@
 from __future__ import annotations
 
 import uuid
-from typing import cast
 
-from sqlalchemy import ForeignKey, Index, Table, Text, text
+from sqlalchemy import ForeignKey, Index, Text, and_, func
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -32,15 +31,16 @@ class Relation(Base, UUIDMixin, TimestampMixin):
 
 Index(
     "uq_bo_er_pair",
-    text("least(source_id, target_id)"),
-    text("greatest(source_id, target_id)"),
+    func.least(Relation.source_id, Relation.target_id),
+    func.greatest(Relation.source_id, Relation.target_id),
     unique=True,
-    postgresql_where=text("type = 'relDataObjectToDataObject'"),
-    _table=cast(Table, Relation.__table__),
+    postgresql_where=Relation.type == "relDataObjectToDataObject",
 )
 Index(
     "uq_bo_master",
     Relation.target_id,
     unique=True,
-    postgresql_where=text("type = 'relAppToDataObj' AND attributes->>'dataOwnership' = 'master'"),
+    postgresql_where=and_(
+        Relation.type == "relAppToDataObj", Relation.attributes["dataOwnership"].astext == "master"
+    ),
 )

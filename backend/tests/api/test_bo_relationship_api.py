@@ -919,6 +919,120 @@ async def test_layout_rejects_nonfinite_coordinates_and_non_bo_ids(client, db, e
         assert response.status_code == status
 
 
+@pytest.mark.parametrize(
+    ("field", "value", "loc", "error_type"),
+    [
+        ("positions", {"x": 10_000_001, "y": 0}, ["x"], "less_than_equal"),
+        ("auto_positions", {"x": 0, "y": -10_000_001}, ["y"], "greater_than_equal"),
+        (
+            "edge_geometry",
+            {"bends": [{"x": 0, "y": 10_000_001}]},
+            ["bends", 0, "y"],
+            "less_than_equal",
+        ),
+        (
+            "edge_geometry",
+            {"bends": [], "source": {"x": -10_000_001, "y": 0}},
+            ["source", "x"],
+            "greater_than_equal",
+        ),
+    ],
+)
+async def test_layout_rejects_coordinates_outside_canvas(
+    client, env, field, value, loc, error_type
+):
+    id_ = str(uuid.uuid4())
+    response = await client.put(f"{BASE}/layout", json={field: {id_: value}}, headers=env["editor"])
+    assert response.status_code == 422
+    assert [(error["loc"], error["type"]) for error in response.json()["detail"]] == [
+        (["body", field, id_, *loc], error_type)
+    ]
+
+
+@pytest.mark.parametrize(
+    ("field", "limit"),
+    [
+        ("positions", 50_000),
+        ("auto_positions", 50_000),
+        ("removed_relation_ids", 5000),
+        ("restored_relation_ids", 5000),
+        ("accepted_inventory_changes", 5000),
+    ],
+)
+async def test_layout_bounds_request_collections(client, env, field, limit):
+    ids = [str(uuid.UUID(int=i)) for i in range(limit + 1)]
+    if field == "accepted_inventory_changes":
+        value = [{"kind": "node", "id": id_, "revision": "a" * 64} for id_ in ids]
+    elif field in ("positions", "auto_positions"):
+        value = dict.fromkeys(ids, {"x": 0, "y": 0})
+    else:
+        value = ids
+    response = await client.put(f"{BASE}/layout", json={field: value}, headers=env["editor"])
+    assert response.status_code == 422
+    assert [(error["loc"], error["type"]) for error in response.json()["detail"]] == [
+        (["body", field], "too_long")
+    ]
+
+
+async def test_legacy_layout_discards_only_invalid_geometry(client, db, env):
+    a, b, c = await bo(db), await bo(db, "Order"), await bo(db, "Invoice")
+    edge = await create_relation(db, type_key=ER, source_id=a.id, target_id=b.id)
+    kept_edge = await create_relation(db, type_key=ER, source_id=b.id, target_id=c.id)
+    a_id, b_id, c_id = str(a.id), str(b.id), str(c.id)
+    edge_id, kept_edge_id = str(edge.id), str(kept_edge.id)
+    headers = env["editor"]
+    valid_position = {"x": -10_000_000, "y": 10_000_000}
+    valid_geometry = {"bends": [{"x": 20, "y": 30}], "source": None, "target": None}
+    invalid_geometry = {"bends": [{"x": 1e100, "y": 0}]}
+    saved = await client.put(
+        f"{BASE}/layout",
+        json={
+            "positions": {a_id: valid_position},
+            "edge_geometry": {kept_edge_id: valid_geometry},
+        },
+        headers=headers,
+    )
+    assert saved.status_code == 200
+    diagram = await db.scalar(select(Diagram).where(Diagram.kind == BO_RELATIONSHIP_KIND))
+    data = diagram.data
+    diagram.data = {
+        **data,
+        "positions": {**data["positions"], b_id: {"x": 0, "y": 1e100}},
+        "edge_geometry": {**data["edge_geometry"], edge_id: invalid_geometry},
+        "edges": {
+            **data["edges"],
+            edge_id: {**data["edges"][edge_id], "geometry": invalid_geometry},
+        },
+    }
+    await db.flush()
+
+    graph = await client.get(BASE, headers=headers)
+    assert graph.status_code == 200
+    body = graph.json()
+    assert {node["id"] for node in body["nodes"]} == {a_id, b_id, c_id}
+    assert body["positions"] == {a_id: valid_position}
+    edges = {item["id"]: item for item in body["edges"]}
+    assert "geometry" not in edges[edge_id]
+    assert edges[kept_edge_id]["geometry"] == valid_geometry
+
+    saved = await client.put(
+        f"{BASE}/layout", json={"positions": {c_id: {"x": 3, "y": 4}}}, headers=headers
+    )
+    assert saved.status_code == 200
+    assert saved.json()["positions"] == {a_id: valid_position, c_id: {"x": 3, "y": 4}}
+    await db.refresh(diagram)
+    assert diagram.data["edge_geometry"] == {kept_edge_id: valid_geometry}
+    assert "geometry" not in diagram.data["edges"][edge_id]
+
+
+async def test_application_picker_rejects_excessive_page(client, env):
+    response = await client.get(f"{BASE}/applications?page=10001", headers=env["editor"])
+    assert response.status_code == 422
+    assert [(error["loc"], error["type"]) for error in response.json()["detail"]] == [
+        (["query", "page"], "less_than_equal")
+    ]
+
+
 @pytest.mark.parametrize("master", [None, "visible", "hidden"])
 async def test_partial_master_permission_does_not_depend_on_designation(client, db, env, master):
     node = await bo(db)

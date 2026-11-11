@@ -88,6 +88,7 @@ from app.services.portfolio_payload import (
     has_timeline_dates,
     roadmap_from_portfolio,
 )
+from app.services.relation_attributes import public_relation_attributes
 from app.services.value_chain_report import (
     STREAM_RELATED_CARD_TYPE,
     STREAM_RELATED_MODES,
@@ -1943,7 +1944,7 @@ async def dependencies(
     # reader may see. Filtering this one load removes hidden cards from the
     # nodes, from every edge (both ends must be visible) and from ancestor
     # paths, and stops the BFS from bridging through a hidden card.
-    read_scope = await CardReadScope.load(db, user)
+    read_scope = await CardReadScope.load(db, user, include_subtype_denials=True)
     full_result = await db.execute(
         select(Card).where(Card.status == "ACTIVE", *read_scope.where(Card, mode="module"))
     )
@@ -2069,7 +2070,7 @@ async def dependencies(
                         "label": rt_info.get("label", r.type),
                         "reverse_label": rt_info.get("reverse_label"),
                         "description": r.description,
-                        "attributes": r.attributes,
+                        "attributes": public_relation_attributes(r.type, r.attributes),
                     }
                 )
 

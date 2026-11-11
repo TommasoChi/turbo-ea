@@ -1,6 +1,8 @@
+import { fireEvent } from "@testing-library/react";
 import type Modeling from "diagram-js/lib/features/modeling/Modeling";
 import type Selection from "diagram-js/lib/features/selection/Selection";
 import type ElementRegistry from "diagram-js/lib/core/ElementRegistry";
+import type EventBus from "diagram-js/lib/core/EventBus";
 import type { Connection, Shape } from "diagram-js/lib/model/Types";
 import type { EnterpriseObject } from "@/types";
 import { MODEL } from "@/test/archimateModel";
@@ -29,6 +31,123 @@ function setup() {
 }
 
 describe("ArchimateEngine", () => {
+  const manualBends = [{ x: 80, y: -60 }, { x: 180, y: -60 }];
+
+  it("opens the connection menu from an orthogonal segment handle", () => {
+    const container = document.createElement("div");
+    const onConnectionContextMenu = vi.fn();
+    const engine = new ArchimateEngine({ container, bridge, enterpriseObjects, onConnectionContextMenu });
+    try {
+      engine.load(MODEL);
+      engine.setConnectionRouting("id-c1", "orthogonal");
+      fireEvent.mouseOver(container.querySelector('.djs-connection[data-element-id="id-c1"]')!);
+      const handle = container.querySelector('.djs-bendpoints[data-element-id="id-c1"] .djs-segment-dragger')!;
+      expect(fireEvent.contextMenu(handle, { button: 2, clientX: 100, clientY: 30 })).toBe(false);
+      expect(onConnectionContextMenu).toHaveBeenCalledExactlyOnceWith("id-c1", { left: 100, top: 30 });
+    } finally {
+      engine.destroy();
+    }
+  });
+
+  function editOrthogonalRoute({ engine, get }: ReturnType<typeof setup>) {
+    const registry = get<ElementRegistry>("elementRegistry");
+    const modeling = get<Modeling>("modeling");
+    engine.setConnectionRouting("id-c1", "orthogonal");
+    modeling.updateWaypoints(registry.get("id-c1") as Connection, [
+      { x: 80, y: 20 }, ...manualBends.map((p) => ({ ...p })), { x: 180, y: 140 },
+    ]);
+    return { registry, modeling };
+  }
+
+  it("reopens an edited orthogonal connector with its saved bends", () => {
+    const env = setup();
+    editOrthogonalRoute(env);
+    const { engine } = env;
+    engine.load(readExchange(writeExchange(engine.toModel())));
+    expect(engine.connectionRouting("id-c1")).toBe("orthogonal");
+    expect(engine.toModel().views[0].connections[0].bendpoints).toEqual(manualBends);
+  });
+
+  it("keeps the manually routed segment at right angles when either node moves", () => {
+    const env = setup();
+    const { registry, modeling } = editOrthogonalRoute(env);
+    const connection = registry.get("id-c1") as Connection;
+    const assertManualRoute = () => {
+      const points = connection.waypoints.map(({ x, y }) => ({ x, y }));
+      const firstBend = points.findIndex((p) => p.x === manualBends[0].x && p.y === manualBends[0].y);
+      expect(firstBend).toBeGreaterThan(0);
+      expect(points.slice(firstBend, firstBend + 2)).toEqual(manualBends);
+      expect(points.slice(1).every((p, i) => p.x === points[i].x || p.y === points[i].y)).toBe(true);
+    };
+
+    const source = registry.get("id-n1") as Shape;
+    // The segment drag handler restores a shallow copy of its starting waypoints on cancel.
+    env.get<EventBus>("eventBus").fire("connectionSegment.move.cancel", {
+      connection, connectionGfx: registry.getGraphics(connection),
+      context: { connection, originalWaypoints: connection.waypoints.slice() },
+    });
+    modeling.moveShape(source, { x: -85, y: 20 });
+    assertManualRoute();
+    modeling.moveShape(registry.get("id-n2") as Shape, { x: 85, y: 10 });
+    assertManualRoute();
+    const waypointCount = connection.waypoints.length;
+    modeling.moveShape(source, { x: -15, y: 5 });
+    assertManualRoute();
+    expect(connection.waypoints).toHaveLength(waypointCount);
+    env.engine.undo();
+    assertManualRoute();
+    env.engine.redo();
+    assertManualRoute();
+  });
+
+  it("keeps an orthogonal connector at right angles when a bend is dragged off-axis", () => {
+    const { engine, get } = setup();
+    const registry = get<ElementRegistry>("elementRegistry");
+    const modeling = get<Modeling>("modeling");
+    engine.setConnectionRouting("id-c1", "orthogonal");
+    const connection = registry.get("id-c1") as Connection;
+    const original = connection.waypoints;
+    const bend = { x: 40, y: 105 };
+    modeling.updateWaypoints(connection, [original[0], bend, original[original.length - 1]]);
+    const edited = connection.waypoints;
+    expect(edited).toContainEqual(bend);
+    expect(edited.slice(1).every((p, i) => p.x === edited[i].x || p.y === edited[i].y)).toBe(true);
+    engine.undo();
+    expect(connection.waypoints).toEqual(original);
+    engine.redo();
+    expect(connection.waypoints).toEqual(edited);
+  });
+
+  it("clips the orthogonal route where a moved node covers several bends", () => {
+    const { engine, get } = setup();
+    const registry = get<ElementRegistry>("elementRegistry");
+    const modeling = get<Modeling>("modeling");
+    const connection = registry.get("id-c1") as Connection;
+    const source = registry.get("id-n1") as Shape;
+    const bends = [{ x: 150, y: 45 }, { x: 150, y: 60 }, { x: 175, y: 60 }, { x: 175, y: 100 }, { x: 190, y: 100 }];
+    engine.setConnectionRouting(connection.id, "orthogonal");
+    modeling.updateWaypoints(connection, [{ x: 130, y: 45 }, ...bends, { x: 190, y: 140 }]);
+    const original = connection.waypoints;
+    const move = { x: 90, y: 0 };
+    const assertClipped = () => {
+      const points = (registry.get("id-c1") as Connection).waypoints.map(({ x, y }) => ({ x, y }));
+      expect(points).toEqual([{ x: 175, y: 75 }, ...bends.slice(3), { x: 190, y: 140 }]);
+    };
+    modeling.moveShape(source, move);
+    assertClipped();
+    engine.undo();
+    expect(connection.waypoints).toEqual(original);
+    engine.redo();
+    assertClipped();
+    modeling.moveShape(source, { x: -move.x, y: 0 });
+    expect(engine.toModel().views[0].connections[0].bendpoints).toEqual(bends);
+    modeling.moveShape(source, move);
+    engine.load(readExchange(writeExchange(engine.toModel())));
+    assertClipped();
+    modeling.moveShape(registry.get("id-n1") as Shape, { x: -move.x, y: 0 });
+    expect(engine.toModel().views[0].connections[0].bendpoints).toEqual(bends);
+  });
+
   it("keeps the selected connector routing after moving and reopening the diagram", () => {
     const { engine, get } = setup();
     const registry = get<ElementRegistry>("elementRegistry");
@@ -45,6 +164,8 @@ describe("ArchimateEngine", () => {
     engine.load(readExchange(writeExchange(engine.toModel())));
     expect(engine.connectionRouting(id)).toBe("orthogonal");
     assertOrthogonal();
+    get<Modeling>("modeling").moveShape(registry.get("id-n1") as Shape, { x: -20, y: 0 });
+    expect(engine.toModel().views[0].connections[0].bendpoints).toEqual([{ x: 98, y: 83 }, { x: 98, y: 168 }]);
     engine.setConnectionRouting(id, "straight");
     expect((registry.get(id) as Connection).waypoints).toHaveLength(2);
     engine.undo();

@@ -10,9 +10,9 @@ from dataclasses import dataclass, replace
 from typing import Literal, TypeVar, cast
 
 from fastapi import HTTPException
-from pydantic import BaseModel, Field, ValidationError
-from sqlalchemy import ColumnElement, func, select
-from sqlalchemy.dialects.postgresql import insert
+from pydantic import BaseModel, Field, ValidationError, ValidationInfo, field_validator
+from sqlalchemy import ColumnElement, any_, bindparam, func, select
+from sqlalchemy.dialects.postgresql import ARRAY, UUID, insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -80,6 +80,37 @@ class BoSnapshot(BaseModel):
     edge_routes: dict[uuid.UUID, ConnectorRouting] = Field(default_factory=dict)
     edge_geometry: dict[uuid.UUID, BoEdgeGeometry] = Field(default_factory=dict)
 
+    @field_validator("positions", "edge_geometry", mode="before")
+    @classmethod
+    def validate_saved_geometry(
+        cls, raw: object, info: ValidationInfo
+    ) -> dict[str | uuid.UUID, BoPosition | BoEdgeGeometry]:
+        # Older snapshots allowed coordinates that cannot be rendered safely.
+        model = BoPosition if info.field_name == "positions" else BoEdgeGeometry
+        valid = {}
+        if isinstance(raw, dict):
+            for id_, value in raw.items():
+                try:
+                    valid[id_] = model.model_validate(value)
+                except ValidationError:
+                    continue
+        return valid
+
+    @field_validator("edges", mode="before")
+    @classmethod
+    def validate_inline_geometry(cls, raw: object) -> object:
+        if not isinstance(raw, dict):
+            return raw
+        edges = raw.copy()
+        for id_, edge in raw.items():
+            if isinstance(edge, dict) and edge.get("geometry") is not None:
+                try:
+                    geometry = BoEdgeGeometry.model_validate(edge["geometry"])
+                except ValidationError:
+                    geometry = None
+                edges[id_] = {**edge, "geometry": geometry}
+        return edges
+
 
 @dataclass
 class BoInventory:
@@ -110,6 +141,11 @@ class SavedDraft:
     result_id: uuid.UUID
     available: bool
     published: bool
+
+
+def _uuid_array(ids: Collection[uuid.UUID]) -> ColumnElement[list[uuid.UUID]]:
+    # Workspace-sized sets can exceed asyncpg's limit on bind parameters.
+    return bindparam(None, list(ids), type_=ARRAY(UUID(as_uuid=True)))
 
 
 async def bo_read_scope(db: AsyncSession, user: User) -> CardReadScope:
@@ -198,7 +234,7 @@ async def load_bo_inventory(db: AsyncSession, scope: CardReadScope) -> BoInvento
                 Relation.attributes,
             ).where(
                 Relation.type.in_((ER_RELATION, APPLICATION_RELATION)),
-                Relation.target_id.in_(objects),
+                Relation.target_id == any_(_uuid_array(objects)),
             )
         )
         for id_, type_key, source, target, attributes in relations:
@@ -458,9 +494,12 @@ def _returning_node_placements(
     links: dict[uuid.UUID, list[BoApplicationLink]] = {id_: [] for id_ in returning}
     for edge in snapshot.edges.values():
         endpoints = {edge.source, edge.target}
-        if endpoints <= inventory.objects:
-            for id_ in endpoints & returning:
-                edges[id_].append(_styled_edge(snapshot, edge))
+        returning_endpoints = endpoints & returning
+        if not returning_endpoints or not endpoints <= inventory.objects:
+            continue
+        styled = _styled_edge(snapshot, edge)
+        for id_ in returning_endpoints:
+            edges[id_].append(styled)
     for link in snapshot.application_links.values():
         if link.object_id in returning and link.application.id in inventory.applications:
             links[link.object_id].append(link)
@@ -546,14 +585,16 @@ async def _authorize_deleted_snapshot_items(
     db: AsyncSession, user: User, snapshot: BoSnapshot, inventory: BoInventory
 ) -> None:
     """Admit absent snapshot items only when durable evidence proves visibility."""
-    endpoints = set(snapshot.nodes)
-    endpoints.update(link.application.id for link in snapshot.application_links.values())
+    application_ids = {link.application.id for link in snapshot.application_links.values()}
+    endpoints = set(snapshot.nodes) | application_ids
     endpoints.update(edge.source for edge in snapshot.edges.values())
     endpoints.update(edge.target for edge in snapshot.edges.values())
     relation_ids = set(snapshot.edges) | set(snapshot.application_links)
-    existing_cards = set((await db.scalars(select(Card.id).where(Card.id.in_(endpoints)))).all())
+    existing_cards = set(
+        await db.scalars(select(Card.id).where(Card.id == any_(_uuid_array(endpoints))))
+    )
     existing_relations = set(
-        (await db.scalars(select(Relation.id).where(Relation.id.in_(relation_ids)))).all()
+        await db.scalars(select(Relation.id).where(Relation.id == any_(_uuid_array(relation_ids))))
     )
     absent_cards = endpoints - existing_cards
     absent_relations = relation_ids - existing_relations
@@ -563,7 +604,7 @@ async def _authorize_deleted_snapshot_items(
         )
         .where(
             BoOperationReceipt.kind.in_((INVENTORY_CARD_DELETE, INVENTORY_RELATION_DELETE)),
-            BoOperationReceipt.result_id.in_(absent_cards | absent_relations),
+            BoOperationReceipt.result_id == any_(_uuid_array(absent_cards | absent_relations)),
         )
         .order_by(BoOperationReceipt.created_at.desc(), BoOperationReceipt.id.desc())
     )
@@ -585,9 +626,7 @@ async def _authorize_deleted_snapshot_items(
             continue
         if card.type == APPLICATION_TYPE and id_ in snapshot.nodes:
             continue
-        if card.type == BO_TYPE and any(
-            link.application.id == id_ for link in snapshot.application_links.values()
-        ):
+        if card.type == BO_TYPE and id_ in application_ids:
             continue
         if card.type == BO_TYPE:
             inventory.objects.add(id_)
@@ -628,7 +667,7 @@ async def _er_delete_evidence(
         select(BoOperationReceipt.result_id, BoOperationReceipt.fingerprint).where(
             BoOperationReceipt.actor_id == user.id,
             BoOperationReceipt.kind == ER_DELETE_RECEIPT,
-            BoOperationReceipt.result_id.in_(ids),
+            BoOperationReceipt.result_id == any_(_uuid_array(ids)),
         )
     )
     proven = set()
@@ -689,9 +728,8 @@ async def _apply_inventory_changes(
                 BoOperationReceipt.kind.in_(
                     {removal_kind(change) for change in body.accepted_inventory_changes}
                 ),
-                BoOperationReceipt.draft_id.in_(
-                    {change.id for change in body.accepted_inventory_changes}
-                ),
+                BoOperationReceipt.draft_id
+                == any_(_uuid_array({change.id for change in body.accepted_inventory_changes})),
             )
         )
     }
@@ -767,7 +805,7 @@ async def _draft_receipt_results(
         ).where(
             BoOperationReceipt.actor_id == actor_id,
             BoOperationReceipt.kind.in_(kinds | {f"layout_{kind}" for kind in kinds}),
-            BoOperationReceipt.draft_id.in_({id_ for _, id_ in operations}),
+            BoOperationReceipt.draft_id == any_(_uuid_array({id_ for _, id_ in operations})),
         )
     )
     return {(kind, id_): result for kind, id_, result in rows}
@@ -965,20 +1003,22 @@ async def save_bo_layout(db: AsyncSession, user: User, body: BoLayoutUpdate) -> 
         ):
             if id_ not in conflicting_edges and id_ not in unavailable_relations:
                 conflicts.append(BoInventoryItem(kind="edge", id=id_))
-        elif id_ in snapshot.edges:
-            if id_ in body.edge_routes:
-                if body.edge_routes[id_] == "orthogonal":
-                    snapshot.edge_routes[id_] = "orthogonal"
-                else:
-                    snapshot.edge_routes.pop(id_, None)
-            if id_ in body.edge_geometry:
-                geometry = body.edge_geometry[id_]
-                if geometry is None:
-                    snapshot.edge_geometry.pop(id_, None)
-                else:
-                    snapshot.edge_geometry[id_] = geometry
-        elif id_ not in body.removed_relation_ids and id_ not in conflicting_edges:
-            conflicts.append(BoInventoryItem(kind="edge", id=id_))
+            continue
+        if id_ not in snapshot.edges:
+            if id_ not in body.removed_relation_ids and id_ not in conflicting_edges:
+                conflicts.append(BoInventoryItem(kind="edge", id=id_))
+            continue
+        routing = body.edge_routes.get(id_)
+        if routing == "orthogonal":
+            snapshot.edge_routes[id_] = routing
+        elif routing == "straight":
+            snapshot.edge_routes.pop(id_, None)
+        if id_ in body.edge_geometry:
+            geometry = body.edge_geometry[id_]
+            if geometry is None:
+                snapshot.edge_geometry.pop(id_, None)
+            else:
+                snapshot.edge_geometry[id_] = geometry
     snapshot.positions.update(
         (id_, position)
         for id_, position in body.positions.items()

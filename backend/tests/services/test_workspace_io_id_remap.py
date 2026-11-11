@@ -382,7 +382,8 @@ async def test_bo_diagrams_only_resolves_renamed_or_archived_card(db, archived):
 
 
 @pytest.mark.parametrize("selected", [False, True])
-async def test_bo_diagram_uses_reverse_existing_er_relation(db, selected):
+@pytest.mark.parametrize("hidden", [False, True])
+async def test_bo_diagram_uses_reverse_existing_er_relation(db, selected, hidden):
     from app.services.bo_relationship_constants import (
         BO_RELATIONSHIP_DIAGRAM_ID,
         BO_RELATIONSHIP_KIND,
@@ -430,9 +431,11 @@ async def test_bo_diagram_uses_reverse_existing_er_relation(db, selected):
                 "source": {"x": 200, "y": 40},
             }
         },
-        "positions": {},
+        "positions": {str(a.id): {"x": 1e50, "y": 0}, str(b.id): {"x": 32, "y": 48}},
         "application_links": {},
     }
+    if hidden:
+        data["edges"].clear()
     db.add(
         Diagram(
             id=BO_RELATIONSHIP_DIAGRAM_ID,
@@ -461,7 +464,8 @@ async def test_bo_diagram_uses_reverse_existing_er_relation(db, selected):
     restored = (
         await db.execute(select(Diagram).where(Diagram.kind == BO_RELATIONSHIP_KIND))
     ).scalar_one()
-    assert restored.data["edges"] == {
+    assert restored.data["positions"] == {str(b2.id): {"x": 32, "y": 48}}
+    visible_edges = {
         str(reverse.id): {
             "id": str(reverse.id),
             "source": str(b2.id),
@@ -469,6 +473,7 @@ async def test_bo_diagram_uses_reverse_existing_er_relation(db, selected):
             "cardinality": "n:1",
         }
     }
+    assert restored.data["edges"] == ({} if hidden else visible_edges)
     assert restored.data["edge_routes"] == {str(reverse.id): "orthogonal"}
     assert restored.data["edge_geometry"] == {
         str(reverse.id): {

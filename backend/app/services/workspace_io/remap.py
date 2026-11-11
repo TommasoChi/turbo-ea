@@ -40,7 +40,7 @@ from typing import Any
 import defusedxml.ElementTree as ET  # noqa: N817
 from pydantic import ValidationError
 
-from app.schemas.bo_relationship import BoEdgeGeometry
+from app.schemas.bo_relationship import BoEdgeGeometry, BoPosition
 from app.services.bo_relationship_constants import (
     APPLICATION_RELATION,
     APPLICATION_TYPE,
@@ -165,6 +165,7 @@ class RemapContext:
     diagram_card_hints: dict[str, set[str]] = field(default_factory=dict)
     card_types: dict[str, str] = field(default_factory=dict)
     relation_details: dict[str, tuple[str, str, str]] = field(default_factory=dict)
+    source_er_ends: dict[str, tuple[str, str]] = field(default_factory=dict)
 
 
 RowRewriter = Callable[[dict[str, Any], RemapContext], RewriteTally]
@@ -584,11 +585,16 @@ def rewrite_bo_snapshot(kwargs: dict[str, Any], ctx: RemapContext) -> RewriteTal
     # A position or link can be saved before its node is accepted into the drawing.
     for old, pos in (source.get("positions") or {}).items():
         target = card(old, BO_TYPE)
-        if target:
-            result["positions"][target] = pos
-        else:
+        if not target:
             missing()
-    for old, edge in (source.get("edges") or {}).items():
+            continue
+        try:
+            result["positions"][target] = BoPosition.model_validate(pos).model_dump(mode="json")
+        except ValidationError:
+            missing()
+    source_edges = source.get("edges") or {}
+    visible_ends: dict[str, tuple[str, str]] = {}
+    for old, edge in source_edges.items():
         rid = ctx.ids.lookup(RELATIONS, old)
         src, dst = card(edge.get("source"), BO_TYPE), card(edge.get("target"), BO_TYPE)
         details = ctx.relation_details.get(rid or "")
@@ -612,10 +618,32 @@ def rewrite_bo_snapshot(kwargs: dict[str, Any], ctx: RemapContext) -> RewriteTal
             "target": details[2],
             "cardinality": cardinality,
         }
-        routing = (source.get("edge_routes") or {}).get(old)
+        visible_ends[old] = src, dst
+        tally.bump(REMAPPED)
+
+    routes = source.get("edge_routes")
+    geometries = source.get("edge_geometry")
+    routes = routes if isinstance(routes, dict) else {}
+    geometries = geometries if isinstance(geometries, dict) else {}
+    for old in routes.keys() | geometries.keys():
+        rid = ctx.ids.lookup(RELATIONS, old)
+        details = ctx.relation_details.get(rid or "")
+        ends = (
+            visible_ends.get(old)
+            if old in source_edges
+            else ctx.source_er_ends.get(canonical_uuid(old) or "")
+        )
+        if not rid or not details or details[0] != ER_RELATION or not ends:
+            missing()
+            continue
+        src, dst = ends
+        if {details[1], details[2]} != {src, dst}:
+            missing()
+            continue
+        routing = routes.get(old)
         if routing in ("straight", "orthogonal"):
             result.setdefault("edge_routes", {})[rid] = routing
-        geometry = (source.get("edge_geometry") or {}).get(old)
+        geometry = geometries.get(old)
         if geometry is not None:
             try:
                 layout = BoEdgeGeometry.model_validate(geometry)
@@ -627,7 +655,8 @@ def rewrite_bo_snapshot(kwargs: dict[str, Any], ctx: RemapContext) -> RewriteTal
                         bends=layout.bends[::-1], source=layout.target, target=layout.source
                     )
                 result.setdefault("edge_geometry", {})[rid] = layout.model_dump(mode="json")
-        tally.bump(REMAPPED)
+        if old not in source_edges:
+            tally.bump(REMAPPED)
     for old, link in (source.get("application_links") or {}).items():
         rid = ctx.ids.lookup(RELATIONS, old)
         obj = card(link.get("object_id"), BO_TYPE)

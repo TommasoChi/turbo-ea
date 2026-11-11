@@ -303,8 +303,8 @@ def _upgrade_body(conn):
             {"attrs": json.dumps(attrs), "id": row["id"]},
         )
     conn.execute(
-        sa.text("""INSERT INTO relation_types (id, key, label, reverse_label, source_type_key, target_type_key, cardinality, attributes_schema, built_in, is_hidden, sort_order, translations)
-        VALUES (:id, 'relDataObjectToDataObject', 'relates to', 'relates to', 'DataObject', 'DataObject', 'n:m', CAST(:attrs AS jsonb), true, false, 0, CAST(:translations AS jsonb)) ON CONFLICT (key) DO NOTHING"""),
+        sa.text("""INSERT INTO relation_types (id, key, label, reverse_label, source_type_key, target_type_key, cardinality, attributes_schema, built_in, is_hidden, sort_order, translations, archimate_type)
+        VALUES (:id, 'relDataObjectToDataObject', 'relates to', 'relates to', 'DataObject', 'DataObject', 'n:m', CAST(:attrs AS jsonb), true, false, 50, CAST(:translations AS jsonb), 'Association') ON CONFLICT (key) DO NOTHING"""),
         {
             "id": uuid.uuid4(),
             "attrs": json.dumps([CARDINALITY]),

@@ -20,7 +20,7 @@ pytestmark = pytest.mark.anyio
 
 
 async def test_upgrade_is_additive_and_idempotent(db):
-    from app.services.seed import TYPES
+    from app.services.seed import RELATIONS, TYPES
 
     await create_card_type(
         db,
@@ -63,6 +63,13 @@ async def test_upgrade_is_additive_and_idempotent(db):
         )
     ).scalar_one()
     assert er.source_type_key == er.target_type_key == "DataObject"
+    er_defaults = next(entry for entry in RELATIONS if entry["key"] == er.key)
+    assert er.sort_order == er_defaults["sort_order"]
+    assert (er.archimate_type, er.archimate_reversed, er.archimate_access) == (
+        "Association",
+        False,
+        None,
+    )
     assert {o["key"] for o in er.attributes_schema[0]["options"]} == {"1:1", "1:n", "n:1", "n:m"}
     diagrams = (
         (await db.execute(select(Diagram).where(Diagram.kind == "boRelationship"))).scalars().all()

@@ -459,11 +459,11 @@ describe("AppLayout — extension nav placement", () => {
     expect(item).toHaveAttribute("href", "/ext/product-technology-what-if/analysis");
   });
 
-  it.each([true, false])("shows BO Relationship only with view permission: %s", async (allowed) => {
+  it.each([true, false])("shows Data Modeller only with view permission: %s", async (allowed) => {
     const user = userEvent.setup();
     renderLayout({ ...viewerUser, permissions: { ...viewerUser.permissions, "boRelationship.view": allowed } });
     await user.click(screen.getByRole("button", { name: /application & data architecture/i }));
-    const item = screen.queryByRole("menuitem", { name: /BO Relationship/i });
+    const item = screen.queryByRole("menuitem", { name: /Data Modeller/i });
     if (allowed) expect(item).toHaveAttribute("href", "/application-architecture/bo-relationship");
     else expect(item).not.toBeInTheDocument();
   });

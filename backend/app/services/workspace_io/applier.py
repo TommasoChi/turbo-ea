@@ -525,7 +525,16 @@ async def _load_remap_context(
         rel_id = _matching_relation(ctx.relations_by_ends, (key[0], str(key[1]), str(key[2])))
         return uuid.UUID(rel_id) if rel_id else None
 
-    rm.backfill(bundle.rows(schema.SHEET_RELATIONS), id_map, rm.RELATIONS, _resolve_relation)
+    source_relations = bundle.rows(schema.SHEET_RELATIONS)
+    rm.backfill(source_relations, id_map, rm.RELATIONS, _resolve_relation)
+    if wants_bo:
+        for row in source_relations:
+            source_id = rm.canonical_uuid(row.get(schema.SOURCE_ID_COLUMN))
+            if source_id is None or row.get("type") != ER_RELATION:
+                continue
+            key = _relation_key(row, id_map, resolver, rt_by_key)
+            if key is not None:
+                ctx.source_er_ends[source_id] = str(key[1]), str(key[2])
 
     if ctx.legacy:
         cards = (await db.execute(select(Card.id, Card.type, Card.name, Card.status))).all()

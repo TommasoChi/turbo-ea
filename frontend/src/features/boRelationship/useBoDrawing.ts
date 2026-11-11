@@ -65,6 +65,12 @@ const emptyDraft: DrawingDraft = {
   objects: [], relations: [], applications: [], moves: {}, removed: [], restored: [],
 };
 
+export function hasDrawingChanges(draft: DrawingDraft, accepted: InventoryChange[]) {
+  return !!(accepted.length || draft.objects.length || draft.relations.length || draft.applications.length
+    || draft.removed.length || draft.restored.length || draft.removedNodes?.length || Object.keys(draft.moves).length
+    || Object.keys(draft.edgeRoutes ?? {}).length || Object.keys(draft.edgeGeometry ?? {}).length);
+}
+
 function resolveId(draft: DrawingDraft, id: string) {
   const object = draft.objects.find((item) => item.id === id);
   return object ? object.saved?.id : id;
@@ -542,9 +548,10 @@ export function useBoDrawing(initialGraph: BoGraph | undefined, onSaved: OnSave,
       };
       const [edgeRoutes, pendingRoutes] = resolveEdgeUpdates(draft.edgeRoutes);
       const [edgeGeometry, pendingGeometry] = resolveEdgeUpdates(draft.edgeGeometry, orientGeometry);
-      const visualEdgeIds = [...Object.keys(edgeRoutes), ...Object.keys(edgeGeometry)];
+      const routeIds = Object.keys(edgeRoutes);
+      const geometryIds = Object.keys(edgeGeometry);
       if (accepted.length || savedDrafts.length || draft.removed.length || draft.restored.length || draft.removedNodes?.length
-        || Object.keys(positions).length || Object.keys(autoPositions).length || visualEdgeIds.length) {
+        || Object.keys(positions).length || Object.keys(autoPositions).length || routeIds.length || geometryIds.length) {
         const result = await api.put<LayoutResult>("/bo-relationship/layout", {
           snapshot_revision: graph.snapshot_revision,
           saved_drafts: savedDrafts,
@@ -556,8 +563,8 @@ export function useBoDrawing(initialGraph: BoGraph | undefined, onSaved: OnSave,
           restored_relation_ids: draft.restored.map(({ id }) => id),
           skip_unavailable_relations: true,
           ...(draft.removedNodes?.length ? { removed_node_ids: draft.removedNodes } : {}),
-          ...(Object.keys(edgeRoutes).length ? { edge_routes: edgeRoutes } : {}),
-          ...(Object.keys(edgeGeometry).length ? { edge_geometry: edgeGeometry } : {}),
+          ...(routeIds.length ? { edge_routes: edgeRoutes } : {}),
+          ...(geometryIds.length ? { edge_geometry: edgeGeometry } : {}),
         });
         savedLayout = result;
         const unavailable = result.unavailable_drafts ?? [];
@@ -581,7 +588,7 @@ export function useBoDrawing(initialGraph: BoGraph | undefined, onSaved: OnSave,
         if (result.skipped_positions) {
           failures.push({ id: "positions", names: [], reason: "positionUnavailable" });
         }
-        const visualChanges = new Set([...draft.removed, ...draft.restored.map(({ id }) => id), ...visualEdgeIds]);
+        const visualChanges = new Set([...draft.removed, ...draft.restored.map(({ id }) => id), ...routeIds, ...geometryIds]);
         if (result.inventory_conflicts?.some(({ kind, id }) =>
           (kind === "edge" && visualChanges.has(id)) || (kind === "node" && draft.removedNodes?.includes(id)))) {
           failures.push({ id: "visual", names: [], reason: "visualChangeUnavailable" });
@@ -640,10 +647,7 @@ export function useBoDrawing(initialGraph: BoGraph | undefined, onSaved: OnSave,
 
   return {
     graph, ...drawing, draft, restoreDraft, applications, accepted, acceptChanges, removedIds: draft.removed, busy, issues, removals, save, syncRemovals,
-    hasChanges: !!(accepted.length || draft.objects.length || draft.relations.length || draft.applications.length
-      || draft.removed.length || draft.restored.length || draft.removedNodes?.length || Object.keys(draft.moves).length
-      || Object.keys(draft.edgeRoutes ?? {}).length || Object.keys(draft.edgeGeometry ?? {}).length
-      || drawing.nodes.some(({ id }) => !graph?.positions[id])),
+    hasChanges: hasDrawingChanges(draft, accepted) || drawing.nodes.some(({ id }) => !graph?.positions[id]),
     pendingApplications: draft.applications.map(({ input }) => ({
       ...input, objectId: resolveId(draft, input.objectId) ?? input.objectId,
     })),

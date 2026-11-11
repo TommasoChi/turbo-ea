@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "@/api/client";
 import { randomUuid } from "@/lib/randomUuid";
 import type { BoApplication, BoEdge, BoGraph, BoNode } from "./BoRelationshipPage";
-import type { DrawingDraft, InventoryChange, BoSavedApplication } from "./useBoDrawing";
+import { hasDrawingChanges, type DrawingDraft, type InventoryChange, type BoSavedApplication } from "./useBoDrawing";
 import { validBoEdgeGeometry } from "./boConnectorGeometry";
 
 type Recovery = {
@@ -30,13 +30,6 @@ function removeStoredEntry(entry: StoredEntry | null) {
   try {
     if (entry && localStorage.getItem(entry.key) === entry.raw) localStorage.removeItem(entry.key);
   } catch { /* Local storage is optional. */ }
-}
-
-function hasChanges(draft: DrawingDraft, accepted: InventoryChange[]) {
-  return !!(draft.objects.length || draft.relations.length || draft.applications.length
-    || Object.keys(draft.moves).length || draft.removed.length || draft.restored.length
-    || draft.removedNodes?.length || Object.keys(draft.edgeRoutes ?? {}).length
-    || Object.keys(draft.edgeGeometry ?? {}).length || accepted.length);
 }
 
 function projectRecovery(draft: DrawingDraft, accepted: InventoryChange[], graph: BoGraph): Recovery {
@@ -208,7 +201,7 @@ export function useBoRecovery(
           ...(Object.keys(edgeRoutes).length ? { edgeRoutes } : {}),
           ...(Object.keys(edgeGeometry).length ? { edgeGeometry } : {}),
         };
-        if (hasChanges(recovered, matched)) {
+        if (hasDrawingChanges(recovered, matched)) {
           const changes = result.changes.filter(({ id }) => removed.includes(id));
           setCandidate({ token, draft: recovered, accepted: matched, changes });
         } else {
@@ -236,7 +229,7 @@ export function useBoRecovery(
     const { draft: currentDraft, accepted: currentAccepted, graph: currentGraph } = current.current;
     if (!currentGraph) return;
     try {
-      if (!hasChanges(currentDraft, currentAccepted)) {
+      if (!hasDrawingChanges(currentDraft, currentAccepted)) {
         clear();
       } else {
         const raw = JSON.stringify(projectRecovery(currentDraft, currentAccepted, currentGraph));
@@ -245,7 +238,7 @@ export function useBoRecovery(
       }
     } catch { /* Local storage is optional. */ }
   }, [key, checkedKey, candidate, clear]);
-  const hasLocalChanges = hasChanges(draft, accepted);
+  const hasLocalChanges = hasDrawingChanges(draft, accepted);
   useEffect(() => {
     if (!key || checkedKey !== key || candidate) return;
     if (!hasLocalChanges) {

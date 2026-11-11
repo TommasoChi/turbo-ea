@@ -1,6 +1,6 @@
 """Wire models for the shared BO drawing."""
 
-from typing import Literal
+from typing import Annotated, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, FiniteFloat, model_validator
@@ -17,11 +17,12 @@ class BoNode(BaseModel):
 
 
 ConnectorRouting = Literal["straight", "orthogonal"]
+CanvasCoordinate = Annotated[FiniteFloat, Field(ge=-10_000_000, le=10_000_000)]
 
 
 class BoPosition(BaseModel):
-    x: FiniteFloat
-    y: FiniteFloat
+    x: CanvasCoordinate
+    y: CanvasCoordinate
 
 
 class BoEdgeGeometry(BaseModel):
@@ -138,8 +139,8 @@ class BoLayoutUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     snapshot_revision: UUID | None = None
-    positions: dict[UUID, BoPosition] = Field(default_factory=dict)
-    auto_positions: dict[UUID, BoPosition] = Field(default_factory=dict)
+    positions: dict[UUID, BoPosition] = Field(default_factory=dict, max_length=50_000)
+    auto_positions: dict[UUID, BoPosition] = Field(default_factory=dict, max_length=50_000)
     edge_routes: dict[UUID, ConnectorRouting] = Field(default_factory=dict, max_length=5000)
     edge_geometry: dict[UUID, BoEdgeGeometry | None] = Field(default_factory=dict, max_length=5000)
     skip_unavailable_positions: bool = Field(
@@ -151,13 +152,15 @@ class BoLayoutUpdate(BaseModel):
         max_length=5000,
         description="Remove nodes from the drawing and report unavailable IDs as conflicts.",
     )
-    removed_relation_ids: set[UUID] = Field(default_factory=set)
-    restored_relation_ids: set[UUID] = Field(default_factory=set)
+    removed_relation_ids: set[UUID] = Field(default_factory=set, max_length=5000)
+    restored_relation_ids: set[UUID] = Field(default_factory=set, max_length=5000)
     skip_unavailable_relations: bool = Field(
         default=False,
         description="Save authorized deltas and report unavailable edge IDs as conflicts.",
     )
-    accepted_inventory_changes: list[BoAcceptedInventoryChange] = Field(default_factory=list)
+    accepted_inventory_changes: list[BoAcceptedInventoryChange] = Field(
+        default_factory=list, max_length=5000
+    )
     saved_drafts: list[BoInventoryItem] = Field(default_factory=list, max_length=5000)
 
     @model_validator(mode="after")

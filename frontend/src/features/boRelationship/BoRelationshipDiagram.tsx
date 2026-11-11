@@ -25,6 +25,7 @@ import { append, attr, create } from "tiny-svg";
 import MaterialSymbol from "@/components/MaterialSymbol";
 import ConnectorRoutingMenu from "@/components/ConnectorRoutingMenu";
 import type { ConnectorRouting } from "@/lib/connectorRouting";
+import { bindBendpointContextMenu } from "@/lib/diagramBendpointContextMenu";
 import { iconSize } from "@/theme/tokens";
 import { downloadText } from "@/features/archimate/download";
 import { anchorOffset, boEdgeWaypoints, crowFoot, type BoEdgeGeometry } from "./boConnectorGeometry";
@@ -165,6 +166,7 @@ interface Props {
 
 type Interaction = { element: Element; originalEvent: MouseEvent };
 type BoDrag = { context: { shape: Shape; x: number; y: number }; dx: number; dy: number };
+type AttachmentOffsets = Pick<BoEdgeGeometry, "source" | "target">;
 
 export default function BoRelationshipDiagram({
   ref,
@@ -209,11 +211,11 @@ export default function BoRelationshipDiagram({
 
   useEffect(() => {
     if (!container.current) return;
-    const setGeometry = (connection: Connection, bends: Point[], pinned?: { end: "source" | "target"; offset: Point }) => {
+    const setGeometry = (connection: Connection, bends: Point[], pinned: AttachmentOffsets) => {
       const geometry: BoEdgeGeometry = {
         ...connection.businessObject.geometry,
         bends: bends.map(({ x, y }) => ({ x, y })),
-        ...(pinned ? { [pinned.end]: pinned.offset } : {}),
+        ...pinned,
       };
       actions.current.onChangeGeometry?.(connection.id, geometry);
     };
@@ -228,14 +230,24 @@ export default function BoRelationshipDiagram({
           // Use the same interaction as ArchiMate, committing to the shared drawing draft.
           // Redocking can choose an anchor on the same object. Endpoints are inventory relations.
           modeling: ["value", {
-            updateWaypoints(connection: Connection, points: Point[]) {
-              setGeometry(connection, points.slice(1, -1));
+            updateWaypoints(connection: Connection, points: Point[], hints?: { segmentMove?: unknown }) {
+              const pinned: AttachmentOffsets = {};
+              if (hints?.segmentMove) {
+                // diagram-js restores the original waypoints before committing the cropped route.
+                for (const end of ["source", "target"] as const) {
+                  const shape = connection[end] as Shape;
+                  const before = anchorOffset(shape, connection.waypoints[end === "source" ? 0 : connection.waypoints.length - 1]);
+                  const after = anchorOffset(shape, points[end === "source" ? 0 : points.length - 1]);
+                  if (before.x !== after.x || before.y !== after.y) pinned[end] = after;
+                }
+              }
+              setGeometry(connection, points.slice(1, -1), pinned);
             },
             reconnect(connection: Connection, source: Shape, target: Shape, point: Point, hints: { docking: "source" | "target" }) {
               if (source !== connection.source || target !== connection.target) return;
               const end = hints.docking;
               setGeometry(connection, connection.waypoints.slice(1, -1), {
-                end, offset: anchorOffset(end === "source" ? source : target, point),
+                [end]: anchorOffset(end === "source" ? source : target, point),
               });
             },
           }],
@@ -317,6 +329,7 @@ export default function BoRelationshipDiagram({
       }
     }
     if (canRoute) {
+      if (canReshape) bindBendpointContextMenu(diagram);
       eventBus.on("element.contextmenu", ({ element, originalEvent }: Interaction) => {
         if (!element.waypoints || !element.businessObject?.boRelationship) return;
         originalEvent.preventDefault();
@@ -429,6 +442,8 @@ export default function BoRelationshipDiagram({
         const transform = visual.parentElement?.getAttribute("transform");
         if (transform) copy.setAttribute("transform", transform);
         for (const child of visual.children) {
+          // Decorative ligatures need the app's icon font, which the standalone SVG cannot rely on.
+          if (child.classList.contains("bo-node-icon")) continue;
           const styles = getComputedStyle(child);
           if (styles.display === "none") continue;
           const item = child.cloneNode(true) as SVGElement;

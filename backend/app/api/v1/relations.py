@@ -26,13 +26,14 @@ from app.schemas.relation import (
     RelationUpdate,
 )
 from app.services import card_write_service
-from app.services.bo_relationship_constants import APPLICATION_RELATION, ER_RELATION, OWNERSHIP_KEY
+from app.services.bo_relationship_constants import APPLICATION_RELATION, ER_RELATION
 from app.services.calculation_engine import run_calculations_for_card
 from app.services.card_read_scope import CardReadScope
 from app.services.card_resolver import CardResolver
 from app.services.cost_field_filter import cost_field_keys_from_relation_schema
 from app.services.data_quality import calc_data_quality
 from app.services.permission_service import PermissionService
+from app.services.relation_attributes import public_relation_attributes
 from app.services.relation_orientation import orient_endpoints
 
 router = APIRouter(prefix="/relations", tags=["relations"])
@@ -79,11 +80,6 @@ def _rel_to_response(
             name=r.target.name,
             subtype=r.target.subtype,
         )
-    attrs = r.attributes
-    if r.type == APPLICATION_RELATION:
-        strip_cost_keys = strip_cost_keys | {OWNERSHIP_KEY}
-    if strip_cost_keys and attrs:
-        attrs = {k: v for k, v in attrs.items() if k not in strip_cost_keys}
     return RelationResponse(
         id=str(r.id),
         type=r.type,
@@ -91,7 +87,7 @@ def _rel_to_response(
         target_id=str(r.target_id),
         source=source_ref,
         target=target_ref,
-        attributes=attrs,
+        attributes=public_relation_attributes(r.type, r.attributes, strip_cost_keys),
         description=r.description,
         created_at=r.created_at,
     )

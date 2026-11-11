@@ -155,7 +155,7 @@ async def get_object_detail(
 @router.get("/applications", response_model=BoApplicationPage)
 async def search_applications(
     search: str | None = Query(None, max_length=200),
-    page: int = Query(1, ge=1),
+    page: int = Query(1, ge=1, le=10_000),
     page_size: int = Query(20, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require_permission("boRelationship.edit")),
