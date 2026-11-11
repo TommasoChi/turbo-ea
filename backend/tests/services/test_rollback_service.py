@@ -18,15 +18,23 @@ from app.models.architecture_decision import ArchitectureDecision
 from app.models.diagram import Diagram
 from app.models.event import Event
 from app.models.mutation_batch import MutationBatch
+from app.models.relation import Relation
 from app.models.risk import Risk, RiskCard
 from app.models.stakeholder import Stakeholder
 from app.models.survey import Survey, SurveyResponse
 from app.models.tag import CardTag, Tag, TagGroup
 from app.models.todo import Todo
-from app.services import adr_service, risk_service, stakeholder_service, tag_service
+from app.services import (
+    adr_service,
+    card_write_service,
+    risk_service,
+    stakeholder_service,
+    tag_service,
+)
+from app.services.bo_relationship_constants import ER_RELATION
 from app.services.event_bus import event_bus, request_batch_id
-from app.services.rollback_service import execute_rollback, plan_rollback
-from tests.conftest import create_card, create_user
+from app.services.rollback_service import _lock_inverse_writes, execute_rollback, plan_rollback
+from tests.conftest import create_card, create_relation, create_user
 
 
 async def _open_batch(db, actor) -> MutationBatch:
@@ -682,6 +690,92 @@ async def test_rollback_bo_deletion_is_available_to_inventory_sync(client, db, a
     assert all(edge["id"] != str(link_id) for edge in synced.json()["edges"])
     if delete_kind == "card":
         assert all(node["id"] != str(source_id) for node in synced.json()["nodes"])
+
+
+@pytest.mark.parametrize("delete_kind", ["relation", "card", None])
+async def test_rollback_prelocks_only_the_affected_endpoints(db, monkeypatch, delete_kind):
+    deleted = await create_card(db, name="Deleted")
+    incoming = await create_card(db, name="Incoming")
+    outgoing = await create_card(db, name="Outgoing")
+    direct_source = await create_card(db, name="Direct source")
+    direct_target = await create_card(db, name="Direct target")
+    event_card = await create_card(db, name="In event only")
+    restored = await create_card(db, name="Restored fields")
+    unrelated = await create_card(db, name="Unrelated")
+    await create_relation(db, type_key=ER_RELATION, source_id=incoming.id, target_id=deleted.id)
+    await create_relation(db, type_key=ER_RELATION, source_id=deleted.id, target_id=outgoing.id)
+    direct = await create_relation(
+        db, type_key=ER_RELATION, source_id=direct_source.id, target_id=direct_target.id
+    )
+    untouched = await create_relation(
+        db, type_key=ER_RELATION, source_id=restored.id, target_id=unrelated.id
+    )
+    events = [
+        Event(event_type="card.updated", card_id=event_card.id),
+        Event(event_type="relation.created"),
+    ]
+    ops = [
+        {"op": "restore_card_fields", "card_id": str(restored.id)},
+        {"op": "unsupported", "relation_id": str(untouched.id)},
+        {"op": "delete_card", "card_id": "invalid"},
+        {"op": "delete_relation", "relation_id": "invalid"},
+    ]
+    expected_cards = {event_card.id, restored.id}
+    expected_relations = set()
+    if delete_kind == "card":
+        ops.append({"op": "delete_card", "card_id": str(deleted.id)})
+        expected_cards.update((deleted.id, incoming.id, outgoing.id))
+        expected_relations.update(
+            ((ER_RELATION, incoming.id, deleted.id), (ER_RELATION, deleted.id, outgoing.id))
+        )
+    if delete_kind == "relation":
+        ops.append({"op": "delete_relation", "relation_id": str(direct.id)})
+        expected_cards.update((direct_source.id, direct_target.id))
+        expected_relations.add((ER_RELATION, direct_source.id, direct_target.id))
+
+    calls = []
+    lock_relations = card_write_service.lock_bo_relation_writes
+    lock_cards = card_write_service.lock_relation_endpoints
+
+    async def record_relation_locks(session, pairs):
+        calls.append(("relation keys", set(pairs)))
+        await lock_relations(session, pairs)
+
+    async def record_card_locks(session, card_ids):
+        calls.append(("card rows", set(card_ids)))
+        return await lock_cards(session, card_ids)
+
+    monkeypatch.setattr(card_write_service, "lock_bo_relation_writes", record_relation_locks)
+    monkeypatch.setattr(card_write_service, "lock_relation_endpoints", record_card_locks)
+    await _lock_inverse_writes(db, events, ops)
+    assert calls == [("relation keys", expected_relations), ("card rows", expected_cards)]
+
+
+async def test_rollback_skips_a_relation_deleted_between_lookup_and_lock(db, actor, monkeypatch):
+    source = await create_card(db, name="Source")
+    target = await create_card(db, name="Target")
+    relation = await create_relation(db, source_id=source.id, target_id=target.id)
+    batch = await _open_batch(db, actor)
+    with _InBatch(batch):
+        await event_bus.publish("relation.created", {"id": str(relation.id)}, db=db)
+
+    lock_relation = card_write_service.lock_relation_for_write
+
+    async def delete_before_lock(session, loaded):
+        # Simulate a committed deletion between the initial read and the re-read.
+        await session.delete(loaded)
+        await session.flush()
+        return await lock_relation(session, loaded)
+
+    monkeypatch.setattr(card_write_service, "lock_relation_for_write", delete_before_lock)
+    result = await execute_rollback(db, batch, actor.id)
+    assert await db.get(Relation, relation.id) is None
+    [op] = _ops(result, "delete_relation")
+    assert (op["relation_id"], op["status"], op["reason"]) == (
+        str(relation.id),
+        "skipped",
+        "already_deleted",
+    )
 
 
 @pytest.mark.parametrize("delete_kind", ["relation", "card"])

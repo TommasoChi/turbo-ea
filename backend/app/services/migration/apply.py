@@ -57,7 +57,7 @@ from app.models.stakeholder import Stakeholder
 from app.models.tag import CardTag, Tag, TagGroup
 from app.models.user import User
 from app.services import card_type_categories
-from app.services.bo_relationship_constants import APPLICATION_RELATION, ER_RELATION
+from app.services.bo_relationship_constants import APPLICATION_RELATION
 from app.services.card_costs import recompute_derived
 from app.services.card_write_service import (
     find_relation,
@@ -756,14 +756,12 @@ async def _apply_relation_pass(
                 staged.status = "applied"
                 staged.error_message = "Endpoint card not resolved in identity map"
                 continue
-            type_key = payload.get("tea_type", "")
-            if staged.action == "create" or type_key == ER_RELATION:
+            type_key = payload["tea_type"]
+            if staged.action == "create":
                 # The source platform's from/to is its own convention; store
                 # the relation the way the Turbo EA type runs (#1140), and
                 # reuse the row when that turned it onto one already present.
-                src_uuid, tgt_uuid = await orient_endpoints(
-                    db, payload["tea_type"], src_uuid, tgt_uuid
-                )
+                src_uuid, tgt_uuid = await orient_endpoints(db, type_key, src_uuid, tgt_uuid)
             resolved_rows.append((staged, type_key, src_uuid, tgt_uuid))
         except Exception as exc:  # noqa: BLE001
             record_error(staged, exc)

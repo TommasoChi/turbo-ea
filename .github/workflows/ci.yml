@@ -984,7 +984,9 @@ jobs:
       github.event_name == 'pull_request' &&
       (needs.changes.outputs.backend == 'true' || needs.changes.outputs.mutation == 'true')
     runs-on: ubuntu-latest
-    timeout-minutes: 150
+    # Large backend diffs may have thousands of changed-line mutants. Keep
+    # time after mutmut stops to collect results and publish the artifact.
+    timeout-minutes: 270
     services:
       postgres:
         image: postgres:16-alpine
@@ -1033,7 +1035,7 @@ jobs:
       - name: Mutate the functions this pull request touches
         run: >-
           python scripts/mutation/mutmut_scope.py run --suite backend
-          --changed mutation-changed.json --max-children 4 --budget 120
+          --changed mutation-changed.json --max-children 4 --budget 240
       - name: Score the mutants on changed lines
         run: |
           python scripts/mutation/mutmut_scope.py collect --suite backend \

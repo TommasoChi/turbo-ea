@@ -26,6 +26,7 @@ from app.models.role import Role
 from app.models.stakeholder_role_definition import StakeholderRoleDefinition
 from app.models.tag import Tag, TagGroup
 from app.models.user import User
+from app.services.bo_relationship_constants import BO_RELATIONSHIP_KIND
 from app.services.card_resolver import CardResolver
 from app.services.workspace_io import applier, schema
 from app.services.workspace_io.bundle import WorkspaceBundle
@@ -730,6 +731,43 @@ async def test_group_members_need_both_ends_to_exist(db, diagram_env):
         db, bundle(SHEET_DIAGRAM_GROUP_MEMBERS, rows[:1]), sr2
     )
     assert sr2.skip_reasons == {"already_present": 1}
+
+
+async def test_import_does_not_attach_cards_or_groups_to_the_private_bo_diagram(db, diagram_env):
+    env = diagram_env
+    bo = Diagram(name="BO Relationship", kind=BO_RELATIONSHIP_KIND)
+    db.add(bo)
+    await db.flush()
+    card_links = section(SHEET_DIAGRAM_CARDS)
+    groups = section(SHEET_DIAGRAM_GROUP_MEMBERS)
+    diagrams = (bo, env.diagram)
+
+    await applier._apply_diagram_cards(
+        db,
+        bundle(
+            SHEET_DIAGRAM_CARDS,
+            [
+                {"diagram_id": diagram.id, "card_type": "Application", "card_ref": env.app.name}
+                for diagram in diagrams
+            ],
+        ),
+        card_links,
+        env.resolver,
+    )
+    await applier._apply_diagram_group_members(
+        db,
+        bundle(
+            SHEET_DIAGRAM_GROUP_MEMBERS,
+            [{"diagram_id": diagram.id, "group_id": env.group.id} for diagram in diagrams],
+        ),
+        groups,
+    )
+
+    assert counts(card_links) == counts(groups) == (1, 0, 0, 1, 0)
+    assert (await db.execute(select(diagram_cards))).all() == [(env.diagram.id, env.app.id)]
+    assert (await db.execute(select(diagram_group_members))).all() == [
+        (env.diagram.id, env.group.id)
+    ]
 
 
 async def test_bookmark_shares_match_the_user_by_email(db):

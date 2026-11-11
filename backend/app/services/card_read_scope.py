@@ -54,7 +54,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 from fastapi import HTTPException
-from sqlalchemy import UUID, ColumnElement, and_, case, cast, false, or_, select
+from sqlalchemy import UUID, ColumnElement, and_, case, cast, exists, false, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
@@ -68,6 +68,7 @@ from app.services.permission_service import PermissionService, effective_role_ke
 ReadMode = Literal["inventory", "module"]
 
 _EMPTY: frozenset = frozenset()
+_CANONICAL_UUID = r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
 
 
 @dataclass(frozen=True, slots=True)
@@ -204,6 +205,14 @@ class CardReadScope:
                 return False
         return card_id in self.stakeholder_card_ids
 
+    def _subtype_clause(self, card) -> ColumnElement[bool]:
+        return and_(
+            *(
+                or_(card.type != key, card.subtype.is_(None), card.subtype.not_in(subtypes))
+                for key, subtypes in self.subtype_denials
+            )
+        )
+
     def clause(self, card, *, mode: ReadMode) -> ColumnElement[bool] | None:
         """SQL predicate over ``card`` (``Card`` or an ``aliased(Card)``).
 
@@ -221,13 +230,7 @@ class CardReadScope:
         else:
             type_ok = false()
         if self.subtype_denials:
-            type_ok = and_(
-                type_ok,
-                *(
-                    or_(card.type != key, card.subtype.is_(None), card.subtype.not_in(subtypes))
-                    for key, subtypes in self.subtype_denials
-                ),
-            )
+            type_ok = and_(type_ok, self._subtype_clause(card))
         if self.stakeholder_card_ids:
             return or_(type_ok, card.id.in_(self.stakeholder_card_ids))
         return type_ok
@@ -253,14 +256,14 @@ class CardReadScope:
             # An event stores the peer UUID as text. Check its current
             # subtype, and withhold references that cannot be resolved when
             # the recorded type has a subtype deny.
-            canonical_uuid = r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
-            peer_id = cast(case((id_expr.op("~*")(canonical_uuid), id_expr)), UUID)
+            peer_id = cast(case((id_expr.op("~*")(_CANONICAL_UUID), id_expr)), UUID)
             peer = aliased(Card)
-            readable_peer = (
-                select(peer.id)
-                .where(peer.id == peer_id, peer.type == type_expr, *self.where(peer, mode=mode))
-                .exists()
-            )
+            # The outer clause checks the type grant. This lookup checks the
+            # subtype of that same type, using a parsed UUID for stakeholder IDs.
+            subtype_ok = self._subtype_clause(peer)
+            if self.stakeholder_card_ids:
+                subtype_ok = or_(subtype_ok, peer.id.in_(self.stakeholder_card_ids))
+            readable_peer = exists().where(peer.id == peer_id, peer.type == type_expr, subtype_ok)
             type_ok = and_(
                 type_ok,
                 or_(type_expr.not_in([key for key, _ in self.subtype_denials]), readable_peer),

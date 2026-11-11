@@ -589,7 +589,7 @@ def rewrite_bo_snapshot(kwargs: dict[str, Any], ctx: RemapContext) -> RewriteTal
             missing()
             continue
         try:
-            result["positions"][target] = BoPosition.model_validate(pos).model_dump(mode="json")
+            result["positions"][target] = BoPosition.model_validate(pos).model_dump()
         except ValidationError:
             missing()
     source_edges = source.get("edges") or {}
@@ -654,7 +654,7 @@ def rewrite_bo_snapshot(kwargs: dict[str, Any], ctx: RemapContext) -> RewriteTal
                     layout = BoEdgeGeometry(
                         bends=layout.bends[::-1], source=layout.target, target=layout.source
                     )
-                result.setdefault("edge_geometry", {})[rid] = layout.model_dump(mode="json")
+                result.setdefault("edge_geometry", {})[rid] = layout.model_dump()
         if old not in source_edges:
             tally.bump(REMAPPED)
     for old, link in (source.get("application_links") or {}).items():
