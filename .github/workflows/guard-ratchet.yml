@@ -52,7 +52,7 @@ jobs:
           GH_REPO: ${{ github.repository }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          MAINTAINERS: "vincentmakes"
+          MAINTAINERS: "TommasoChi"
         run: |
           set -euo pipefail
           # The last application of the label: "<login> <created_at>".
