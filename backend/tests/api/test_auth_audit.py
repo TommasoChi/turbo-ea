@@ -636,6 +636,12 @@ class TestImpersonation:
 
 
 class TestRegisterAndPasswords:
+    @pytest.fixture(autouse=True)
+    def _base_url(self, monkeypatch):
+        from app.config import settings
+
+        monkeypatch.setattr(settings, "_app_base_url", "https://ea.test", raising=False)
+
     async def test_register_records(self, client, db):
         resp = await client.post(
             "/api/v1/auth/register",

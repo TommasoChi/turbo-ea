@@ -29,6 +29,7 @@ from app.models.architecture_decision_link import ArchitectureDecisionLink
 from app.models.architecture_decision_person import ArchitectureDecisionPerson
 from app.models.bookmark import Bookmark
 from app.models.card_cost import CardCost
+from app.models.card_cost_history import CardCostHistory
 from app.models.card_license import CardLicense
 from app.models.card_logo import CardLogo
 from app.models.comment import Comment
@@ -280,6 +281,14 @@ ENTITY_SECTIONS: tuple[EntitySection, ...] = (
         CardCost,
         card_fk_columns=("card_id",),
         natural_key=("card_id", "fiscal_year"),
+    ),
+    # Past-year cost values of Initiative / Provider; they feed the cost report only, so like the
+    # license rows this sheet is not a card-finalising one.
+    EntitySection(
+        "CardCostHistory",
+        CardCostHistory,
+        card_fk_columns=("card_id",),
+        natural_key=("card_id", "fiscal_year", "field_key"),
     ),
     # Licenses change no card attribute, so this sheet is not a card-finalising one.
     EntitySection(

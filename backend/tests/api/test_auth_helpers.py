@@ -163,22 +163,18 @@ def test_the_expiry_instant_itself_still_gets_a_session(monkeypatch):
 
 def test_the_base_url_prefers_the_configured_one(monkeypatch):
     monkeypatch.setattr(settings, "_app_base_url", "https://ea.corp.example/", raising=False)
-    assert auth._resolve_app_base_url(request()) == "https://ea.corp.example"
+    assert auth._resolve_app_base_url() == "https://ea.corp.example"
 
 
 @pytest.mark.parametrize("configured", ["", None])
-def test_the_base_url_falls_back_to_the_request(monkeypatch, configured):
+def test_the_base_url_is_never_taken_from_the_request(monkeypatch, configured):
     monkeypatch.setattr(settings, "_app_base_url", configured, raising=False)
-    assert auth._resolve_app_base_url(request("https", host="direct.example")) == (
-        "https://direct.example"
-    )
+    assert auth._resolve_app_base_url() is None
 
 
 def test_the_base_url_strips_only_the_trailing_slash(monkeypatch):
     monkeypatch.setattr(settings, "_app_base_url", "https://ea.exampleX/", raising=False)
-    assert auth._resolve_app_base_url(request()) == "https://ea.exampleX"
-    monkeypatch.setattr(settings, "_app_base_url", "", raising=False)
-    assert auth._resolve_app_base_url(request("http", host="hostX")) == "http://hostX"
+    assert auth._resolve_app_base_url() == "https://ea.exampleX"
 
 
 RESET_HTML = (

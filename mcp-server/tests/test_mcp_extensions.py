@@ -135,6 +135,19 @@ class TestRegisterExtensionTools:
         assert result == '{\n  "ok": true\n}'
 
     @pytest.mark.asyncio
+    async def test_path_parameter_cannot_climb_out_of_the_extension_namespace(self):
+        mcp = FastMCP("test")
+        mcp_extensions.register_extension_tools(
+            mcp, get_token=AsyncMock(return_value="tok"), is_writes_disabled=lambda: None
+        )
+        tool = mcp._tool_manager.get_tool("ext_sample_get_thing")
+        with patch.object(
+            mcp_extensions.TurboEAClient, "get", AsyncMock(return_value={})
+        ) as mock_get:
+            await tool.fn(thing_id="../../cards/1")
+        assert mock_get.call_args.args[0] == "/ext/sample/thing/..%2F..%2Fcards%2F1"
+
+    @pytest.mark.asyncio
     async def test_write_tool_forces_dry_run_true_by_default(self):
         mcp = FastMCP("test")
         mcp_extensions.register_extension_tools(

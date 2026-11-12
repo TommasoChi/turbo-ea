@@ -13,6 +13,7 @@ import inspect
 import json as _json
 import logging
 import re
+from urllib.parse import quote
 from typing import Any, Awaitable, Callable
 
 import httpx
@@ -137,7 +138,9 @@ def _make_tool_function(
             name = match.group(1)
             if name not in remaining:
                 return f"Error: missing path parameter '{name}'"
-            resolved_path = resolved_path.replace(f"{{{name}}}", str(remaining.pop(name)))
+            resolved_path = resolved_path.replace(
+                f"{{{name}}}", quote(str(remaining.pop(name)), safe="")
+            )
 
         client = TurboEAClient(token)
         url_path = f"/ext/{ext_key}/{resolved_path}"

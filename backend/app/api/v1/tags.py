@@ -14,6 +14,7 @@ from app.models.tag import CardTag, Tag, TagGroup
 from app.models.user import User
 from app.schemas.common import TagCreate, TagGroupCreate, TagGroupUpdate, TagUpdate
 from app.services import audit_labels, audit_log
+from app.services.card_read_scope import require_card_readable
 from app.services.data_quality import rescore_cards
 from app.services.permission_service import PermissionService
 from app.services.tag_service import publish_tag_event as _publish_tag_event
@@ -286,7 +287,9 @@ async def delete_tag(
 async def _require_can_tag_card(db: AsyncSession, user: User, card_uuid: uuid.UUID) -> None:
     """Allow tagging a card if the user has `tags.manage` globally OR can
     edit the card (via `inventory.edit` at the app level, or `card.edit`
-    through a stakeholder role)."""
+    through a stakeholder role). A card the caller may not read does not exist for them: 404
+    before any permission answer."""
+    await require_card_readable(db, user, card_uuid, mode="module")
     if await PermissionService.check_permission(db, user, "tags.manage"):
         return
     if await PermissionService.check_permission(

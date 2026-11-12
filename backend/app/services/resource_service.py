@@ -1,24 +1,20 @@
-"""Shared policy for card and extension-owned binary resources."""
+"""Shared policy for extension-owned binary resources.
+
+An upload is what its bytes say, not what the client calls it: the name picks the format and
+``attachment_validation`` proves the content, exactly as for a card attachment.
+"""
 
 from __future__ import annotations
 
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.app_settings import AppSettings
-
-MAX_FILE_SIZE = 10 * 1024 * 1024
-
-ALLOWED_MIME_TYPES = {
-    "application/pdf",
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-    "image/png",
-    "image/jpeg",
-    "image/svg+xml",
-    "text/plain",
-}
+from app.services.attachment_upload import UPLOADS_DISABLED_MESSAGE, uploads_enabled
+from app.services.attachment_validation import (
+    MAX_ATTACHMENT_BYTES,
+    MAX_ATTACHMENT_MB,
+    InvalidAttachmentError,
+    validate_attachment,
+)
 
 
 class ResourcePolicyError(ValueError):
@@ -28,28 +24,13 @@ class ResourcePolicyError(ValueError):
         self.detail = detail
 
 
-async def validate_file_upload(
-    db: AsyncSession,
-    *,
-    mime_type: str,
-    data: bytes,
-) -> None:
-    settings_result = await db.execute(select(AppSettings).where(AppSettings.id == "default"))
-    settings_row = settings_result.scalar_one_or_none()
-    general = (settings_row.general_settings if settings_row else None) or {}
-    if not general.get("fileUploadsEnabled", True):
-        raise ResourcePolicyError(
-            403,
-            "File uploads are disabled by the administrator",
-        )
-    if mime_type not in ALLOWED_MIME_TYPES:
-        raise ResourcePolicyError(
-            400,
-            f"File type '{mime_type}' is not allowed. "
-            "Accepted: PDF, DOCX, XLSX, PPTX, PNG, JPG, SVG, TXT.",
-        )
-    if len(data) > MAX_FILE_SIZE:
-        raise ResourcePolicyError(
-            400,
-            f"File exceeds maximum size of {MAX_FILE_SIZE // (1024 * 1024)} MB",
-        )
+async def validate_file_upload(db: AsyncSession, *, name: str, data: bytes) -> str:
+    """The canonical MIME to store; raises ``ResourcePolicyError`` otherwise."""
+    if not await uploads_enabled(db):
+        raise ResourcePolicyError(403, UPLOADS_DISABLED_MESSAGE)
+    if len(data) > MAX_ATTACHMENT_BYTES:
+        raise ResourcePolicyError(400, f"File exceeds maximum size of {MAX_ATTACHMENT_MB} MB")
+    try:
+        return validate_attachment(name, data)
+    except InvalidAttachmentError as exc:
+        raise ResourcePolicyError(400, str(exc)) from exc

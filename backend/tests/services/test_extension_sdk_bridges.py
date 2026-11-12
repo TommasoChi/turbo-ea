@@ -874,6 +874,9 @@ async def test_audit_bridge_persists_generic_entity_and_skips_noop(db):
     assert count == 1
 
 
+PDF_BYTES = b"%PDF-1.7\n%\xe2\xe3\xcf\xd3\nevidence\n"
+
+
 async def test_resource_bridge_owns_links_and_files_by_generic_entity(db):
     env = await _product_context(db)
     context = build_request_context("swot-analysis", db, env["actor"])
@@ -893,7 +896,7 @@ async def test_resource_bridge_owns_links_and_files_by_generic_entity(db):
         entity_id=analysis_id,
         name="evidence.pdf",
         mime_type="application/pdf",
-        data=b"evidence-bytes",
+        data=PDF_BYTES,
         category="research",
         required_permission="ext.swot-analysis.edit",
     )
@@ -914,7 +917,7 @@ async def test_resource_bridge_owns_links_and_files_by_generic_entity(db):
         ("link", "Market evidence"),
         ("file", "evidence.pdf"),
     }
-    assert content.data == b"evidence-bytes"
+    assert content.data == PDF_BYTES
     assert content.mime_type == "application/pdf"
 
     document_row = (await db.execute(select(Document).where(Document.id == link.id))).scalar_one()
@@ -1648,3 +1651,34 @@ async def test_diagram_artifact_bridge_hides_private_bo_diagram(db):
     with pytest.raises(ExtensionBridgeError):
         await context.diagrams.rename_diagram(diagram.id, "Changed")
     assert await context.diagrams.delete_diagram(diagram.id) is False
+
+
+async def test_resource_bridge_upload_trusts_bytes_not_the_declared_mime(db):
+    env = await _product_context(db)
+    context = build_request_context("swot-analysis", db, env["actor"])
+    with pytest.raises(ExtensionBridgeError) as exc:
+        await context.resources.upload_file(
+            entity_type="ext.swot-analysis.analysis",
+            entity_id=uuid.uuid4(),
+            name="evil.pdf",
+            mime_type="text/plain",
+            data=b"<html><script>alert(1)</script></html>",
+            category=None,
+            required_permission="ext.swot-analysis.edit",
+        )
+    assert exc.value.code == "validation_failed"
+
+
+async def test_resource_bridge_upload_stores_the_sniffed_mime(db):
+    env = await _product_context(db)
+    context = build_request_context("swot-analysis", db, env["actor"])
+    item = await context.resources.upload_file(
+        entity_type="ext.swot-analysis.analysis",
+        entity_id=uuid.uuid4(),
+        name="a.pdf",
+        mime_type="text/plain",
+        data=PDF_BYTES,
+        category=None,
+        required_permission="ext.swot-analysis.edit",
+    )
+    assert item.mime_type == "application/pdf"

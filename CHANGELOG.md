@@ -5,6 +5,22 @@ All notable changes to Turbo EA are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.204.1] - 2026-11-12
+
+### Fixed
+
+- **Past-year costs now travel with a workspace transfer.** The cost history of Initiatives and Providers was left out of an export and import, so the cost report of a previous year came back empty on the target.
+- **Saving a past-year cost twice at the same moment no longer fails** with a server error; the last value wins.
+- **A dependency subgraph read by an extension builds its cards once** instead of twice.
+
+### Security
+
+- **The password-reset and set-password links are built only from the configured application base URL**, never from the request's `Host` header. Without a base URL no email is sent, so a forged `Host` can no longer deliver a reset token to another site.
+- **A tag manager can no longer tag or untag a card hidden from them** by a View deny on its type: the card answers 404, as everywhere else.
+- **The ArchiMate diagram list now hides the diagrams of layers the caller has no permission for**, as the mixed list already did.
+- **An extension's MCP tool can no longer step out of its own namespace.** A path parameter such as `../../cards/1` is now escaped, so the call cannot reach a core route with the user's token.
+- **Files uploaded by an extension are checked by their content**, like every other upload: the declared type decides nothing, the 20 MB limit applies, and the stored type is the one the bytes prove.
+
 ## [2.204.0] - 2026-11-12
 
 ### Changed

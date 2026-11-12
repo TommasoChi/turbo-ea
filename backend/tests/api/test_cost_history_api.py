@@ -250,3 +250,37 @@ async def test_deleting_a_year_that_has_no_row_publishes_nothing(client, db, env
     )
     assert resp.status_code == 204
     assert await _cost_events(db, card) == []
+
+
+async def test_a_put_that_loses_the_race_to_a_concurrent_insert_still_succeeds(
+    client, db, env, monkeypatch
+):
+    """The row appears between the existence check and the write: no unique-key 500."""
+    from sqlalchemy import select
+
+    from app.api.v1 import cost_history
+    from app.models.card_cost_history import CardCostHistory
+
+    admin = env["admin"]
+    card = await create_card(db, card_type="Provider", name="Raced", user_id=admin.id)
+    real_publish = cost_history._publish_history_change
+
+    async def _publish_then_lose_the_race(db_, user, card_, fiscal_year, *, old, new):
+        await real_publish(db_, user, card_, fiscal_year, old=old, new=new)
+        db_.add(
+            CardCostHistory(
+                card_id=card_.id, fiscal_year=fiscal_year, field_key="costTotalAnnual", value=1
+            )
+        )
+        await db_.flush()
+
+    monkeypatch.setattr(cost_history, "_publish_history_change", _publish_then_lose_the_race)
+    resp = await _put(client, card, admin, fiscal_year=YEAR, field_key="costTotalAnnual", value=7)
+    assert resp.status_code == 200
+    assert resp.json()["value"] == 7
+    rows = (
+        (await db.execute(select(CardCostHistory).where(CardCostHistory.card_id == card.id)))
+        .scalars()
+        .all()
+    )
+    assert [r.value for r in rows] == [7]

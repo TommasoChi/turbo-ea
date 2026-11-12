@@ -420,6 +420,9 @@ class TestSetPasswordEdgeCases:
 
 class TestForgotPasswordSetup:
     def _patch_email(self, monkeypatch):
+        from app.config import settings
+
+        monkeypatch.setattr(settings, "_app_base_url", "https://ea.test", raising=False)
         """Make email look configured and capture every send. Returns the list
         of sent messages (dicts with subject/html)."""
         from app.services import email_service

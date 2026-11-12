@@ -18,11 +18,19 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, patch
 
+import pytest
 from sqlalchemy import select
 
+from app.config import settings
 from app.core.security import verify_password
 from app.models.user import User
 from tests.conftest import create_user
+
+
+@pytest.fixture(autouse=True)
+def _base_url(monkeypatch):
+    """Emailed links come from the configured base URL only, never from the request."""
+    monkeypatch.setattr(settings, "_app_base_url", "https://ea.test", raising=False)
 
 
 def _patch_smtp_on():
@@ -32,6 +40,46 @@ def _patch_smtp_on():
 
 def _patch_smtp_off():
     return patch("app.api.v1.auth.email_service._is_configured", return_value=False)
+
+
+class TestForgotPasswordLinkHost:
+    async def test_the_link_uses_the_configured_base_url_not_the_host_header(self, client, db):
+        await create_user(db, email="host@test.com", role="member")
+        await db.commit()
+        with (
+            _patch_smtp_on(),
+            patch(
+                "app.api.v1.auth.email_service.send_email", new=AsyncMock(return_value=True)
+            ) as mock_send,
+        ):
+            resp = await client.post(
+                "/api/v1/auth/forgot-password",
+                json={"email": "host@test.com"},
+                headers={"Host": "evil.example"},
+            )
+        assert resp.status_code == 200
+        html = mock_send.call_args.args[2]
+        assert "https://ea.test/auth/reset-password?token=" in html
+        assert "evil.example" not in html
+
+    async def test_without_a_configured_base_url_no_email_is_sent(self, client, db, monkeypatch):
+        monkeypatch.setattr(settings, "_app_base_url", "", raising=False)
+        await create_user(db, email="nobase@test.com", role="member")
+        await db.commit()
+        with (
+            _patch_smtp_on(),
+            patch(
+                "app.api.v1.auth.email_service.send_email", new=AsyncMock(return_value=True)
+            ) as mock_send,
+        ):
+            resp = await client.post(
+                "/api/v1/auth/forgot-password",
+                json={"email": "nobase@test.com"},
+                headers={"Host": "evil.example"},
+            )
+        assert resp.status_code == 200
+        assert resp.json() == {"ok": True}
+        mock_send.assert_not_awaited()
 
 
 class TestForgotPassword:
