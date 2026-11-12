@@ -37,8 +37,11 @@ from app.services.event_bus import event_bus
 from app.services.permission_service import PermissionService
 from app.services.process_element_sync import (
     as_card_uuid,
+    normalise_draft_link_body,
+    stored_link_ids,
     sync_process_elements,
     sync_process_message_flows,
+    validate_link_cards,
     validate_process_link,
 )
 
@@ -46,6 +49,22 @@ router = APIRouter(prefix="/bpm", tags=["bpm-workflow"])
 
 
 # ── Helpers ─────────────────────────────────────────────────────────────
+
+
+# The Process Flow tab's sub-tabs, by the index the card page reads from
+# ``?subtab=`` (``ProcessFlowTab``: 0 Published, 1 Drafts, 2 Archived).
+_PUBLISHED_SUBTAB = 0
+_DRAFTS_SUBTAB = 1
+
+
+def _flow_tab_link(process_id: str, subtab: int) -> str:
+    """The in-app link to a process's Process Flow tab, on one sub-tab.
+
+    The card page addresses a tab by its key and a sub-tab by its index; the
+    ``?tab=process-flow&subtab=drafts`` these links used to carry matched
+    neither, so a notification or to-do opened the Card tab instead.
+    """
+    return f"/cards/{process_id}?tab=processFlow&subtab={subtab}"
 
 
 async def _get_process_or_404(db: AsyncSession, process_id: uuid.UUID, user: User) -> Card:
@@ -578,7 +597,7 @@ async def submit_for_approval(
             notif_type="process_flow_approval_requested",
             title=f"Process flow approval requested for {process.name}",
             message=f"{user.display_name} submitted revision {version.revision} for approval.",
-            link=f"/cards/{process_id}?tab=process-flow&subtab=drafts",
+            link=_flow_tab_link(process_id, _DRAFTS_SUBTAB),
             card_id=pid,
             actor_id=user.id,
         )
@@ -589,7 +608,7 @@ async def submit_for_approval(
                 f"Review and approve process flow revision {version.revision} for {process.name}"
             ),
             status="open",
-            link=f"/cards/{process_id}?tab=process-flow&subtab=drafts",
+            link=_flow_tab_link(process_id, _DRAFTS_SUBTAB),
             is_system=True,
             assigned_to=sub.user_id,
             created_by=user.id,
@@ -798,7 +817,7 @@ async def approve_version(
             notif_type="process_flow_approved",
             title=f"Process flow approved for {process.name}",
             message=msg,
-            link=f"/cards/{process_id}?tab=process-flow&subtab=published",
+            link=_flow_tab_link(process_id, _PUBLISHED_SUBTAB),
             card_id=pid,
             actor_id=user.id,
         )
@@ -881,7 +900,7 @@ async def reject_version(
             notif_type="process_flow_rejected",
             title=f"Process flow rejected for {process.name}",
             message=f"{user.display_name} rejected revision {version.revision}. Please revise.",
-            link=f"/cards/{process_id}?tab=process-flow&subtab=drafts",
+            link=_flow_tab_link(process_id, _DRAFTS_SUBTAB),
             card_id=pid,
             actor_id=user.id,
         )
@@ -1024,7 +1043,7 @@ async def withdraw_version(
                 f"Reason: {reason} — revision {new_draft_revision} has been opened "
                 f"as a draft so {process.name} can be corrected and re-published."
             ),
-            link=f"/cards/{process_id}?tab=process-flow&subtab=drafts",
+            link=_flow_tab_link(process_id, _DRAFTS_SUBTAB),
             card_id=pid,
             actor_id=user.id,
         )
@@ -1249,6 +1268,10 @@ async def update_draft_element_link(
     links = dict(version.draft_element_links or {})
     existing = links.get(bpmn_element_id, {})
 
+    # A value that is not a card id is a 400 before anything is looked up; the
+    # body now carries canonical id strings.
+    named = normalise_draft_link_body(body)
+
     # Read scope: linking a card hidden from the caller is a 404 (it does not
     # exist for them); clearing or replacing links they were never shown
     # keeps those links.
@@ -1283,11 +1306,20 @@ async def update_draft_element_link(
         before = {o for o in (existing.get("organization_ids") or []) if o}
         body["organization_ids"] = sorted(wanted | await _hidden(before))
 
+    # Every NEW link is checked at write time: an ACTIVE card of the type its
+    # slot takes. A value the step already holds is not re-checked — a draft
+    # whose linked card was archived since stays editable, and publishing
+    # drops such a link with a warning, as it always has — and neither is a
+    # hidden link kept for the caller above (it is a stored value too).
+    new_links = {key: ids - stored_link_ids(existing, key) for key, ids in named.items()}
+    process_link = new_links.pop("business_process_id", set())
+    await validate_link_cards(db, new_links)
+
     # The process link is validated at write time — the picker is the only
     # sanctioned source, so a bad id here is a client bug, not stale data.
     # An element the *saved* XML does not carry is accepted: the modeler links
     # a shape the moment it is placed, before its 5s autosave lands.
-    if body.get("business_process_id"):
+    if process_link:
         types = {
             e.bpmn_element_id: e.element_type for e in parse_bpmn(version.bpmn_xml or "").elements
         }
