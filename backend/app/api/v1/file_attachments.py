@@ -20,6 +20,7 @@ from app.services.attachment_upload import (
 )
 from app.services.attachment_validation import extension_of, extensions_for_mime
 from app.services.card_read_scope import require_card_readable
+from app.services.entity_resources import is_extension_owned
 from app.services.event_bus import event_bus
 from app.services.permission_service import PermissionService
 
@@ -52,7 +53,7 @@ async def _load_for_manage(db: AsyncSession, user: User, attachment_id: str) -> 
         select(FileAttachment).where(FileAttachment.id == uuid.UUID(attachment_id))
     )
     attachment = result.scalar_one_or_none()
-    if not attachment:
+    if not attachment or is_extension_owned(attachment.entity_type):
         raise HTTPException(404, "File attachment not found")
     if not await PermissionService.check_permission(
         db, user, "documents.manage", attachment.card_id, "card.manage_documents"
@@ -272,7 +273,7 @@ async def download_file_attachment(
         select(FileAttachment).where(FileAttachment.id == uuid.UUID(attachment_id))
     )
     attachment = result.scalar_one_or_none()
-    if not attachment:
+    if not attachment or is_extension_owned(attachment.entity_type):
         raise HTTPException(404, "File attachment not found")
     # An attachment of a card hidden from the caller does not exist for them.
     # A generic-entity attachment (card_id NULL, see the model's CHECK) hangs off

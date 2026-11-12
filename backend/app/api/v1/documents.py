@@ -12,6 +12,7 @@ from app.models.document import Document
 from app.models.user import User
 from app.schemas.common import DocumentCreate, DocumentUpdate
 from app.services.card_read_scope import require_card_readable
+from app.services.entity_resources import is_extension_owned
 from app.services.event_bus import event_bus
 from app.services.permission_service import PermissionService
 
@@ -105,7 +106,7 @@ async def update_document(
     """
     result = await db.execute(select(Document).where(Document.id == uuid.UUID(doc_id)))
     doc = result.scalar_one_or_none()
-    if not doc:
+    if not doc or is_extension_owned(doc.entity_type):
         raise HTTPException(404, "Document not found")
     if not await PermissionService.check_permission(
         db, user, "documents.manage", doc.card_id, "card.manage_documents"
@@ -153,7 +154,7 @@ async def delete_document(
 ):
     result = await db.execute(select(Document).where(Document.id == uuid.UUID(doc_id)))
     doc = result.scalar_one_or_none()
-    if not doc:
+    if not doc or is_extension_owned(doc.entity_type):
         raise HTTPException(404, "Document not found")
     if not await PermissionService.check_permission(
         db, user, "documents.manage", doc.card_id, "card.manage_documents"

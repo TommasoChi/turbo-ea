@@ -62,6 +62,7 @@ from app.schemas.resource import (
     ResourceStats,
 )
 from app.services.card_read_scope import CardReadScope
+from app.services.entity_resources import is_extension_owned
 from app.services.event_bus import event_bus
 from app.services.permission_service import PermissionService
 
@@ -583,7 +584,7 @@ async def bulk_delete_resources(
 
     for ref in body.refs:
         row = files.get(ref.id) if ref.kind == "file" else links.get(ref.id)
-        if row is None:
+        if row is None or is_extension_owned(row.entity_type):
             skipped.append(ResourceSkipped(id=ref.id, kind=ref.kind, reason="Not found"))
             continue
         if not await _may_delete(row.card_id):

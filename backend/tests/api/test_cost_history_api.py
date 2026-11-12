@@ -207,3 +207,46 @@ async def test_a_card_edit_stakeholder_may_still_write_the_history(client, db, e
         headers=auth_headers(editor),
     )
     assert resp.status_code == 200
+
+
+async def _cost_events(db, card):
+    from sqlalchemy import select
+
+    from app.models.event import Event
+
+    rows = await db.execute(
+        select(Event).where(Event.card_id == card.id, Event.event_type == "card.costs_updated")
+    )
+    return [e.data for e in rows.scalars().all()]
+
+
+async def test_a_history_write_and_delete_publish_an_event_with_keys_only(client, db, env):
+    admin = env["admin"]
+    card = await create_card(db, card_type="Provider", name="ERP", user_id=admin.id)
+    url = f"/api/v1/cards/{card.id}/cost-history"
+    for value in (123456, 654321):
+        body = {"fiscal_year": YEAR, "field_key": "costTotalAnnual", "value": value}
+        assert (await client.put(url, json=body, headers=auth_headers(admin))).status_code == 200
+    resp = await client.delete(f"{url}/{YEAR}/costTotalAnnual", headers=auth_headers(admin))
+    assert resp.status_code == 204
+
+    events = await _cost_events(db, card)
+    assert [e["changes"]["cost_items"] for e in events] == [
+        {"old": [], "new": ["costTotalAnnual"]},
+        {"old": ["costTotalAnnual"], "new": ["costTotalAnnual"]},
+        {"old": ["costTotalAnnual"], "new": []},
+    ]
+    assert {e["source"] for e in events} == {"cost_history"}
+    assert {e["fiscal_year"] for e in events} == {YEAR}
+    dumped = str(events)
+    assert "123456" not in dumped and "654321" not in dumped
+
+
+async def test_deleting_a_year_that_has_no_row_publishes_nothing(client, db, env):
+    admin = env["admin"]
+    card = await create_card(db, card_type="Provider", name="ERP", user_id=admin.id)
+    resp = await client.delete(
+        f"/api/v1/cards/{card.id}/cost-history/{YEAR}/costTotalAnnual", headers=auth_headers(admin)
+    )
+    assert resp.status_code == 204
+    assert await _cost_events(db, card) == []
