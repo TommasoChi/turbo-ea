@@ -38,7 +38,6 @@
     // the zip reader the SoAW export test opens .docx files with (docx, pptxgenjs), and
     // the resize-handle CSS of react-grid-layout. Declaring them separately
     // could install a second, mismatched copy beside the one the parent uses.
-    "didi",
     "bpmn-moddle",
     "jszip",
     "react-resizable"

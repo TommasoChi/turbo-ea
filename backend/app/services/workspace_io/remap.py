@@ -40,7 +40,6 @@ from typing import Any
 import defusedxml.ElementTree as ET  # noqa: N817
 from pydantic import ValidationError
 
-from app.schemas.bo_relationship import BoEdgeGeometry, BoPosition
 from app.services import mention_markup
 from app.services.bo_relationship_constants import (
     APPLICATION_RELATION,
@@ -571,6 +570,10 @@ def rewrite_diagram_row(kwargs: dict[str, Any], ctx: RemapContext) -> RewriteTal
 
 def rewrite_bo_snapshot(kwargs: dict[str, Any], ctx: RemapContext) -> RewriteTally:
     """Keep only references verified against destination inventory."""
+    # Imported here: app.schemas.bo_relationship needs app.schemas.card, and loading that from
+    # the workspace_io package (through audit_log) would close an import cycle.
+    from app.schemas.bo_relationship import BoEdgeGeometry, BoPosition
+
     source = kwargs.get("data") or {}
     result: dict[str, Any] = {"nodes": {}, "edges": {}, "positions": {}, "application_links": {}}
     tally = RewriteTally()

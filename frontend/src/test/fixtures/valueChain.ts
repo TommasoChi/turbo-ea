@@ -1,4 +1,4 @@
-import type { ValueChainResponse, ValueStreamResponse, ValueStreamRoot } from "@/types";
+import type { ValueChainResponse, ValueStreamRoot } from "@/types";
 
 export function makeChainResponse(): ValueChainResponse {
   const box = (id: string, name: string, process_type: "management" | "core" | "support" | "not_set", has_children = true) => ({
@@ -60,8 +60,4 @@ export function makeStreamRoot(overrides: Partial<ValueStreamRoot> = {}): ValueS
     goals: [{ id: "goal1", name: "Improve talent management", description: "Hire faster." }],
     ...overrides,
   };
-}
-
-export function makeStreamResponse(): ValueStreamResponse {
-  return { roots: [makeStreamRoot()] };
 }

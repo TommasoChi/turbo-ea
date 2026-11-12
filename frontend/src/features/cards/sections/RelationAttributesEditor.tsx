@@ -278,8 +278,6 @@ export function hasEditableRelationAttributes(relationType: RelationType | undef
 // the same values card detail shows as badges; re-exported here for the
 // existing importers.
 export { relationAttributeBadges } from "@/lib/relationAttributeBadges";
-export type { RelationAttributeBadge } from "@/lib/relationAttributeBadges";
-
 export function genericRelationAttributes(rt: RelationType, value: RelationAttributes): RelationAttributes {
   const result = { ...value };
   if (isBoOwnershipAttribute(rt.key, "dataOwnership")) delete result.dataOwnership;

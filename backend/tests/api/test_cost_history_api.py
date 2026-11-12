@@ -160,3 +160,50 @@ async def test_a_cost_of_zero_is_accepted(client, db, env):
     admin = env["admin"]
     card = await create_card(db, card_type="Provider", name="ERP", user_id=admin.id)
     assert (await _put(client, card, admin, value=0)).status_code == 200
+
+
+async def _editor_without_costs(db, *, view=False):
+    """A role that edits inventory but holds no cost permission (optionally only `costs.view`)."""
+    perms = {"inventory.view": True, "inventory.edit": True}
+    if view:
+        perms["costs.view"] = True
+    await create_role(db, key="inv-editor", permissions=perms)
+    return await create_user(db, email="editor@cost-history.com", role="inv-editor")
+
+
+@pytest.mark.parametrize("view", [False, True])
+async def test_inventory_edit_alone_cannot_write_or_delete_a_cost(client, db, env, view):
+    admin = env["admin"]
+    editor = await _editor_without_costs(db, view=view)
+    card = await create_card(db, card_type="Provider", name="ERP", user_id=admin.id)
+    url = f"/api/v1/cards/{card.id}/cost-history"
+    body = {"fiscal_year": YEAR, "field_key": "costTotalAnnual", "value": 100}
+    assert (await client.put(url, json=body, headers=auth_headers(admin))).status_code == 200
+
+    resp = await client.put(url, json={**body, "value": 0}, headers=auth_headers(editor))
+    assert resp.status_code == 403
+    resp = await client.delete(f"{url}/{YEAR}/costTotalAnnual", headers=auth_headers(editor))
+    assert resp.status_code == 403
+
+    rows = (await client.get(url, headers=auth_headers(admin))).json()["rows"]
+    assert rows == [{"fiscal_year": YEAR, "field_key": "costTotalAnnual", "value": 100}]
+
+
+async def test_a_card_edit_stakeholder_may_still_write_the_history(client, db, env):
+    from app.models.stakeholder import Stakeholder
+    from tests.conftest import create_stakeholder_role_def
+
+    admin = env["admin"]
+    editor = await _editor_without_costs(db)
+    card = await create_card(db, card_type="Provider", name="ERP", user_id=admin.id)
+    await create_stakeholder_role_def(
+        db, card_type_key="Provider", key="owner", label="Owner", permissions={"card.edit": True}
+    )
+    db.add(Stakeholder(card_id=card.id, user_id=editor.id, role="owner"))
+    await db.flush()
+    resp = await client.put(
+        f"/api/v1/cards/{card.id}/cost-history",
+        json={"fiscal_year": YEAR, "field_key": "costTotalAnnual", "value": 5},
+        headers=auth_headers(editor),
+    )
+    assert resp.status_code == 200
