@@ -141,7 +141,8 @@ def _make_tool_function(
             value = str(remaining.pop(name))
             if value in (".", ".."):  # quote leaves dots alone, and a bare one is a dot-segment
                 return f"Error: invalid path parameter '{name}'"
-            resolved_path = resolved_path.replace(f"{{{name}}}", quote(value, safe=""))
+            quoted = quote(value, safe="")  # pragma: no mutate, letters are never encoded
+            resolved_path = resolved_path.replace(f"{{{name}}}", quoted)
 
         client = TurboEAClient(token)
         url_path = f"/ext/{ext_key}/{resolved_path}"

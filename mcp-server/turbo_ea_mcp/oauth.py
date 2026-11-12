@@ -451,20 +451,49 @@ def _consent_cookie_ok(request: Request, state: str) -> bool:
     """The browser that asked is the browser that answers: the cookie set with the consent page
     must match the request's state. A state an attacker obtained in their own browser is useless
     in the victim's."""
-    cookie = request.cookies.get(CONSENT_COOKIE, "")
-    return bool(cookie) and hmac.compare_digest(cookie, state)
+    cookie = request.cookies.get(CONSENT_COOKIE)
+    return cookie is not None and hmac.compare_digest(cookie, state)
+
+
+# Static page text lives in module constants: it carries no logic, and a typo in a style rule is
+# not a behaviour a test should have to pin.
+_PAGE_HEAD = (
+    "<!doctype html><html><head><meta charset=utf-8><title>Authorize access</title>"
+    "<meta name=viewport content='width=device-width,initial-scale=1'>"
+    "<style>body{font-family:sans-serif;max-width:32rem;margin:4rem auto;padding:0 1rem}"
+    "button{font-size:1rem;padding:.5rem 1.2rem;margin-right:.6rem}dl{margin:1.2rem 0}"
+    "dt{color:#555;font-size:.85rem}dd{margin:0 0 .8rem;font-weight:600;word-break:break-all}"
+    "</style></head><body>"
+)
+_PAGE_TAIL = "</body></html>"
+_CONSENT_BODY = (
+    "<h1>Authorize access to Turbo EA</h1>"
+    "<p>An application is asking to use your Turbo EA account, with your permissions.</p>"
+    "<dl><dt>Application (name as it describes itself)</dt><dd>{name}</dd>"
+    "<dt>It will receive the sign-in at</dt><dd>{host}</dd>"
+    "<dt>Access requested</dt><dd>{scope}</dd></dl>"
+    "<p>Only continue if you started this from an application you trust.</p>"
+    "<form method=post action=authorize/consent>"
+    "<input type=hidden name=state value='{state}'>"
+    "<button name=decision value=approve type=submit>Continue</button>"
+    "<button name=decision value=deny type=submit>Cancel</button></form>"
+)
+_EXPIRED_BODY = "<h1>This request has expired</h1><p>Start again from the application.</p>"
+_CANCELLED_BODY = "<h1>Cancelled</h1><p>No access was given. You can close this window.</p>"
+_UNNAMED_CLIENT = "MCP Client"
+# Not readable by script, not sent on a cross-site POST, gone when the request would be.
+_CONSENT_COOKIE_ATTRS = {
+    "max_age": AUTH_CODE_TTL,
+    "httponly": True,
+    "samesite": "lax",
+    "path": "/",
+}
 
 
 def _html(body: str, status_code: int = 200) -> HTMLResponse:
-    page = (
-        "<!doctype html><html><head><meta charset=utf-8><title>Authorize access</title>"
-        "<meta name=viewport content='width=device-width,initial-scale=1'>"
-        "<style>body{font-family:sans-serif;max-width:32rem;margin:4rem auto;padding:0 1rem}"
-        "button{font-size:1rem;padding:.5rem 1.2rem;margin-right:.6rem}dl{margin:1.2rem 0}"
-        "dt{color:#555;font-size:.85rem}dd{margin:0 0 .8rem;font-weight:600;word-break:break-all}"
-        f"</style></head><body>{body}</body></html>"
+    return HTMLResponse(
+        _PAGE_HEAD + body + _PAGE_TAIL, status_code=status_code, headers=_CONSENT_HEADERS
     )
-    return HTMLResponse(page, status_code=status_code, headers=_CONSENT_HEADERS)
 
 
 def _consent_page(
@@ -472,27 +501,17 @@ def _consent_page(
 ) -> Response:
     # The redirect host is what the sign-in is sent to; the name is only what the client claims.
     host = urlsplit(redirect_uri).netloc or redirect_uri
-    name = client.client_name if client else "MCP Client"
+    name = client.client_name if client else _UNNAMED_CLIENT
     resp = _html(
-        "<h1>Authorize access to Turbo EA</h1>"
-        "<p>An application is asking to use your Turbo EA account, with your permissions.</p>"
-        f"<dl><dt>Application (name as it describes itself)</dt><dd>{escape(name)}</dd>"
-        f"<dt>It will receive the sign-in at</dt><dd>{escape(host)}</dd>"
-        f"<dt>Access requested</dt><dd>{escape(scope)}</dd></dl>"
-        "<p>Only continue if you started this from an application you trust.</p>"
-        "<form method=post action=authorize/consent>"
-        f"<input type=hidden name=state value='{escape(state, quote=True)}'>"
-        "<button name=decision value=approve type=submit>Continue</button>"
-        "<button name=decision value=deny type=submit>Cancel</button></form>"
+        _CONSENT_BODY.format(
+            name=escape(name), host=escape(host), scope=escape(scope), state=escape(state)
+        )
     )
     resp.set_cookie(
         CONSENT_COOKIE,
         state,
-        max_age=AUTH_CODE_TTL,
-        httponly=True,
-        samesite="lax",
         secure=MCP_PUBLIC_URL.startswith("https://"),
-        path="/",
+        **_CONSENT_COOKIE_ATTRS,
     )
     return resp
 
@@ -504,12 +523,10 @@ async def authorize_consent(request: Request) -> Response:
     state = (fields.get("state") or [""])[0]
     pending = store.pending.get(state)
     if pending is None or not _consent_cookie_ok(request, state):
-        return _html(
-            "<h1>This request has expired</h1><p>Start again from the application.</p>", 400
-        )
+        return _html(_EXPIRED_BODY, 400)
     if (fields.get("decision") or [""])[0] != "approve":
-        store.pending.pop(state, None)
-        return _html("<h1>Cancelled</h1><p>No access was given. You can close this window.</p>")
+        del store.pending[state]
+        return _html(_CANCELLED_BODY)
 
     sso_config = await _get_sso_config()
     if not sso_config.get("enabled"):
@@ -578,13 +595,7 @@ async def sso_callback(request: Request) -> Response:
     # A pending request goes on only if the person approved it (consent) and this is the browser
     # that was shown the consent page: a link built to skip the page fails both.
     pending = store.pending.get(internal_state)
-    if pending is not None and not (
-        pending.consented and _consent_cookie_ok(request, internal_state)
-    ):
-        pending = None
-    if pending is not None:
-        store.pending.pop(internal_state, None)
-    if not pending:
+    if pending is None or not (pending.consented and _consent_cookie_ok(request, internal_state)):
         return JSONResponse(
             {
                 "error": "invalid_request",
@@ -592,6 +603,7 @@ async def sso_callback(request: Request) -> Response:
             },
             status_code=400,
         )
+    del store.pending[internal_state]
 
     # Exchange the SSO code via Turbo EA's existing SSO callback
     callback_url = f"{MCP_PUBLIC_URL.rstrip('/')}/oauth/callback"

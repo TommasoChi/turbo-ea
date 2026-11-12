@@ -8,6 +8,7 @@ that was shown the page, and the SSO callback must refuse a request that skipped
 
 from __future__ import annotations
 
+import time
 from unittest.mock import AsyncMock
 
 import pytest
@@ -184,3 +185,164 @@ def test_the_whole_flow_from_one_browser_issues_a_code(victim, store, monkeypatc
     assert resp.status_code == 302
     assert resp.headers["location"].startswith(CB + "?code=")
     assert len(store.codes) == 1
+
+
+# ── What the page says, exactly ─────────────────────────────────────────────
+
+
+def test_the_page_names_the_redirect_host_alone(victim, store):
+    resp = _start(victim)
+    assert "<dd>attacker.example</dd>" in resp.text  # the netloc, not the whole URI
+    assert "<dd>mcp:read</dd>" in resp.text
+
+
+def test_a_redirect_without_a_host_is_shown_whole(victim, store):
+    store.clients["c"].redirect_uris.append("myapp:/cb")
+    resp = victim.get(
+        "/oauth/authorize",
+        params={
+            "response_type": "code",
+            "client_id": "c",
+            "redirect_uri": "myapp:/cb",
+            "code_challenge": "chal",
+            "code_challenge_method": "S256",
+        },
+        follow_redirects=False,
+    )
+    assert "<dd>myapp:/cb</dd>" in resp.text
+
+
+def test_a_client_that_never_registered_is_called_mcp_client(victim, store, monkeypatch):
+    monkeypatch.setattr(oauth, "MCP_OAUTH_ALLOWED_REDIRECT_URIS", ["https://fixed.example/cb"])
+    resp = victim.get(
+        "/oauth/authorize",
+        params={
+            "response_type": "code",
+            "client_id": "unregistered",
+            "redirect_uri": "https://fixed.example/cb",
+            "code_challenge": "chal",
+            "code_challenge_method": "S256",
+        },
+        follow_redirects=False,
+    )
+    assert "<dd>MCP Client</dd>" in resp.text
+
+
+def test_every_value_put_in_the_page_is_escaped(victim, store):
+    store.clients["c"].redirect_uris.append("https://x<b>y.example/cb")
+    resp = victim.get(
+        "/oauth/authorize",
+        params={
+            "response_type": "code",
+            "client_id": "c",
+            "redirect_uri": "https://x<b>y.example/cb",
+            "scope": "a<i>b",
+            "code_challenge": "chal",
+            "code_challenge_method": "S256",
+        },
+        follow_redirects=False,
+    )
+    assert "x<b>y" not in resp.text and "x&lt;b&gt;y.example" in resp.text
+    assert "a<i>b" not in resp.text and "a&lt;i&gt;b" in resp.text
+
+
+def test_the_state_cannot_break_out_of_its_attribute():
+    page = oauth._consent_page("a'b\"c", None, "https://h.example/cb", "s").body.decode()
+    assert "value='a&#x27;b&quot;c'" in page
+
+
+def test_the_page_offers_the_two_answers(victim):
+    page = _start(victim).text
+    assert "<form method=post action=authorize/consent>" in page
+    assert "name=decision value=approve" in page and "name=decision value=deny" in page
+
+
+def test_the_cookie_lives_as_long_as_the_request_and_is_sent_everywhere_on_the_host(victim, store):
+    set_cookie = _start(victim).headers["set-cookie"]
+    assert f"Max-Age={oauth.AUTH_CODE_TTL}" in set_cookie
+    assert "Path=/" in set_cookie
+    assert "SameSite=lax" in set_cookie
+
+
+def test_the_cookie_is_secure_over_https_only(store, monkeypatch):
+    monkeypatch.setattr(oauth, "MCP_PUBLIC_URL", "http://localhost:8000/")
+    plain = _start(_browser()).headers["set-cookie"]
+    assert "Secure" not in plain
+    monkeypatch.setattr(oauth, "MCP_PUBLIC_URL", "https://mcp.example.com/")
+    assert "Secure" in _start(_browser()).headers["set-cookie"]
+
+
+def test_a_missing_cookie_never_matches_whatever_the_state(victim):
+    from starlette.requests import Request
+
+    bare = Request({"type": "http", "headers": [], "query_string": b""})
+    for state in ("XXXX", "", "anything"):
+        assert oauth._consent_cookie_ok(bare, state) is False
+
+
+def test_the_cookie_must_equal_the_state():
+    from starlette.requests import Request
+
+    def request(cookie: str) -> Request:
+        return Request(
+            {
+                "type": "http",
+                "headers": [(b"cookie", f"{oauth.CONSENT_COOKIE}={cookie}".encode())],
+                "query_string": b"",
+            }
+        )
+
+    assert oauth._consent_cookie_ok(request("abc"), "abc") is True
+    assert oauth._consent_cookie_ok(request("abc"), "abd") is False
+
+
+# ── The answer ──────────────────────────────────────────────────────────────
+
+
+def test_an_expired_answer_says_so_with_a_400(victim, store):
+    resp = _answer(victim, "unknown")
+    assert resp.status_code == 400
+    assert "This request has expired" in resp.text
+
+
+def test_cancelling_says_nothing_was_given(victim, store):
+    _start(victim)
+    [state] = store.pending
+    assert "No access was given" in _answer(victim, state, "deny").text
+
+
+def test_an_answer_that_is_not_approve_is_a_refusal(victim, store):
+    _start(victim)
+    [state] = store.pending
+    resp = victim.post(
+        "/oauth/authorize/consent", data={"state": state}, follow_redirects=False
+    )  # no decision at all
+    assert resp.status_code == 200 and "location" not in resp.headers
+    assert store.pending == {}
+
+
+def test_an_answer_that_is_not_valid_utf8_is_a_400_not_a_crash(victim, store):
+    resp = victim.post(
+        "/oauth/authorize/consent",
+        content=b"state=\xff&decision=approve",
+        headers={"content-type": "application/x-www-form-urlencoded"},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 400
+
+
+def test_approving_without_sso_configured_is_a_503_and_not_consented(victim, store, monkeypatch):
+    _start(victim)
+    [state] = store.pending
+    monkeypatch.setattr(oauth, "_get_sso_config", AsyncMock(return_value={"enabled": False}))
+    resp = _answer(victim, state)
+    assert resp.status_code == 503
+    assert store.pending[state].consented is False
+
+
+def test_expired_requests_are_swept_when_an_answer_arrives(victim, store):
+    store.pending["stale"] = PendingAuth(
+        "c", CB, "s", "st", "ch", "S256", created_at=time.time() - oauth.AUTH_CODE_TTL - 1
+    )
+    _answer(victim, "unknown")
+    assert "stale" not in store.pending
