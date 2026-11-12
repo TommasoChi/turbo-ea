@@ -148,6 +148,19 @@ class TestRegisterExtensionTools:
         assert mock_get.call_args.args[0] == "/ext/sample/thing/..%2F..%2Fcards%2F1"
 
     @pytest.mark.asyncio
+    @pytest.mark.parametrize("dots", [".", ".."])
+    async def test_a_bare_dot_segment_is_refused(self, dots):
+        mcp = FastMCP("test")
+        mcp_extensions.register_extension_tools(
+            mcp, get_token=AsyncMock(return_value="tok"), is_writes_disabled=lambda: None
+        )
+        tool = mcp._tool_manager.get_tool("ext_sample_get_thing")
+        with patch.object(mcp_extensions.TurboEAClient, "get", AsyncMock()) as mock_get:
+            result = await tool.fn(thing_id=dots)
+        assert result == "Error: invalid path parameter 'thing_id'"
+        mock_get.assert_not_awaited()
+
+    @pytest.mark.asyncio
     async def test_write_tool_forces_dry_run_true_by_default(self):
         mcp = FastMCP("test")
         mcp_extensions.register_extension_tools(
