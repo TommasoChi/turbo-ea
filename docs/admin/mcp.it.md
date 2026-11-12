@@ -183,31 +183,34 @@ In questa modalità, il server si autentica con email/password e rinnova il toke
 
 ## Funzionalità disponibili
 
-Il server MCP espone **56 strumenti** suddivisi in due gruppi: **35 strumenti di lettura** che interrogano i dati EA e **21 strumenti di scrittura** (15 additivi, 6 distruttivi) che creano e mantengono card, relazioni, diagrammi, rischi, ADR e altro ancora — inclusa la trasformazione degli artefatti che uno strumento di IA ha nel proprio contesto (fogli di calcolo, BPMN XML, DrawIO XML, documenti, immagini) in dati EA strutturati. Ogni strumento porta `ToolAnnotations` MCP (indicazioni di sola lettura / distruttivo / idempotente) in modo che i connettori possano evidenziare la distruttività nella loro interfaccia.
+Il server MCP espone **64 strumenti** suddivisi in due gruppi: **40 strumenti di lettura** che interrogano i dati EA e **24 strumenti di scrittura** (18 additivi, 6 distruttivi) che creano e mantengono card, relazioni, diagrammi, rischi, ADR, viste di inventario salvate e altro ancora — inclusa la trasformazione degli artefatti che uno strumento di IA ha nel proprio contesto (fogli di calcolo, BPMN XML, DrawIO XML, documenti, immagini) in dati EA strutturati. Ogni strumento porta `ToolAnnotations` MCP (indicazioni di sola lettura / distruttivo / idempotente) in modo che i connettori possano evidenziare la distruttività nella loro interfaccia.
 
 ### Sicurezza tramite esecuzione di prova nelle scritture
 
 Ogni strumento di scrittura usa per impostazione predefinita **`dry_run=true`**, e nulla viene persistito finché lo strumento di IA non lo richiama con `dry_run=false` — cosa che dovrebbe fare solo dopo che l'utente ha visto l'anteprima e ha confermato. Questo evita che un agente troppo zelante crei silenziosamente centinaia di card a partire da un foglio di calcolo interpretato male. L'anteprima è di due tipi:
 
 - **Verificata dal backend.** Dove l'endpoint sottostante supporta un'esecuzione di prova, il backend esegue ogni validatore e risolutore — permessi, id delle card, ciò che l'utente può leggere —, costruisce il risultato completo e poi **annulla la transazione**. Questo vale per le card (`create_cards_bulk`, `update_cards_bulk`), le relazioni (`upsert_relations_bulk`) e i diagrammi (`create_diagram`, `update_diagram`). L'anteprima di un diagramma restituisce i collegamenti alle card accettati dal backend e, per un aggiornamento, la modifica esatta: campi rinominati, collegamenti alle card aggiunti e rimossi, e se il canvas è cambiato.
-- **Costruita dal server MCP.** Dove l'endpoint non prevede un'esecuzione di prova, lo strumento valida e traduce il proprio input e mostra il payload esatto che un commit invierebbe, senza chiamare l'endpoint di scrittura: `import_bpmn` (il percorso bozza → invio → approvazione; i conteggi dei nodi di flusso sono una stima e l'anteprima riporta `verified: false`), `create_adr`, `update_adr`, `sign_adr`, `create_soaw`, `add_card_comment`, `transition_card_lifecycle`, `assign_stakeholders`, `create_risks`, `update_risks`, `archive_cards` (che mostra l'impatto dell'archiviazione di ogni card) e `set_card_logos` / `clear_card_logos` (che cercano il tipo e il logo attuale di ogni card e scaricano ogni `image_url`).
+- **Costruita dal server MCP.** Dove l'endpoint non prevede un'esecuzione di prova, lo strumento valida e traduce il proprio input e mostra il payload esatto che un commit invierebbe, senza chiamare l'endpoint di scrittura: `import_bpmn` (il percorso bozza → invio → approvazione; i conteggi dei nodi di flusso sono una stima e l'anteprima riporta `verified: false`), `create_adr`, `update_adr`, `sign_adr`, `revise_adr` (che legge la decisione e indica il numero di revisione che creerebbe, o perché il backend rifiuterebbe), `create_soaw`, `add_card_comment`, `add_document_comment` (che legge la discussione e indica se si può commentare e se il thread a cui si risponde appartiene a quel documento), `transition_card_lifecycle`, `save_inventory_view` (che esegue la query e indica quante card corrispondono, con alcuni nomi di esempio), `assign_stakeholders`, `create_risks`, `update_risks`, `archive_cards` (che mostra l'impatto dell'archiviazione di ogni card) e `set_card_logos` / `clear_card_logos` (che cercano il tipo e il logo attuale di ogni card e scaricano ogni `image_url`).
 
 In entrambi i casi l'anteprima viene registrata nel registro di audit come batch di esecuzione di prova, così un amministratore può vedere ciò che un agente ha proposto e ciò che ha confermato.
 
 ### Strumenti di lettura
 
-Il server espone 35 strumenti di lettura raggruppati in otto cluster.
+Il server espone 40 strumenti di lettura raggruppati in nove cluster.
 
 **Card & metamodello**
 
 | Strumento | Descrizione |
 |-----------|-------------|
 | `search_cards` | Cercare e filtrare le card per tipo, stato o testo libero |
+| `query_cards` | Trova card attraverso una catena di relazioni con una condizione a ogni salto — vedi [Query di card a più salti](#multi-hop-card-queries) |
+| `list_inventory_views` | Elenca le viste di inventario salvate che puoi vedere, con la query di ciascuna vista e il canale che l'ha creata |
 | `get_card` | Ottenere i dettagli completi di una card tramite UUID |
 | `get_card_relations` | Ottenere tutte le relazioni connesse a una card |
 | `get_card_hierarchy` | Ottenere antenati e figli di una card |
 | `list_card_types` | Elencare tutti i tipi di card nel metamodello; il campo `category` di ogni tipo è la chiave della sua categoria (livello architetturale) |
 | `get_relation_types` | Elencare i tipi di relazione, con filtro opzionale per tipo di card |
+| `list_tag_groups` | Elencare i gruppi di tag (con i tipi di card a cui si applica ciascuno) e i loro tag; gli id dei tag sono ciò che `query_cards` e `save_inventory_view` accettano in `where.tags` |
 | `resolve_card_refs` | Pre-validare i riferimenti alle card basati sul nome (nome → UUID) prima di un'importazione di massa — risolve soltanto, non scrive mai |
 | `analyze_impact` | Analisi del raggio d'impatto delle dipendenze per una modifica proposta a una card |
 
@@ -239,9 +242,11 @@ Il server espone 35 strumenti di lettura raggruppati in otto cluster.
 | Strumento | Descrizione |
 |-----------|-------------|
 | `list_principles` | Principi EA pubblicati (enunciato, motivazione, implicazioni) |
-| `list_adrs` | Architecture Decision Records, filtrabili per iniziativa / stato |
-| `get_adr` | ADR singolo con sezioni, card collegate e percorso di firma |
-| `list_soaws` | Statements of Architecture Work di un'iniziativa |
+| `list_adrs` | Architecture Decision Records, filtrabili per iniziativa, stato e vigenza (`standing="in_force,amended"` elenca le decisioni in vigore). Mostra la revisione corrente di ogni decisione; `include_earlier` aggiunge le revisioni precedenti |
+| `get_adr` | Singola revisione di un ADR con sezioni, card collegate, percorso di firma, vigenza, collegamenti tipizzati ad altre decisioni, decisori e partecipanti, date, revisioni e nomi dei file |
+| `list_soaws` | Statements of Architecture Work di un'iniziativa (revisioni correnti; `include_earlier` aggiunge quelle precedenti) |
+| `get_document_discussion` | La discussione di una decisione o di un SoAW: thread con le loro risposte, sezione, autore e stato risolto, inclusi motivi di rifiuto e note di firma. Ogni commento è fornito in HTML e in testo semplice, con le menzioni scritte come `@Nome`, o `[restricted]` per una card che non si può vedere; `include_earlier_revisions` aggiunge i thread delle revisioni precedenti |
+| `get_document_history` | La cronologia di una decisione o di un SoAW (creato, salvato, inviato per la revisione, firmato, rifiutato, ripristinato, …), pagina per pagina. Aprire, confrontare e ripristinare le versioni salvate resta possibile solo nell'interfaccia web |
 
 **Report**
 
@@ -281,9 +286,9 @@ Tutti gli strumenti rispettano l'RBAC dell'utente autenticato — un visualizzat
 
 ### Strumenti di scrittura
 
-Il server espone 21 strumenti di scrittura, ciascuno annotato come **additivo** (crea o estende dati) o **distruttivo** (modifica o rimuove dati esistenti), in modo che i connettori possano avvertire di conseguenza.
+Il server espone 24 strumenti di scrittura, ciascuno annotato come **additivo** (crea o estende dati) o **distruttivo** (modifica o rimuove dati esistenti), in modo che i connettori possano avvertire di conseguenza.
 
-**Additivi (15)**
+**Additivi (18)**
 
 | Strumento | Descrizione |
 |-----------|-------------|
@@ -292,14 +297,17 @@ Il server espone 21 strumenti di scrittura, ciascuno annotato come **additivo** 
 | `create_risks` | Crea voci nel Registro dei rischi EA. |
 | `update_risks` | Aggiorna le voci del Registro dei rischi (campi, card collegate). |
 | `add_card_comment` | Pubblica un commento su una card — una nota non distruttiva e revisionabile invece di modificare i campi. |
+| `add_document_comment` | Pubblica un commento su una decisione o un SoAW: un nuovo thread, facoltativamente associato a una sezione, o una risposta a un thread. Il commento è testo semplice; le menzioni si fanno solo nell'interfaccia web. Richiede il permesso `adr.comment` / `soaw.comment`, oppure essere firmatario del documento. Un commento pubblicato non può essere annullato con `rollback_batch`; eliminarlo dalla discussione nell'interfaccia web. |
 | `create_soaw` | Crea uno Statement of Architecture Work per un'iniziativa. |
 | `assign_stakeholders` | Assegna o rimuove ruoli di stakeholder sulle card. |
 | `update_cards_bulk` | Patch a livello di campo su molte card in una sola chiamata. |
-| `create_adr` | Crea un Architecture Decision Record. |
-| `update_adr` | Aggiorna un ADR (titolo, sezioni, stato, card collegate). |
+| `create_adr` | Crea un Architecture Decision Record, con collegamenti tipizzati ad altre decisioni (`replaces`, `amends`, `revokes`, `relates`), decisori, partecipanti e date. Sostituire o revocare una decisione si fa in questo modo: una nuova decisione con un collegamento `replaces` / `revokes`, che ha effetto una volta firmata. |
+| `update_adr` | Aggiorna un ADR in bozza (titolo, sezioni, card collegate, collegamenti tipizzati, persone, date, riepilogo delle modifiche). Una decisione in revisione accetta solo modifiche alle card collegate, e una firmata non viene mai modificata. |
 | `sign_adr` | Firma un ADR (richiede il permesso `adr.sign`; altrimenti restituisce un deep-link all'interfaccia per firmare nel browser). |
+| `revise_adr` | Avvia la revisione successiva di un ADR firmato: una bozza con lo stesso riferimento e il numero di revisione successivo, che può consolidare le decisioni che la modificano. Rifiutato quando una revisione è già in fase di redazione, una revisione successiva è firmata, o la decisione è stata revocata o sostituita. La registrazione di una decisione passata come presa resta nell'interfaccia web. |
 | `create_diagram` | Crea un diagramma DrawIO libero con collegamenti opzionali a card esistenti. |
 | `create_archimate_diagram` | Crea un diagramma ArchiMate da XML in formato Exchange dell'Open Group, con collegamenti opzionali a card esistenti. L'esecuzione di prova valida il modello sul server e riporta `valid` e `issues` senza creare nulla. |
+| `save_inventory_view` | Salva una query di card a più salti come vista di inventario (nuova, oppure in sostituzione della query di una esistente indicata con `view_id`). L'inventario riesegue la query ogni volta che la vista viene aperta; la risposta contiene un link che la apre. Un aggiornamento modifica solo il nome e la query, più la visibilità e le colonne se vengono passate; raggruppamento e layout della vista restano invariati. |
 | `import_bpmn` | Salva un diagramma BPMN 2.0 XML su una card Processo di business **esistente**. Se nessuna card corrisponde al nome fornito, lo strumento restituisce un errore `card_not_found` che rimanda l'agente a `create_cards_bulk` — questo forza la creazione esplicita della card con descrizione, sottotipo e attributi prima, invece di una scorciatoia che produce una card scarna. |
 | `set_card_logos` | Set the custom logo on many cards at once — the bulk way to put product marks on an Application inventory. Three ways to supply the image, one per row: a built-in `icon_slug` (resolved server-side, nothing transferred), an `image_url` the MCP server downloads for you from an allowlisted icon host, or `image_base64` from the agent's own context. The packs are a shortcut, not the source of truth — a dry run lists the slugs they do not carry under `unknown_icon_slugs` **and** fetches every `image_url`, so a missing brand or a dead link is reported before anything is written rather than left as a logo nobody could set. `mime` is optional and sniffed from the bytes. PNG/JPEG/WebP/GIF only, 1 MB each. Each row echoes a sha256 so the caller can prove what landed. Use `clear_card_logos` to remove one. |
 
@@ -323,6 +331,113 @@ Chiamate prima `get_archimate_mapping` perché il modello sappia a quale element
 > Disegna una vista ArchiMate Application Cooperation del CRM e di tutto ciò a cui è collegato.
 
 Il lato editor è descritto nella [guida ArchiMate](../guide/archimate.md).
+### Query di card a più salti { #multi-hop-card-queries }
+
+`query_cards` risponde in una sola chiamata a una domanda che concatena relazioni — «Organizzazioni che usano un'Applicazione con ciclo di vita Attivo, influenzata da un'Iniziativa con stato In linea» — e `save_inventory_view` conserva la stessa query come vista di inventario salvata. La vista memorizza la query, non i suoi risultati: l'inventario la riesegue ogni volta che qualcuno apre la vista, così l'elenco resta aggiornato.
+
+Una query è un piccolo oggetto JSON composto **solo da chiavi** — chiavi di tipo di card, di tipo di relazione, di campo e di opzione così come le restituiscono `list_card_types` e `get_relation_types`; id di card solo sotto `where.cards` e id di tag solo sotto `where.tags`; mai etichette:
+
+```text
+CardQuery = { type, where?, related?: [Hop] }
+Hop       = { relation: "<relation type key>" | "<key>__out" | "<key>__in",
+              type, where?, negate?: true|false, related?: [Hop] }
+Where     = { lifecycle_phase?: [plan | phaseIn | active | phaseOut | endOfLife | none],
+              subtype?: [subtype key],
+              approval_status?: [status],
+              data_quality_band?: [complete | partial | minimal],
+              eol_status?: [eol | approaching | supported | unknown | __empty__],
+              attributes?: { field key: [option key | "true" | "false" | text | "__empty__"] },
+              tags?: [tag id],
+              cards?: [card id],
+              include_descendants?: true|false }
+```
+
+Le query possono anche essere **impilate**, così una vista combina più query complete:
+
+```text
+Query = CardQuery | { all_of: [CardQuery, …] } | { any_of: [Group, …] }
+Group = CardQuery | { all_of: [CardQuery, …] }
+```
+
+- `all_of` (**E**): una card viene elencata solo se corrisponde a ogni query dell'elenco. Le sue query partono tutte dallo stesso tipo di card (altrimenti `all_of_type_mismatch`) e ne servono almeno due (`all_of_needs_two`).
+- `any_of` (**O**): una card viene elencata se corrisponde a uno qualsiasi dei gruppi, ciascuno una query semplice o un `all_of`. Servono almeno due gruppi (`any_of_needs_two`). I gruppi possono partire da tipi di card diversi, quindi **una vista può elencare più tipi di card**; una vista così si apre su tutti, e la griglia mostra le colonne che hanno in comune.
+- Un `any_of` non può stare dentro un altro `any_of` né dentro un `all_of`, e un `all_of` contiene solo query semplici (`invalid_query`).
+- Le query di un `all_of` si incontrano solo sulla card iniziale: «usa un Componente IT in dismissione» E «è interessata da un'Iniziativa» possono riguardare due card collegate diverse. Per richiedere due cose alla **stessa** card collegata, metti entrambi i salti sulla stessa riga, affiancati sotto di essa.
+
+- Un salto corrisponde quando **una qualsiasi** card correlata di quel tipo soddisfa il suo `where` (e i suoi salti annidati). `negate: true` lo trasforma in «**non** ha nessuna card di questo tipo».
+- I salti affiancati allo stesso livello devono corrispondere tutti (AND); i valori all'interno di un elenco sono alternative (OR).
+- `<key>__out` e `<key>__in` scelgono un lato di un tipo di relazione che collega un tipo di card a sé stesso (la card è l'origine o la destinazione). Altrimenti basta la chiave semplice.
+- `data_quality_band` fa corrispondere il punteggio di qualità dei dati di una card per fascia, come il filtro Qualità dei dati dell'inventario: `complete` (80 e oltre), `partial` (da 40 incluso a 80 escluso) o `minimal` (sotto 40). Qualsiasi altro valore viene rifiutato con `unknown_band`.
+- `eol_status` corrisponde allo stato di fine vita di una card come lo mostra la colonna Fine vita dell'inventario, calcolato da endoflife.date o da un prodotto EOL personalizzato: `eol`, `approaching`, `supported`, `unknown`, oppure `__empty__` per una card senza collegamento EOL e senza fine vita manuale. Qualsiasi altro valore è rifiutato con `unknown_eol_status`, e un tipo di card che non tiene traccia della fine vita con `eol_not_tracked`. Una tale condizione richiede il permesso di visualizzare i dati EOL: salvare, visualizzare in anteprima e aprire una vista che ne contiene una sono rifiutati senza di esso (`eol_view_required`), così come l'esecuzione della query.
+- `tags` accetta id di tag da `list_tag_groups`, raggruppati per gruppo di tag: una card deve avere almeno uno dei tag elencati di **ogni** gruppo indicato (alternative all'interno di un gruppo, AND tra i gruppi). Un tag il cui gruppo non si applica al tipo di card di quel salto viene rifiutato con `tag_not_for_type`; un id sconosciuto con `unknown_tag`.
+- `cards` vincola quel nodo alle card elencate (alternative): prendi i loro id da `search_cards` o `resolve_card_refs`. Ognuna dovrebbe essere una card del tipo proprio del nodo. L'esecuzione di una query non verifica le scelte: un id che non indica alcuna card, una card di un altro tipo o una card che l'utente non può leggere semplicemente non corrisponde a nulla. Il salvataggio di una vista le verifica e rifiuta una scelta simile con `unknown_card`. Una card archiviata non corrisponde a nulla in un salto. `include_descendants: true` estende ogni scelta a tutte le card sottostanti tramite il legame di parentela (sotto-capacità, organizzazioni figlie); impostato senza `cards` viene rifiutato con `descendants_without_cards`, e su un tipo di card senza gerarchia con `descendants_without_hierarchy`. Un id di card o di tag in qualsiasi altro punto della query viene rifiutato con `query_holds_an_id`.
+- Le card correlate contano solo se sono attive e l'utente può leggerle: una card che l'utente non può vedere interrompe la catena, esattamente come nell'interfaccia web. Quando una vista viene salvata, chi scrive non può vincolare una card che gli è nascosta (`unknown_card`); un collaboratore che modifica una vista condivisa con lui mantiene le scelte che contiene già, anche quelle che non può leggere. Un lettore che apre una vista le cui scelte includono una card a lui nascosta non viene rifiutato: le scelte nascoste semplicemente non corrispondono a nulla.
+
+Esempio — Organizzazioni che usano un'Applicazione attiva influenzata da un'Iniziativa con stato *On Track*:
+
+```json
+{
+  "type": "Organization",
+  "related": [
+    {
+      "relation": "relOrgToApp",
+      "type": "Application",
+      "where": { "lifecycle_phase": ["active"] },
+      "related": [
+        {
+          "relation": "relInitiativeToApp",
+          "type": "Initiative",
+          "where": { "attributes": { "initiativeStatus": ["onTrack"] } }
+        }
+      ]
+    }
+  ]
+}
+```
+
+Esempio — Applicazioni attive su tecnologia obsoleta interessate da un'Iniziativa, **oppure** le Organizzazioni che usano un'Applicazione (una vista che elenca due tipi di card):
+
+```json
+{
+  "any_of": [
+    {
+      "all_of": [
+        {
+          "type": "Application",
+          "where": { "lifecycle_phase": ["active"] },
+          "related": [
+            {
+              "relation": "relAppToITC",
+              "type": "ITComponent",
+              "where": { "lifecycle_phase": ["phaseOut", "endOfLife"] }
+            }
+          ]
+        },
+        {
+          "type": "Application",
+          "related": [{ "relation": "relInitiativeToApp", "type": "Initiative" }]
+        }
+      ]
+    },
+    {
+      "type": "Organization",
+      "related": [{ "relation": "relOrgToApp", "type": "Application" }]
+    }
+  ]
+}
+```
+
+Nell'inventario, una vista salvata in questo modo mostra la sua catena come percorso leggibile sopra la griglia con una nota che indica che è stata creata tramite MCP. La sua query può essere modificata nell'inventario (la matita nella striscia del percorso) o tramite `save_inventory_view` (passa l'id della vista ottenuto da `list_inventory_views` come `view_id`; l'aggiornamento sostituisce nome e query, modifica visibilità e colonne solo se passate e mantiene il raggruppamento e il layout impostati nell'interfaccia web — a meno che la nuova query non parta da altri tipi di card, il che reimposta i filtri e il raggruppamento della vista, perché appartenevano ai precedenti; una vista che non puoi modificare viene rifiutata con `view_not_found` o `view_not_editable`; una modifica della visibilità che non ti è consentita (solo il proprietario può cambiarla, e pubblica o condivisa richiede `bookmarks.share`) viene rifiutata con `visibility_not_allowed`); nell'interfaccia web il suo proprietario può anche rinominarla, cambiarne la condivisione e l'impostazione OData, regolare il layout delle colonne o eliminarla.
+
+Le `columns` di una vista possono contenere anche **colonne di corrispondenze**, `via:<line>:<hop path>`: una colonna che mostra, per ogni riga, le card di un passaggio della query che hanno fatto corrispondere la riga (per «Organizzazioni che usano un'Applicazione che usa un Componente IT a fine vita», quali Applicazioni e quali Componenti IT). `line` è la posizione, a partire da zero, della riga tra tutte le righe della query in ordine (una query semplice è la riga 0; le righe di un `all_of`, e di ogni gruppo `any_of` a turno, sono numerate una dopo l'altra), e `hop path` sono gli indici a partire da zero in `related`, uniti da punti, dalla prima card della riga fino al passaggio: `via:0:0` è il primo salto della prima riga, `via:0:0.1` il secondo salto sotto di esso, `via:2:0` il primo salto della terza riga. La prima card di una riga e un passaggio dietro «non ha» (`negate`) non ne hanno. Le corrispondenze sono mostrate solo nell'interfaccia web: nessuno strumento MCP le legge ancora. Aggiornare la `query` di una vista senza inviare `columns` mantiene invariate le sue chiavi `via:` salvate, quindi invia `columns` quando i passaggi cambiano.
+
+Limitazioni:
+
+- Al massimo **6 query** in una pila (`too_many_lines`); le query di un `all_of` condividono un solo tipo di card iniziale, mentre i gruppi di un `any_of` possono elencarne diversi.
+- Al massimo **3 livelli** di `related` in ogni query, al massimo 10 salti affiancati a un livello e al massimo **12 salti nell'intera query** (affiancati, annidati e su tutte le query di una pila insieme). Una query più lunga viene rifiutata con `too_many_hops`.
+- Al massimo **50** card scelte per condizione.
+- Un attributo di testo corrisponde al suo valore **esattamente** — non esiste corrispondenza parziale né senza distinzione tra maiuscole e minuscole.
+- **`rollback_batch` non può annullare una vista salvata.** Salvare una vista registra un batch di mutazioni ma non pubblica alcun evento che il rollback possa invertire; elimina una vista indesiderata dalle Viste salvate dell'inventario.
 
 ### Caricamento di artefatti
 
@@ -342,10 +457,10 @@ Difesa in profondità sopra l'esecuzione di prova, in modo che un errore del LLM
 
 - **Limite di dimensione per chiamata.** Gli strumenti di scrittura MCP applicano un limite molto più piccolo rispetto agli endpoint sottostanti dell'importatore Excel: 200 righe per `create_cards_bulk`, 500 operazioni per `upsert_relations_bulk`. Sufficientemente grande per qualsiasi caricamento realistico di un singolo artefatto, sufficientemente piccolo perché un'anteprima di esecuzione di prova rimanga visionabile.
 - **Nessuna eliminazione di relazioni per impostazione predefinita.** `upsert_relations_bulk` rifiuta le operazioni `action: "delete"` — per rimuovere relazioni, utilizzare l'interfaccia web dove l'azione viene registrata sotto l'identità dell'utente. Gli operatori possono abilitarla impostando `MCP_ALLOW_RELATION_DELETE=true`.
-- **Interruttore di spegnimento.** `MCP_WRITES_ENABLED=false` disattiva tutti i 21 strumenti di scrittura senza ridistribuire codice. I 35 strumenti di lettura continuano a funzionare.
+- **Interruttore di spegnimento.** `MCP_WRITES_ENABLED=false` disattiva tutti i 24 strumenti di scrittura senza ridistribuire codice. I 40 strumenti di lettura continuano a funzionare.
 - **Il download dei loghi passa da una lista di host consentiti.** I pacchetti di icone inclusi non possono coprire ogni prodotto di un cliente, e un assistente è spesso isolato senza accesso al web: perciò `set_card_logos` accetta un `image_url` che il server MCP scarica. Solo `https`, solo gli host di `MCP_LOGO_FETCH_HOSTS`, solo indirizzi pubblici, al massimo due reindirizzamenti (ricontrollati ogni volta), al massimo 1 MB letto in streaming, e i byte devono portare una vera firma PNG/JPEG/WebP/GIF. Il download avviene al bordo MCP, mai nel backend, e l'immagine viene poi caricata per la via ordinaria: un URL scelto da un LLM non raggiunge mai il processo che detiene il database. `MCP_LOGO_FETCH_ENABLED=false` lo disattiva.
 - **Etichetta di origine per l'audit.** Ogni richiesta al backend dal server MCP porta un'intestazione `X-Turbo-EA-Origin: mcp`. Gli eventi emessi da queste richieste vengono etichettati con `origin: "mcp"` nel payload del log di audit, in modo che gli amministratori possano filtrare le scritture guidate da MCP fuori dalla timeline, separate dalle azioni dell'interfaccia web.
-- **Batch di mutazione.** Ogni chiamata di scrittura MCP — sia l'anteprima sia il commit — è un batch di mutazione nel registro di audit, aperto prima che venga scritto qualsiasi dato; ogni evento emesso durante la chiamata viene marcato con l'id del batch, e ogni strumento di scrittura restituisce quel `batch_id`. Gli amministratori (o lo strumento `get_change_history`) possono ricostruire il diff completo per evento di un commit a partire da un singolo id, e `rollback_batch` può annullarlo, compresa l'eliminazione di un diagramma creato da `create_diagram`, a meno che nel frattempo qualcuno non lo abbia pubblicato. Un aggiornamento di diagramma viene segnalato come non reversibile, perché il canvas precedente non viene conservato. I commit che superano `MCP_BATCH_CONFIRMATION_THRESHOLD` righe devono restituire il `confirm_token` monouso fornito dalla precedente esecuzione di prova. Il backend lo verifica all'apertura del batch del commit, prima di qualsiasi scrittura: deve provenire da un'esecuzione di prova dello stesso strumento, dello stesso utente, di meno di 15 minuti prima, e autorizza un solo commit. Ogni strumento di scrittura massiva segue questo ciclo di anteprima e conferma: `create_cards_bulk`, `update_cards_bulk`, `archive_cards`, `upsert_relations_bulk`, `assign_stakeholders`, `create_risks`, `update_risks`, `set_card_logos`, `clear_card_logos`.
+- **Batch di mutazione.** Ogni chiamata di scrittura MCP — sia l'anteprima sia il commit — è un batch di mutazione nel registro di audit, aperto prima che venga scritto qualsiasi dato; ogni evento emesso durante la chiamata viene marcato con l'id del batch, e ogni strumento di scrittura restituisce quel `batch_id`. Gli amministratori (o lo strumento `get_change_history`) possono ricostruire il diff completo per evento di un commit a partire da un singolo id, e `rollback_batch` può annullarlo, compresa l'eliminazione di un diagramma creato da `create_diagram`, a meno che nel frattempo qualcuno non lo abbia pubblicato. Un aggiornamento di diagramma viene segnalato come non reversibile, perché il canvas precedente non viene conservato. Nemmeno un commento pubblicato su una decisione o un SoAW è reversibile: potrebbe essere già stato letto, quindi viene invece eliminato dalla discussione. I commit che superano `MCP_BATCH_CONFIRMATION_THRESHOLD` righe devono restituire il `confirm_token` monouso fornito dalla precedente esecuzione di prova. Il backend lo verifica all'apertura del batch del commit, prima di qualsiasi scrittura: deve provenire da un'esecuzione di prova dello stesso strumento, dello stesso utente, di meno di 15 minuti prima, e autorizza un solo commit. Ogni strumento di scrittura massiva segue questo ciclo di anteprima e conferma: `create_cards_bulk`, `update_cards_bulk`, `archive_cards`, `upsert_relations_bulk`, `assign_stakeholders`, `create_risks`, `update_risks`, `set_card_logos`, `clear_card_logos`.
 - **Nessuna eliminazione definitiva.** Il set di strumenti omette deliberatamente l'eliminazione permanente delle card. `archive_cards` e `update_cards_bulk` *sono* esposti, ma l'archiviazione è un soft-delete recuperabile (finestra di ripristino di 30 giorni) ed entrambi sono annotati come distruttivi e protetti dall'esecuzione di prova. Aggiungere uno strumento che esegua una mutazione irreversibile (eliminazione definitiva, force-purge) richiederebbe una revisione di progettazione esplicita.
 
 Le sei variabili di ambiente di salvaguardia sul container MCP:
@@ -385,7 +500,7 @@ Le sei variabili di ambiente di salvaguardia sul container MCP:
 | Ruolo | Accesso |
 |-------|---------|
 | **Amministratore** | Configurare le impostazioni MCP (permesso `admin.mcp`). Accesso completo in lettura + scrittura tramite MCP. |
-| **Tutti gli utenti autenticati** | Accesso in lettura governato dal loro RBAC esistente. Gli strumenti di scrittura richiedono i corrispondenti permessi backend — `inventory.create` / `inventory.edit` / `inventory.archive` (card), `relations.manage` (relazioni), `diagrams.manage` (diagrammi), `bpm.edit` (BPMN), `risks.manage` (Registro dei rischi), `comments.create` (commenti), `stakeholders.manage` (stakeholder), `soaw.create` (SoAW), `adr.create` / `adr.sign` (ADR). |
+| **Tutti gli utenti autenticati** | Accesso in lettura governato dal loro RBAC esistente. Gli strumenti di scrittura richiedono i corrispondenti permessi backend — `inventory.create` / `inventory.edit` / `inventory.archive` (card), `relations.manage` (relazioni), `diagrams.manage` (diagrammi), `bpm.edit` (BPMN), `risks.manage` (Registro dei rischi), `comments.create` (commenti), `stakeholders.manage` (stakeholder), `soaw.create` (SoAW), `adr.manage` / `adr.sign` (ADR), `adr.comment` / `soaw.comment` (discussione di decisioni e SoAW), `bookmarks.manage` / `bookmarks.share` (viste di inventario salvate). |
 
 Il permesso `admin.mcp` controlla chi può gestire le impostazioni MCP. È disponibile solo per il ruolo Amministratore per impostazione predefinita. Ai ruoli personalizzati può essere concesso questo permesso tramite la pagina di amministrazione dei Ruoli.
 

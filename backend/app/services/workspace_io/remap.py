@@ -41,6 +41,7 @@ import defusedxml.ElementTree as ET  # noqa: N817
 from pydantic import ValidationError
 
 from app.schemas.bo_relationship import BoEdgeGeometry, BoPosition
+from app.services import mention_markup
 from app.services.bo_relationship_constants import (
     APPLICATION_RELATION,
     APPLICATION_TYPE,
@@ -53,7 +54,8 @@ from app.services.drawio_refs import extract_card_refs
 CARDS = "cards"
 RELATIONS = "relations"
 TAGS = "tags"
-KINDS = (CARDS, RELATIONS, TAGS)
+USERS = "users"
+KINDS = (CARDS, RELATIONS, TAGS, USERS)
 
 # Counter keys on :class:`RewriteTally` — stable identifiers the import
 # preview translates (``workspaceTransfer.report.ref.<key>``).
@@ -96,6 +98,10 @@ class IdMap:
     cards: dict[str, str] = field(default_factory=dict)
     relations: dict[str, str] = field(default_factory=dict)
     tags: dict[str, str] = field(default_factory=dict)
+    # Users are matched by e-mail; the Users sheet's ``source_id`` (2.200.0)
+    # maps the ids rich text and signatory lists hold. Empty for an older
+    # bundle, which leaves those ids as they were.
+    users: dict[str, str] = field(default_factory=dict)
 
     def table(self, kind: str) -> dict[str, str]:
         if kind == CARDS:
@@ -104,6 +110,8 @@ class IdMap:
             return self.relations
         if kind == TAGS:
             return self.tags
+        if kind == USERS:
+            return self.users
         raise ValueError(f"Unknown id kind {kind!r}")
 
     def record(self, kind: str, source: Any, target: Any) -> None:
@@ -875,13 +883,146 @@ def rewrite_portal_row(kwargs: dict[str, Any], ctx: RemapContext) -> RewriteTall
     return tally
 
 
+def _map_query_ids(values: list[Any], kind: str, ids: IdMap, tally: RewriteTally) -> list[str]:
+    """``values`` through the ``kind`` id map; an id it does not know is
+    counted ``unresolved`` and dropped."""
+    kept: list[str] = []
+    for value in values:
+        target = ids.lookup(kind, value)
+        if target is None:
+            tally.bump(UNRESOLVED)
+            continue
+        if target != canonical_uuid(value):
+            tally.bump(REMAPPED)
+        kept.append(target)
+    return kept
+
+
+def rewrite_card_query_ids(node: Any, ids: IdMap, tally: RewriteTally) -> Any:
+    """A saved view's multi-hop ``query`` (``card_query.CardQuerySet``) with
+    the ids under ``where.tags`` (the tag map) and ``where.cards`` (the card
+    map) translated, at the start card and every hop of every line — a plain
+    query is one line, an ``all_of`` / ``any_of`` stack is walked line by
+    line (an ``any_of`` group may itself be an ``all_of``), each line under
+    the rules below. A line is never removed by the rewrite: the rules only
+    loosen a line, and removing one would change what the stack means.
+
+    One consequence is deliberate: when none of the cards picked on a line's
+    *start* card resolves, the line loses that condition and lists every card
+    of its type — exactly what a plain query view does — so inside an
+    ``any_of`` that group adds the whole type to the view. The view widens,
+    it never silently narrows, and the tally reports each id ``unresolved``
+    for the admin to follow up.
+
+    Those are the grammar's only ids (everything else is a metamodel key). An
+    id the map does not know — or a value that is no id at all — is counted
+    ``unresolved`` and **dropped**, not kept: kept, it would point at nothing
+    on the target. A list left empty is removed — for ``cards`` together with
+    ``include_descendants``, which needs it — and a ``where`` left empty with
+    it. What that does to the view depends on the hop, and the rule is that
+    the view may widen but never silently narrow: a dropped pick on a
+    positive hop (or the start card) only loosens that node's condition,
+    while a **negated** hop whose ``cards`` lose every pick is removed whole,
+    subtree included — left in place it would read "has no card of that type
+    at all", far narrower than "has none of these cards". Not
+    ``replace_mapped_ids``: that walk can neither count an unknown id nor
+    drop it. Anything malformed comes back untouched.
+    """
+    if isinstance(node, dict):
+        for key in ("all_of", "any_of"):
+            if isinstance(node.get(key), list):
+                lines = [rewrite_card_query_ids(line, ids, tally) for line in node[key]]
+                return {**node, key: lines}
+    return _rewrite_query_node(node, ids, tally)
+
+
+#: A hop ``_rewrite_query_node`` removes from its parent's ``related``.
+_DROP = object()
+
+
+def _rewrite_query_node(node: Any, ids: IdMap, tally: RewriteTally, *, is_hop: bool = False) -> Any:
+    """``node`` rewritten, or ``_DROP`` for a negated hop (``is_hop``; the start
+    card is none) left with no pick."""
+    if not isinstance(node, dict):
+        return node
+    out = dict(node)
+    where = out.get("where")
+    if isinstance(where, dict) and any(isinstance(where.get(k), list) for k in ("tags", "cards")):
+        new_where = dict(where)
+        for key, kind in (("tags", TAGS), ("cards", CARDS)):
+            if not isinstance(where.get(key), list):
+                continue
+            kept = _map_query_ids(where[key], kind, ids, tally)
+            if kept:
+                new_where[key] = kept
+                continue
+            if key == "cards" and is_hop and out.get("negate") is True:
+                return _DROP
+            del new_where[key]
+            if key == "cards":
+                new_where.pop("include_descendants", None)
+        if new_where:
+            out["where"] = new_where
+        else:
+            del out["where"]
+    related = out.get("related")
+    if isinstance(related, list):
+        hops = [_rewrite_query_node(hop, ids, tally, is_hop=True) for hop in related]
+        kept_hops = [hop for hop in hops if hop is not _DROP]
+        if kept_hops or not related:
+            out["related"] = kept_hops
+        else:
+            del out["related"]
+    return out
+
+
 def rewrite_bookmark_row(kwargs: dict[str, Any], ctx: RemapContext) -> RewriteTally:
     """A bookmark's relation filters hold card *names*, which travel as they
-    are; only its tag filter holds ids."""
+    are; its tag filter holds ids, and so does its multi-hop ``query`` (tag
+    and card ids, ``rewrite_card_query_ids``). A query that loses a hop drops
+    its ``via:`` columns here, on the create path; the heal path
+    (``entities.heal_row``) writes back only the id-bearing columns and leaves
+    ``columns`` alone, because it holds keys only and a stale ``via:`` entry
+    there at worst shows a column for a neighbouring step."""
     tally = RewriteTally()
     if "filters" in kwargs:
         kwargs["filters"] = _rewrite_filter_keys(kwargs["filters"], (), ("tagIds",), ctx.ids, tally)
+    if "query" in kwargs:
+        before = query_hop_count(kwargs["query"])
+        kwargs["query"] = rewrite_card_query_ids(kwargs["query"], ctx.ids, tally)
+        if query_hop_count(kwargs["query"]) != before and "columns" in kwargs:
+            kwargs["columns"] = without_via_columns(kwargs["columns"])
     return tally
+
+
+#: The prefix of a saved view's matched column (``via:<line>:<hop path>``,
+#: ``card_query_matches``): the cards behind a match at one step of the query.
+VIA_COLUMN_PREFIX = "via:"
+
+
+def query_hop_count(node: Any) -> int:
+    """The hops under every line of a *stored* query, read tolerantly (a
+    malformed node counts nothing)."""
+    if not isinstance(node, dict):
+        return 0
+    total = 0
+    for key in ("all_of", "any_of", "related"):
+        nested = node.get(key)
+        if not isinstance(nested, list):
+            continue
+        total += sum(query_hop_count(child) for child in nested)
+        if key == "related":
+            total += len(nested)
+    return total
+
+
+def without_via_columns(columns: Any) -> Any:
+    """A view's ``columns`` with every matched column (``via:…``) removed: once
+    the import drops a hop, the positions those keys name no longer hold.
+    Anything that is not a list comes back untouched."""
+    if not isinstance(columns, list):
+        return columns
+    return [c for c in columns if not (isinstance(c, str) and c.startswith(VIA_COLUMN_PREFIX))]
 
 
 # The key prefix the survey builder gives a stakeholder-role field (``sh:<role>``).
@@ -999,4 +1140,139 @@ def refresh_finding_key_row(kwargs: dict[str, Any], ctx: RemapContext) -> Rewrit
     if new_key != kwargs["finding_key"]:
         kwargs["finding_key"] = new_key
         tally.bump(REMAPPED)
+    return tally
+
+
+# ---------------------------------------------------------------------------
+# Decisions, SoAWs and their discussion and history: mentions in rich text
+# ---------------------------------------------------------------------------
+
+ADR_TEXT_COLUMNS = ("context", "decision", "consequences", "alternatives_considered")
+
+
+def rewrite_mention_html(html: Any, ids: IdMap, tally: RewriteTally) -> Any:
+    """Translate the ids of the mention spans in one rich-text value.
+
+    A card mention follows its card, a user mention its user (by the Users
+    sheet's ``source_id``); a decision keeps its id — decisions preserve
+    their primary keys like every module row. Not a string → untouched.
+    """
+    if not isinstance(html, str):
+        return html
+
+    def _mapping(kind: str, mention_id: str) -> str | None:
+        if kind == "card":
+            return ids.cards.get(mention_id)
+        if kind == "user":
+            return ids.users.get(mention_id)
+        return mention_id
+
+    rewritten, remapped, unresolved = mention_markup.map_ids(html, _mapping)
+    if remapped:
+        tally.bump(REMAPPED, remapped)
+    if unresolved:
+        tally.bump(UNRESOLVED, unresolved)
+    return rewritten
+
+
+def rewrite_signatories(signatories: Any, ids: IdMap, tally: RewriteTally) -> Any:
+    """``[{user_id, …}]`` with each ``user_id`` through the users map; any
+    other shape comes back untouched."""
+    if not isinstance(signatories, list):
+        return signatories
+    out = []
+    for entry in signatories:
+        if isinstance(entry, dict) and "user_id" in entry:
+            entry = {**entry, "user_id": map_id(entry["user_id"], ids.users, tally)}
+        out.append(entry)
+    return out
+
+
+def _rewrite_strings(value: Any, ids: IdMap, tally: RewriteTally) -> Any:
+    """Every string anywhere inside a JSON value through
+    :func:`rewrite_mention_html` (only mention spans can change)."""
+    if isinstance(value, dict):
+        return {k: _rewrite_strings(v, ids, tally) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_rewrite_strings(v, ids, tally) for v in value]
+    return rewrite_mention_html(value, ids, tally)
+
+
+def rewrite_soaw_sections(sections: Any, ids: IdMap, tally: RewriteTally) -> Any:
+    """``sections[*]["content"]`` through :func:`rewrite_mention_html`, the
+    custom ones included; a section whose content is not a string (a table,
+    the TOGAF grid) is plain text and stays."""
+    if not isinstance(sections, dict):
+        return sections
+    out: dict[str, Any] = {}
+    for key, section in sections.items():
+        if isinstance(section, dict) and isinstance(section.get("content"), str):
+            section = {**section, "content": rewrite_mention_html(section["content"], ids, tally)}
+        out[key] = section
+    return out
+
+
+#: The keys of a decision snapshot that list people (``document_history_service``).
+HISTORY_PEOPLE_KEYS: tuple[str, ...] = ("decision_makers", "participants")
+
+
+def _rewrite_people(people: Any, ids: IdMap, tally: RewriteTally) -> Any:
+    """A snapshot's list of ``{user_id?, name}`` with each ``user_id`` through
+    the users map."""
+    if not isinstance(people, list):
+        return people
+    out = []
+    for person in people:
+        if isinstance(person, dict) and person.get("user_id") is not None:
+            person = {**person, "user_id": map_id(person["user_id"], ids.users, tally)}
+        out.append(person)
+    return out
+
+
+def rewrite_history_content(content: Any, ids: IdMap, tally: RewriteTally) -> Any:
+    """A history snapshot: the mention ids in every HTML string and the user
+    id of every person under ``decision_makers`` / ``participants``."""
+    if not isinstance(content, dict):
+        return content
+    out = _rewrite_strings(
+        {k: v for k, v in content.items() if k not in HISTORY_PEOPLE_KEYS}, ids, tally
+    )
+    for key in HISTORY_PEOPLE_KEYS:
+        if key in content:
+            out[key] = _rewrite_people(content[key], ids, tally)
+    return out
+
+
+def rewrite_adr_row(kwargs: dict[str, Any], ctx: RemapContext) -> RewriteTally:
+    tally = RewriteTally()
+    for col in ADR_TEXT_COLUMNS:
+        if col in kwargs:
+            kwargs[col] = rewrite_mention_html(kwargs[col], ctx.ids, tally)
+    if "signatories" in kwargs:
+        kwargs["signatories"] = rewrite_signatories(kwargs["signatories"], ctx.ids, tally)
+    return tally
+
+
+def rewrite_soaw_row(kwargs: dict[str, Any], ctx: RemapContext) -> RewriteTally:
+    tally = RewriteTally()
+    if "sections" in kwargs:
+        kwargs["sections"] = rewrite_soaw_sections(kwargs["sections"], ctx.ids, tally)
+    if "signatories" in kwargs:
+        kwargs["signatories"] = rewrite_signatories(kwargs["signatories"], ctx.ids, tally)
+    return tally
+
+
+def rewrite_document_comment_row(kwargs: dict[str, Any], ctx: RemapContext) -> RewriteTally:
+    tally = RewriteTally()
+    if "body" in kwargs:
+        kwargs["body"] = rewrite_mention_html(kwargs["body"], ctx.ids, tally)
+    return tally
+
+
+def rewrite_document_history_row(kwargs: dict[str, Any], ctx: RemapContext) -> RewriteTally:
+    tally = RewriteTally()
+    if "content" in kwargs:
+        kwargs["content"] = rewrite_history_content(kwargs["content"], ctx.ids, tally)
+    if "signatories" in kwargs:
+        kwargs["signatories"] = rewrite_signatories(kwargs["signatories"], ctx.ids, tally)
     return tally

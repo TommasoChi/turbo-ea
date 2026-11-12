@@ -75,10 +75,10 @@ const propertyDefinition = (d: PropertyDefinition) =>
   el("propertyDefinition", { identifier: d.id, type: d.type }, [name(d.name)]);
 
 const channel = (n: number) => Math.min(255, Math.max(0, int(n)));
-const rgb = (tag: string, c: Rgb) => el(tag, { r: channel(c.r), g: channel(c.g), b: channel(c.b) });
+const colourEl = (tag: string, c: Rgb) => el(tag, { r: channel(c.r), g: channel(c.g), b: channel(c.b) });
 function style(s?: NodeStyle): Xml[] {
   if (!s || (!s.fillColor && !s.lineColor)) return [];
-  return [el("style", {}, [...(s.fillColor ? [rgb("fillColor", s.fillColor)] : []), ...(s.lineColor ? [rgb("lineColor", s.lineColor)] : [])])];
+  return [el("style", {}, [...(s.fillColor ? [colourEl("fillColor", s.fillColor)] : []), ...(s.lineColor ? [colourEl("lineColor", s.lineColor)] : [])])];
 }
 
 /** Effective parent of each node: null for top-level nodes, including ones whose parent is missing,

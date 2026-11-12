@@ -28,6 +28,189 @@
             ],
             "title": "Alternatives Considered"
           },
+          "change_summary": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Change Summary"
+          },
+          "consequences": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Consequences"
+          },
+          "context": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Context"
+          },
+          "decided_on": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided On"
+          },
+          "decision": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decision"
+          },
+          "decision_makers": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ADRPersonIn"
+                },
+                "maxItems": 500,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decision Makers"
+          },
+          "effective_from": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effective From"
+          },
+          "linked_card_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Linked Card Ids"
+          },
+          "links": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ADRLinkIn"
+                },
+                "maxItems": 500,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Links"
+          },
+          "participants": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ADRPersonIn"
+                },
+                "maxItems": 500,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Participants"
+          },
+          "related_decisions": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Related Decisions",
+            "type": "array"
+          },
+          "title": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          },
+          "valid_until": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Valid Until"
+          }
+        },
+        "required": [
+          "title"
+        ],
+        "title": "ADRCreate",
+        "type": "object"
+      },
+      "ADRImportItem": {
+        "description": "One spreadsheet row for ``POST /adr/bulk-import``.\n\n``title`` is not length-checked here so a blank or over-long title fails\nits own row instead of 422-ing the batch. The four sections arrive as\nHTML (the dialog converts plain-text cells). ``status`` is read only to\nwarn that an imported decision always lands as a draft.",
+        "properties": {
+          "alternatives_considered": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Alternatives Considered"
+          },
+          "card_names": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 500,
+            "title": "Card Names",
+            "type": "array"
+          },
           "consequences": {
             "anyOf": [
               {
@@ -61,44 +244,291 @@
             ],
             "title": "Decision"
           },
-          "linked_card_ids": {
+          "reference_number": {
             "anyOf": [
               {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array"
+                "maxLength": 50,
+                "type": "string"
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Linked Card Ids"
+            "title": "Reference Number"
           },
-          "related_decisions": {
-            "default": [],
+          "related_references": {
             "items": {
               "type": "string"
             },
-            "title": "Related Decisions",
+            "maxItems": 500,
+            "title": "Related References",
             "type": "array"
           },
+          "revision_number": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "maxLength": 50,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revision Number"
+          },
+          "row_index": {
+            "title": "Row Index",
+            "type": "integer"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "maxLength": 50,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          },
           "title": {
-            "maxLength": 500,
-            "minLength": 1,
+            "default": "",
+            "maxLength": 5000,
             "title": "Title",
             "type": "string"
           }
         },
         "required": [
-          "title"
+          "row_index"
         ],
-        "title": "ADRCreate",
+        "title": "ADRImportItem",
+        "type": "object"
+      },
+      "ADRImportRequest": {
+        "properties": {
+          "dry_run": {
+            "default": false,
+            "title": "Dry Run",
+            "type": "boolean"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ADRImportItem"
+            },
+            "maxItems": 1000,
+            "minItems": 1,
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "ADRImportRequest",
+        "type": "object"
+      },
+      "ADRImportResponse": {
+        "properties": {
+          "created": {
+            "title": "Created",
+            "type": "integer"
+          },
+          "dry_run": {
+            "default": false,
+            "title": "Dry Run",
+            "type": "boolean"
+          },
+          "failed": {
+            "title": "Failed",
+            "type": "integer"
+          },
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/ADRImportResult"
+            },
+            "title": "Results",
+            "type": "array"
+          },
+          "skipped": {
+            "title": "Skipped",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "results",
+          "created",
+          "skipped",
+          "failed"
+        ],
+        "title": "ADRImportResponse",
+        "type": "object"
+      },
+      "ADRImportResult": {
+        "properties": {
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "reference_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference Number"
+          },
+          "row_index": {
+            "title": "Row Index",
+            "type": "integer"
+          },
+          "status": {
+            "enum": [
+              "created",
+              "skipped",
+              "failed"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "row_index",
+          "status"
+        ],
+        "title": "ADRImportResult",
+        "type": "object"
+      },
+      "ADRLinkIn": {
+        "additionalProperties": false,
+        "description": "One typed link from the decision being saved to another decision.",
+        "properties": {
+          "decision_id": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Decision Id",
+            "type": "string"
+          },
+          "kind": {
+            "maxLength": 20,
+            "minLength": 1,
+            "title": "Kind",
+            "type": "string"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "maxLength": 1000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "required": [
+          "decision_id",
+          "kind"
+        ],
+        "title": "ADRLinkIn",
+        "type": "object"
+      },
+      "ADRPersonIn": {
+        "additionalProperties": false,
+        "description": "A decision maker or participant: a user of this instance, or a name.",
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "user_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Id"
+          }
+        },
+        "title": "ADRPersonIn",
+        "type": "object"
+      },
+      "ADRRecordRequest": {
+        "additionalProperties": false,
+        "description": "Body of ``POST /adr/{id}/record``: when a decision taken outside Turbo EA was made.",
+        "properties": {
+          "decided_on": {
+            "format": "date",
+            "title": "Decided On",
+            "type": "string"
+          },
+          "effective_from": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effective From"
+          }
+        },
+        "required": [
+          "decided_on"
+        ],
+        "title": "ADRRecordRequest",
         "type": "object"
       },
       "ADRRejectRequest": {
         "properties": {
           "comment": {
+            "maxLength": 4000,
             "title": "Comment",
             "type": "string"
           }
@@ -107,6 +537,34 @@
           "comment"
         ],
         "title": "ADRRejectRequest",
+        "type": "object"
+      },
+      "ADRReviseRequest": {
+        "additionalProperties": false,
+        "description": "Optional body of ``POST /adr/{id}/revise``.",
+        "properties": {
+          "change_summary": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Change Summary"
+          },
+          "consolidates": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 100,
+            "title": "Consolidates",
+            "type": "array"
+          }
+        },
+        "title": "ADRReviseRequest",
         "type": "object"
       },
       "ADRSignRequest": {
@@ -182,6 +640,18 @@
             ],
             "title": "Attributes"
           },
+          "change_summary": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Change Summary"
+          },
           "consequences": {
             "anyOf": [
               {
@@ -204,6 +674,18 @@
             ],
             "title": "Context"
           },
+          "decided_on": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided On"
+          },
           "decision": {
             "anyOf": [
               {
@@ -214,6 +696,33 @@
               }
             ],
             "title": "Decision"
+          },
+          "decision_makers": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ADRPersonIn"
+                },
+                "maxItems": 500,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decision Makers"
+          },
+          "effective_from": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effective From"
           },
           "linked_card_ids": {
             "anyOf": [
@@ -228,6 +737,36 @@
               }
             ],
             "title": "Linked Card Ids"
+          },
+          "links": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ADRLinkIn"
+                },
+                "maxItems": 500,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Links"
+          },
+          "participants": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ADRPersonIn"
+                },
+                "maxItems": 500,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Participants"
           },
           "related_decisions": {
             "anyOf": [
@@ -266,9 +805,49 @@
               }
             ],
             "title": "Title"
+          },
+          "valid_until": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Valid Until"
           }
         },
         "title": "ADRUpdate",
+        "type": "object"
+      },
+      "AiEolProductSuggestRequest": {
+        "description": "A custom EOL product to describe: its name and, if known, its vendor page.",
+        "properties": {
+          "link": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Link"
+          },
+          "name": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "AiEolProductSuggestRequest",
         "type": "object"
       },
       "AiFieldSuggestion": {
@@ -2065,6 +2644,20 @@
         "title": "Body_replace_file_attachment_api_v1_file_attachments__attachment_id__content_put",
         "type": "object"
       },
+      "Body_upload_adr_file_api_v1_adr__adr_id__files_post": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_upload_adr_file_api_v1_adr__adr_id__files_post",
+        "type": "object"
+      },
       "Body_upload_bundle_api_v1_admin_extensions_install_post": {
         "properties": {
           "file": {
@@ -2280,6 +2873,18 @@
             "title": "Odata Enabled",
             "type": "boolean"
           },
+          "query": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Query"
+          },
           "shared_with": {
             "anyOf": [
               {
@@ -2429,6 +3034,18 @@
               }
             ],
             "title": "Odata Enabled"
+          },
+          "query": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Query"
           },
           "shared_with": {
             "anyOf": [
@@ -4005,6 +4622,106 @@
         "title": "CardListResponse",
         "type": "object"
       },
+      "CardQueryMatchCard": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "CardQueryMatchCard",
+        "type": "object"
+      },
+      "CardQueryMatchCell": {
+        "properties": {
+          "cards": {
+            "items": {
+              "$ref": "#/components/schemas/CardQueryMatchCard"
+            },
+            "title": "Cards",
+            "type": "array"
+          },
+          "more": {
+            "description": "True when cards past the first 100 exist.",
+            "title": "More",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "cards",
+          "more"
+        ],
+        "title": "CardQueryMatchCell",
+        "type": "object"
+      },
+      "CardQueryMatchesRequest": {
+        "description": "``POST /cards/query/matches``: the cards behind a match, per row.",
+        "properties": {
+          "ids": {
+            "description": "The rows (cards the query lists) to answer for.",
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "maxItems": 10000,
+            "minItems": 1,
+            "title": "Ids",
+            "type": "array"
+          },
+          "nodes": {
+            "description": "Node keys `<line>:<hop path>`: the zero-based line among every line of the query in document order, then the dot-joined zero-based indices into `related` from the line's first card down to the node (`0:0`, `0:0.1`, `2:0`). The first card of a line, a negated hop and a hop below one have no key (400 `unknown_node`).",
+            "items": {
+              "maxLength": 32,
+              "type": "string"
+            },
+            "maxItems": 12,
+            "minItems": 1,
+            "title": "Nodes",
+            "type": "array"
+          },
+          "query": {
+            "additionalProperties": true,
+            "description": "The card query, in the grammar of `GET /cards?query=` (a plain query, `all_of` or `any_of`).",
+            "title": "Query",
+            "type": "object"
+          }
+        },
+        "required": [
+          "query",
+          "nodes",
+          "ids"
+        ],
+        "title": "CardQueryMatchesRequest",
+        "type": "object"
+      },
+      "CardQueryMatchesResponse": {
+        "properties": {
+          "rows": {
+            "additionalProperties": {
+              "additionalProperties": {
+                "$ref": "#/components/schemas/CardQueryMatchCell"
+              },
+              "type": "object"
+            },
+            "description": "`{row card id: {node key: cell}}`; only non-empty cells, and a row with none is absent.",
+            "title": "Rows",
+            "type": "object"
+          }
+        },
+        "required": [
+          "rows"
+        ],
+        "title": "CardQueryMatchesResponse",
+        "type": "object"
+      },
       "CardRef": {
         "properties": {
           "id": {
@@ -4830,47 +5547,6 @@
           }
         },
         "title": "CardUpdate",
-        "type": "object"
-      },
-      "CommentCreate": {
-        "properties": {
-          "content": {
-            "maxLength": 10000,
-            "minLength": 1,
-            "title": "Content",
-            "type": "string"
-          },
-          "parent_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Parent Id"
-          }
-        },
-        "required": [
-          "content"
-        ],
-        "title": "CommentCreate",
-        "type": "object"
-      },
-      "CommentUpdate": {
-        "properties": {
-          "content": {
-            "maxLength": 10000,
-            "minLength": 1,
-            "title": "Content",
-            "type": "string"
-          }
-        },
-        "required": [
-          "content"
-        ],
-        "title": "CommentUpdate",
         "type": "object"
       },
       "ComplianceBundleOut": {
@@ -7271,6 +7947,18 @@
             ],
             "title": "Eol Product"
           },
+          "eol_product_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A custom product's title; null for endoflife.date links",
+            "title": "Eol Product Title"
+          },
           "latest": {
             "anyOf": [
               {
@@ -7283,7 +7971,7 @@
             "title": "Latest"
           },
           "source": {
-            "description": "api (endoflife.date link) | manual (lifecycle date)",
+            "description": "api (endoflife.date link) | custom (custom EOL product) | manual (lifecycle date)",
             "title": "Source",
             "type": "string"
           },
@@ -7326,6 +8014,569 @@
           "items"
         ],
         "title": "EolCardStatusResponse",
+        "type": "object"
+      },
+      "EolCustomCycleCreate": {
+        "properties": {
+          "cycle": {
+            "title": "Cycle",
+            "type": "string"
+          },
+          "eol": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "boolean"
+              }
+            ],
+            "description": "A date, false (none announced) or true (ended)",
+            "title": "Eol"
+          },
+          "latest": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latest"
+          },
+          "latestReleaseDate": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latestreleasedate"
+          },
+          "releaseDate": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Releasedate"
+          },
+          "sort_order": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sort Order"
+          },
+          "support": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Support"
+          }
+        },
+        "required": [
+          "eol",
+          "cycle"
+        ],
+        "title": "EolCustomCycleCreate",
+        "type": "object"
+      },
+      "EolCustomCycleOut": {
+        "properties": {
+          "cycle": {
+            "title": "Cycle",
+            "type": "string"
+          },
+          "eol": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Eol"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "latest": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latest"
+          },
+          "latestReleaseDate": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latestreleasedate"
+          },
+          "linked_cards": {
+            "default": 0,
+            "title": "Linked Cards",
+            "type": "integer"
+          },
+          "releaseDate": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Releasedate"
+          },
+          "sort_order": {
+            "default": 0,
+            "title": "Sort Order",
+            "type": "integer"
+          },
+          "support": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Support"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          }
+        },
+        "required": [
+          "id",
+          "cycle"
+        ],
+        "title": "EolCustomCycleOut",
+        "type": "object"
+      },
+      "EolCustomCycleUpdate": {
+        "description": "Partial update; a field left out of the body is left alone.",
+        "properties": {
+          "cycle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cycle"
+          },
+          "eol": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Eol"
+          },
+          "latest": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latest"
+          },
+          "latestReleaseDate": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latestreleasedate"
+          },
+          "releaseDate": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Releasedate"
+          },
+          "sort_order": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sort Order"
+          },
+          "support": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Support"
+          }
+        },
+        "title": "EolCustomCycleUpdate",
+        "type": "object"
+      },
+      "EolCustomProductCreate": {
+        "properties": {
+          "cycles": {
+            "items": {
+              "$ref": "#/components/schemas/EolCustomCycleCreate"
+            },
+            "title": "Cycles",
+            "type": "array"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "eol_category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Eol Category"
+          },
+          "key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Key"
+          },
+          "link": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Link"
+          },
+          "release_policy_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Release Policy Note"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "title"
+        ],
+        "title": "EolCustomProductCreate",
+        "type": "object"
+      },
+      "EolCustomProductOut": {
+        "properties": {
+          "cycles": {
+            "items": {
+              "$ref": "#/components/schemas/EolCustomCycleOut"
+            },
+            "title": "Cycles",
+            "type": "array"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "eol_category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Eol Category"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "link": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Link"
+          },
+          "linked_cards": {
+            "default": 0,
+            "title": "Linked Cards",
+            "type": "integer"
+          },
+          "product": {
+            "description": "The value a card stores: \"custom:<key>\"",
+            "title": "Product",
+            "type": "string"
+          },
+          "release_policy_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Release Policy Note"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          }
+        },
+        "required": [
+          "id",
+          "key",
+          "product",
+          "title"
+        ],
+        "title": "EolCustomProductOut",
+        "type": "object"
+      },
+      "EolCustomProductUpdate": {
+        "description": "Title, description, link and the proposal fields. The key is\nimmutable: cards store it.",
+        "properties": {
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "eol_category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Eol Category"
+          },
+          "link": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Link"
+          },
+          "release_policy_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Release Policy Note"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          }
+        },
+        "title": "EolCustomProductUpdate",
+        "type": "object"
+      },
+      "EolCustomSwitchRequest": {
+        "description": "Move a custom product's card links onto an endoflife.date product.",
+        "properties": {
+          "cycle_map": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "title": "Cycle Map",
+            "type": "object"
+          },
+          "delete_when_unused": {
+            "default": false,
+            "title": "Delete When Unused",
+            "type": "boolean"
+          },
+          "target_product": {
+            "title": "Target Product",
+            "type": "string"
+          }
+        },
+        "required": [
+          "target_product"
+        ],
+        "title": "EolCustomSwitchRequest",
+        "type": "object"
+      },
+      "EolCustomSwitchResult": {
+        "properties": {
+          "deleted": {
+            "title": "Deleted",
+            "type": "boolean"
+          },
+          "kept": {
+            "title": "Kept",
+            "type": "integer"
+          },
+          "relinked": {
+            "title": "Relinked",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "relinked",
+          "kept",
+          "deleted"
+        ],
+        "title": "EolCustomSwitchResult",
         "type": "object"
       },
       "EolCycle": {
@@ -7445,6 +8696,17 @@
               }
             ],
             "title": "Support"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
           }
         },
         "required": [
@@ -7454,11 +8716,27 @@
         "type": "object"
       },
       "EolProduct": {
-        "description": "A product identifier returned from the product list.",
+        "description": "A product identifier returned from the product list.\n\n``custom`` products are the organisation's own (``name`` is then\n``custom:<key>`` and ``title`` its display name).",
         "properties": {
+          "custom": {
+            "default": false,
+            "title": "Custom",
+            "type": "boolean"
+          },
           "name": {
             "title": "Name",
             "type": "string"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
           }
         },
         "required": [
@@ -7469,6 +8747,40 @@
       },
       "EolProductMatch": {
         "description": "A product with a fuzzy match score.",
+        "properties": {
+          "custom": {
+            "default": false,
+            "title": "Custom",
+            "type": "boolean"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "score": {
+            "title": "Score",
+            "type": "number"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          }
+        },
+        "required": [
+          "name",
+          "score"
+        ],
+        "title": "EolProductMatch",
+        "type": "object"
+      },
+      "EolUpstreamMatch": {
         "properties": {
           "name": {
             "title": "Name",
@@ -7483,7 +8795,7 @@
           "name",
           "score"
         ],
-        "title": "EolProductMatch",
+        "title": "EolUpstreamMatch",
         "type": "object"
       },
       "ExtensionInstallOut": {
@@ -8831,6 +10143,25 @@
         "title": "LicenseTypeUpdate",
         "type": "object"
       },
+      "LifecyclePhaseHelpPayload": {
+        "properties": {
+          "phases": {
+            "additionalProperties": {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            "title": "Phases",
+            "type": "object"
+          }
+        },
+        "required": [
+          "phases"
+        ],
+        "title": "LifecyclePhaseHelpPayload",
+        "type": "object"
+      },
       "LoginBrandingPayload": {
         "properties": {
           "login_help_link": {
@@ -9162,6 +10493,11 @@
             "title": "Card Type",
             "type": "string"
           },
+          "custom": {
+            "default": false,
+            "title": "Custom",
+            "type": "boolean"
+          },
           "eol_product": {
             "title": "Eol Product",
             "type": "string"
@@ -9169,6 +10505,17 @@
           "score": {
             "title": "Score",
             "type": "number"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
           }
         },
         "required": [
@@ -9224,6 +10571,17 @@
               }
             ],
             "title": "Current Eol Product"
+          },
+          "current_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Title"
           }
         },
         "required": [
@@ -13401,6 +14759,230 @@
         "title": "PrincipleCreate",
         "type": "object"
       },
+      "PrincipleImportItem": {
+        "description": "One spreadsheet row.\n\nEvery column except ``title`` is optional, and ``None`` means *the sheet\nhas no such column*: the importer then leaves that field as it is. An\nempty string is a deliberate blank and clears the field. ``is_active``\nand ``sort_order`` arrive as text so a bad cell fails only its own row\ninstead of 422-ing the whole batch; so does ``title`` (a blank title is a\nper-row error).",
+        "properties": {
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "implications": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Implications"
+          },
+          "is_active": {
+            "anyOf": [
+              {
+                "maxLength": 50,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Active"
+          },
+          "rationale": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rationale"
+          },
+          "reference_number": {
+            "anyOf": [
+              {
+                "maxLength": 50,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference Number"
+          },
+          "row_index": {
+            "title": "Row Index",
+            "type": "integer"
+          },
+          "sort_order": {
+            "anyOf": [
+              {
+                "maxLength": 50,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sort Order"
+          },
+          "title": {
+            "default": "",
+            "maxLength": 2000,
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "row_index"
+        ],
+        "title": "PrincipleImportItem",
+        "type": "object"
+      },
+      "PrincipleImportRequest": {
+        "properties": {
+          "dry_run": {
+            "default": false,
+            "title": "Dry Run",
+            "type": "boolean"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PrincipleImportItem"
+            },
+            "maxItems": 1000,
+            "minItems": 1,
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "PrincipleImportRequest",
+        "type": "object"
+      },
+      "PrincipleImportResponse": {
+        "properties": {
+          "created": {
+            "title": "Created",
+            "type": "integer"
+          },
+          "dry_run": {
+            "default": false,
+            "title": "Dry Run",
+            "type": "boolean"
+          },
+          "failed": {
+            "title": "Failed",
+            "type": "integer"
+          },
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/PrincipleImportResult"
+            },
+            "title": "Results",
+            "type": "array"
+          },
+          "skipped": {
+            "title": "Skipped",
+            "type": "integer"
+          },
+          "updated": {
+            "title": "Updated",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "results",
+          "created",
+          "updated",
+          "skipped",
+          "failed"
+        ],
+        "title": "PrincipleImportResponse",
+        "type": "object"
+      },
+      "PrincipleImportResult": {
+        "properties": {
+          "changed_fields": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Changed Fields",
+            "type": "array"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "reference_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference Number"
+          },
+          "row_index": {
+            "title": "Row Index",
+            "type": "integer"
+          },
+          "status": {
+            "enum": [
+              "created",
+              "updated",
+              "skipped",
+              "failed"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "row_index",
+          "status"
+        ],
+        "title": "PrincipleImportResult",
+        "type": "object"
+      },
       "PrincipleUpdate": {
         "properties": {
           "description": {
@@ -13867,6 +15449,7 @@
       "RejectRequest": {
         "properties": {
           "comment": {
+            "maxLength": 4000,
             "title": "Comment",
             "type": "string"
           }
@@ -16770,6 +18353,25 @@
         "title": "SetPasswordRequest",
         "type": "object"
       },
+      "SignRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "note": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "title": "SignRequest",
+        "type": "object"
+      },
       "SignatureRequest": {
         "properties": {
           "message": {
@@ -19246,9 +20848,15 @@
             "title": "Password"
           },
           "role": {
-            "default": "member",
-            "title": "Role",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Role"
           },
           "send_email": {
             "default": false,
@@ -20396,6 +22004,59 @@
         "title": "YearLicensesOut",
         "type": "object"
       },
+      "app__api__v1__document_comments__CommentCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "body": {
+            "maxLength": 100000,
+            "title": "Body",
+            "type": "string"
+          },
+          "parent_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Id"
+          },
+          "section": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Section"
+          }
+        },
+        "required": [
+          "body"
+        ],
+        "title": "CommentCreate",
+        "type": "object"
+      },
+      "app__api__v1__document_comments__CommentUpdate": {
+        "additionalProperties": false,
+        "properties": {
+          "body": {
+            "maxLength": 100000,
+            "title": "Body",
+            "type": "string"
+          }
+        },
+        "required": [
+          "body"
+        ],
+        "title": "CommentUpdate",
+        "type": "object"
+      },
       "app__api__v1__migration__StagedRecordOut": {
         "properties": {
           "action": {
@@ -20577,6 +22238,47 @@
           "status"
         ],
         "title": "StagedRecordOut",
+        "type": "object"
+      },
+      "app__schemas__common__CommentCreate": {
+        "properties": {
+          "content": {
+            "maxLength": 10000,
+            "minLength": 1,
+            "title": "Content",
+            "type": "string"
+          },
+          "parent_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Id"
+          }
+        },
+        "required": [
+          "content"
+        ],
+        "title": "CommentCreate",
+        "type": "object"
+      },
+      "app__schemas__common__CommentUpdate": {
+        "properties": {
+          "content": {
+            "maxLength": 10000,
+            "minLength": 1,
+            "title": "Content",
+            "type": "string"
+          }
+        },
+        "required": [
+          "content"
+        ],
+        "title": "CommentUpdate",
         "type": "object"
       }
     }
@@ -22025,6 +23727,86 @@
               ],
               "title": "Signed To"
             }
+          },
+          {
+            "description": "Only decisions decided on or after this date (signed or recorded)",
+            "in": "query",
+            "name": "decided_from",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only decisions decided on or after this date (signed or recorded)",
+              "title": "Decided From"
+            }
+          },
+          {
+            "description": "Only decisions decided on or before this date (signed or recorded)",
+            "in": "query",
+            "name": "decided_to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only decisions decided on or before this date (signed or recorded)",
+              "title": "Decided To"
+            }
+          },
+          {
+            "description": "Also return every section's text and related decision references (the spreadsheet export)",
+            "in": "query",
+            "name": "include_content",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Also return every section's text and related decision references (the spreadsheet export)",
+              "title": "Include Content",
+              "type": "boolean"
+            }
+          },
+          {
+            "description": "Also list earlier revisions superseded inside their own chain",
+            "in": "query",
+            "name": "include_earlier",
+            "required": false,
+            "schema": {
+              "default": true,
+              "description": "Also list earlier revisions superseded inside their own chain",
+              "title": "Include Earlier",
+              "type": "boolean"
+            }
+          },
+          {
+            "description": "Only decisions with this standing (comma-separated allowed)",
+            "in": "query",
+            "name": "standing",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only decisions with this standing (comma-separated allowed)",
+              "title": "Standing"
+            }
           }
         ],
         "responses": {
@@ -22090,6 +23872,48 @@
         ]
       }
     },
+    "/api/v1/adr/bulk-import": {
+      "post": {
+        "description": "Spreadsheet importer for decision records \u2014 create-only.\n\nA row whose ``reference_number`` already exists is skipped, so\nre-importing an exported register is a no-op; every other row creates a\n**draft** with a fresh ``ADR-NNN`` reference (status and signatories are\nnever imported). Cards are linked by exact name among those the caller\nmay read; related decisions resolve against existing references and the\nfile's own rows. ``dry_run=True`` runs everything, publishes nothing and\nrolls back, so the dialog previews exactly what applying will do.",
+        "operationId": "bulk_import_adrs_api_v1_adr_bulk_import_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ADRImportRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ADRImportResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Bulk Import Adrs",
+        "tags": [
+          "adr"
+        ]
+      }
+    },
     "/api/v1/adr/by-card/{card_id}": {
       "get": {
         "description": "Get all ADRs linked to a specific card.",
@@ -22102,6 +23926,36 @@
             "schema": {
               "title": "Card Id",
               "type": "string"
+            }
+          },
+          {
+            "description": "Also list earlier revisions superseded inside their own chain",
+            "in": "query",
+            "name": "include_earlier",
+            "required": false,
+            "schema": {
+              "default": true,
+              "description": "Also list earlier revisions superseded inside their own chain",
+              "title": "Include Earlier",
+              "type": "boolean"
+            }
+          },
+          {
+            "description": "Only decisions with this standing (comma-separated allowed)",
+            "in": "query",
+            "name": "standing",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only decisions with this standing (comma-separated allowed)",
+              "title": "Standing"
             }
           }
         ],
@@ -22348,6 +24202,313 @@
         ]
       }
     },
+    "/api/v1/adr/{adr_id}/comments": {
+      "get": {
+        "description": "The decision's discussion: ``{can: {comment, moderate}, open_count, threads}``;\n``scope=chain`` adds the threads of every revision of its chain.",
+        "operationId": "list_adr_comments_api_v1_adr__adr_id__comments_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "adr_id",
+            "required": true,
+            "schema": {
+              "title": "Adr Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "scope",
+            "required": false,
+            "schema": {
+              "default": "document",
+              "enum": [
+                "document",
+                "chain"
+              ],
+              "title": "Scope",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Adr Comments",
+        "tags": [
+          "document-collaboration"
+        ]
+      },
+      "post": {
+        "description": "Start a thread or reply to one; the thread comes back with\n``unnotified_mentions``.",
+        "operationId": "create_adr_comment_api_v1_adr__adr_id__comments_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "adr_id",
+            "required": true,
+            "schema": {
+              "title": "Adr Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/app__api__v1__document_comments__CommentCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Adr Comment",
+        "tags": [
+          "document-collaboration"
+        ]
+      }
+    },
+    "/api/v1/adr/{adr_id}/comments/{comment_id}": {
+      "delete": {
+        "description": "Delete a comment (it stays as a placeholder; a deleted thread start\ncloses the thread to replies).",
+        "operationId": "delete_adr_comment_api_v1_adr__adr_id__comments__comment_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "adr_id",
+            "required": true,
+            "schema": {
+              "title": "Adr Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "comment_id",
+            "required": true,
+            "schema": {
+              "title": "Comment Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Adr Comment",
+        "tags": [
+          "document-collaboration"
+        ]
+      },
+      "patch": {
+        "description": "Edit your own comment; the thread comes back with ``unnotified_mentions``.",
+        "operationId": "update_adr_comment_api_v1_adr__adr_id__comments__comment_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "adr_id",
+            "required": true,
+            "schema": {
+              "title": "Adr Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "comment_id",
+            "required": true,
+            "schema": {
+              "title": "Comment Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/app__api__v1__document_comments__CommentUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Adr Comment",
+        "tags": [
+          "document-collaboration"
+        ]
+      }
+    },
+    "/api/v1/adr/{adr_id}/comments/{comment_id}/reopen": {
+      "post": {
+        "description": "Reopen a thread; the thread comes back.",
+        "operationId": "reopen_adr_thread_api_v1_adr__adr_id__comments__comment_id__reopen_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "adr_id",
+            "required": true,
+            "schema": {
+              "title": "Adr Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "comment_id",
+            "required": true,
+            "schema": {
+              "title": "Comment Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Reopen Adr Thread",
+        "tags": [
+          "document-collaboration"
+        ]
+      }
+    },
+    "/api/v1/adr/{adr_id}/comments/{comment_id}/resolve": {
+      "post": {
+        "description": "Resolve a thread; the thread comes back.",
+        "operationId": "resolve_adr_thread_api_v1_adr__adr_id__comments__comment_id__resolve_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "adr_id",
+            "required": true,
+            "schema": {
+              "title": "Adr Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "comment_id",
+            "required": true,
+            "schema": {
+              "title": "Comment Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Resolve Adr Thread",
+        "tags": [
+          "document-collaboration"
+        ]
+      }
+    },
     "/api/v1/adr/{adr_id}/duplicate": {
       "post": {
         "description": "Duplicate an ADR as a new draft with a new reference number.",
@@ -22386,6 +24547,355 @@
         "summary": "Duplicate Adr",
         "tags": [
           "adr"
+        ]
+      }
+    },
+    "/api/v1/adr/{adr_id}/files": {
+      "get": {
+        "description": "The files on a decision, oldest first.",
+        "operationId": "list_adr_files_api_v1_adr__adr_id__files_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "adr_id",
+            "required": true,
+            "schema": {
+              "title": "Adr Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Adr Files",
+        "tags": [
+          "adr"
+        ]
+      },
+      "post": {
+        "description": "Attach a file to a draft decision. Same checks as a card attachment.",
+        "operationId": "upload_adr_file_api_v1_adr__adr_id__files_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "adr_id",
+            "required": true,
+            "schema": {
+              "title": "Adr Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_upload_adr_file_api_v1_adr__adr_id__files_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Upload Adr File",
+        "tags": [
+          "adr"
+        ]
+      }
+    },
+    "/api/v1/adr/{adr_id}/files/{attachment_id}": {
+      "delete": {
+        "description": "Remove a file from a draft decision; its bytes go once no decision shares them.\n\nAllowed while file uploads are switched off, like a card attachment's\ndelete: otherwise a file could not leave a draft and would be signed with it.",
+        "operationId": "delete_adr_file_api_v1_adr__adr_id__files__attachment_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "adr_id",
+            "required": true,
+            "schema": {
+              "title": "Adr Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "attachment_id",
+            "required": true,
+            "schema": {
+              "title": "Attachment Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Adr File",
+        "tags": [
+          "adr"
+        ]
+      }
+    },
+    "/api/v1/adr/{adr_id}/files/{attachment_id}/download": {
+      "get": {
+        "description": "One file of a decision, as a download.",
+        "operationId": "download_adr_file_api_v1_adr__adr_id__files__attachment_id__download_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "adr_id",
+            "required": true,
+            "schema": {
+              "title": "Adr Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "attachment_id",
+            "required": true,
+            "schema": {
+              "title": "Attachment Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Download Adr File",
+        "tags": [
+          "adr"
+        ]
+      }
+    },
+    "/api/v1/adr/{adr_id}/history": {
+      "get": {
+        "description": "The decision's timeline, newest first:\n``{can_view_versions, can_restore, total, entries}``.",
+        "operationId": "list_adr_history_api_v1_adr__adr_id__history_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "adr_id",
+            "required": true,
+            "schema": {
+              "title": "Adr Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Adr History",
+        "tags": [
+          "document-collaboration"
+        ]
+      }
+    },
+    "/api/v1/adr/{adr_id}/history/{entry_id}": {
+      "get": {
+        "description": "One saved version of the decision: ``{entry, content}``.",
+        "operationId": "get_adr_version_api_v1_adr__adr_id__history__entry_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "adr_id",
+            "required": true,
+            "schema": {
+              "title": "Adr Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "entry_id",
+            "required": true,
+            "schema": {
+              "title": "Entry Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Adr Version",
+        "tags": [
+          "document-collaboration"
+        ]
+      }
+    },
+    "/api/v1/adr/{adr_id}/history/{entry_id}/restore": {
+      "post": {
+        "description": "Restore a saved version into the draft decision; the decision's detail.",
+        "operationId": "restore_adr_version_api_v1_adr__adr_id__history__entry_id__restore_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "adr_id",
+            "required": true,
+            "schema": {
+              "title": "Adr Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "entry_id",
+            "required": true,
+            "schema": {
+              "title": "Entry Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Restore Adr Version",
+        "tags": [
+          "document-collaboration"
         ]
       }
     },
@@ -22430,9 +24940,60 @@
         ]
       }
     },
+    "/api/v1/adr/{adr_id}/record": {
+      "post": {
+        "description": "Record a draft as a decision already taken outside Turbo EA.\n\nThe decision locks like a signed one (``status`` ``signed``) with\n``recorded_at`` / ``recorded_by`` set instead of signatures. Draft only\n(409 ``not_draft``); at least one decision maker, ``decided_on`` not in\nthe future and, on a revision, not before the revised decision's date\n(400 ``invalid_record``); then the same lock checks as a request for\nsignatures (409).",
+        "operationId": "record_adr_api_v1_adr__adr_id__record_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "adr_id",
+            "required": true,
+            "schema": {
+              "title": "Adr Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ADRRecordRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Record Adr",
+        "tags": [
+          "adr"
+        ]
+      }
+    },
     "/api/v1/adr/{adr_id}/reject": {
       "post": {
-        "description": "Reject the ADR as a signatory. Resets to draft, increments revision\nnumber, clears all signatories, and notifies the creator.",
+        "description": "Reject the ADR as a signatory. Resets to draft (the revision number\nstays: revisions count signed versions), clears all signatories, and\nnotifies the creator.",
         "operationId": "reject_adr_api_v1_adr__adr_id__reject_post",
         "parameters": [
           {
@@ -22534,7 +25095,7 @@
     },
     "/api/v1/adr/{adr_id}/revise": {
       "post": {
-        "description": "Create a new revision of a signed ADR.",
+        "description": "Create the next revision of a signed ADR: same reference, next number.\n\n409 when the chain already has a revision being drafted, when a later\nrevision is signed, or when another decision revoked or replaced it.",
         "operationId": "revise_adr_api_v1_adr__adr_id__revise_post",
         "parameters": [
           {
@@ -22547,6 +25108,23 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/ADRReviseRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "content": {
@@ -22575,7 +25153,7 @@
     },
     "/api/v1/adr/{adr_id}/revisions": {
       "get": {
-        "description": "List all revisions in the chain for this ADR.",
+        "description": "List all revisions in the chain for this ADR, in chain order.",
         "operationId": "list_revisions_api_v1_adr__adr_id__revisions_get",
         "parameters": [
           {
@@ -22771,6 +25349,48 @@
           }
         },
         "summary": "Suggest",
+        "tags": [
+          "AI Suggestions"
+        ]
+      }
+    },
+    "/api/v1/ai/suggest-eol-product": {
+      "post": {
+        "description": "Suggest a description for a custom EOL product (Settings \u2192 EOL, or a\ncard's End of Life section).\n\nThe same pipeline as ``/suggest`` with a product-lifecycle search context.\nA product is not a card type, so the per-type enablement does not apply:\nthe switch and the provider configuration are what gate it.",
+        "operationId": "suggest_eol_product_api_v1_ai_suggest_eol_product_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AiEolProductSuggestRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiSuggestResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Suggest Eol Product",
         "tags": [
           "AI Suggestions"
         ]
@@ -26395,6 +29015,24 @@
             }
           },
           {
+            "description": "A multi-hop card query as JSON (metamodel keys, plus tag ids): `{\"type\": <card type>, \"where\"?: {...}, \"related\"?: [{\"relation\": <relation type, `__out` / `__in` on a self-referencing one>, \"type\": <card type>, \"where\"?: {...}, \"negate\"?: bool, \"related\"?: [...]}]}`, where `where` takes `lifecycle_phase`, `subtype`, `approval_status`, `data_quality_band`, `eol_status` (`eol`, `approaching`, `supported`, `unknown`, `__empty__` for no EOL data; computed from endoflife.date or a custom EOL product, on a card type that tracks End of Life, and needs `eol.view`: 403 `eol_view_required` otherwise), `attributes` value lists, `tags` (tag ids: any tag of a group, every group named) and `cards` (card ids). Keeps the cards of the start type with a related card matching every hop (`negate`: with none); a related card must be ACTIVE and readable by the caller. Queries stack: `{\"all_of\": [<query>, \u2026]}` keeps the cards matching every query (AND; two or more, one start type), `{\"any_of\": [<query or all_of>, \u2026]}` the cards matching any group (OR; two or more, the groups may start from different card types, so the list can hold several types). At most 6 queries in a stack, 3 hops deep, 12 hops in all, 8000 characters. 400 with a code (`query_too_long`, `invalid_query_json`, `invalid_query`, `all_of_needs_two`, `all_of_type_mismatch`, `any_of_needs_two`, `too_many_lines`, `unknown_card_type`, `unknown_relation_type`, \u2026) when it cannot be answered.",
+            "in": "query",
+            "name": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "A multi-hop card query as JSON (metamodel keys, plus tag ids): `{\"type\": <card type>, \"where\"?: {...}, \"related\"?: [{\"relation\": <relation type, `__out` / `__in` on a self-referencing one>, \"type\": <card type>, \"where\"?: {...}, \"negate\"?: bool, \"related\"?: [...]}]}`, where `where` takes `lifecycle_phase`, `subtype`, `approval_status`, `data_quality_band`, `eol_status` (`eol`, `approaching`, `supported`, `unknown`, `__empty__` for no EOL data; computed from endoflife.date or a custom EOL product, on a card type that tracks End of Life, and needs `eol.view`: 403 `eol_view_required` otherwise), `attributes` value lists, `tags` (tag ids: any tag of a group, every group named) and `cards` (card ids). Keeps the cards of the start type with a related card matching every hop (`negate`: with none); a related card must be ACTIVE and readable by the caller. Queries stack: `{\"all_of\": [<query>, \u2026]}` keeps the cards matching every query (AND; two or more, one start type), `{\"any_of\": [<query or all_of>, \u2026]}` the cards matching any group (OR; two or more, the groups may start from different card types, so the list can hold several types). At most 6 queries in a stack, 3 hops deep, 12 hops in all, 8000 characters. 400 with a code (`query_too_long`, `invalid_query_json`, `invalid_query`, `all_of_needs_two`, `all_of_type_mismatch`, `any_of_needs_two`, `too_many_lines`, `unknown_card_type`, `unknown_relation_type`, \u2026) when it cannot be answered.",
+              "title": "Query"
+            }
+          },
+          {
             "in": "query",
             "name": "page",
             "required": false,
@@ -26997,6 +29635,48 @@
         ]
       }
     },
+    "/api/v1/cards/query/matches": {
+      "post": {
+        "description": "The cards behind a match: for the rows `ids` that `query` lists, the\ncards at each requested step (`nodes`) through which the row matches \u2014\nunder the list's own rules (ACTIVE, readable related cards; sibling and\nnegated hops kept). Per row and node, distinct cards by name then id, the\nfirst 100, `more` when a further one exists. Only non-empty cells; a\ncard the caller may not read never appears. Same permission as\n`GET /cards`; a bad query answers the list's 400 / 403 codes, a bad node\nkey 400 `unknown_node`. A read, sent as POST for its body (like\n`resolve-refs`).",
+        "operationId": "card_query_matches_route_api_v1_cards_query_matches_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CardQueryMatchesRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CardQueryMatchesResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Card Query Matches Route",
+        "tags": [
+          "cards"
+        ]
+      }
+    },
     "/api/v1/cards/resolve-refs": {
       "post": {
         "description": "Resolve a batch of human-readable card references (`name` or\n`parent_path/name`) to UUIDs in one round-trip.\n\nUsed by the spreadsheet importer's validation pass to surface\nambiguous or missing references **before** anything is written. Each\nref carries the originating `row` + `column` so the importer can\npin the result to the cell that produced it.\n\nReturns one result per ref with status `resolved`, `ambiguous`, or\n`missing`. Ambiguous results include up to a handful of candidate\npaths so the UI can render a useful disambiguation hint.",
@@ -27041,7 +29721,7 @@
     },
     "/api/v1/cards/{card_id}": {
       "delete": {
-        "description": "Permanently delete a card plus optional descendants and related peer cards.\n\nMirrors `archive_card`'s body shape and rules. The primary is always deleted;\ndescendants are deleted leaves-first to satisfy the self-FK on `parent_id`.\nRelated cards are processed single-hop only.\n\nReturns 409 if the primary has direct children and `child_strategy` is None.",
+        "description": "Permanently delete a card plus optional descendants and related peer cards.\n\nMirrors `archive_card`'s body shape and rules. The primary is always deleted;\ndescendants are deleted leaves-first to satisfy the self-FK on `parent_id`.\nRelated cards are processed single-hop only.\n\nReturns 409 if the primary has active direct children and `child_strategy` is\nNone. Archived children need no decision: they are detached, not deleted.",
         "operationId": "delete_card_api_v1_cards__card_id__delete",
         "parameters": [
           {
@@ -27233,7 +29913,7 @@
     },
     "/api/v1/cards/{card_id}/archive": {
       "post": {
-        "description": "Archive a card (soft delete) plus optional descendants and related peer cards.\n\nBody shape:\n  - `child_strategy`: `cascade` | `disconnect` | `reparent` (required if the\n    primary card has direct children \u2014 otherwise 409).\n  - `related_card_ids`: peer cards (capped at 200) to also archive in the\n    same operation. Single-hop only \u2014 the related cards' own peer relations\n    are NOT recursed.\n  - `cascade_all_related`: bulk-mode shortcut that resolves all direct\n    relations of the primary on the server side.\n\nPermission check runs against every affected card; first denial aborts.",
+        "description": "Archive a card (soft delete) plus optional descendants and related peer cards.\n\nBody shape:\n  - `child_strategy`: `cascade` | `disconnect` | `reparent` (required if the\n    primary card has active direct children \u2014 otherwise 409). Archived\n    children need no decision and are left as they are.\n  - `related_card_ids`: peer cards (capped at 200) to also archive in the\n    same operation. Single-hop only \u2014 the related cards' own peer relations\n    are NOT recursed.\n  - `cascade_all_related`: bulk-mode shortcut that resolves all direct\n    relations of the primary on the server side.\n\nPermission check runs against every affected card; first denial aborts.",
         "operationId": "archive_card_api_v1_cards__card_id__archive_post",
         "parameters": [
           {
@@ -27382,7 +30062,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/CommentCreate"
+                "$ref": "#/components/schemas/app__schemas__common__CommentCreate"
               }
             }
           },
@@ -29636,7 +32316,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/CommentUpdate"
+                "$ref": "#/components/schemas/app__schemas__common__CommentUpdate"
               }
             }
           },
@@ -32278,12 +34958,12 @@
         "operationId": "eol_card_status_api_v1_eol_card_status_get",
         "parameters": [
           {
-            "description": "Application or ITComponent",
+            "description": "A card type that tracks End of Life",
             "in": "query",
             "name": "type",
             "required": true,
             "schema": {
-              "description": "Application or ITComponent",
+              "description": "A card type that tracks End of Life",
               "title": "Type",
               "type": "string"
             }
@@ -32312,6 +34992,401 @@
           }
         },
         "summary": "Eol Card Status",
+        "tags": [
+          "End of Life"
+        ]
+      }
+    },
+    "/api/v1/eol/custom-products": {
+      "get": {
+        "description": "Every custom product with its cycles and how many cards link to each.\n\nThe counts cover the cards the caller may read, never naming one.",
+        "operationId": "list_custom_products_api_v1_eol_custom_products_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/EolCustomProductOut"
+                  },
+                  "title": "Response List Custom Products Api V1 Eol Custom Products Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Custom Products",
+        "tags": [
+          "End of Life"
+        ]
+      },
+      "post": {
+        "description": "Create a custom product, optionally with its first cycles.\n\nOne request, so a user who found nothing on endoflife.date from a card\ncan define the product and link the card without leaving it.",
+        "operationId": "create_custom_product_api_v1_eol_custom_products_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EolCustomProductCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EolCustomProductOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Custom Product",
+        "tags": [
+          "End of Life"
+        ]
+      }
+    },
+    "/api/v1/eol/custom-products/upstream-matches": {
+      "get": {
+        "description": "Custom products that now look covered by endoflife.date.\n\n``{key: {name, score}}`` for each custom product whose title or key\nclosely matches an upstream product \u2014 the cue to switch its cards over.\nAn unreachable endoflife.date yields an empty map, not an error: this is\na hint, and the grid must still load without it.",
+        "operationId": "custom_product_upstream_matches_api_v1_eol_custom_products_upstream_matches_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "$ref": "#/components/schemas/EolUpstreamMatch"
+                  },
+                  "title": "Response Custom Product Upstream Matches Api V1 Eol Custom Products Upstream Matches Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Custom Product Upstream Matches",
+        "tags": [
+          "End of Life"
+        ]
+      }
+    },
+    "/api/v1/eol/custom-products/{key}": {
+      "delete": {
+        "description": "Delete a product no card links to (409 ``cards_linked`` otherwise).",
+        "operationId": "delete_custom_product_api_v1_eol_custom_products__key__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "title": "Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Custom Product",
+        "tags": [
+          "End of Life"
+        ]
+      },
+      "patch": {
+        "description": "Edit a product's title, description or link. The key never changes.",
+        "operationId": "update_custom_product_api_v1_eol_custom_products__key__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "title": "Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EolCustomProductUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EolCustomProductOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Custom Product",
+        "tags": [
+          "End of Life"
+        ]
+      }
+    },
+    "/api/v1/eol/custom-products/{key}/cycles": {
+      "post": {
+        "description": "Add a release cycle to a custom product.",
+        "operationId": "create_custom_cycle_api_v1_eol_custom_products__key__cycles_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "title": "Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EolCustomCycleCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EolCustomCycleOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Custom Cycle",
+        "tags": [
+          "End of Life"
+        ]
+      }
+    },
+    "/api/v1/eol/custom-products/{key}/cycles/{cycle_id}": {
+      "delete": {
+        "description": "Delete a cycle no card links (409 ``cards_linked`` otherwise).",
+        "operationId": "delete_custom_cycle_api_v1_eol_custom_products__key__cycles__cycle_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "title": "Key",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "cycle_id",
+            "required": true,
+            "schema": {
+              "title": "Cycle Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Custom Cycle",
+        "tags": [
+          "End of Life"
+        ]
+      },
+      "patch": {
+        "description": "Patch one cycle: the admin grid's per-cell and drag-fill write.",
+        "operationId": "update_custom_cycle_api_v1_eol_custom_products__key__cycles__cycle_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "title": "Key",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "cycle_id",
+            "required": true,
+            "schema": {
+              "title": "Cycle Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EolCustomCycleUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EolCustomCycleOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Custom Cycle",
+        "tags": [
+          "End of Life"
+        ]
+      }
+    },
+    "/api/v1/eol/custom-products/{key}/switch": {
+      "post": {
+        "description": "Move a custom product's card links onto an endoflife.date product.\n\nOnce endoflife.date tracks a product (perhaps after someone proposed it),\nthe custom copy should give way. The target's cycles are fetched first,\nwith no connection held, then the cards the caller can read are relinked\ncycle by cycle as ``cycle_map`` says; a cycle mapped to null keeps its\ncards. Lifecycle dates are never touched, as with mass-link.",
+        "operationId": "switch_custom_product_api_v1_eol_custom_products__key__switch_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "title": "Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EolCustomSwitchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EolCustomSwitchResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Switch Custom Product",
         "tags": [
           "End of Life"
         ]
@@ -32368,12 +35443,12 @@
         "operationId": "mass_eol_search_api_v1_eol_mass_search_post",
         "parameters": [
           {
-            "description": "Card type to search (Application or ITComponent)",
+            "description": "Card type to search (one that tracks End of Life)",
             "in": "query",
             "name": "type_key",
             "required": true,
             "schema": {
-              "description": "Card type to search (Application or ITComponent)",
+              "description": "Card type to search (one that tracks End of Life)",
               "title": "Type Key",
               "type": "string"
             }
@@ -32527,7 +35602,7 @@
     },
     "/api/v1/eol/products/{product}": {
       "get": {
-        "description": "Return all release cycles for a given product.",
+        "description": "Return all release cycles for a given product.\n\nA ``custom:<key>`` product is served from the database and never reaches\nthe upstream proxy below.",
         "operationId": "get_product_cycles_api_v1_eol_products__product__get",
         "parameters": [
           {
@@ -32567,6 +35642,32 @@
           }
         },
         "summary": "Get Product Cycles",
+        "tags": [
+          "End of Life"
+        ]
+      }
+    },
+    "/api/v1/eol/types": {
+      "get": {
+        "description": "The card types that track End of Life.\n\nA type tracks it when its End of Life section is shown in the Card Layout\neditor \u2014 Applications and IT Components unless an admin hid it there,\nany other type once an admin shows it (``card_flags.type_tracks_eol``).",
+        "operationId": "eol_types_api_v1_eol_types_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "title": "Response Eol Types Api V1 Eol Types Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Eol Types",
         "tags": [
           "End of Life"
         ]
@@ -33284,6 +36385,88 @@
         "summary": "Import Licenses",
         "tags": [
           "card-licenses"
+        ]
+      }
+    },
+    "/api/v1/mentions/cards/{card_id}": {
+      "get": {
+        "description": "``{decisions: [...], soaws: [...]}`` that mention the card.",
+        "operationId": "card_mentioned_in_api_v1_mentions_cards__card_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "card_id",
+            "required": true,
+            "schema": {
+              "title": "Card Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Card Mentioned In",
+        "tags": [
+          "document-collaboration"
+        ]
+      }
+    },
+    "/api/v1/mentions/decisions/{adr_id}": {
+      "get": {
+        "description": "``{decisions: [...], soaws: [...]}`` that mention the decision.",
+        "operationId": "decision_mentioned_in_api_v1_mentions_decisions__adr_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "adr_id",
+            "required": true,
+            "schema": {
+              "title": "Adr Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Decision Mentioned In",
+        "tags": [
+          "document-collaboration"
         ]
       }
     },
@@ -34153,6 +37336,48 @@
           }
         },
         "summary": "Create Principle",
+        "tags": [
+          "metamodel"
+        ]
+      }
+    },
+    "/api/v1/metamodel/principles/bulk-import": {
+      "post": {
+        "description": "Spreadsheet importer for EA principles (admin only).\n\nEach row is matched on ``reference_number``, then on title\n(case-insensitive). A matched principle is updated when a value differs\nand skipped when nothing does; any other row creates a principle with a\nfresh ``P-NNN`` reference. A column missing from the sheet leaves that\nfield untouched. ``dry_run=True`` validates and matches every row, then\nrolls back, so the dialog can preview exactly what applying will do.",
+        "operationId": "bulk_import_principles_api_v1_metamodel_principles_bulk_import_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PrincipleImportRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PrincipleImportResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Bulk Import Principles",
         "tags": [
           "metamodel"
         ]
@@ -40000,7 +43225,7 @@
     },
     "/api/v1/reports/capability-heatmap": {
       "get": {
-        "description": "Business capability heatmap data with hierarchy.",
+        "description": "Business capability heatmap data with hierarchy.\n\n``total_cost`` per capability sums its applications' cost fields. With\n``attribution=\"full\"`` (the default) an application linked to several\ncapabilities counts in full on each; with ``\"split\"`` its cost is divided\nequally between the readable capabilities it links to. Each application\nlists those capabilities (``capability_ids``) so the page can roll a branch\nup without counting a shared application twice.",
         "operationId": "capability_heatmap_api_v1_reports_capability_heatmap_get",
         "parameters": [
           {
@@ -40010,6 +43235,16 @@
             "schema": {
               "default": "app_count",
               "title": "Metric",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "attribution",
+            "required": false,
+            "schema": {
+              "default": "full",
+              "title": "Attribution",
               "type": "string"
             }
           }
@@ -40469,7 +43704,7 @@
     },
     "/api/v1/reports/eol": {
       "get": {
-        "description": "End-of-Life risk & impact report.\n\nReturns all Applications and IT Components with linked EOL data\n(from endoflife.date API) *or* manually maintained lifecycle dates,\nenriched with live cycle information and impact mapping\n(IT Component \u2192 related Applications).\n\nEach item includes a ``source`` field: ``\"api\"`` for items linked\nto endoflife.date, ``\"manual\"`` for items with only a hand-entered\n``endOfLife`` lifecycle date, and ``\"none\"`` for cards carrying neither.\n\nThose last ones (``status: \"missing\"``) are the answer to \"which of my\nhundreds of IT Components has nobody recorded an end of life for?\"\n([#1065](https://github.com/vincentmakes/turbo-ea/discussions/1065)). The\nreport used to drop them silently, which made the one question the report\nis best placed to answer the one it could not.",
+        "description": "End-of-Life risk & impact report.\n\nReturns every card of a type that tracks End of Life (Applications and IT\nComponents by default; see ``card_flags.type_tracks_eol``) with linked EOL data\n(from endoflife.date API) *or* manually maintained lifecycle dates,\nenriched with live cycle information and impact mapping\n(IT Component \u2192 related Applications).\n\nEach item includes a ``source`` field: ``\"api\"`` for items linked\nto endoflife.date, ``\"custom\"`` for items linked to one of the\norganisation's own custom EOL products, ``\"manual\"`` for items with only a hand-entered\n``endOfLife`` lifecycle date, and ``\"none\"`` for cards carrying neither.\n\nThose last ones (``status: \"missing\"``) are the answer to \"which of my\nhundreds of IT Components has nobody recorded an end of life for?\"\n([#1065](https://github.com/vincentmakes/turbo-ea/discussions/1065)). The\nreport used to drop them silently, which made the one question the report\nis best placed to answer the one it could not.",
         "operationId": "eol_report_api_v1_reports_eol_get",
         "responses": {
           "200": {
@@ -45360,6 +48595,64 @@
         ]
       }
     },
+    "/api/v1/settings/lifecycle-phase-help": {
+      "get": {
+        "description": "The admin-written help text of each lifecycle phase.\n\nSigned-in only: nothing before sign-in shows a lifecycle. ``/bootstrap``\ncarries the same map, so this is the refresh path after an admin edit.",
+        "operationId": "get_lifecycle_phase_help_api_v1_settings_lifecycle_phase_help_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Lifecycle Phase Help",
+        "tags": [
+          "settings"
+        ]
+      },
+      "patch": {
+        "description": "Admin endpoint \u2014 replace the lifecycle phase help texts.\n\nGated on ``admin.metamodel``: what a phase means is metamodel\nconfiguration, edited under Admin \u2192 Metamodel.",
+        "operationId": "update_lifecycle_phase_help_api_v1_settings_lifecycle_phase_help_patch",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LifecyclePhaseHelpPayload"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Lifecycle Phase Help",
+        "tags": [
+          "settings"
+        ]
+      }
+    },
     "/api/v1/settings/login-branding": {
       "get": {
         "description": "Admin endpoint \u2014 read the customizable login-page strings.\n\nPublic consumers (the login page itself) read these via\n``GET /settings/bootstrap`` instead, where they're returned alongside\nother public boot-time settings.",
@@ -46241,6 +49534,16 @@
               ],
               "title": "Initiative Id"
             }
+          },
+          {
+            "in": "query",
+            "name": "include_earlier",
+            "required": false,
+            "schema": {
+              "default": true,
+              "title": "Include Earlier",
+              "type": "boolean"
+            }
           }
         ],
         "responses": {
@@ -46427,6 +49730,477 @@
         ]
       }
     },
+    "/api/v1/soaw/{soaw_id}/comments": {
+      "get": {
+        "description": "The SoAW's discussion: ``{can: {comment, moderate}, open_count, threads}``;\n``scope=chain`` adds the threads of every revision of its chain.",
+        "operationId": "list_soaw_comments_api_v1_soaw__soaw_id__comments_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "soaw_id",
+            "required": true,
+            "schema": {
+              "title": "Soaw Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "scope",
+            "required": false,
+            "schema": {
+              "default": "document",
+              "enum": [
+                "document",
+                "chain"
+              ],
+              "title": "Scope",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Soaw Comments",
+        "tags": [
+          "document-collaboration"
+        ]
+      },
+      "post": {
+        "description": "Start a thread or reply to one; the thread comes back with\n``unnotified_mentions``.",
+        "operationId": "create_soaw_comment_api_v1_soaw__soaw_id__comments_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "soaw_id",
+            "required": true,
+            "schema": {
+              "title": "Soaw Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/app__api__v1__document_comments__CommentCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Soaw Comment",
+        "tags": [
+          "document-collaboration"
+        ]
+      }
+    },
+    "/api/v1/soaw/{soaw_id}/comments/{comment_id}": {
+      "delete": {
+        "description": "Delete a comment (it stays as a placeholder; a deleted thread start\ncloses the thread to replies).",
+        "operationId": "delete_soaw_comment_api_v1_soaw__soaw_id__comments__comment_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "soaw_id",
+            "required": true,
+            "schema": {
+              "title": "Soaw Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "comment_id",
+            "required": true,
+            "schema": {
+              "title": "Comment Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Soaw Comment",
+        "tags": [
+          "document-collaboration"
+        ]
+      },
+      "patch": {
+        "description": "Edit your own comment; the thread comes back with ``unnotified_mentions``.",
+        "operationId": "update_soaw_comment_api_v1_soaw__soaw_id__comments__comment_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "soaw_id",
+            "required": true,
+            "schema": {
+              "title": "Soaw Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "comment_id",
+            "required": true,
+            "schema": {
+              "title": "Comment Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/app__api__v1__document_comments__CommentUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Soaw Comment",
+        "tags": [
+          "document-collaboration"
+        ]
+      }
+    },
+    "/api/v1/soaw/{soaw_id}/comments/{comment_id}/reopen": {
+      "post": {
+        "description": "Reopen a thread; the thread comes back.",
+        "operationId": "reopen_soaw_thread_api_v1_soaw__soaw_id__comments__comment_id__reopen_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "soaw_id",
+            "required": true,
+            "schema": {
+              "title": "Soaw Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "comment_id",
+            "required": true,
+            "schema": {
+              "title": "Comment Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Reopen Soaw Thread",
+        "tags": [
+          "document-collaboration"
+        ]
+      }
+    },
+    "/api/v1/soaw/{soaw_id}/comments/{comment_id}/resolve": {
+      "post": {
+        "description": "Resolve a thread; the thread comes back.",
+        "operationId": "resolve_soaw_thread_api_v1_soaw__soaw_id__comments__comment_id__resolve_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "soaw_id",
+            "required": true,
+            "schema": {
+              "title": "Soaw Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "comment_id",
+            "required": true,
+            "schema": {
+              "title": "Comment Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Resolve Soaw Thread",
+        "tags": [
+          "document-collaboration"
+        ]
+      }
+    },
+    "/api/v1/soaw/{soaw_id}/history": {
+      "get": {
+        "description": "The SoAW's timeline, newest first:\n``{can_view_versions, can_restore, total, entries}``.",
+        "operationId": "list_soaw_history_api_v1_soaw__soaw_id__history_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "soaw_id",
+            "required": true,
+            "schema": {
+              "title": "Soaw Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Soaw History",
+        "tags": [
+          "document-collaboration"
+        ]
+      }
+    },
+    "/api/v1/soaw/{soaw_id}/history/{entry_id}": {
+      "get": {
+        "description": "One saved version of the SoAW: ``{entry, content}``.",
+        "operationId": "get_soaw_version_api_v1_soaw__soaw_id__history__entry_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "soaw_id",
+            "required": true,
+            "schema": {
+              "title": "Soaw Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "entry_id",
+            "required": true,
+            "schema": {
+              "title": "Entry Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Soaw Version",
+        "tags": [
+          "document-collaboration"
+        ]
+      }
+    },
+    "/api/v1/soaw/{soaw_id}/history/{entry_id}/restore": {
+      "post": {
+        "description": "Restore a saved version into the draft SoAW; the SoAW's detail.",
+        "operationId": "restore_soaw_version_api_v1_soaw__soaw_id__history__entry_id__restore_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "soaw_id",
+            "required": true,
+            "schema": {
+              "title": "Soaw Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "entry_id",
+            "required": true,
+            "schema": {
+              "title": "Entry Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Restore Soaw Version",
+        "tags": [
+          "document-collaboration"
+        ]
+      }
+    },
     "/api/v1/soaw/{soaw_id}/recall-signatures": {
       "post": {
         "description": "Recall all pending signature requests. Only the creator or an admin\ncan recall. Resets status to draft and clears signatories.",
@@ -46470,7 +50244,7 @@
     },
     "/api/v1/soaw/{soaw_id}/reject": {
       "post": {
-        "description": "Reject the SoAW as a signatory. Resets to draft, increments revision\nnumber, clears all signatories, and notifies the creator.",
+        "description": "Reject the SoAW as a signatory. Resets to draft (the revision number\nstays: revisions count signed versions), clears all signatories, notifies\nthe creator and opens a rejection thread carrying the reason.\n\nLike signing: a signatory holding ``soaw.sign`` (or ``soaw.manage``).",
         "operationId": "reject_soaw_api_v1_soaw__soaw_id__reject_post",
         "parameters": [
           {
@@ -46572,7 +50346,7 @@
     },
     "/api/v1/soaw/{soaw_id}/revise": {
       "post": {
-        "description": "Create a new revision of a signed SoAW. Copies the document content\ninto a new draft linked to the same initiative, with an incremented\nrevision number and parent_id pointing to the original.",
+        "description": "Create a new revision of a signed SoAW. Copies the document content\ninto a new draft linked to the same initiative, numbered after the chain's\nhighest revision, with parent_id pointing to the original. Refused (409)\nwhile the chain already has an unsigned revision, and on a signed revision\nthat a later signed revision superseded.",
         "operationId": "revise_soaw_api_v1_soaw__soaw_id__revise_post",
         "parameters": [
           {
@@ -46613,7 +50387,7 @@
     },
     "/api/v1/soaw/{soaw_id}/revisions": {
       "get": {
-        "description": "List all revisions in the chain for this SoAW (traverses parent_id).",
+        "description": "List all revisions in the chain for this SoAW, in chain order (fork-safe;\na dangling parent is a root).",
         "operationId": "list_revisions_api_v1_soaw__soaw_id__revisions_get",
         "parameters": [
           {
@@ -46667,6 +50441,23 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/SignRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "content": {

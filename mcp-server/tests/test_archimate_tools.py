@@ -1,5 +1,7 @@
 """ArchiMate tools: the type mapping, Exchange-format diagram create/update, kind filter."""
 
+# ruff: noqa: E501, the ArchiMate element-name lists are long literals
+
 from __future__ import annotations
 
 import json

@@ -26,6 +26,7 @@ from __future__ import annotations
 import functools
 import uuid
 from dataclasses import dataclass, field
+from datetime import timezone
 from typing import Any
 
 from sqlalchemy import exists, or_, select
@@ -37,6 +38,8 @@ from app.core.permissions import (
     strip_legacy_card_permissions,
 )
 from app.models.app_settings import AppSettings
+from app.models.architecture_decision import ArchitectureDecision
+from app.models.architecture_decision_link import ArchitectureDecisionLink
 from app.models.bookmark import Bookmark, bookmark_shares
 from app.models.card import Card
 from app.models.card_type import CardType
@@ -49,7 +52,7 @@ from app.models.role import Role
 from app.models.stakeholder_role_definition import StakeholderRoleDefinition
 from app.models.tag import CardTag, Tag, TagGroup
 from app.models.user import User
-from app.services import card_reference, card_type_categories
+from app.services import card_reference, card_type_categories, decision_links_legacy
 from app.services.bo_relationship_constants import (
     APPLICATION_RELATION,
     APPLICATION_TYPE,
@@ -63,6 +66,7 @@ from app.services.card_resolver import CardResolver
 from app.services.card_write_service import lock_bo_relation_writes
 from app.services.email_backends.runtime import apply_email_settings_to_runtime
 from app.services.licensing_migration import move_model_field
+from app.services.principle_service import ensure_principle_references
 from app.services.relation_orientation import oriented
 from app.services.workspace_io import exporter as exp
 from app.services.workspace_io import remap as rm
@@ -271,7 +275,7 @@ async def _run(
         ),
         (schema.SHEET_TAG_GROUPS, _apply_tag_groups),
         (schema.SHEET_TAGS, functools.partial(_apply_tags, id_map=id_map)),
-        (schema.SHEET_USERS, _apply_users),
+        (schema.SHEET_USERS, functools.partial(_apply_users, id_map=id_map)),
         (schema.SHEET_SETTINGS, _apply_settings),
         (schema.SHEET_CARDS, _make_cards_applier(user, id_map)),
         (schema.SHEET_CARD_TAGS, functools.partial(_apply_card_tags, id_map=id_map)),
@@ -285,6 +289,9 @@ async def _run(
             sr = SectionResult(sheet=sheet)
             result.sections.append(sr)
             await applier(db, bundle, sr, dry_run)
+        # The Principles sheet does not carry the source's references (each
+        # instance numbers its own), so number whatever that section created.
+        await ensure_principle_references(db)
 
         # --- Generic entity sections (module + card-context tables) -----
         # Built after the cards pass so every card FK resolves. Cards never
@@ -300,10 +307,16 @@ async def _run(
             remap_ctx = await _load_remap_context(
                 db, bundle, id_map, ent_resolver, wanted_entity_sections
             )
+        # An older bundle's decisions carry ``related_decisions``: note which
+        # decisions exist before the entity pass, so only the ones it creates
+        # are given their links and dates afterwards.
+        adr_ids_before = await _legacy_adr_baseline(db, bundle) if _wanted(SHEET_ADRS) else None
         for ent in wanted_entity_sections:
             sr = SectionResult(sheet=ent.sheet)
             result.sections.append(sr)
             await apply_entity_section(db, ent, bundle, sr, ent_resolver, email_to_id, remap_ctx)
+        if adr_ids_before is not None:
+            await _apply_legacy_decisions(db, bundle, result, adr_ids_before)
 
         if _wanted(SHEET_DIAGRAM_CARDS):
             sr = SectionResult(sheet=SHEET_DIAGRAM_CARDS)
@@ -353,6 +366,85 @@ async def _run(
         PermissionService.invalidate_srd_cache()
         PermissionService.invalidate_type_permission_cache()
     return result
+
+
+SHEET_ADRS = "Adrs"
+SHEET_ADR_LINKS = "AdrLinks"
+
+
+async def _legacy_adr_baseline(db: AsyncSession, bundle: WorkspaceBundle) -> set[uuid.UUID] | None:
+    """The decision ids already on this instance, when ``bundle`` is an older
+    one whose ``Adrs`` sheet still carries ``related_decisions``; else ``None``."""
+    rows = bundle.rows(SHEET_ADRS)
+    if not any(decision_links_legacy.LEGACY_COLUMN in row for row in rows):
+        return None
+    return set((await db.execute(select(ArchitectureDecision.id))).scalars().all())
+
+
+async def _apply_legacy_decisions(
+    db: AsyncSession,
+    bundle: WorkspaceBundle,
+    result: ApplyResult,
+    ids_before: set[uuid.UUID],
+) -> None:
+    """Bring the decisions an older bundle just created up to the register.
+
+    Each ``related_decisions`` entry that names a decision of the bundle
+    becomes a ``relates`` link (``decision_links_legacy.plan_bundle_links``:
+    self links, missing targets and pairs already linked are skipped), counted
+    as created on the ``AdrLinks`` section; and a signed decision's empty
+    ``decided_on`` / ``effective_from`` take the UTC date of ``signed_at``, as
+    migration 167 did for the decisions already stored (not counted: those
+    rows are counted as created by the ``Adrs`` section). Only decisions this
+    import created are touched, so a re-import changes nothing. Runs in the
+    dry run too: the preview's savepoint rolls it back.
+    """
+    present = set((await db.execute(select(ArchitectureDecision.id))).scalars().all())
+    created = present - ids_before
+    if not created:
+        return
+    existing = (
+        await db.execute(
+            select(ArchitectureDecisionLink.source_id, ArchitectureDecisionLink.target_id).where(
+                ArchitectureDecisionLink.source_id.in_(created)
+            )
+        )
+    ).all()
+    pairs = decision_links_legacy.plan_bundle_links(
+        bundle.rows(SHEET_ADRS),
+        created_ids=created,
+        present_ids=present,
+        existing_pairs=[(row[0], row[1]) for row in existing],
+    )
+    if pairs:
+        sr = next((s for s in result.sections if s.sheet == SHEET_ADR_LINKS), None)
+        if sr is None:
+            sr = SectionResult(sheet=SHEET_ADR_LINKS)
+            result.sections.append(sr)
+        for source, target in pairs:
+            db.add(ArchitectureDecisionLink(source_id=source, target_id=target, kind="relates"))
+            sr.created += 1
+
+    signed = (
+        (
+            await db.execute(
+                select(ArchitectureDecision).where(
+                    ArchitectureDecision.id.in_(created),
+                    ArchitectureDecision.status == "signed",
+                    ArchitectureDecision.signed_at.is_not(None),
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    for adr in signed:
+        signed_on = adr.signed_at.astimezone(timezone.utc).date()
+        if adr.decided_on is None:
+            adr.decided_on = signed_on
+        if adr.effective_from is None:
+            adr.effective_from = signed_on
+    await db.flush()
 
 
 async def _load_entity_context(db) -> tuple[CardResolver, dict[str, uuid.UUID]]:
@@ -498,6 +590,20 @@ async def _load_remap_context(
             rm.TAGS,
             lambda row: tag_index.get((row.get("group_name"), row.get("name"))),
         )
+
+    # A selective run that did not apply the Users sheet still maps the users
+    # the target already has, by e-mail.
+    user_ids = {
+        email.lower(): uid
+        for email, uid in (await db.execute(select(User.email, User.id))).all()
+        if email
+    }
+    rm.backfill(
+        bundle.rows(schema.SHEET_USERS),
+        id_map,
+        rm.USERS,
+        lambda row: user_ids.get(str(row.get("email") or "").strip().lower()),
+    )
 
     ctx.legacy = not rm.bundle_carries_source_ids(card_rows)
     if ctx.legacy and "ProcessElements" in sheets:
@@ -935,21 +1041,35 @@ async def _apply_tags(
 # ---------------------------------------------------------------------------
 
 
-async def _apply_users(db, bundle: WorkspaceBundle, sr: SectionResult, dry_run: bool) -> None:
+async def _apply_users(
+    db,
+    bundle: WorkspaceBundle,
+    sr: SectionResult,
+    dry_run: bool,
+    *,
+    id_map: rm.IdMap | None = None,
+) -> None:
+    """Create the users the target lacks (matched by e-mail) and record where
+    every bundle user's id landed — created or matched, in a dry run too — so
+    the user ids inside rich text and signatory lists can follow (2.200.0).
+    A bundle without ``source_id`` records nothing."""
+    ids = id_map if id_map is not None else rm.IdMap()
     valid_roles = {r for (r,) in (await db.execute(select(Role.key))).all()}
-    existing = {u.email.lower() for u in (await db.execute(select(User))).scalars().all()}
+    existing = {u.email.lower(): u.id for u in (await db.execute(select(User))).scalars().all()}
     for row in bundle.rows(schema.SHEET_USERS):
         email = (row.get("email") or "").strip()
         if not email:
             sr.failed += 1
             continue
         if email.lower() in existing:
+            ids.record(rm.USERS, row.get(schema.SOURCE_ID_COLUMN), existing[email.lower()])
             sr.skip("user_exists")
             continue
         role = row.get("role")
         if role not in valid_roles:
             role = _SAFE_SYNTHETIC_ROLE
         user = User(
+            id=uuid.uuid4(),
             email=email,
             display_name=row.get("display_name") or email,
             role=role,
@@ -958,7 +1078,8 @@ async def _apply_users(db, bundle: WorkspaceBundle, sr: SectionResult, dry_run: 
             locale=row.get("locale") or "en",
         )
         db.add(user)
-        existing.add(email.lower())
+        existing[email.lower()] = user.id
+        ids.record(rm.USERS, row.get(schema.SOURCE_ID_COLUMN), user.id)
         sr.created += 1
     await db.flush()
 

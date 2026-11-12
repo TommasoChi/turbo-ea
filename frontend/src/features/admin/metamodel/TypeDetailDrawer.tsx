@@ -40,14 +40,15 @@ import { useRelationLabel, useSubtypeLabel, useTypeLabel } from "@/hooks/useReso
 import { expandSides, sideFlags, sideKey } from "@/lib/relationSort";
 import FieldEditorDialog from "./FieldEditorDialog";
 import DataQualityPanel from "./DataQualityPanel";
-import StakeholderRolePanel from "./StakeholderRolePanel";
+import StakeholderRolePanel, { type StakeholderRolePanelHandle } from "./StakeholderRolePanel";
 import CardTypePermissionsPanel from "./CardTypePermissionsPanel";
 import TranslationDialog from "./TranslationDialog";
 import RelationsTabContent from "./RelationsTabContent";
 import DeleteTypeDialog from "./DeleteTypeDialog";
-import { STATUS_COLORS } from "@/theme/tokens";
+import { STATUS_COLORS, brand, RAG_COLORS } from "@/theme/tokens";
 import CategoryCombobox from "./CategoryCombobox";
 import { categoryErrorCode, categoryErrorMessage } from "./categoryErrors";
+import { useTheme } from "@mui/material/styles";
 
 /* ------------------------------------------------------------------ */
 /*  Type Detail Dialog (full-width, 2-panel layout)                    */
@@ -91,6 +92,7 @@ export default function TypeDetailDrawer({
   onRefresh,
   onDeleted = onRefresh,
 }: TypeDrawerProps) {
+  const theme = useTheme();
   const { t, i18n } = useTranslation(["admin", "common"]);
   const locale = i18n.language;
   const stLabel = useSubtypeLabel();
@@ -102,7 +104,7 @@ export default function TypeDetailDrawer({
   const [label, setLabel] = useState("");
   const [description, setDescription] = useState("");
   const [category, setCategory] = useState("");
-  const [color, setColor] = useState("#1976d2");
+  const [color, setColor] = useState<string>(brand.primary);
   const [icon, setIcon] = useState("category");
   const [hasHierarchy, setHasHierarchy] = useState(false);
   const [hasSuccessors, setHasSuccessors] = useState(false);
@@ -131,6 +133,10 @@ export default function TypeDetailDrawer({
   // state drives the UI.
   const [mutating, setMutating] = useState(false);
   const mutatingRef = useRef(false);
+  // Set only while the Stakeholder roles tab is shown. The header Save commits
+  // a role form left open there first: the role's own Save sits at the bottom
+  // of its expanded form, and a description typed there was otherwise lost.
+  const panelRef = useRef<StakeholderRolePanelHandle>(null);
 
   /* --- Subtype inline add --- */
   const [addSubOpen, setAddSubOpen] = useState(false);
@@ -286,6 +292,10 @@ export default function TypeDetailDrawer({
   const handleSaveHeader = async () => {
     setSaving(true);
     try {
+      // `false` means the role form is invalid or its save failed; its error is
+      // already on screen and the form stays open, so the type is not saved.
+      const rolesSaved = await panelRef.current?.savePendingForm();
+      if (rolesSaved === false) return;
       const mergedTranslations = {
         ...cardTypeKey.translations,
         label: { ...cardTypeKey.translations?.label, [locale]: label },
@@ -659,7 +669,7 @@ export default function TypeDetailDrawer({
               flexShrink: 0,
             }}
           >
-            <MaterialSymbol icon={icon} size={22} color="#fff" />
+            <MaterialSymbol icon={icon} size={22} color={theme.palette.common.white} />
           </Box>
           <Box>
             <Typography variant="h6" fontWeight={700} lineHeight={1.2}>
@@ -691,7 +701,7 @@ export default function TypeDetailDrawer({
                 <MaterialSymbol
                   icon={cardTypeKey.is_hidden ? "visibility_off" : "visibility"}
                   size={20}
-                  color={cardTypeKey.is_hidden ? "#f57c00" : "#999"}
+                  color={cardTypeKey.is_hidden ? RAG_COLORS.amber : STATUS_COLORS.neutral}
                 />
               </IconButton>
             </span>
@@ -715,7 +725,7 @@ export default function TypeDetailDrawer({
                 <MaterialSymbol
                   icon="delete"
                   size={20}
-                  color={cardTypeKey.built_in ? "#bbb" : STATUS_COLORS.error}
+                  color={cardTypeKey.built_in ? theme.palette.action.disabled : STATUS_COLORS.error}
                 />
               </IconButton>
             </span>
@@ -1121,6 +1131,7 @@ export default function TypeDetailDrawer({
         {/* -- Stakeholder Roles tab -- */}
         {tab === "stakeholders" && (
         <StakeholderRolePanel
+          ref={panelRef}
           typeKey={cardTypeKey.key}
           onError={(msg) => setError(msg)}
         />

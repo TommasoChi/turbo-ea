@@ -54,6 +54,7 @@ import NavbarStyleCard from "./NavbarStyleCard";
 import { useMetamodel } from "@/hooks/useMetamodel";
 import { useEnabledLocales } from "@/hooks/useEnabledLocales";
 import { SUPPORTED_LOCALES, LOCALE_LABELS, type SupportedLocale } from "@/i18n";
+import { useTheme } from "@mui/material/styles";
 
 const AuthAdmin = lazy(() => import("./AuthAdmin"));
 const EolAdmin = lazy(() => import("./EolAdmin"));
@@ -216,6 +217,7 @@ function SectionHeader({ children }: { children: React.ReactNode }) {
 
 function GeneralTab() {
   const navigate = useNavigate();
+  const theme = useTheme();
   const { t, i18n } = useTranslation(["admin", "common"]);
   const currencyOptions = useMemo(
     () => CURRENCY_CODES.map((code) => ({ code, label: currencyOptionLabel(code, i18n.language) })),
@@ -949,7 +951,7 @@ function GeneralTab() {
       {/* App title Settings */}
       <Paper sx={{ p: 3, mb: 3 }}>
         <Box sx={{ display: "flex", alignItems: "center", mb: 2, gap: 1 }}>
-          <MaterialSymbol icon="badge" size={22} color="#555" />
+          <MaterialSymbol icon="badge" size={22} color={theme.palette.text.secondary} />
           <Typography variant="h6" fontWeight={600}>
             {t("settings.appTitle.title")}
           </Typography>
@@ -988,7 +990,7 @@ function GeneralTab() {
       {/* Logo Settings */}
       <Paper sx={{ p: 3, mb: 3 }}>
         <Box sx={{ display: "flex", alignItems: "center", mb: 2, gap: 1 }}>
-          <MaterialSymbol icon="image" size={22} color="#555" />
+          <MaterialSymbol icon="image" size={22} color={theme.palette.text.secondary} />
           <Typography variant="h6" fontWeight={600}>
             {t("settings.logo.title")}
           </Typography>
@@ -1079,7 +1081,7 @@ function GeneralTab() {
       {/* Favicon Settings */}
       <Paper sx={{ p: 3, mb: 3 }}>
         <Box sx={{ display: "flex", alignItems: "center", mb: 2, gap: 1 }}>
-          <MaterialSymbol icon="star" size={22} color="#555" />
+          <MaterialSymbol icon="star" size={22} color={theme.palette.text.secondary} />
           <Typography variant="h6" fontWeight={600}>
             {t("settings.favicon.title")}
           </Typography>
@@ -1166,7 +1168,7 @@ function GeneralTab() {
       {/* Login Page Branding */}
       <Paper sx={{ p: 3, mb: 3 }}>
         <Box sx={{ display: "flex", alignItems: "center", mb: 2, gap: 1 }}>
-          <MaterialSymbol icon="login" size={22} color="#555" />
+          <MaterialSymbol icon="login" size={22} color={theme.palette.text.secondary} />
           <Typography variant="h6" fontWeight={600}>
             {t("settings.loginBranding.title")}
           </Typography>
@@ -1242,7 +1244,7 @@ function GeneralTab() {
       {/* Currency Settings */}
       <Paper sx={{ p: 3, mb: 3 }}>
         <Box sx={{ display: "flex", alignItems: "center", mb: 2, gap: 1 }}>
-          <MaterialSymbol icon="payments" size={22} color="#555" />
+          <MaterialSymbol icon="payments" size={22} color={theme.palette.text.secondary} />
           <Typography variant="h6" fontWeight={600}>
             {t("settings.currency.title")}
           </Typography>
@@ -1288,7 +1290,7 @@ function GeneralTab() {
       {/* Date Format Settings */}
       <Paper sx={{ p: 3, mb: 3 }}>
         <Box sx={{ display: "flex", alignItems: "center", mb: 2, gap: 1 }}>
-          <MaterialSymbol icon="calendar_today" size={22} color="#555" />
+          <MaterialSymbol icon="calendar_today" size={22} color={theme.palette.text.secondary} />
           <Typography variant="h6" fontWeight={600}>
             {t("settings.dateFormat.title")}
           </Typography>
@@ -1340,7 +1342,7 @@ function GeneralTab() {
       {/* Fiscal Year Start */}
       <Paper sx={{ p: 3, mb: 3 }}>
         <Box sx={{ display: "flex", alignItems: "center", mb: 2, gap: 1 }}>
-          <MaterialSymbol icon="calendar_month" size={22} color="#555" />
+          <MaterialSymbol icon="calendar_month" size={22} color={theme.palette.text.secondary} />
           <Typography variant="h6" fontWeight={600}>
             {t("settings.fiscal.title")}
           </Typography>
@@ -1371,7 +1373,7 @@ function GeneralTab() {
       {/* Enabled Languages */}
       <Paper sx={{ p: 3, mb: 3 }}>
         <Box sx={{ display: "flex", alignItems: "center", mb: 2, gap: 1 }}>
-          <MaterialSymbol icon="translate" size={22} color="#555" />
+          <MaterialSymbol icon="translate" size={22} color={theme.palette.text.secondary} />
           <Typography variant="h6" fontWeight={600}>
             {t("settings.locales.title")}
           </Typography>
@@ -1417,7 +1419,7 @@ function GeneralTab() {
       {/* File Uploads Toggle */}
       <Paper sx={{ p: 3, mb: 3 }}>
         <Box sx={{ display: "flex", alignItems: "center", mb: 2, gap: 1 }}>
-          <MaterialSymbol icon="attach_file" size={22} color="#555" />
+          <MaterialSymbol icon="attach_file" size={22} color={theme.palette.text.secondary} />
           <Typography variant="h6" fontWeight={600}>
             {t("settings.fileUploads.title")}
           </Typography>
@@ -1457,7 +1459,7 @@ function GeneralTab() {
       {/* Archived-card retention */}
       <Paper sx={{ p: 3, mb: 3 }}>
         <Box sx={{ display: "flex", alignItems: "center", mb: 2, gap: 1 }}>
-          <MaterialSymbol icon="auto_delete" size={22} color="#555" />
+          <MaterialSymbol icon="auto_delete" size={22} color={theme.palette.text.secondary} />
           <Typography variant="h6" fontWeight={600}>
             {t("settings.dataManagement.title")}
           </Typography>
@@ -1580,7 +1582,7 @@ function GeneralTab() {
       {/* BPM Module Toggle */}
       <Paper sx={{ p: 3, mb: 3 }}>
         <Box sx={{ display: "flex", alignItems: "center", mb: 2, gap: 1 }}>
-          <MaterialSymbol icon="route" size={22} color="#555" />
+          <MaterialSymbol icon="route" size={22} color={theme.palette.text.secondary} />
           <Typography variant="h6" fontWeight={600}>
             {t("settings.bpm.title")}
           </Typography>
@@ -1650,7 +1652,7 @@ function GeneralTab() {
       {/* PPM Module Toggle */}
       <Paper sx={{ p: 3, mb: 3 }}>
         <Box sx={{ display: "flex", alignItems: "center", mb: 2, gap: 1 }}>
-          <MaterialSymbol icon="assignment" size={22} color="#555" />
+          <MaterialSymbol icon="assignment" size={22} color={theme.palette.text.secondary} />
           <Typography variant="h6" fontWeight={600}>
             {t("settings.ppm.title")}
           </Typography>
@@ -1679,7 +1681,7 @@ function GeneralTab() {
       {/* GRC Module Toggle */}
       <Paper sx={{ p: 3, mb: 3 }}>
         <Box sx={{ display: "flex", alignItems: "center", mb: 2, gap: 1 }}>
-          <MaterialSymbol icon="policy" size={22} color="#555" />
+          <MaterialSymbol icon="policy" size={22} color={theme.palette.text.secondary} />
           <Typography variant="h6" fontWeight={600}>
             {t("settings.grc.title")}
           </Typography>
@@ -1750,7 +1752,7 @@ function GeneralTab() {
       {/* Update check toggle */}
       <Paper sx={{ p: 3, mb: 3 }}>
         <Box sx={{ display: "flex", alignItems: "center", mb: 2, gap: 1 }}>
-          <MaterialSymbol icon="system_update_alt" size={22} color="#555" />
+          <MaterialSymbol icon="system_update_alt" size={22} color={theme.palette.text.secondary} />
           <Typography variant="h6" fontWeight={600}>
             {t("settings.updateCheck.title")}
           </Typography>
@@ -1836,7 +1838,7 @@ function GeneralTab() {
       {/* Sponsor Button Toggle */}
       <Paper sx={{ p: 3, mb: 3 }}>
         <Box sx={{ display: "flex", alignItems: "center", mb: 2, gap: 1 }}>
-          <MaterialSymbol icon="volunteer_activism" size={22} color="#555" />
+          <MaterialSymbol icon="volunteer_activism" size={22} color={theme.palette.text.secondary} />
           <Typography variant="h6" fontWeight={600}>
             {t("settings.sponsorButton.title")}
           </Typography>
@@ -1860,7 +1862,7 @@ function GeneralTab() {
           sx={{
             mb: 2,
             background: `linear-gradient(135deg, ${brand.sponsorFrom}, ${brand.sponsorTo})`,
-            color: "#fff",
+            color: "common.white",
             textTransform: "none",
             "&:hover": {
               background: `linear-gradient(135deg, ${brand.sponsorFrom}, ${brand.sponsorTo})`,
@@ -1938,7 +1940,7 @@ function GeneralTab() {
       {/* Email delivery settings (SMTP / SMTP OAuth / Microsoft Graph) */}
       <Paper sx={{ p: 3, mb: 3 }}>
         <Box sx={{ display: "flex", alignItems: "center", mb: 2, gap: 1 }}>
-          <MaterialSymbol icon="mail" size={22} color="#555" />
+          <MaterialSymbol icon="mail" size={22} color={theme.palette.text.secondary} />
           <Typography variant="h6" fontWeight={600}>
             {t("settings.email.title")}
           </Typography>
@@ -2250,7 +2252,7 @@ export default function SettingsAdmin() {
   return (
     <Box>
       <Box sx={{ display: "flex", alignItems: "center", mb: 3, gap: 1 }}>
-        <MaterialSymbol icon="settings" size={28} color="#1976d2" />
+        <MaterialSymbol icon="settings" size={28} color={brand.primary} />
         <Typography variant="h5" fontWeight={700}>
           {t("settings.title")}
         </Typography>

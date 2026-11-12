@@ -65,7 +65,7 @@ Campos definem os atributos personalizados disponíveis nos cards deste tipo. Ca
 | **Rótulo** | Nome de exibição |
 | **Tipo** | text, multiline_text, number, cost, percentage, boolean, date, url, single_select ou multiple_select. Uma porcentagem é um número de 0 a 100, exibida como uma barra de progresso e editada com um controle deslizante ou digitada com exatidão. Um booleano é escolhido numa lista Sim / Não, com **Nenhum** para o limpar, e é exibido como etiqueta verde *Sim* ou azul *Não*, ou como — quando não definido, o que o filtro **(vazio)** do inventário encontra |
 | **Opções** | Para campos de seleção: as escolhas disponíveis com rótulos e cores opcionais. Reordene-as com as setas para cima e para baixo ao lado de cada opção: os menus e os filtros listam as opções nessa ordem, e os chips de um valor de seleção múltipla a seguem em todos os cards. |
-| **Texto de ajuda** | Orientação opcional mostrada como uma nota recolhível sob o campo enquanto um card é editado. É escrito por idioma e pode ser definido por qualquer administrador do metamodelo; em um campo fornecido por uma extensão, é somente leitura |
+| **Texto de ajuda** | Orientação opcional para o campo. Enquanto um card é lido, aparece como um ícone de informação ao lado do rótulo do campo (passe o cursor ou foque nele para ler o texto) e como dica na linha de cabeçalho da coluna do campo no Inventário; enquanto um card é editado, o mesmo ícone fica ao lado do campo. É escrito por idioma e pode ser definido por qualquer administrador do metamodelo; em um campo fornecido por uma extensão, é somente leitura |
 | **Obrigatório** | Se o campo é obrigatório — veja as regras de aplicação abaixo |
 | **Qualidade dos dados** | A contribuição de cada campo para a pontuação é gerida no painel **Qualidade dos dados** (ver abaixo) |
 | **Somente leitura** | Impede edição manual (útil para campos calculados) |
@@ -147,6 +147,8 @@ Defina papéis personalizados para este tipo (ex.: "Proprietário da Aplicação
 
 Cada papel tem uma **chave** (o identificador armazenado nos cartões, usado pelas colunas de importação/exportação `stakeholder:<chave_do_papel>`) e um **rótulo** (o que os utilizadores veem). A chave segue a mesma convenção de qualquer outra chave do metamodelo: apenas letras e dígitos, começando por uma letra, de 3 a 50 caracteres, por convenção em camelCase como `businessArchitect`. É preenchida automaticamente a partir do rótulo, pelo que raramente precisará de a escrever.
 
+Dê a um papel uma **descrição** para dizer o que ele significa na sua organização – o que assina um *Responsável pelo contrato*, do que responde um *Responsável técnico*. Os usuários a veem como um ícone de informação ao lado do papel na aba **Partes interessadas** de um card, sob o nome do papel no seletor de papéis, como dica no cabeçalho da coluna do papel no Inventário, em **Meus papéis** no painel e no diretório de partes interessadas. A descrição é traduzida por idioma como o rótulo: cada idioma habilitado tem o seu próprio campo de descrição em **Traduções** no editor de papéis, e a **caixa de diálogo de tradução** do tipo também a lista. Um idioma deixado vazio recorre à descrição em inglês. Os papéis integrados (**Responsável**, **Observador**, os dois responsáveis da aplicação, **Gestor de projeto de TI** e **Responsável do processo**) vêm com uma descrição em todos os idiomas que pode editar ou limpar como qualquer outra, e o botão **Guardar** do cabeçalho do painel também guarda um papel que esteja a editar neste separador.
+
 Cada papel tem também um interruptor **Conta para a qualidade dos dados**. A pontuação de qualidade tem uma única posição para partes interessadas, satisfeita assim que alguém é atribuído ao card num papel com este interruptor ativo. Desative-o para papéis puramente passivos — o **Observador** integrado vem desativado, para que observar um card nunca equivalha a ser responsável por ele. Um tipo cujos papéis estejam todos desativados não contribui com posição alguma. Alterar o interruptor volta a pontuar de imediato todos os cards do tipo.
 
 Os papéis podem ser removidos de duas formas:
@@ -210,7 +212,7 @@ Clique no botão **Traduzir** na barra de ferramentas do drawer do tipo para abr
 - **Seções** — Cabeçalhos de seção na página de detalhe do card
 - **Campos** — Rótulos de campos e rótulos de opções de seleção
 - **Texto de ajuda** — O texto de ajuda de um campo, listado sob o campo depois de ter sido inserido no editor de campos. Editá-lo em inglês também atualiza o texto de ajuda padrão do campo
-- **Papéis de stakeholder** — Nomes de papéis exibidos na interface de atribuição de stakeholders
+- **Papéis de stakeholder** — Nomes e descrições dos papéis. A descrição de um papel é listada sob o seu nome assim que o papel tem uma descrição em algum idioma; editá-la em inglês também atualiza a descrição padrão do papel
 
 As traduções são armazenadas junto com cada tipo de card e são resolvidas no momento da renderização de acordo com o idioma selecionado pelo usuário. Rótulos não traduzidos recorrem ao padrão em inglês.
 
@@ -256,7 +258,7 @@ Remover um tipo de ligação **não** reescreve os cards que já o usam: mantêm
 
 Algumas relações incluem atributos adicionais que define em cada ligação individual em vez de no tipo de relação. Por exemplo, a relação integrada **Organização → Aplicação** («utiliza») tem um atributo **Tipo de utilização** — defina-o como **Proprietário**, **Utilizador** ou **Parte interessada** em cada ligação. Assim, pode modelar uma aplicação *propriedade de* uma organização e *utilizada por* outras através de um único tipo de relação. O valor escolhido aparece como um marcador colorido na secção **Relações** da carta; defina-o ao adicionar a relação ou mais tarde através do ícone de edição na linha da relação.
 
-Também pode criar **vários tipos de relação entre o mesmo par de tipos de carta** — por exemplo, uma organização que *detém* uma aplicação a par de outra que a *utiliza*. Prefira um atributo quando estiver a descrever variantes de uma mesma relação (mantém uma só coluna no inventário e uma só linha num diagrama); crie um segundo tipo de relação quando as relações forem genuinamente diferentes e merecerem verbos, atributos ou filtros próprios. Quando um par tem mais do que um tipo de relação, o inventário continua a mostrar uma única coluna para o tipo de carta relacionado, e abrir essa célula dá-lhe uma secção por tipo de relação. Num cartão, cada tipo de relação mantém a sua própria secção: as secções que apontam para o mesmo tipo de cartão são apresentadas juntas, e um cartão que tenha ligado através de mais do que uma delas fica marcado com *Também …* em cada uma das suas secções. Um tipo de relação cujas duas extremidades são o mesmo tipo de cartão — uma organização que *tem como local* outra organização — mostra *ambos* os verbos num cartão, como duas secções, e no inventário como duas linhas de filtro e duas secções do editor; dê a esse tipo um rótulo inverso, ou ambas as secções se lerão da mesma forma.
+Também pode criar **vários tipos de relação entre o mesmo par de tipos de carta** — por exemplo, uma organização que *detém* uma aplicação a par de outra que a *utiliza*. Prefira um atributo quando estiver a descrever variantes de uma mesma relação (mantém uma só coluna no inventário e uma só linha num diagrama); crie um segundo tipo de relação quando as relações forem genuinamente diferentes e merecerem verbos, atributos ou filtros próprios. Quando um par tem mais do que um tipo de relação, o inventário mostra uma coluna por tipo de relação, encabeçada pelo seu verbo e pelo tipo de carta relacionado (*possui Aplicação*, *utiliza Aplicação*). Num cartão, cada tipo de relação mantém a sua própria secção: as secções que apontam para o mesmo tipo de cartão são apresentadas juntas, e um cartão que tenha ligado através de mais do que uma delas fica marcado com *Também …* em cada uma das suas secções. Um tipo de relação cujas duas extremidades são o mesmo tipo de cartão — uma organização que *tem como local* outra organização — mostra *ambos* os verbos num cartão, como duas secções, e no inventário como duas colunas e duas linhas de filtro; dê a esse tipo um rótulo inverso, ou ambas as secções se lerão da mesma forma.
 
 Quando um par tem mais do que um tipo de relação, relatórios, portais e questionários podem visar um específico: o relatório de Portefólio oferece um eixo de agrupamento e um filtro por relação, o Mapa de capacidades acrescenta um filtro por relação, os filtros e secções de relação do portal são identificados com o seu verbo, e o filtro **relacionado com** de um questionário ganha um seletor **Através da relação**. Não escolher nada continua a significar «relacionado por qualquer uma delas».
 
@@ -326,6 +328,23 @@ Cada princípio tem quatro campos:
 
 Os princípios podem ser **ativados** ou **desativados** individualmente através do interruptor em cada cartão.
 
+Cada princípio tem um **número de referência** (`P-001`, `P-002`, …), atribuído quando é criado e apresentado junto ao título. As referências são numeradas por instância: um princípio trazido através da [transferência do espaço de trabalho](workspace-transfer.md) recebe o próximo número livre no destino.
+
+### Exportar e importar princípios {: #principles-import }
+
+**Exportar** (junto a **Novo princípio**) transfere todos os princípios como um ficheiro `.xlsx` com as colunas `reference_number`, `title`, `description`, `rationale`, `implications`, `is_active` e `sort_order`. A exportação é um ficheiro de importação válido, pelo que pode editar os princípios no Excel e carregá-los de volta.
+
+**Importar** carrega princípios em massa a partir de um ficheiro `.xlsx`. Clique em **Transferir modelo** para obter um livro inicial, preencha um princípio por linha e carregue-o. Cada linha é associada a um princípio existente primeiro pela sua `reference_number` e depois pelo título (sem distinguir maiúsculas de minúsculas):
+
+- Um princípio associado é **atualizado** com os valores que diferem; se nada diferir, a linha é **ignorada**. A pré-visualização lista cada linha atualizada com os campos que altera.
+- Qualquer outra linha **cria** um novo princípio com a próxima referência livre. Uma referência que não existe nesta instância não é reutilizada; a pré-visualização avisa sobre isso.
+- Uma linha sem referência cujo título corresponde a dois princípios é recusada por ser ambígua: adicione a referência para indicar qual pretende.
+- Uma coluna ausente da folha deixa o campo inalterado. Uma célula vazia em `description`, `rationale` ou `implications` limpa esse texto; uma célula vazia em `is_active` ou `sort_order` deixa o valor como está. `title` é a única coluna obrigatória.
+- `is_active` aceita `true` / `false` (também `yes` / `no`, `1` / `0`); `sort_order` tem de ser um número inteiro. Os novos princípios sem `sort_order` são adicionados no fim da lista.
+- Um título ou uma referência que apareça duas vezes no ficheiro, ou uma mudança de nome para o título de outro princípio, faz essa linha falhar.
+
+Antes de se escrever o que quer que seja, obtém uma pré-visualização de quantas linhas serão criadas, atualizadas, ignoradas e quantas falharão, com cada erro e aviso listado por linha; nada muda até confirmar. A importação requer a permissão `admin.metamodel` e fica registada no [registo de segurança e administração](audit-log.md).
+
 ### Importar do Catálogo de princípios
 
 O Turbo EA é fornecido com um **catálogo de referência curado com 10 princípios EA padrão do setor** para que não tenha de começar com uma página em branco. Abra o menu do avatar no canto superior direito e selecione **Catálogos de referência → Catálogo de princípios**. A partir daí pode:
@@ -374,12 +393,20 @@ Em cada linha você pode:
 
 O scanner de conformidade e o fluxo de promoção para Risco funcionam **mesmo sem um provedor de IA configurado** — a entrada manual de achados, transições de status e o caminho de promoção para Risco continuam disponíveis. A IA só é necessária quando você efetivamente dispara uma nova varredura.
 
+## Fases do ciclo de vida {: #lifecycle-phases }
+
+A seção **Ciclo de vida** de cada card percorre cinco fases fixas: Planejamento, Entrada, Ativo, Saída e Fim de vida. O que cada fase significa difere entre organizações – por exemplo, se a *Saída* ainda admite novos usuários, ou quando um componente conta como *Fim de vida*. A aba **Fases do ciclo de vida** permite registrar isso uma vez para todo o espaço de trabalho.
+
+A aba mostra um campo de texto por fase e uma linha de abas de idioma (primeiro o inglês, depois cada idioma habilitado). Em um espaço de trabalho novo, os campos vêm preenchidos com uma explicação padrão de cada fase em todos os idiomas, de modo que a ajuda existe desde o início; edite qualquer texto para refletir como a sua organização trabalha. Um idioma deixado vazio mostra o texto em inglês. Deixe uma fase vazia para não mostrar ajuda nela – esvaziar as cinco fases e salvar remove a ajuda por completo. Clique em **Salvar** para aplicar os textos.
+
+Os usuários veem a ajuda de uma fase como um ícone de informação ao lado da fase na linha do tempo do ciclo de vida de cada card, que continua visível enquanto o ciclo de vida é editado. Os textos valem para todos os tipos de card. O salvamento é registrado no **Registo de segurança e administração**.
+
 ## Editor de Layout de Card
 
 Para cada tipo de card, a seção **Layout** no painel do tipo controla como a página de detalhe do card é estruturada:
 
 - **Ordem das seções** — Arraste seções (Descrição, EOL, Ciclo de Vida, Hierarquia, Etiquetas, Relacionamentos e seções personalizadas) para reordená-las
-- **Visibilidade** — Oculte seções que não são relevantes para um tipo
+- **Visibilidade** — Oculte seções que não são relevantes para um tipo. A seção **Fim de vida** é a exceção a «exibida, a menos que oculta»: por padrão, ela é exibida apenas em Aplicações e Componentes de TI e fica oculta em todos os outros tipos, inclusive os personalizados, até que você a ative. Seu interruptor também decide se o tipo participa dos relatórios de fim de vida — veja [Fim de vida em outros tipos de card](eol.md#fim-de-vida-em-outros-tipos-de-card)
 - **Expansão padrão** — Escolha se cada seção começa expandida ou recolhida
 - **Layout de colunas** — Defina 1 ou 2 colunas por seção personalizada
 - **Mover campos entre seções** — Usar a ação **mover** de um campo (ao lado dos botões de editar e excluir) para realocá-lo em outra seção, mantendo a sua configuração

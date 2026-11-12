@@ -297,6 +297,11 @@ class BookmarkCreate(BaseModel):
     visibility: str = "private"
     odata_enabled: bool = False
     shared_with: list[BookmarkShareEntry] | None = None
+    # A multi-hop card query or an ``all_of`` / ``any_of`` stack of them
+    # (``app/services/card_query.py``); the view's ``card_type`` and
+    # ``filters.types`` are pinned to its start types (``card_type`` only when
+    # there is one).
+    query: dict | None = None
 
 
 class BookmarkUpdate(BaseModel):
@@ -311,6 +316,8 @@ class BookmarkUpdate(BaseModel):
     visibility: str | None = None
     odata_enabled: bool | None = None
     shared_with: list[BookmarkShareEntry] | None = None
+    # ``null`` clears the view's query; absent leaves it as it is.
+    query: dict | None = None
 
 
 class BookmarkResponse(BaseModel):
@@ -332,6 +339,9 @@ class BookmarkResponse(BaseModel):
     shared_with: list[dict] | None = None
     odata_url: str | None = None
     created_at: datetime | None = None
+    query: dict | None = None
+    created_via: str | None = None
+    updated_via: str | None = None
 
     model_config = {"from_attributes": True}
 

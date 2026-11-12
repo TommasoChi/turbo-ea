@@ -183,7 +183,6 @@
     "intro": "Попробуйте Architecture Studio. Созданные здесь диаграммы хранятся как файлы ArchiMate Exchange и пока не отображаются в меню «Диаграммы».",
     "newDiagram": "Новая диаграмма ArchiMate",
     "name": "Название",
-    "create": "Создать",
     "empty": "Диаграмм ArchiMate пока нет.",
     "open": "Открыть",
     "delete": "Удалить",

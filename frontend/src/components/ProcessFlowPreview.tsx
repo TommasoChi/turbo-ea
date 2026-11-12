@@ -32,6 +32,7 @@ import type {
   ProcessNavigatorSource,
 } from "@/features/bpm/ProcessNavigatorContext";
 import type { ProcessElement, ProcessFlowVersion } from "@/types";
+import { PROCESS_FALLBACK_COLOR } from "@/theme/tokens";
 
 export interface ProcessFlowPreviewProps {
   processId: string | null;
@@ -102,7 +103,7 @@ export default function ProcessFlowPreview({ processId, open, onClose }: Process
   const meta = useMemo<NavigatorMeta>(
     () => ({
       typeIcon: bpType?.icon ?? "route",
-      typeColor: bpType?.color ?? "#028f00",
+      typeColor: bpType?.color ?? PROCESS_FALLBACK_COLOR,
       subtypes: bpType?.subtypes ?? [],
       processTypes,
     }),

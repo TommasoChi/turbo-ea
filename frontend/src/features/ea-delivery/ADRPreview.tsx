@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useParams, useNavigate } from "react-router";
 import { sanitizeRichHtml } from "@/lib/richHtml";
+import { fillMentionLabels } from "@/lib/mentionHtml";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import Button from "@mui/material/Button";
@@ -15,36 +16,49 @@ import Divider from "@mui/material/Divider";
 import useMediaQuery from "@mui/material/useMediaQuery";
 import { alpha, useTheme } from "@mui/material/styles";
 import MaterialSymbol from "@/components/MaterialSymbol";
+import LinkifiedText from "@/components/LinkifiedText";
 import { api } from "@/api/client";
+import { useAbortableEffect } from "@/hooks/useLatestRequest";
 import { useDateFormat } from "@/hooks/useDateFormat";
 import { usePageSubject } from "@/hooks/usePageTitle";
 import { useAuth } from "@/hooks/useAuth";
 import { hasPermission } from "@/components/RequirePermission";
 import { ExtensionBoundary, ExtensionSlot, useExtensionAdrPanels } from "@/lib/extensionHost";
 import { printAdr } from "./adrPrint";
+import DecisionBanners from "./DecisionBanners";
+import RevisionStrip, { decisionRevisionItems, showsRevisionStrip } from "./RevisionStrip";
+import DecisionPeopleField from "./DecisionPeopleField";
+import DecisionLinksBlock from "./DecisionLinksBlock";
+import DecisionFilesSection from "./DecisionFilesSection";
+import { DecisionStandingChip, DecisionStatusChip } from "./DecisionStandingChip";
+import { DATE_LABEL_KEYS, decisionRefLabel } from "./decisionStanding";
+import { currentRevisionId } from "./adrEditorModel";
+import MentionContainer from "./mentions/MentionContainer";
+import { useMentionLabels } from "./mentions/mentionLabels";
+import DocumentHistoryButton from "./collab/DocumentHistoryButton";
+import DocumentSidePanel from "./collab/DocumentSidePanel";
+import SectionDiscussionMarker from "./collab/SectionDiscussionMarker";
+import { documentPeopleIds } from "./mentions/mentionModel";
+import MentionedInList from "./collab/MentionedInList";
+import { sectionOptions } from "./collab/discussionModel";
 import type { ArchitectureDecision } from "@/types";
+import { RAG_COLORS, WARNING_STRONG_COLOR, brand } from "@/theme/tokens";
 
-const STATUS_COLORS: Record<string, "default" | "warning" | "success" | "info"> = {
-  draft: "default",
-  in_review: "warning",
-  signed: "info",
-};
+const DATE_FIELDS = ["decided_on", "effective_from", "valid_until"] as const;
+
+/** Pointers on the preview open the other decision's preview. */
+const previewHref = (id: string) => `/ea-delivery/adr/${id}/preview`;
 
 export default function ADRPreview() {
   const { t } = useTranslation(["delivery", "common"]);
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { formatDateTime } = useDateFormat();
+  const { formatDate, formatDateTime } = useDateFormat();
   const theme = useTheme();
   const compact = useMediaQuery(theme.breakpoints.down("sm"));
   const { user } = useAuth();
   const adrPanels = useExtensionAdrPanels();
-
-  const STATUS_LABELS: Record<string, string> = {
-    draft: t("status.draft"),
-    in_review: t("status.inReview"),
-    signed: t("status.signed"),
-  };
+  const mentionLabels = useMentionLabels();
 
   const [adr, setAdr] = useState<ArchitectureDecision | null>(null);
   usePageSubject(adr?.title);
@@ -52,20 +66,24 @@ export default function ADRPreview() {
   const [error, setError] = useState("");
   const [snack, setSnack] = useState("");
 
-  useEffect(() => {
-    if (!id) return;
-    (async () => {
+  // Re-keyed on in-page revision navigation: only the latest load may fill
+  // the page, so a late reply for the revision just left is dropped.
+  useAbortableEffect(
+    async ({ signal, isCurrent }) => {
+      if (!id) return;
       setLoading(true);
+      setError("");
       try {
-        const data = await api.get<ArchitectureDecision>(`/adr/${id}`);
-        setAdr(data);
+        const data = await api.get<ArchitectureDecision>(`/adr/${id}`, { signal });
+        if (isCurrent()) setAdr(data);
       } catch (e) {
-        setError(e instanceof Error ? e.message : t("adr.editor.error.loadFailed"));
+        if (isCurrent()) setError(e instanceof Error ? e.message : t("adr.editor.error.loadFailed"));
       } finally {
-        setLoading(false);
+        if (isCurrent()) setLoading(false);
       }
-    })();
-  }, [id]);
+    },
+    [id],
+  );
 
   const handleCopyLink = () => {
     navigator.clipboard.writeText(window.location.href).then(
@@ -93,12 +111,36 @@ export default function ADRPreview() {
   const sections = [
     { key: "context", label: t("adr.context"), content: adr.context },
     { key: "decision", label: t("adr.decision"), content: adr.decision },
-    { key: "alternatives", label: t("adr.alternativesConsidered"), content: adr.alternatives_considered },
+    { key: "alternatives_considered", label: t("adr.alternativesConsidered"), content: adr.alternatives_considered },
     { key: "consequences", label: t("adr.consequences"), content: adr.consequences },
   ];
 
+  const stripItems = decisionRevisionItems(adr.revisions ?? [], t);
+  const stripShown = showsRevisionStrip(stripItems);
+  const historyButton = (placeCompact: boolean) =>
+    id ? (
+      <DocumentHistoryButton<ArchitectureDecision>
+        owner={{ kind: "adr", id }}
+        label={`${decisionRefLabel(adr, t)} · ${adr.title}`}
+        status={adr.status}
+        refreshKey={adr.updated_at ?? undefined}
+        onRestored={(restored) => setAdr(restored)}
+        compact={placeCompact}
+      />
+    ) : null;
+
   return (
     <>
+      <DocumentSidePanel
+        owner={id ? { kind: "adr", id } : null}
+        sections={sectionOptions("adr", t)}
+        openThreadCount={adr.open_thread_count}
+        refreshKey={adr.updated_at ?? undefined}
+        mentionContext={{
+          linkedCardIds: (adr.linked_cards ?? []).map((c) => c.id),
+          priorityUserIds: documentPeopleIds(adr),
+        }}
+      >
       {/* Toolbar */}
       <Box
         className="no-print"
@@ -117,7 +159,7 @@ export default function ADRPreview() {
             <MaterialSymbol icon="arrow_back" size={22} />
           </IconButton>
         </Tooltip>
-        {!compact && <MaterialSymbol icon="gavel" size={26} color="#1976d2" />}
+        {!compact && <MaterialSymbol icon="gavel" size={26} color={brand.primary} />}
         <Typography
           variant={compact ? "subtitle1" : "h5"}
           sx={{ fontWeight: 700, flex: 1, minWidth: 0 }}
@@ -126,16 +168,13 @@ export default function ADRPreview() {
           {adr.title}
         </Typography>
         <Chip
-          label={adr.reference_number}
+          label={decisionRefLabel(adr, t)}
           size="small"
           variant="outlined"
           sx={{ fontFamily: "monospace" }}
         />
-        <Chip
-          label={STATUS_LABELS[adr.status] ?? adr.status}
-          size="small"
-          color={STATUS_COLORS[adr.status] ?? "default"}
-        />
+        <DecisionStatusChip adr={adr} />
+        <DecisionStandingChip standing={adr.standing} />
         {id && (
           <ExtensionSlot
             name="adr.header"
@@ -143,10 +182,14 @@ export default function ADRPreview() {
               adrId: id,
               status: adr.status,
               signed: adr.status === "signed",
+              readOnly: true,
               attributes: adr.attributes ?? {},
+              standing: adr.standing ?? null,
+              isCurrent: adr.is_current,
             }}
           />
         )}
+        {!stripShown && historyButton(compact)}
         <Tooltip title={t("preview.copyLink")}>
           <IconButton onClick={handleCopyLink}>
             <MaterialSymbol icon="link" size={20} />
@@ -189,18 +232,27 @@ export default function ADRPreview() {
 
       {/* Content */}
       <Box sx={{ maxWidth: 800, mx: "auto", px: { xs: 1, sm: 0 }, pb: 4 }}>
-        {/* Reference + revision info */}
+        {/* Where the decision stands, and its chain */}
+        <Box sx={{ display: "flex", flexDirection: "column", gap: 1, mb: 2, "&:empty": { display: "none" } }}>
+          <DecisionBanners adr={adr} mode="preview" hrefFor={previewHref} />
+          {stripShown && (
+            <Box sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 1 }}>
+              <RevisionStrip
+                items={stripItems}
+                activeId={adr.id}
+                currentId={currentRevisionId(adr)}
+                hrefFor={previewHref}
+              />
+              {historyButton(false)}
+            </Box>
+          )}
+        </Box>
+
+        {/* Reference (with its revision) */}
         <Box sx={{ mb: 3, display: "flex", alignItems: "center", gap: 1 }}>
           <Typography variant="h4" sx={{ fontWeight: 700 }}>
-            {adr.reference_number}
+            {decisionRefLabel(adr, t)}
           </Typography>
-          {adr.revision_number > 1 && (
-            <Chip
-              label={t("adr.editor.revisionLabel", { number: adr.revision_number })}
-              size="small"
-              variant="outlined"
-            />
-          )}
         </Box>
 
         <Typography variant="h5" sx={{ fontWeight: 600, mb: 3 }}>
@@ -208,27 +260,96 @@ export default function ADRPreview() {
         </Typography>
 
         {/* Sections */}
-        {sections.map(({ key, label, content }) => (
-          <Box key={key} sx={{ mb: 4 }}>
+        <MentionContainer>
+          {sections.map(({ key, label, content }) => (
+            <Box key={key} sx={{ mb: 4 }}>
+              <Box sx={{ display: "flex", alignItems: "center", mb: 1 }}>
+                <Typography variant="h6" sx={{ fontWeight: 700 }}>
+                  {label}
+                </Typography>
+                <SectionDiscussionMarker section={key} />
+              </Box>
+              {content ? (
+                <Box
+                  dangerouslySetInnerHTML={{
+                    __html: sanitizeRichHtml(fillMentionLabels(content, mentionLabels)),
+                  }}
+                  sx={{
+                    "& p": { mt: 0, mb: 1 },
+                    "& ul, & ol": { pl: 3 },
+                    lineHeight: 1.7,
+                  }}
+                />
+              ) : (
+                <Typography variant="body2" color="text.secondary" fontStyle="italic">
+                  -
+                </Typography>
+              )}
+            </Box>
+          ))}
+        </MentionContainer>
+
+        {/* Dates */}
+        {DATE_FIELDS.some((f) => adr[f]) && (
+          <Box sx={{ mb: 4 }} data-testid="preview-dates">
             <Typography variant="h6" sx={{ fontWeight: 700, mb: 1 }}>
-              {label}
+              {t("adr.dates.title")}
             </Typography>
-            {content ? (
-              <Box
-                dangerouslySetInnerHTML={{ __html: sanitizeRichHtml(content) }}
-                sx={{
-                  "& p": { mt: 0, mb: 1 },
-                  "& ul, & ol": { pl: 3 },
-                  lineHeight: 1.7,
-                }}
-              />
-            ) : (
-              <Typography variant="body2" color="text.secondary" fontStyle="italic">
-                -
-              </Typography>
-            )}
+            <Box sx={{ display: "flex", gap: 3, flexWrap: "wrap" }}>
+              {DATE_FIELDS.filter((f) => adr[f]).map((f) => (
+                <Box key={f}>
+                  <Typography variant="caption" color="text.secondary" component="div">
+                    {t(DATE_LABEL_KEYS[f])}
+                  </Typography>
+                  <Typography variant="body2">{formatDate(adr[f])}</Typography>
+                </Box>
+              ))}
+            </Box>
           </Box>
-        ))}
+        )}
+
+        {/* People */}
+        {((adr.decision_makers ?? []).length > 0 || (adr.participants ?? []).length > 0) && (
+          <Box sx={{ mb: 4, display: "flex", flexDirection: "column", gap: 1.5 }}>
+            <Typography variant="h6" sx={{ fontWeight: 700 }}>
+              {t("adr.people.title")}
+            </Typography>
+            <DecisionPeopleField part="decision_makers" value={adr.decision_makers ?? []} readOnly />
+            <DecisionPeopleField part="participants" value={adr.participants ?? []} readOnly />
+          </Box>
+        )}
+
+        {/* Links to and from other decisions */}
+        {((adr.links?.outgoing.length ?? 0) > 0 || (adr.links?.incoming.length ?? 0) > 0) && (
+          <Box sx={{ mb: 4 }}>
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 1 }}>
+              {t("adr.links.title")}
+            </Typography>
+            <DecisionLinksBlock links={adr.links} readOnly />
+          </Box>
+        )}
+
+        {/* Change summary (a revision) */}
+        {adr.change_summary && (
+          <Box sx={{ mb: 4 }}>
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 1 }}>
+              {t("adr.revise.changeSummary")}
+            </Typography>
+            <Typography variant="body2" sx={{ whiteSpace: "pre-wrap" }}>
+              <LinkifiedText text={adr.change_summary} />
+            </Typography>
+          </Box>
+        )}
+
+        {/* Files */}
+        {id && (adr.files ?? []).length > 0 && (
+          <Box sx={{ mb: 4 }}>
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 1 }}>
+              {t("adr.files.title")}
+            </Typography>
+            <DecisionFilesSection adrId={id} files={adr.files} editable={false} live={false} />
+          </Box>
+        )}
 
         {/* Linked Cards */}
         {(adr.linked_cards ?? []).length > 0 && (
@@ -251,6 +372,13 @@ export default function ADRPreview() {
           </Box>
         )}
 
+        {/* Decisions and SoAWs that mention this decision */}
+        {id && (
+          <Box sx={{ mb: 4, "&:empty": { display: "none" } }}>
+            <MentionedInList target={{ kind: "decision", id }} />
+          </Box>
+        )}
+
         {/* Extension ADR panels (SDK 1.3) — read-only on the preview page */}
         {id &&
           adrPanels
@@ -270,6 +398,8 @@ export default function ADRPreview() {
                     status={adr.status}
                     signed={adr.status === "signed"}
                     readOnly
+                    standing={adr.standing ?? null}
+                    isCurrent={adr.is_current}
                   />
                 </ExtensionBoundary>
               </Box>
@@ -283,7 +413,7 @@ export default function ADRPreview() {
               <MaterialSymbol
                 icon={adr.status === "signed" ? "verified" : "draw"}
                 size={24}
-                color={adr.status === "signed" ? "#2e7d32" : "#ed6c02"}
+                color={adr.status === "signed" ? RAG_COLORS.green : WARNING_STRONG_COLOR}
               />
               <Typography variant="h6" sx={{ fontWeight: 700 }}>
                 {t("adr.editor.signatures")}
@@ -316,7 +446,7 @@ export default function ADRPreview() {
                   {sig.status === "signed" ? (
                     <>
                       <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
-                        <MaterialSymbol icon="verified" size={20} color="#2e7d32" />
+                        <MaterialSymbol icon="verified" size={20} color={RAG_COLORS.green} />
                         <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "success.dark" }}>
                           {t("adr.editor.sigApproved")}
                         </Typography>
@@ -338,7 +468,7 @@ export default function ADRPreview() {
                   ) : (
                     <>
                       <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
-                        <MaterialSymbol icon="pending" size={20} color="#ed6c02" />
+                        <MaterialSymbol icon="pending" size={20} color={WARNING_STRONG_COLOR} />
                         <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "warning.dark" }}>
                           {t("adr.editor.sigPending")}
                         </Typography>
@@ -371,10 +501,13 @@ export default function ADRPreview() {
               signed: adr.status === "signed",
               readOnly: true,
               attributes: adr.attributes ?? {},
+              standing: adr.standing ?? null,
+              isCurrent: adr.is_current,
             }}
           />
         )}
       </Box>
+      </DocumentSidePanel>
 
       <Snackbar
         open={!!snack}

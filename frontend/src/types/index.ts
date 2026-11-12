@@ -130,6 +130,8 @@ export interface StakeholderRoleDef {
   allowed_types: string[] | null;
   /** Absent on the JSONB fallback and the hardcoded default roles. */
   color?: string | null;
+  /** What the role means; translated under `translations.description`. */
+  description?: string | null;
   translations?: MetamodelTranslations;
 }
 
@@ -141,11 +143,18 @@ export interface StakeholderRoleDef {
 export interface StakeholderRoleOption {
   key: string;
   label: string;
+  description?: string | null;
   translations?: MetamodelTranslations;
 }
 
 /** Locale-keyed translations for a single property (e.g., label). */
 export type TranslationMap = Record<string, string>;
+
+/**
+ * Admin-written help per lifecycle phase: `{phase: {locale: text}}`
+ * (`/settings/lifecycle-phase-help`, carried by `/settings/bootstrap`).
+ */
+export type LifecyclePhaseHelp = Record<string, TranslationMap>;
 
 /** Top-level translations stored in the `translations` JSONB column. */
 export interface MetamodelTranslations {
@@ -574,6 +583,8 @@ export interface CalculationRunReport {
 
 export interface EAPrinciple {
   id: string;
+  /** Human-readable reference (`P-001`); what a spreadsheet re-import matches on first. */
+  reference_number?: string | null;
   title: string;
   description?: string;
   rationale?: string;
@@ -850,6 +861,112 @@ export interface Bookmark {
   shared_with?: BookmarkShareEntry[];
   odata_url?: string | null;
   created_at?: string;
+  /** A query view's stacked query (a plain query, an `all_of` group or an
+   *  `any_of` of groups), evaluated by the backend on every open. Written by
+   *  the inventory's query builder and through the MCP server; its presence
+   *  is what makes a view a query view. */
+  query?: CardQuerySet | null;
+  /** Channel the view was created / last changed through (`web`, `mcp`, …). */
+  created_via?: string | null;
+  updated_via?: string | null;
+}
+
+/** Per-node conditions of a `CardQuery` — metamodel keys, plus tag ids. */
+export interface CardQueryWhere {
+  /** Lifecycle phase keys (`plan` … `endOfLife`), or `none` for no lifecycle. */
+  lifecycle_phase?: string[];
+  subtype?: string[];
+  approval_status?: string[];
+  /** Data-quality bands (`complete` / `partial` / `minimal`, as `DATA_QUALITY_BANDS`). */
+  data_quality_band?: string[];
+  /** End-of-life statuses (`eol` / `approaching` / `supported` / `unknown`, as
+   *  `EOL_STATUSES`), or `"__empty__"` for no EOL data recorded. Needs `eol.view`. */
+  eol_status?: string[];
+  /** Field key → option keys / `"true"` / `"false"` / text / `"__empty__"`. */
+  attributes?: Record<string, string[]>;
+  /** Tag ids: any tag of one tag group (OR), every group named (AND). */
+  tags?: string[];
+  /** Card ids of the node's own type (at most 50): the node is one of these. */
+  cards?: string[];
+  /** A picked card also covers its descendants (`parent_id`); needs `cards`. */
+  include_descendants?: boolean;
+}
+
+/** One hop of a `CardQuery`: an EXISTS (or, with `negate`, NOT EXISTS) over a
+ *  relation type to cards of `type` that satisfy `where`. `relation` is a
+ *  relation type key, or `<key>__out` / `<key>__in` on a self-referencing type. */
+export interface CardQueryHop {
+  relation: string;
+  type: string;
+  where?: CardQueryWhere;
+  negate?: boolean;
+  related?: CardQueryHop[];
+}
+
+/** A server-evaluated multi-hop inventory condition (`GET /cards?query=`). */
+export interface CardQuery {
+  type: string;
+  where?: CardQueryWhere;
+  related?: CardQueryHop[];
+}
+
+/** Lines of one start type a card must ALL match (2+ lines). */
+export interface CardQueryAll {
+  all_of: CardQuery[];
+}
+
+/** Groups whose results are added (2+ groups); a group may be one line. */
+export interface CardQueryAny {
+  any_of: (CardQuery | CardQueryAll)[];
+}
+
+/**
+ * What a query view holds: one query, an AND group of lines of one start
+ * type, or an OR of such groups (possibly over several start types).
+ */
+export type CardQuerySet = CardQuery | CardQueryAll | CardQueryAny;
+
+/** A card named in a matched-cards cell. */
+export interface CardQueryMatchCard {
+  id: string;
+  name: string;
+}
+
+/** The cards at one step of a query that made one row match (at most 100). */
+export interface CardQueryMatchCell {
+  cards: CardQueryMatchCard[];
+  /** More cards matched than the 100 listed. */
+  more: boolean;
+}
+
+/** `POST /cards/query/matches`: the switched-on steps of the sent query, for the loaded rows. */
+export interface CardQueryMatchesRequest {
+  /** Exactly the query the card list was sent. */
+  query: CardQuerySet;
+  /** Node keys (`"<line>:<hop path>"`, see `matchNodes`), at most 12. */
+  nodes: string[];
+  /** Ids of the rows loaded in the grid, at most 10,000. */
+  ids: string[];
+}
+
+/** Row id → node key → its cell; only non-empty cells are present. */
+export interface CardQueryMatchesResponse {
+  rows: Record<string, Record<string, CardQueryMatchCell>>;
+}
+
+/** The query view currently applied in the inventory. */
+export interface ActiveQuery {
+  viewId: string;
+  name: string;
+  query: CardQuerySet;
+  createdVia?: string | null;
+}
+
+/** A query view being built or edited in the inventory's path strip. */
+export interface QueryDraft {
+  query: CardQuerySet;
+  /** The saved view being edited, or null for a new one. */
+  viewId: string | null;
 }
 
 export interface SavedReport {
@@ -934,7 +1051,8 @@ export type WidgetType =
   | "system_activity"
   | "unassigned_todos"
   | "stakeholder_directory"
-  | "quality_leaderboard";
+  | "quality_leaderboard"
+  | "inventory_views";
 
 /** How the Data quality leaderboard ranks people. */
 export type LeaderboardRankBy = "average_quality" | "card_count";
@@ -1256,11 +1374,117 @@ export interface SoAW {
   parent_id: string | null;
   signatories: SoAWSignatory[];
   signed_at: string | null;
+  /** Exactly one revision per chain is current (the last signed one, else the first). */
+  is_current?: boolean;
+  /** True on a revision that a later signed revision of the chain supersedes. */
+  is_earlier_revision?: boolean;
+  /** On an earlier revision: the chain's current revision. */
+  superseded_by?: SoAWRef | null;
+  /** On the current revision: the unsigned revision being worked on after it. */
+  open_revision?: (SoAWRef & { status: SoAW["status"] }) | null;
+  /** `GET /soaw/{id}` only: the whole chain in order. */
+  revisions?: SoAWRevision[];
+  /** Detail only: unresolved discussion threads on this revision. */
+  open_thread_count?: number;
+}
+
+/** A pointer to another revision of a SoAW chain. */
+export interface SoAWRef {
+  id: string;
+  name: string;
+  revision_number: number;
+}
+
+export interface SoAWRevision extends SoAWRef {
+  status: SoAW["status"];
+  signed_at?: string | null;
 }
 
 // ---------------------------------------------------------------------------
 // Architecture Decision Records
 // ---------------------------------------------------------------------------
+
+/**
+ * Where a signed decision stands today, derived by the backend
+ * (`services/decision_standing.py`); `null` on a decision that is not signed.
+ */
+export type DecisionStanding =
+  | "scheduled"
+  | "in_force"
+  | "amended"
+  | "superseded"
+  | "revoked"
+  | "expired";
+
+/** A pointer to one decision revision. */
+export interface DecisionRef {
+  id: string;
+  reference_number: string;
+  revision_number: number;
+  title: string;
+}
+
+export type DecisionLinkKind = "replaces" | "amends" | "revokes" | "relates" | "consolidates";
+
+/** The other decision of a link: the exact revision linked, plus its chain's
+ *  current revision when that is another one. */
+export interface DecisionLinkDecision extends DecisionRef {
+  status: ArchitectureDecision["status"];
+  standing: DecisionStanding | null;
+  current?: { id: string; reference_number: string; revision_number: number };
+}
+
+export interface DecisionLinkEntry {
+  id: string | null;
+  kind: DecisionLinkKind;
+  note: string | null;
+  /** The target of an outgoing link, the source of an incoming one. */
+  decision: DecisionLinkDecision;
+}
+
+export interface DecisionLinks {
+  outgoing: DecisionLinkEntry[];
+  incoming: DecisionLinkEntry[];
+}
+
+/** A link as written on `POST /adr` / `PATCH /adr/{id}` (replace-set). */
+export interface DecisionLinkInput {
+  decision_id: string;
+  kind: DecisionLinkKind;
+  note?: string | null;
+}
+
+/** A decision maker or participant: a Turbo EA user, or a free-text name
+ *  (`user_id` null). `display_name` is the stored name snapshot. */
+export interface DecisionPerson {
+  user_id: string | null;
+  display_name: string;
+}
+
+/** A person as written on `POST /adr` / `PATCH /adr/{id}`. */
+export type DecisionPersonInput = { user_id: string } | { name: string };
+
+/** A signed change to the chain that has not taken effect yet. */
+export interface DecisionUpcoming {
+  kind: "revision" | "replaces" | "revokes";
+  by: DecisionRef;
+  effective_from: string | null;
+}
+
+/** A file attached to a decision (`GET /adr/{id}/files`, `files` on the detail). */
+export interface DecisionFile {
+  id: string;
+  name: string;
+  mime_type: string;
+  size: number;
+  created_at: string | null;
+  created_by: { user_id: string; display_name: string | null } | null;
+}
+
+export interface DecisionRevision extends DecisionRef {
+  status: ArchitectureDecision["status"];
+  standing: DecisionStanding | null;
+}
 
 export interface ArchitectureDecision {
   id: string;
@@ -1287,6 +1511,193 @@ export interface ArchitectureDecision {
   created_via?: string | null;
   updated_via?: string | null;
   updated_at: string | null;
+  /** `GET /adr?include_content=true` only: `related_decisions` as reference numbers. */
+  related_references?: string[];
+  /** `GET /adr?include_content=true` only: each hard link kind's targets as
+   *  reference numbers (`relates` stays in `related_references`). */
+  link_references?: Partial<Record<"replaces" | "amends" | "revokes" | "consolidates", string[]>>;
+  // --- Decision register (derived by the backend; optional so older fixtures
+  // and payloads still type-check) ---
+  standing?: DecisionStanding | null;
+  is_current?: boolean;
+  is_earlier_revision?: boolean;
+  /** On an earlier revision: the chain's current revision; on a replaced
+   *  decision: the decision that replaced it. */
+  superseded_by?: DecisionRef | null;
+  revoked_by?: DecisionRef | null;
+  amended_by?: DecisionRef[];
+  /** On the current revision: the unsigned revision being drafted after it. */
+  open_revision?: DecisionRef | null;
+  upcoming?: DecisionUpcoming[];
+  /** On an amending decision: the revision that consolidated its amendment. */
+  consolidated_into?: DecisionRef | null;
+  /** ISO dates (`YYYY-MM-DD`). */
+  decided_on?: string | null;
+  effective_from?: string | null;
+  valid_until?: string | null;
+  /** Set on a decision recorded as decided outside Turbo EA (no signatures). */
+  recorded_at?: string | null;
+  decision_makers?: DecisionPerson[];
+  // --- `GET /adr/{id}` only ---
+  links?: DecisionLinks;
+  participants?: DecisionPerson[];
+  revisions?: DecisionRevision[];
+  change_summary?: string | null;
+  recorded_by?: { user_id: string; display_name: string | null } | null;
+  files?: DecisionFile[];
+  /** Detail only: unresolved discussion threads on this revision. */
+  open_thread_count?: number;
+}
+
+// ---------------------------------------------------------------------------
+// Discussion and history of a decision or SoAW (the side panel and the History view)
+// ---------------------------------------------------------------------------
+
+/** What a discussion or a history belongs to. */
+export type DocumentKind = "adr" | "soaw";
+
+export interface DocumentOwner {
+  kind: DocumentKind;
+  id: string;
+}
+
+/** A person as the collaboration routes name one. */
+export interface DocumentUserRef {
+  id: string;
+  display_name: string;
+}
+
+/** `rejection`: a review was rejected with this reason; `sign_note`: a signer's note. */
+export type DocumentCommentKind = "comment" | "rejection" | "sign_note";
+
+/** One comment, top-level or a reply (`GET /{adr|soaw}/{id}/comments`). */
+export interface DocumentComment {
+  id: string;
+  kind: DocumentCommentKind;
+  section: string | null;
+  /** The revision the thread was started on: replies and resolves go there. */
+  revision_id: string;
+  revision_number: number;
+  author: DocumentUserRef | null;
+  /** The name kept when the author's account is gone. */
+  author_name: string | null;
+  /** HTML; `""` once deleted. */
+  body: string;
+  created_at: string;
+  edited_at: string | null;
+  deleted: boolean;
+  resolved_at: string | null;
+  resolved_by: DocumentUserRef | null;
+  can: { edit: boolean; delete: boolean; resolve: boolean };
+}
+
+export interface DocumentThread extends DocumentComment {
+  replies: DocumentComment[];
+}
+
+export interface DocumentDiscussion {
+  can: { comment: boolean; moderate: boolean };
+  /** Unresolved, undeleted threads of the path document only. */
+  open_count: number;
+  threads: DocumentThread[];
+}
+
+/** A POST / PATCH reply: the thread, and who a mention could not notify. */
+export interface DocumentThreadWrite extends DocumentThread {
+  unnotified_mentions?: DocumentUserRef[];
+}
+
+export type DocumentHistoryKind =
+  | "created"
+  | "baseline"
+  | "save"
+  | "restored"
+  | "revised"
+  | "sent_for_review"
+  | "signature"
+  | "signed"
+  | "rejected"
+  | "recalled"
+  | "recorded";
+
+/** One timeline row (`GET /{adr|soaw}/{id}/history`). */
+export interface DocumentHistoryEntry {
+  id: string;
+  kind: DocumentHistoryKind;
+  actor: DocumentUserRef | null;
+  actor_name: string | null;
+  /** A rejection's reason, a signing note, or (on `restored`) the source entry's id. */
+  note: string | null;
+  created_at: string;
+  /** A saved version that can be viewed and compared. */
+  has_content: boolean;
+  /** On a `restored` row: the version it brought back (null once that is gone). */
+  restored_from?: { id: string; kind: DocumentHistoryKind; created_at: string } | null;
+}
+
+export interface DocumentHistoryPage {
+  can_view_versions: boolean;
+  can_restore: boolean;
+  total: number;
+  entries: DocumentHistoryEntry[];
+}
+
+/** A person in a saved decision version. */
+export interface VersionPerson {
+  user_id: string | null;
+  display_name: string;
+}
+
+/** What a saved decision version holds (HTML with mentions resolved for the reader). */
+export interface DecisionVersionContent {
+  title: string;
+  context: string | null;
+  decision: string | null;
+  consequences: string | null;
+  alternatives_considered: string | null;
+  decided_on: string | null;
+  effective_from: string | null;
+  valid_until: string | null;
+  change_summary: string | null;
+  decision_makers: VersionPerson[] | null;
+  participants: VersionPerson[] | null;
+}
+
+/** A SoAW section as a version stores it (custom sections carry their title). */
+export type SoawVersionSection = SoAWSectionData & { title?: string; insertAfter?: string };
+
+/** What a saved SoAW version holds. */
+export interface SoawVersionContent {
+  name: string;
+  document_info: SoAWDocumentInfo | null;
+  version_history: SoAWVersionEntry[] | null;
+  sections: Record<string, SoawVersionSection> | null;
+}
+
+/** `GET /{adr|soaw}/{id}/history/{entry_id}`. */
+export interface DocumentVersion {
+  entry: DocumentHistoryEntry;
+  content: DecisionVersionContent | SoawVersionContent;
+}
+
+/** `GET /mentions/cards/{id}` and `/mentions/decisions/{id}`. */
+export interface MentionedIn {
+  decisions: {
+    id: string;
+    reference_number: string;
+    revision_number: number;
+    title: string;
+    status: ArchitectureDecision["status"];
+    standing: DecisionStanding | null;
+    via: "text" | "comment";
+  }[];
+  soaws: {
+    id: string;
+    name: string;
+    revision_number: number;
+    status: SoAW["status"];
+    via?: "text" | "comment";
+  }[];
 }
 
 export interface FileAttachment {
@@ -1378,12 +1789,6 @@ export interface ResourceBulkDeleteResult {
 // ---------------------------------------------------------------------------
 // Surveys
 // ---------------------------------------------------------------------------
-
-/** A card reference linked through a survey relation field. */
-export interface SurveyRelationRef {
-  id: string;
-  name: string;
-}
 
 /** A person listed by a survey stakeholder-role field. */
 export interface SurveyPersonRef {
@@ -1559,7 +1964,11 @@ export interface BadgeCounts {
 // ---------------------------------------------------------------------------
 
 export interface EolProduct {
+  /** endoflife.date slug, or `custom:<key>` for a custom EOL product. */
   name: string;
+  /** Display name of a custom product (endoflife.date products carry none). */
+  title?: string | null;
+  custom?: boolean;
 }
 
 export interface EolCycle {
@@ -1573,6 +1982,8 @@ export interface EolCycle {
   discontinued?: string | boolean | null;
   codename?: string | null;
   link?: string | null;
+  /** A custom product's title; endoflife.date cycles carry none. */
+  title?: string | null;
 }
 
 /**
@@ -1582,8 +1993,11 @@ export interface EolCycle {
  */
 export interface EolCardStatus {
   status: "eol" | "approaching" | "supported" | "unknown";
-  source: "api" | "manual";
+  /** `custom` — linked to one of the organisation's custom EOL products. */
+  source: "api" | "custom" | "manual";
   eol_product?: string | null;
+  /** A custom product's title; null for endoflife.date links. */
+  eol_product_title?: string | null;
   eol_cycle?: string | null;
   /** ISO date, or null when upstream reports only a boolean. */
   eol_date?: string | null;
@@ -1598,6 +2012,8 @@ export interface EolCardStatusResponse {
 export interface EolProductMatch {
   name: string;
   score: number;
+  title?: string | null;
+  custom?: boolean;
 }
 
 export interface MassEolCandidate {
@@ -1606,6 +2022,66 @@ export interface MassEolCandidate {
   card_type: string;
   eol_product: string;
   score: number;
+  title?: string | null;
+  custom?: boolean;
+}
+
+/** An EOL / end-of-support value: a date, `true` (ended), `false` (no end announced). */
+export type EolMilestone = string | boolean | null;
+
+/** One release cycle of a custom EOL product (`GET /eol/custom-products`). */
+export interface EolCustomCycle {
+  id: string;
+  cycle: string;
+  releaseDate: string | null;
+  support: EolMilestone;
+  eol: EolMilestone;
+  latest: string | null;
+  latestReleaseDate: string | null;
+  sort_order: number;
+  /** Cards the caller can see that link this cycle. */
+  linked_cards: number;
+  updated_at: string | null;
+}
+
+/** endoflife.date's product categories (the file's `category` field). */
+export type EolDateCategory =
+  | "app"
+  | "database"
+  | "device"
+  | "framework"
+  | "lang"
+  | "os"
+  | "server-app"
+  | "service"
+  | "standard";
+
+/** A product the organisation tracks end-of-life dates for itself. */
+export interface EolCustomProduct {
+  id: string;
+  key: string;
+  /** What a card stores in `attributes.eol_product`: `custom:<key>`. */
+  product: string;
+  title: string;
+  description: string | null;
+  link: string | null;
+  /** What the endoflife.date proposal file needs beyond the cycles. */
+  eol_category: EolDateCategory | null;
+  release_policy_note: string | null;
+  linked_cards: number;
+  cycles: EolCustomCycle[];
+  updated_at: string | null;
+}
+
+/** The writable fields of a cycle, as sent on create / patch. */
+export interface EolCustomCycleInput {
+  cycle: string;
+  releaseDate?: string | null;
+  support?: EolMilestone;
+  /** Required on endoflife.date: a date, `false` (none announced) or `true`. */
+  eol: EolMilestone;
+  latest?: string | null;
+  latestReleaseDate?: string | null;
 }
 
 export interface MassEolResult {
@@ -1613,6 +2089,8 @@ export interface MassEolResult {
   card_name: string;
   card_type: string;
   current_eol_product?: string | null;
+  /** The current link's title when it is a custom product. */
+  current_title?: string | null;
   current_eol_cycle?: string | null;
   candidates: MassEolCandidate[];
 }
@@ -1839,16 +2317,6 @@ export interface PortalCardListResponse {
 // ---------------------------------------------------------------------------
 // BPM — BPMN 2.0 Diagrams, Process Elements, Assessments
 // ---------------------------------------------------------------------------
-
-export interface ProcessDiagramData {
-  id: string;
-  process_id: string;
-  bpmn_xml: string;
-  svg_thumbnail?: string;
-  version: number;
-  created_by?: string;
-  created_at?: string;
-}
 
 export interface ProcessElement {
   id: string;
@@ -2500,18 +2968,6 @@ export type ComplianceStatus =
  */
 export type RegulationKey = string;
 
-/** The 6 historical built-in regulation keys, used only as a fallback
- *  when the dynamic list isn't loaded yet (e.g. on initial paint before
- *  bootstrap arrives). */
-export const BUILTIN_REGULATION_KEYS = [
-  "eu_ai_act",
-  "gdpr",
-  "nis2",
-  "dora",
-  "soc2",
-  "iso27001",
-] as const;
-
 export interface ComplianceRegulation {
   id: string;
   key: string;
@@ -2737,6 +3193,58 @@ export interface RiskImportResponse {
   dry_run: boolean;
 }
 
+/** One row's outcome in a spreadsheet import's dry run or apply
+ *  (`/metamodel/principles/bulk-import`, `/adr/bulk-import`). */
+export interface SpreadsheetImportRowResult {
+  row_index: number;
+  status: "created" | "updated" | "skipped" | "failed";
+  id: string | null;
+  reference_number: string | null;
+  /** Principles only: the columns an `updated` row changes. */
+  changed_fields?: string[];
+  error: string | null;
+  warnings: string[];
+}
+
+export interface SpreadsheetImportResponse {
+  results: SpreadsheetImportRowResult[];
+  created: number;
+  /** Absent for create-only importers (ADRs). */
+  updated?: number;
+  skipped: number;
+  failed: number;
+  dry_run: boolean;
+}
+
+/** One parsed principles row. A column the sheet lacks is `undefined`, which
+ *  the server reads as "leave this field as it is"; `""` clears it. */
+export interface PrincipleImportItem {
+  row_index: number;
+  title: string;
+  reference_number?: string;
+  description?: string;
+  rationale?: string;
+  implications?: string;
+  is_active?: string;
+  sort_order?: string;
+}
+
+/** One parsed decision row; the four sections are already HTML. */
+export interface AdrImportItem {
+  row_index: number;
+  title: string;
+  reference_number?: string;
+  context?: string;
+  decision?: string;
+  consequences?: string;
+  alternatives_considered?: string;
+  card_names: string[];
+  related_references: string[];
+  status?: string;
+  /** Picks among several rows of one reference: the highest is imported. */
+  revision_number?: number | string;
+}
+
 export type RecurrenceUnit = "none" | "days" | "weeks" | "months" | "years";
 // "scheduled" is the lead-time gated pre-state — the cycle exists for
 // audit but owns no Todo until the daily promotion loop (or a manual
@@ -2949,11 +3457,6 @@ export interface ArchSolutionOption {
   impactPreview: ArchOptionImpact;
 }
 
-export interface ArchOptionsResult {
-  summary?: string;
-  options: ArchSolutionOption[];
-}
-
 // --- Capability mapping (Phase 3a dependency-aware) ---
 
 export interface CapabilityMapping {
@@ -3081,18 +3584,6 @@ export interface CardArchiveDeleteRequest {
   cascade_all_related?: boolean;
 }
 
-export interface CardArchiveResponse {
-  primary: Card;
-  affected_children_ids: string[];
-  affected_related_card_ids: string[];
-}
-
-export interface CardDeleteResponse {
-  deleted_card_ids: string[];
-  affected_children_ids: string[];
-  affected_related_card_ids: string[];
-}
-
 export interface RestoreImpactPassenger {
   id: string;
   name: string;
@@ -3103,10 +3594,6 @@ export interface RestoreImpactPassenger {
 
 export interface RestoreImpact {
   passengers: RestoreImpactPassenger[];
-}
-
-export interface CardRestoreRequest {
-  also_restore_card_ids?: string[];
 }
 
 export interface CardRestoreResponse {

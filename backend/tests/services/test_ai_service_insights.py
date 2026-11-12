@@ -112,11 +112,10 @@ class TestClients:
 # ── Provider connection: error paths ──────────────────────────────────────
 
 
-def _status_error(code: int) -> httpx.HTTPStatusError:
-    request = httpx.Request("POST", "https://llm.test")
-    return httpx.HTTPStatusError(
-        str(code), request=request, response=httpx.Response(code, request=request)
-    )
+def _response(code: int, body: dict | None = None) -> httpx.Response:
+    """What ``client.post`` really returns for a refused request: a response,
+    not a raised ``HTTPStatusError``."""
+    return httpx.Response(code, json=body or {}, request=httpx.Request("POST", "https://llm.test"))
 
 
 def _client(*, get=None, post=None):
@@ -133,14 +132,25 @@ class TestProviderConnectionErrors:
         ("provider", "method", "exc", "message"),
         [
             ("openai", "get", httpx.ConnectError("x"), "Cannot reach provider: ConnectError"),
-            ("anthropic", "post", _status_error(401), "Invalid API key"),
-            ("anthropic", "post", _status_error(500), "Cannot reach Anthropic: HTTPStatusError"),
+            ("anthropic", "post", [_response(401)], "Invalid API key"),
+            (
+                "anthropic",
+                "post",
+                [_response(500, {"error": {"message": "Overloaded"}})],
+                r"Model 'm' refused the test request \(500\): Overloaded",
+            ),
+            (
+                "anthropic",
+                "post",
+                [_response(404, {"error": {"message": "model: m"}})],
+                r"Model 'm' refused the test request \(404\): model: m",
+            ),
             ("anthropic", "post", httpx.ReadTimeout("x"), "Cannot reach Anthropic: ReadTimeout"),
             (
                 "azure_openai",
                 "post",
-                _status_error(500),
-                "Cannot reach Azure OpenAI: HTTPStatusError",
+                [_response(500, {"error": {"message": "boom"}})],
+                r"Deployment 'm' refused the test request \(500\): boom",
             ),
             (
                 "azure_openai",
@@ -169,14 +179,17 @@ class TestProviderConnectionErrors:
         client.get = AsyncMock(return_value=resp)
         with patch("app.services.ai_service._get_llm_client", AsyncMock(return_value=client)):
             out = await check_provider_connection("https://llm.test/", provider_type="openai")
-        assert out == {"ok": True, "available_models": ["gpt-4o", "o3"], "model_found": False}
+        assert out == {
+            "ok": True,
+            "available_models": ["gpt-4o", "o3"],
+            "model_found": False,
+            "adjusted": [],
+        }
         assert client.get.call_args[0][0] == "https://llm.test/v1/models"
 
     async def test_anthropic_defaults_the_probe_model(self):
-        resp = MagicMock()
-        resp.raise_for_status = MagicMock()
         client = AsyncMock()
-        client.post = AsyncMock(return_value=resp)
+        client.post = AsyncMock(return_value=_response(200))
         with patch("app.services.ai_service._get_llm_client", AsyncMock(return_value=client)):
             out = await check_provider_connection(
                 "https://llm.test", provider_type="anthropic", api_key="k"

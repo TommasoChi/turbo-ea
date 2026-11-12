@@ -9,7 +9,6 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, parse_uuid
-from app.api.v1.file_attachments import read_validated_upload
 from app.database import get_db
 from app.models.card import Card
 from app.models.user import User
@@ -24,6 +23,7 @@ from app.schemas.licenses import (
     YearLicensesOut,
 )
 from app.services import card_licenses, license_import, license_types
+from app.services.attachment_upload import read_validated_upload
 from app.services.card_licenses import LICENSE_TYPES, LicenseError, YearLicenses
 from app.services.card_read_scope import require_card_readable
 from app.services.fiscal_year import (

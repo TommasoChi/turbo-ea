@@ -64,7 +64,7 @@ Fields define the custom attributes available on cards of this type. Each field 
 | **Label** | Display name |
 | **Type** | text, multiline_text, number, cost, percentage, boolean, date, url, single_select, or multiple_select. A percentage is a number from 0 to 100, shown as a progress bar and edited with a slider or typed exactly. A boolean is chosen from a Yes / No list, with **None** to clear it, and shows as a green *Yes* or blue *No* pill, or as — when unset, which the Inventory's **(empty)** filter matches |
 | **Options** | For select fields: the available choices with labels and optional colors. Reorder them with the up and down arrows beside each option: menus and filters list the options in that order, and the chips of a multi-select value follow it on every card. |
-| **Help text** | Optional guidance shown as a collapsible note under the field while a card is edited. It is written per language and can be set by any metamodel admin; on a field contributed by an extension it is read-only |
+| **Help text** | Optional guidance for the field. While a card is read it appears as an info icon beside the field's label (hover or focus it to read the text) and as a tooltip on the field's column header in the Inventory; while a card is edited the same icon sits beside the field. It is written per language and can be set by any metamodel admin; on a field contributed by an extension it is read-only |
 | **Required** | Whether the field is mandatory — see the enforcement rules below |
 | **Data quality** | Each field's contribution to the score is managed in the **Data quality** panel — see [Data quality scoring](#data-quality-scoring) below |
 | **Read-only** | Prevents manual editing (useful for calculated fields) |
@@ -148,6 +148,8 @@ Define custom roles for this type (e.g., "Application Owner", "Technical Owner")
 
 Each role has a **key** (the identifier stored on cards, used by the `stakeholder:<role_key>` import/export columns) and a **label** (what users see). The key follows the same convention as every other metamodel key — letters and digits only, starting with a letter, 3–50 characters, conventionally camelCase such as `businessArchitect`. It is filled in automatically from the label, so you rarely need to type one.
 
+Give a role a **description** to say what it means in your organisation — what a *Contract Owner* signs, what a *Technical Owner* answers for. Users see it as an info icon beside the role on a card's **Stakeholders** tab, under the role's name in the role picker, as a tooltip on the role's column header in the Inventory, in **My roles** on the dashboard and in the stakeholder directory. The description is translated per language like the label: each enabled language has its own description field under **Translations** in the role editor, and the type's **Translation Dialog** lists it too. A language left empty falls back to the English description. The built-in roles (**Responsible**, **Observer**, the two application owners, **IT Project Manager** and **Process Owner**) come with a description in every language that you can edit or clear like any other, and the drawer's **Save** button in the header also saves a role you are editing on this tab.
+
 Each role also carries a **Counts toward data quality** switch. The data-quality score has a single stakeholders slot, and it is filled as soon as anyone is assigned to the card in a role where this is on. Turn it off for purely passive roles — the built-in **Observer** ships with it off, so watching a card never stands in for owning it. A type whose roles all have it off contributes no stakeholders slot at all. Flipping the switch re-scores every card of the type straight away.
 
 Roles can be removed in two ways:
@@ -211,7 +213,7 @@ Click the **Translate** button in the type drawer toolbar to open the **Translat
 - **Sections** — Section headings on the card detail page
 - **Fields** — Field labels and select option labels
 - **Help text** — A field's help text, listed under the field once it has been entered in the field editor. Editing it in English also updates the field's default help
-- **Stakeholder Roles** — Role names displayed in the stakeholder assignment UI
+- **Stakeholder Roles** — Role names and descriptions. A role's description is listed under its name once the role has a description in some language; editing it in English also updates the role's default description
 
 Translations are stored alongside each card type and are resolved at render time using the user's selected locale. Untranslated labels fall back to the English default.
 
@@ -257,7 +259,7 @@ Removing a link type does **not** rewrite the cards already using it: they keep 
 
 Some relations carry extra attributes that you set on each individual link rather than on the relation type. For example, the built-in **Organization → Application** relation ("uses") has a **Usage Type** attribute — set it to **Owner**, **User**, or **Stakeholder** on each link. This lets you model an application that is *owned by* one Organization and *used by* others through a single relation type. The chosen value appears as a coloured chip in the card's **Relations** section; set it when adding the relation, or later via the edit icon on the relation row.
 
-You can also create **several relation types between the same pair of card types** — for example an Organization that *owns* an application alongside one that *uses* it. Prefer an attribute when you are describing variants of a single relationship (it keeps one column in the inventory and one line on a diagram); create a second relation type when the relationships are genuinely different and deserve their own verbs, their own attributes, or their own filters. When a pair carries more than one relation type, the inventory still shows a single column for the related card type, and opening that cell gives you one section per relation type. On a card, each relation type keeps its own section: sections pointing at the same card type are shown together, and a card you have linked through more than one of them is marked *Also …* in each of its sections. A relation type whose two ends are the same card type — an Organization that *has site* another Organization — shows *both* verbs on a card, as two sections, and in the inventory as two filter rows and two editor sections; give such a type a reverse label, or both sections will read alike.
+You can also create **several relation types between the same pair of card types** — for example an Organization that *owns* an application alongside one that *uses* it. Prefer an attribute when you are describing variants of a single relationship (it keeps one column in the inventory and one line on a diagram); create a second relation type when the relationships are genuinely different and deserve their own verbs, their own attributes, or their own filters. When a pair carries more than one relation type, the inventory shows one column per relation type, each headed by its verb and the related card type (*owns Application*, *uses Application*). On a card, each relation type keeps its own section: sections pointing at the same card type are shown together, and a card you have linked through more than one of them is marked *Also …* in each of its sections. A relation type whose two ends are the same card type — an Organization that *has site* another Organization — shows *both* verbs on a card, as two sections, and in the inventory as two columns and two filter rows; give such a type a reverse label, or both sections will read alike.
 
 When a pair carries more than one relation type, reports, portals and surveys can target a specific one: the Portfolio report offers a group-by axis and a filter per relationship, the Capability Map adds a filter per relationship, portal filters and relation sections are labelled with their verb, and a survey's **related to** filter gains a **Via relation** picker. Choosing nothing still means “related through any of them”.
 
@@ -327,6 +329,23 @@ Each principle has four fields:
 
 Principles can be **activated** or **deactivated** individually using the toggle switch on each card.
 
+Every principle carries a **reference number** (`P-001`, `P-002`, …), assigned when it is created and shown next to its title. References are numbered per instance: a principle brought in through [workspace transfer](workspace-transfer.md) takes the next free number on the target.
+
+### Exporting and importing principles {: #principles-import }
+
+**Export** (next to **New Principle**) downloads every principle as an `.xlsx` file with the columns `reference_number`, `title`, `description`, `rationale`, `implications`, `is_active` and `sort_order`. The export is a valid import file, so you can edit principles in Excel and load them back.
+
+**Import** loads principles in bulk from an `.xlsx` file. Click **Download template** for a starter workbook, fill in one principle per row, and upload it. Each row is matched to an existing principle by its `reference_number` first, then by its title (ignoring case):
+
+- A matched principle is **updated** with the values that differ; if nothing differs, the row is **skipped**. The preview lists each updated row with the fields it changes.
+- Any other row **creates** a new principle with the next free reference. A reference that does not exist on this instance is not reused; the preview warns about it.
+- A row without a reference whose title belongs to two principles is refused as ambiguous: add the reference to say which one you mean.
+- A column missing from the sheet leaves that field unchanged. An empty `description`, `rationale` or `implications` cell clears that text; an empty `is_active` or `sort_order` cell leaves the value as it is. `title` is the only required column.
+- `is_active` accepts `true` / `false` (also `yes` / `no`, `1` / `0`); `sort_order` must be a whole number. New principles without a `sort_order` are added at the end of the list.
+- A title or reference that appears twice in the file, or a rename onto another principle's title, fails that row.
+
+Before anything is written you get a preview of how many rows will be created, updated, skipped and failed, with each error and warning listed by row; nothing changes until you confirm. Importing requires the `admin.metamodel` permission and is recorded in the [Security & admin log](audit-log.md).
+
 ### Importing from the Principles Catalogue
 
 Turbo EA ships a **curated reference catalogue of 10 industry-standard EA principles** so you don't have to start from a blank page. Open the avatar menu in the top-right corner and pick **Reference Catalogues → Principles Catalogue**. From there you can:
@@ -391,12 +410,20 @@ For each list you can:
 
 A built-in **Contract** link type ships enabled by default. Both lists are included in **Workspace Transfer**, so your customisations clone between instances.
 
+## Lifecycle phases
+
+Every card's **Lifecycle** section walks through five fixed phases: Plan, Phase In, Active, Phase Out and End of Life. What each phase means differs between organisations — whether *Phase Out* still allows new users, say, or when a component counts as *End of Life*. The **Lifecycle phases** tab lets you write that down once for the whole workspace.
+
+The tab shows one text field per phase, and a row of language tabs (English first, then each enabled language). On a new workspace the fields come prefilled with a default explanation of each phase in every language, so the help is there from the start; edit any text to match how your organisation works. A language left empty shows the English text. Leave a phase empty to show no help for it — clearing all five phases and saving removes the help altogether. Click **Save** to apply the texts.
+
+Users see a phase's help as an info icon beside the phase on every card's Lifecycle timeline, which stays on screen while the lifecycle is edited. The texts apply to every card type. Saving is recorded in the **Security & admin log**.
+
 ## Card Layout Editor
 
 For each card type, the **Layout** section in the type drawer controls how the card detail page is structured:
 
 - **Section order** — Drag sections (Description, EOL, Lifecycle, Hierarchy, Tags, Relations, and custom sections) to reorder them
-- **Visibility** — Hide sections that are not relevant for a type
+- **Visibility** — Hide sections that are not relevant for a type. The **End of Life** section is the exception to "shown unless hidden": it is shown by default on Applications and IT Components only, and hidden on every other type, custom ones included, until you turn it on. Its switch also decides whether the type takes part in End of Life reporting — see [End of Life on other card types](eol.md#end-of-life-on-other-card-types)
 - **Default expansion** — Choose whether each section starts expanded or collapsed
 - **Column layout** — Set 1 or 2 columns per custom section
 - **Move fields between sections** — Use a field's **move** action (next to its edit and delete buttons) to relocate it to another section, keeping its configuration

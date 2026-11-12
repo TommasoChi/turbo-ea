@@ -9,7 +9,6 @@ from unittest.mock import patch
 
 import httpx
 
-
 MANIFEST = {
     "key": "sample",
     "version": "1.0.0",
@@ -36,9 +35,7 @@ def test_extension_tool_registered_on_real_server_module():
     """Reload server.py with discovery mocked, then assert the extension's
     tool shows up alongside the static core tools on the same
     module-level `mcp` FastMCP instance the ASGI app serves."""
-    response = httpx.Response(
-        200, json=[MANIFEST], request=httpx.Request("GET", "http://test/x")
-    )
+    response = httpx.Response(200, json=[MANIFEST], request=httpx.Request("GET", "http://test/x"))
     # The re-import must be undone before the next test file runs. Every module
     # left here is a SECOND copy of the package: a sibling file that imported
     # `api_client` at collection time then patches a class the freshly imported

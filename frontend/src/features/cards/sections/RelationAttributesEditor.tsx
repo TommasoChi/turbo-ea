@@ -254,17 +254,10 @@ export function flowDirectionBadge(
 }
 
 /**
- * Returns true if a relation type has any schema-declared attributes.
- */
-export function hasRelationAttributes(relationType: RelationType | undefined): boolean {
-  return !!relationType && (relationType.attributes_schema ?? []).length > 0;
-}
-
-/**
  * Returns true only when a relation type declares at least one attribute the
  * user can actually edit — a `single_select` with options, or a `boolean` flag.
- * Stricter than {@link hasRelationAttributes} (which is true for any schema
- * entry, even an options-less or unrenderable field), so UI gates don't surface
+ * Stricter than "has any schema entry" (true even for an options-less or
+ * unrenderable field), so UI gates don't surface
  * an empty attribute editor for relations with nothing to set.
  *
  * Booleans count: a relation type whose only dimensions are flags (the seeded
@@ -281,72 +274,11 @@ export function hasEditableRelationAttributes(relationType: RelationType | undef
   );
 }
 
-export interface RelationAttributeBadge {
-  fieldKey: string;
-  fieldLabel: string;
-  fieldTranslations?: { [k: string]: string };
-  optionKey: string;
-  optionLabel: string;
-  optionTranslations?: { [k: string]: string };
-  color?: string;
-  /**
-   * True for a `boolean` dimension that is switched on. A flag has no option
-   * entity, so `optionLabel` mirrors the field label — callers that print
-   * "field: value" should print just the label for these.
-   */
-  isFlag?: boolean;
-}
-
-/**
- * Generic counterpart to {@link flowDirectionBadge}: returns EVERY attribute
- * that carries a value — `single_select` values (other than `flowDirection`,
- * which renders as a directional icon) and `boolean` flags that are on — so the
- * caller can render one labelled chip each (e.g. both `usageType` and
- * `criticality` on a BusinessProcess→Application relation, or the flags on a
- * CRUD-style relation). Labels are returned raw (with their `translations`) so
- * the caller resolves them with the locale-aware label resolver. Returns an
- * empty array when nothing is set.
- */
-export function relationAttributeBadges(
-  relationType: RelationType | undefined,
-  attributes: RelationAttributes | undefined,
-): RelationAttributeBadge[] {
-  if (!relationType) return [];
-  const badges: RelationAttributeBadge[] = [];
-  for (const field of relationType.attributes_schema ?? []) {
-    if (field.key === "flowDirection" || (relationType.key === BO_ER_RELATION_TYPE && field.key === "cardinality") || isBoOwnershipAttribute(relationType.key, field.key)) continue;
-    const v = attributes?.[field.key];
-
-    if (field.type === "boolean") {
-      if (v !== true) continue;
-      badges.push({
-        fieldKey: field.key,
-        fieldLabel: field.label,
-        fieldTranslations: field.translations,
-        optionKey: "true",
-        optionLabel: field.label,
-        optionTranslations: field.translations,
-        isFlag: true,
-      });
-      continue;
-    }
-
-    if (field.type !== "single_select") continue;
-    if (typeof v !== "string" || !v) continue;
-    const opt = (field.options ?? []).find((o) => o.key === v);
-    if (!opt) continue;
-    badges.push({
-      fieldKey: field.key,
-      fieldLabel: field.label,
-      fieldTranslations: field.translations,
-      optionKey: opt.key,
-      optionLabel: opt.label,
-      optionTranslations: opt.translations,
-      color: opt.color,
-    });
-  }
-  return badges;
-}
+// Lifted into a leaf module so the Layered Dependency View's edge labels read
+// the same values card detail shows as badges; re-exported here for the
+// existing importers.
+export { relationAttributeBadges } from "@/lib/relationAttributeBadges";
+export type { RelationAttributeBadge } from "@/lib/relationAttributeBadges";
 
 export function genericRelationAttributes(rt: RelationType, value: RelationAttributes): RelationAttributes {
   const result = { ...value };

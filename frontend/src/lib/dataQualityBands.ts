@@ -9,8 +9,11 @@
  * for one metric made "Partial" unexpressible in the inventory and made the
  * report's segments impossible to deep-link. The bands below are the report's,
  * and they are now what the inventory filters and groups by as well; the
- * backend's `_DQ_BAND_BOUNDS` in `api/v1/reports.py` mirrors them.
+ * backend's `DQ_BAND_BOUNDS` in `backend/app/services/data_quality_bands.py`
+ * mirrors them.
  */
+
+import { STATUS_COLORS } from "@/theme/tokens";
 
 export type DataQualityBand = "complete" | "partial" | "minimal";
 
@@ -25,9 +28,9 @@ export interface DataQualityBandDef {
 }
 
 export const DATA_QUALITY_BANDS: readonly DataQualityBandDef[] = [
-  { key: "complete", min: 80, max: null, tKey: "filter.dataQualityComplete", color: "#4caf50" },
-  { key: "partial", min: 40, max: 80, tKey: "filter.dataQualityPartial", color: "#ff9800" },
-  { key: "minimal", min: 0, max: 40, tKey: "filter.dataQualityMinimal", color: "#f44336" },
+  { key: "complete", min: 80, max: null, tKey: "filter.dataQualityComplete", color: STATUS_COLORS.success },
+  { key: "partial", min: 40, max: 80, tKey: "filter.dataQualityPartial", color: STATUS_COLORS.warning },
+  { key: "minimal", min: 0, max: 40, tKey: "filter.dataQualityMinimal", color: STATUS_COLORS.error },
 ];
 
 const BAND_KEYS = new Set<string>(DATA_QUALITY_BANDS.map((b) => b.key));

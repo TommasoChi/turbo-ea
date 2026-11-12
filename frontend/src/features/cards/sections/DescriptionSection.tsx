@@ -20,7 +20,9 @@ import {
   getUrlErrorMsg,
   isEmptyAttrValue,
   isEnforcedRequiredField,
+  useFieldHelp,
 } from "@/features/cards/sections/cardDetailUtils";
+import HelpTip from "@/components/HelpTip";
 import Chip from "@mui/material/Chip";
 import { useFieldLabel } from "@/hooks/useResolveLabel";
 import { useSyncedExpanded } from "@/hooks/useSyncedExpanded";
@@ -32,6 +34,7 @@ import {
 } from "@/features/cards/dataQualityJump";
 import { ApiError } from "@/api/client";
 import type { Card, FieldDef } from "@/types";
+import { brand } from "@/theme/tokens";
 
 // ── Section: Description ────────────────────────────────────────
 function DescriptionSection({
@@ -72,6 +75,7 @@ function DescriptionSection({
 }) {
   const { t } = useTranslation(["cards", "common", "validation"]);
   const fieldLabel = useFieldLabel();
+  const fieldHelp = useFieldHelp();
   const [expanded, setExpanded] = useSyncedExpanded(initialExpanded, expandOn);
   const [editing, setEditing] = useState(false);
   const [description, setDescription] = useState(card.description || "");
@@ -195,7 +199,7 @@ function DescriptionSection({
                   e.stopPropagation();
                   onAiSuggest();
                 }}
-                sx={{ color: "#1976d2" }}
+                sx={{ color: brand.primary }}
               >
                 <MaterialSymbol icon="auto_awesome" size={20} />
               </IconButton>
@@ -231,7 +235,10 @@ function DescriptionSection({
             {extraFields && extraFields.map((field) =>
               field.readonly || calculatedFieldKeys.includes(field.key) ? (
                 <Box key={field.key} sx={{ mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
-                  <Typography variant="body2" color="text.secondary" sx={{ minWidth: 160 }}>{fieldLabel(field)}</Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ minWidth: 160 }}>
+                    {fieldLabel(field)}
+                    <HelpTip text={fieldHelp(field)} />
+                  </Typography>
                   <FieldValue field={field} value={attrs[field.key]} currencyFmt={currencyFmt} />
                   <Chip size="small" label={calculatedFieldKeys.includes(field.key) ? t("attributes.calculated") : t("attributes.auto")} sx={{ height: 18, fontSize: "0.6rem", ml: 0.5 }} />
                 </Box>
@@ -304,6 +311,7 @@ function DescriptionSection({
                       <Box key={field.key}>
                         <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
                           {fieldLabel(field)}
+                          <HelpTip text={fieldHelp(field)} />
                           {requiredMark}
                           {lockChip}
                         </Typography>
@@ -315,6 +323,7 @@ function DescriptionSection({
                     <Box key={field.key} sx={{ display: "grid", gridTemplateColumns: "1fr", columnGap: 2, "@container (min-width: 480px)": { gridTemplateColumns: "180px 1fr", alignItems: "center" } }}>
                       <Typography variant="body2" color="text.secondary">
                         {fieldLabel(field)}
+                        <HelpTip text={fieldHelp(field)} />
                         {requiredMark}
                         {lockChip}
                       </Typography>

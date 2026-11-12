@@ -2,6 +2,43 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import type { SoAW, SoAWSectionData } from "@/types";
 
+// The discussion and history side panel has its own tests: here the page
+// renders alone, and the props it hands the panel are recorded.
+// It provides the section markers' data the test sets (`sidePanel.sections`).
+const sidePanel = vi.hoisted(() => ({
+  props: [] as Record<string, unknown>[],
+  sections: null as null | {
+    counts: Record<string, { open: number; total: number }>;
+    canComment: boolean;
+    openSection: (section: string) => void;
+  },
+}));
+vi.mock("./collab/DocumentSidePanel", async () => {
+  const { SectionDiscussionContext } = await import("./collab/sectionDiscussionContext");
+  return {
+    default: (props: { children: React.ReactNode }) => {
+      sidePanel.props.push(props);
+      return (
+        <SectionDiscussionContext.Provider value={sidePanel.sections}>{props.children}</SectionDiscussionContext.Provider>
+      );
+    },
+  };
+});
+// The History view has its own tests: here it records what the page hands
+// it, and hands back the document a restore returns.
+const historyView = vi.hoisted(() => ({ props: [] as Record<string, unknown>[], restored: null as unknown }));
+vi.mock("./collab/DocumentHistoryDialog", () => ({
+  default: (props: { onRestored?: (d: unknown) => void }) => {
+    historyView.props.push(props);
+    return (
+      <div role="dialog" aria-label="history-view">
+        <button type="button" onClick={() => props.onRestored?.(historyView.restored)}>
+          restore-it
+        </button>
+      </div>
+    );
+  },
+}));
 vi.mock("@/api/client", () => import("@/test/apiMock").then((m) => m.apiClientModule()));
 vi.mock("@/hooks/useDateFormat", () => import("@/test/hooks").then((m) => m.useDateFormatModule()));
 vi.mock("./soawExport", () => ({ exportToDocx: vi.fn(async () => {}), exportToPdf: vi.fn() }));
@@ -58,7 +95,9 @@ import i18n from "@/i18n";
 import { mockApi } from "@/test/apiMock";
 import { hookState } from "@/test/hooks";
 import { ADMIN_USER, makeCard } from "@/test/fixtures/metamodel";
+import { setViewportWidth } from "@/test/matchMedia";
 import { renderWithProviders } from "@/test/render";
+import { DELIVERABLE_COLORS, brand } from "@/theme/tokens";
 
 import SoAWEditor from "./SoAWEditor";
 import { exportToDocx, exportToPdf } from "./soawExport";
@@ -198,6 +237,16 @@ beforeEach(() => {
   mockApi.on("patch", "/soaw/s1", (_p, body) => ({ ...SOAW, ...(body as object) }));
   mockApi.on("post", "/soaw", (_p, body) => ({ ...SOAW, ...(body as object), id: "s-new" }));
 });
+
+
+/** Sign through the sign dialog: open it from the toolbar, optionally write a note, confirm. */
+async function signThroughDialog(note?: string) {
+  fireEvent.click(button(t("editor.sign")));
+  const dialog = await dialogTitled(t("collab.sign.soawTitle"));
+  if (note !== undefined) setValue(within(dialog).getByLabelText(t("collab.sign.noteLabel")), note);
+  fireEvent.click(within(dialog).getByText(t("collab.sign.confirm"), { selector: "button" }));
+  return dialog;
+}
 
 describe("SoAWEditor — a new document", () => {
   it("opens empty with the template, no preview, and refuses to save without a name", async () => {
@@ -620,10 +669,12 @@ describe("SoAWEditor — signatures", () => {
     renderEdit();
     await waitForLoaded();
 
-    fireEvent.click(button(t("editor.sign")));
+    const dialog = await signThroughDialog();
 
     expect(await screen.findByText(t("editor.documentFullySigned"))).toBeInTheDocument();
-    expect(mockApi.callsOf("post", "/soaw/s1/sign")).toHaveLength(1);
+    // No note: the sign request carries no body.
+    expect(mockApi.callsOf("post", "/soaw/s1/sign")).toEqual([{ method: "post", path: "/soaw/s1/sign", body: undefined }]);
+    await waitFor(() => expect(dialog).not.toBeInTheDocument());
     expect(screen.getByText(t("editor.signedBanner", { date: "2026-06-02" }))).toBeInTheDocument();
     expect(screen.getByText(t("editor.fullySigned"))).toBeInTheDocument();
     expect(screen.getByText(t("editor.sigApproved"))).toBeInTheDocument();
@@ -641,9 +692,10 @@ describe("SoAWEditor — signatures", () => {
     renderEdit();
     await waitForLoaded();
 
-    fireEvent.click(button(t("editor.sign")));
+    await signThroughDialog("  Scope is right  ");
 
     expect(await screen.findByText(t("editor.signatureRecorded"))).toBeInTheDocument();
+    expect(mockApi.callsOf("post", "/soaw/s1/sign")[0].body).toEqual({ note: "Scope is right" });
     expect(screen.getByText(t("editor.signaturesProgress", { signed: 1, total: 2 }))).toBeInTheDocument();
   });
 
@@ -664,9 +716,15 @@ describe("SoAWEditor — signatures", () => {
     expect(pendingCard).toHaveStyle({ backgroundColor: "rgba(0, 0, 0, 0.04)" });
   });
 
-  it("rejects with a comment and resets to a new draft revision", async () => {
+  it("rejects with a comment back to a draft, keeping the revision number", async () => {
     mockApi.on("get", "/auth/me", { id: "u2" });
-    mockApi.on("get", "/soaw/s1", { ...SOAW, status: "in_review", signatories: [PENDING_U2] });
+    mockApi.on("get", "/soaw/s1", {
+      ...SOAW,
+      status: "in_review",
+      signatories: [PENDING_U2],
+      revision_number: 2,
+    });
+    // A rejection does not move the number; the page shows the reply's.
     mockApi.on("post", "/soaw/s1/reject", { ...SOAW, status: "draft", signatories: [], revision_number: 2 });
     renderEdit();
     await waitForLoaded();
@@ -681,6 +739,7 @@ describe("SoAWEditor — signatures", () => {
     expect(await screen.findByText(t("editor.documentRejected"))).toBeInTheDocument();
     expect(mockApi.callsOf("post", "/soaw/s1/reject")[0].body).toEqual({ comment: "Scope unclear" });
     expect(screen.getByText(t("editor.revisionLabel", { number: 2 }))).toBeInTheDocument();
+    expect(screen.getByText(t("status.draft"))).toBeInTheDocument();
     await waitFor(() => expect(dialog).not.toBeInTheDocument());
   });
 
@@ -692,14 +751,33 @@ describe("SoAWEditor — signatures", () => {
     renderEdit();
     await waitForLoaded();
 
-    fireEvent.click(button(t("editor.sign")));
-    expect(await screen.findByText("POST /soaw/s1/sign failed")).toBeInTheDocument();
+    const signDialog = await signThroughDialog();
+    // Inside the dialog, which stays open with its Sign button usable.
+    expect(await within(signDialog).findByTestId("review-dialog-error")).toHaveTextContent(
+      "POST /soaw/s1/sign failed",
+    );
+    expect(screen.getAllByText("POST /soaw/s1/sign failed")).toHaveLength(1);
+    await waitFor(() =>
+      expect(within(signDialog).getByText(t("collab.sign.confirm"), { selector: "button" })).toBeEnabled(),
+    );
+    fireEvent.click(within(signDialog).getByText(tc("actions.cancel"), { selector: "button" }));
+    await waitFor(() => expect(signDialog).not.toBeInTheDocument());
 
     fireEvent.click(button(t("editor.reject")));
     const dialog = await dialogTitled(t("editor.rejectDialog.title"));
     setValue(within(dialog).getByLabelText(new RegExp(`^${t("editor.rejectDialog.commentLabel")}`)), "No");
     fireEvent.click(within(dialog).getByText(t("editor.reject"), { selector: "button" }));
-    expect(await screen.findByText("POST /soaw/s1/reject failed")).toBeInTheDocument();
+    expect(await within(dialog).findByTestId("review-dialog-error")).toHaveTextContent("POST /soaw/s1/reject failed");
+    expect(within(dialog).getByLabelText(new RegExp(`^${t("editor.rejectDialog.commentLabel")}`))).toHaveValue("No");
+  });
+
+  it("opens the sign dialog from ?action=sign for a pending signatory", async () => {
+    mockApi.on("get", "/auth/me", { id: "u2" });
+    mockApi.on("get", "/soaw/s1", { ...SOAW, status: "in_review", signatories: [PENDING_U2] });
+    renderEdit("?action=sign");
+    await waitForLoaded();
+    expect(await dialogTitled(t("collab.sign.soawTitle"))).toBeInTheDocument();
+    expect(screen.queryByLabelText(t("editor.signDialog.title"))).toBeNull();
   });
 
   it("opens the reject dialog from a ?action=reject deep link", async () => {
@@ -807,5 +885,299 @@ describe("SoAWEditor — a signed document", () => {
 
     fireEvent.click(screen.getAllByText(t("editor.newRevision"), { selector: "button" })[0]);
     expect(await screen.findByText("POST /soaw/s1/revise failed")).toBeInTheDocument();
+  });
+});
+
+describe("SoAWEditor — in review", () => {
+  const IN_REVIEW: SoAW = { ...SOAW, status: "in_review", signatories: [PENDING_U2] };
+
+  it("locks the content, keeps the initiative link editable and says how to edit", async () => {
+    mockApi.on("get", "/soaw/s1", IN_REVIEW);
+    renderEdit();
+    await waitForLoaded();
+
+    expect(screen.getByText(t("adr.banner.inReviewLock"))).toBeInTheDocument();
+    expect(screen.getByDisplayValue(SOAW.name)).toBeDisabled();
+    expect(screen.getByDisplayValue("Ada Lovelace")).toBeDisabled();
+    expect(screen.getByDisplayValue("Grace Hopper")).toBeDisabled();
+    expect(screen.getByDisplayValue("0.1")).toBeDisabled();
+    expect(screen.getByDisplayValue("First draft")).toBeDisabled();
+    expect(screen.getByDisplayValue("<p>Background</p>")).toHaveAttribute("readonly");
+    expect(screen.getByDisplayValue("<p>Appendix body</p>")).toHaveAttribute("readonly");
+    expect(queryButton(t("editor.addCustomSection"))).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(t("editor.hideSection"))).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(t("editor.removeCustomSection"))).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(t("editor.addVersionEntry"))).not.toBeInTheDocument();
+    // No second request while one is out; recalling is how to edit again.
+    expect(queryButton(t("editor.requestSignatures"))).not.toBeInTheDocument();
+    expect(button(t("editor.recallSignatures"))).toBeInTheDocument();
+    // The initiative link is filing, not content.
+    const initiative = within(docInfoPaper()).getByRole("combobox");
+    expect(initiative).not.toHaveAttribute("aria-disabled", "true");
+    // Nothing to save until the link changes.
+    expect(queryButton(t("editor.save"))).not.toBeInTheDocument();
+  });
+
+  it("offers Save only once the initiative link changed, sends it alone and says so", async () => {
+    mockApi.on("get", "/soaw/s1", IN_REVIEW);
+    mockApi.on("patch", "/soaw/s1", (_p, body) => ({ ...IN_REVIEW, ...(body as object) }));
+    renderEdit();
+    await waitForLoaded();
+    expect(queryButton(t("editor.save"))).not.toBeInTheDocument();
+
+    fireEvent.mouseDown(within(docInfoPaper()).getByRole("combobox"));
+    fireEvent.click(within(await openListbox()).getByText(tc("labels.none")));
+    expect(screen.getAllByText(t("editor.save"), { selector: "button" })).toHaveLength(2);
+
+    fireEvent.click(saveButton());
+    await waitFor(() => expect(mockApi.callsOf("patch", "/soaw/s1")).toHaveLength(1));
+    expect(lastBody("patch", "/soaw/s1")).toEqual({ initiative_id: null });
+    expect(await screen.findByText("Initiative link saved")).toBeInTheDocument();
+    expect(screen.queryByText(t("editor.savedSuccessfully"))).not.toBeInTheDocument();
+    // The reply is the stored state again: nothing left to save.
+    await waitFor(() => expect(queryButton(t("editor.save"))).not.toBeInTheDocument());
+  });
+
+  it("choosing the stored initiative again hides Save", async () => {
+    mockApi.on("get", "/soaw/s1", IN_REVIEW);
+    renderEdit();
+    await waitForLoaded();
+    fireEvent.mouseDown(within(docInfoPaper()).getByRole("combobox"));
+    fireEvent.click(within(await openListbox()).getByText(tc("labels.none")));
+    expect(saveButton()).toBeInTheDocument();
+    fireEvent.mouseDown(within(docInfoPaper()).getByRole("combobox"));
+    fireEvent.click(within(await openListbox()).getByText(INITIATIVE.name));
+    expect(queryButton(t("editor.save"))).not.toBeInTheDocument();
+    expect(mockApi.callsOf("patch", "/soaw/s1")).toHaveLength(0);
+  });
+
+  it("offers Request signatures on an approved document, which stays editable", async () => {
+    mockApi.on("get", "/soaw/s1", { ...SOAW, status: "approved" });
+    renderEdit();
+    await waitForLoaded();
+    expect(button(t("editor.requestSignatures"))).toBeInTheDocument();
+    expect(screen.getByDisplayValue(SOAW.name)).toBeEnabled();
+    expect(screen.getByText(t("status.approved"))).toBeInTheDocument();
+    fireEvent.click(saveButton());
+    await waitFor(() => expect(mockApi.callsOf("patch", "/soaw/s1")).toHaveLength(1));
+    expect(Object.keys(lastBody("patch", "/soaw/s1")).sort()).toEqual([
+      "document_info",
+      "initiative_id",
+      "name",
+      "sections",
+      "version_history",
+    ]);
+  });
+});
+
+describe("SoAWEditor — revisions", () => {
+  const SIGNED: SoAW = {
+    ...SOAW,
+    status: "signed",
+    signed_at: "2026-06-02T09:30:00Z",
+    signatories: [SIGNED_U2],
+    is_current: true,
+    is_earlier_revision: false,
+  };
+  const newRevision = () => screen.getAllByText(t("editor.newRevision"), { selector: "button" })[0];
+
+  it("offers to open the revision already being drafted", async () => {
+    mockApi.on("get", "/soaw/s1", SIGNED);
+    mockApi.fail("post", "/soaw/s1/revise", 409, { error: "open_revision_exists", revision_id: "s9" });
+    mockApi.on("get", "/soaw/s9", { ...SOAW, id: "s9", name: "Next draft", revision_number: 2 });
+    renderEdit();
+    await waitForLoaded();
+
+    fireEvent.click(newRevision());
+    const alert = await screen.findByTestId("soaw-open-revision-exists");
+    expect(alert).toHaveTextContent(t("editor.revise.openRevisionExists"));
+    expect(screen.queryByText("POST /soaw/s1/revise failed")).not.toBeInTheDocument();
+
+    fireEvent.click(within(alert).getByText(t("editor.revise.openExisting"), { selector: "button" }));
+    expect(await screen.findByDisplayValue("Next draft")).toBeInTheDocument();
+    expect(mockApi.callsOf("get", "/soaw/s9")).toHaveLength(1);
+    expect(screen.queryByTestId("soaw-open-revision-exists")).not.toBeInTheDocument();
+  });
+
+  it("says a document that is not the latest cannot be revised", async () => {
+    mockApi.on("get", "/soaw/s1", SIGNED);
+    mockApi.fail("post", "/soaw/s1/revise", 409, { error: "not_revisable", reason: "not_latest" });
+    renderEdit();
+    await waitForLoaded();
+
+    fireEvent.click(newRevision());
+    expect(await screen.findByText(t("editor.error.notRevisable"))).toBeInTheDocument();
+    expect(screen.queryByTestId("soaw-open-revision-exists")).not.toBeInTheDocument();
+  });
+
+  it("hides New revision on an earlier revision and points to the current one", async () => {
+    mockApi.on("get", "/soaw/s1", {
+      ...SIGNED,
+      is_current: false,
+      is_earlier_revision: true,
+      superseded_by: { id: "s2", name: SOAW.name, revision_number: 2 },
+      revisions: [
+        { id: "s1", name: SOAW.name, revision_number: 1, status: "signed" },
+        { id: "s2", name: SOAW.name, revision_number: 2, status: "signed" },
+      ],
+    });
+    renderEdit();
+    await waitForLoaded();
+
+    expect(queryButton(t("editor.newRevision"))).not.toBeInTheDocument();
+    expect(
+      screen.getByText(t("adr.banner.earlierRevision", { current: "Rev 2" })),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: t("adr.banner.openCurrent") })).toHaveAttribute(
+      "href",
+      "/ea-delivery/soaw/s2",
+    );
+    // The strip lists the chain; the page's own revision is not a link.
+    expect(screen.getByTestId("revision-s1")).toHaveAttribute("aria-current", "page");
+    expect(screen.getByTestId("revision-s2")).toHaveAttribute("href", "/ea-delivery/soaw/s2");
+    // History sits beside the strip, once.
+    const strip = screen.getByRole("navigation", { name: t("adr.revision.strip") });
+    expect(within(strip.parentElement as HTMLElement).getByRole("button", { name: /History$/ })).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: /History$/ })).toHaveLength(1);
+  });
+
+  it("points the current revision to the revision being drafted", async () => {
+    mockApi.on("get", "/soaw/s1", {
+      ...SIGNED,
+      open_revision: { id: "s3", name: SOAW.name, revision_number: 2, status: "draft" },
+    });
+    renderEdit();
+    await waitForLoaded();
+    expect(
+      screen.getByText(t("adr.banner.openRevision", { revision: "Rev 2" })),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: t("adr.banner.open") })).toHaveAttribute(
+      "href",
+      "/ea-delivery/soaw/s3",
+    );
+  });
+});
+
+describe("SoAWEditor — colours", () => {
+  /** The Material Symbols glyph spelled `icon`, if one is rendered. */
+  const glyph = (icon: string) =>
+    [...document.querySelectorAll(".material-symbols-outlined")].find((el) => el.textContent === icon);
+
+  it("shows the document glyph in the SoAW colour on a wide screen only", async () => {
+    const first = renderEdit();
+    await waitForLoaded();
+    expect(glyph("description")).toHaveStyle({ color: DELIVERABLE_COLORS.soaw });
+    first.unmount();
+
+    setViewportWidth(500);
+    renderEdit();
+    await waitForLoaded();
+    expect(glyph("description")).toBeUndefined();
+  });
+
+  it("edges a custom section with the brand colour", async () => {
+    renderEdit();
+    await waitForLoaded();
+    expect(sectionPaper("Appendix A")).toHaveStyle({ borderLeft: `4px solid ${brand.primary}` });
+  });
+});
+
+describe("SoAWEditor — discussion and review notes", () => {
+  it("marks the sections that have threads beside their titles, custom ones included, and opens the discussion on one", async () => {
+    const openSection = vi.fn();
+    sidePanel.sections = {
+      counts: { "2.1": { open: 3, total: 3 }, custom_7: { open: 0, total: 1 } },
+      canComment: false,
+      openSection,
+    };
+    try {
+      const { user } = renderEdit();
+      await waitForLoaded();
+      const markers = screen.getAllByTestId(/^section-marker-/).map((m) => m.dataset.testid);
+      expect(markers.sort()).toEqual(["section-marker-2.1", "section-marker-custom_7"]);
+      expect(within(sectionPaper(SECTION_2_1.title)).getByRole("button", { name: "3 open threads on this section" })).toBeInTheDocument();
+      const done = within(sectionPaper("Appendix A")).getByRole("button", { name: "Resolved discussion on this section" });
+      expect(within(sectionPaper(SECTION_1_1.title)).queryByTestId(/^section-marker-/)).toBeNull();
+      await user.click(done);
+      expect(openSection).toHaveBeenCalledWith("custom_7");
+    } finally {
+      sidePanel.sections = null;
+    }
+  });
+
+  it("mounts the side panel on a saved document with its sections, its own custom section included", async () => {
+    mockApi.on("get", "/soaw/s1", { ...SOAW, open_thread_count: 2, updated_at: "2026-11-02T00:00:00Z" });
+    sidePanel.props.length = 0;
+    renderEdit();
+    await waitForLoaded();
+    const props = sidePanel.props[sidePanel.props.length - 1];
+    expect(props.owner).toEqual({ kind: "soaw", id: "s1" });
+    // History is not the side panel's: it opens from the header.
+    expect(props).not.toHaveProperty("status");
+    expect(props).not.toHaveProperty("onRestored");
+    expect(props).not.toHaveProperty("isDirty");
+    expect(props.openThreadCount).toBe(2);
+    expect(props.refreshKey).toBe("2026-11-02T00:00:00Z");
+    // No signatories yet: nobody to list first in a comment's "@".
+    expect(props.mentionContext).toEqual({ priorityUserIds: [] });
+    const sections = props.sections as { key: string; label: string }[];
+    expect(sections[0]).toEqual({ key: "general", label: t("collab.discussion.section.general") });
+    expect(sections.slice(1, -1).map((s) => s.key)).toEqual(getTemplateSections().map((d) => d.id));
+    expect(sections[sections.length - 1]).toEqual({ key: "custom_7", label: "Appendix A" });
+  });
+
+  it("lists the signatories first in a comment's '@'", async () => {
+    mockApi.on("get", "/soaw/s1", { ...SOAW, status: "in_review", signatories: [PENDING_U2] });
+    sidePanel.props.length = 0;
+    renderEdit();
+    await waitForLoaded();
+    await waitFor(() =>
+      expect(sidePanel.props[sidePanel.props.length - 1].mentionContext).toEqual({ priorityUserIds: ["u2"] }),
+    );
+  });
+
+  it("applies a restored version through the same path as a load", async () => {
+    renderEdit();
+    await waitForLoaded();
+    historyView.restored = { ...SOAW, name: "Restored SoAW" };
+    fireEvent.click(screen.getByRole("button", { name: /History$/ }));
+    fireEvent.click(screen.getByRole("button", { name: "restore-it" }));
+    expect(await screen.findByDisplayValue("Restored SoAW")).toBeInTheDocument();
+    expect(await screen.findByText(t("collab.history.restored"))).toBeInTheDocument();
+  });
+
+  it("shows History in the header of a saved document and opens it with what a restore needs", async () => {
+    mockApi.on("get", "/soaw/s1", { ...SOAW, updated_at: "2026-11-02T00:00:00Z" });
+    historyView.props.length = 0;
+    renderEdit();
+    await waitForLoaded();
+    fireEvent.click(screen.getByRole("button", { name: /History$/ }));
+    expect(screen.getByRole("dialog", { name: "history-view" })).toBeInTheDocument();
+    const props = historyView.props[historyView.props.length - 1];
+    expect(props).toMatchObject({
+      owner: { kind: "soaw", id: "s1" },
+      label: SOAW.name,
+      status: "draft",
+      refreshKey: "2026-11-02T00:00:00Z",
+    });
+    expect((props.isDirty as () => boolean)()).toBe(false);
+  });
+
+  it("warns about open threads when signing and rejecting", async () => {
+    mockApi.on("get", "/auth/me", { id: "u2" });
+    mockApi.on("get", "/soaw/s1", { ...SOAW, status: "in_review", signatories: [PENDING_U2], open_thread_count: 3 });
+    renderEdit();
+    await waitForLoaded();
+    fireEvent.click(button(t("editor.sign")));
+    const sign = await dialogTitled(t("collab.sign.soawTitle"));
+    expect(within(sign).getByTestId("open-threads-warning")).toHaveTextContent(
+      t("collab.openThreadsWarning", { count: 3 }),
+    );
+    fireEvent.click(within(sign).getByText(tc("actions.cancel"), { selector: "button" }));
+    await waitFor(() => expect(sign).not.toBeInTheDocument());
+
+    fireEvent.click(button(t("editor.reject")));
+    const reject = await dialogTitled(t("editor.rejectDialog.title"));
+    expect(within(reject).getByTestId("open-threads-warning")).toBeInTheDocument();
   });
 });

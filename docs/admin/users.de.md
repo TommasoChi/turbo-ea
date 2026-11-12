@@ -38,7 +38,7 @@ Filterzustand, sichtbare Spalten, die Sidebar-Breite und ihr Eingeklappt-Zustand
    - **Anzeigename** (erforderlich): Der vollständige Name des Benutzers
    - **E-Mail** (erforderlich): Die E-Mail-Adresse, mit der sich der Benutzer anmelden wird
    - **Passwort** (optional): Leer lassen, damit der Benutzer beim ersten Anmelden sein eigenes Passwort wählt. Wenn SSO aktiviert ist, kann sich ein Benutzer ohne Passwort stattdessen über seinen SSO-Anbieter anmelden
-   - **Rolle**: Wählen Sie die zuzuweisende Rolle (Admin, Mitglied, Betrachter oder eine benutzerdefinierte Rolle)
+   - **Rolle**: Wählen Sie die zuzuweisende Rolle (Admin, Mitglied, Betrachter oder eine benutzerdefinierte Rolle). Die auf dem Tab **Rollen** als **Standard** markierte Rolle ist vorausgewählt.
    - **Einladungs-E-Mail senden**: Aktivieren Sie dies, um dem Benutzer eine E-Mail-Benachrichtigung mit Anmeldeinstruktionen zu senden
 3. Klicken Sie auf **Benutzer erstellen**, um das Konto zu erstellen.
 
@@ -121,6 +121,10 @@ Der **Rollen**-Tab ermöglicht die Verwaltung anwendungsweiter Rollen. Jede Roll
 | **Betrachter** | Schreibgeschützter Zugriff über alle Bereiche |
 
 Benutzerdefinierte Rollen können mit granularer Berechtigungssteuerung über Inventar, Beziehungen, Stakeholder, Kommentare, Dokumente, Diagramme, BPM, Berichte und mehr erstellt werden. Die Gruppe BPM enthält eine schreibgeschützte Berechtigung, `bpm.value_chain`, für die Seiten [Wertschöpfungskette und Wertstromkarten](../guide/value-chain.md).
+
+Eine Rolle kann als **Standardrolle** markiert werden. Jedes neue Konto startet mit ihr: Benutzer, die sich per SSO registrieren oder erstmals anmelden, Benutzer, die über den Tab **Stakeholder** einer Karte eingeladen werden, sowie die vorausgewählte Rolle im Dialog **Benutzer erstellen**. Eine Rolle mit vollem Administratorzugriff kann nicht die Standardrolle sein.
+
+**Architekturentscheidungen kommentieren** (`adr.comment`) und **SoAW-Dokumente kommentieren** (`soaw.comment`) erlauben einer Rolle, in der Diskussion einer Entscheidung oder eines Statement of Architecture Work Diskussionsstränge zu beginnen, zu beantworten, zu erledigen und wieder zu öffnen. Beide sind für die Rollen Admin, BPM Admin und Member aktiviert und für Viewer deaktiviert; bei einer aktualisierten Installation hat jede bestehende Rolle, die diese Dokumente bereits bearbeiten oder unterzeichnen konnte, sie erhalten. Die Unterzeichner eines Dokuments können es unabhängig von ihrer Rolle immer kommentieren. Siehe [Diskussion](../guide/grc.md#decision-discussion).
 
 Die Berechtigung **Dashboards der Startseite verwalten** (`admin.dashboards`, standardmäßig der Admin-Rolle erteilt) erlaubt einer Rolle, die Startseite anzupassen: die Widgets und das Layout jedes Dashboards bearbeiten, Dashboards erstellen, duplizieren, ausblenden, anordnen, zurücksetzen und löschen und festlegen, welche Rollen jedes davon sehen. Zum Ansehen eines Dashboards ist keine besondere Berechtigung nötig — jedes Widget darauf verlangt weiterhin seine eigene (zum Beispiel `reports.ea_dashboard` für die Diagramme der Übersicht). Siehe [Dashboards anpassen](../guide/dashboard.md#customizing-dashboards).
 

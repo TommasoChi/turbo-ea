@@ -14,9 +14,12 @@ import { useState } from "react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, within, act, waitFor } from "@testing-library/react";
 import InventoryFilterSidebar, {
+  APPROVAL_STATUS_OPTIONS,
   EMPTY_VALUE,
+  LIFECYCLE_PHASES,
   LOCKED_COLUMN_KEYS,
   tagEmptyToken,
+  treeGroupingApplies,
   type Filters,
 } from "./InventoryFilterSidebar";
 import { mockApi } from "@/test/apiMock";
@@ -47,6 +50,11 @@ import {
   makeTagGroup,
 } from "@/test/fixtures/metamodel";
 import type { Bookmark, RelatedCardRef } from "@/types";
+import { emptyFilters } from "./viewApply";
+import { relationColumnSides } from "./relationColumns";
+import { createTheme } from "@mui/material/styles";
+import { DATA_QUALITY_BANDS } from "@/lib/dataQualityBands";
+import { EOL_STATUS_COLORS } from "@/lib/eol";
 
 vi.mock("@/api/client", () => import("@/test/apiMock").then((m) => m.apiClientModule()));
 
@@ -491,6 +499,8 @@ describe("InventoryFilterSidebar — search and scopes", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: /Clear all \(4\)/ }));
     expect(last()).toEqual(EMPTY_FILTERS);
+    // One definition of "no filters", shared with the page's new query view.
+    expect(last()).toEqual(emptyFilters());
     expect(screen.queryByRole("button", { name: /Clear all/ })).not.toBeInTheDocument();
   });
 });
@@ -1005,10 +1015,10 @@ describe("InventoryFilterSidebar — relationship filters", () => {
     expect(last().relations).toEqual({});
   });
 
-  it("falls back to the deduplicated list and skips facets with no names", async () => {
+  it("skips facets with no names", async () => {
     await renderSidebar({
       initialFilters: { types: ["ITComponent"] },
-      relevantRelTypes: [REL_APP_TO_ITC, REL_PROVIDER_TO_ITC],
+      allRelevantRelTypes: [REL_APP_TO_ITC, REL_PROVIDER_TO_ITC],
       relationsMap: new Map([
         ["relAppToITC", new Map([[CARD_IDS.postgres, [ref(CARD_IDS.erp, "ERP Core", "Application")]]])],
       ]),
@@ -1248,7 +1258,7 @@ describe("InventoryFilterSidebar — Columns tab", () => {
   it("lists every field of a single type, relations and stakeholder roles", async () => {
     const { lastColumns } = await renderSidebar({
       initialFilters: { types: ["Application"] },
-      relevantRelTypes: [REL_APP_TO_ITC, REL_APP_TO_BC],
+      relationSides: relationColumnSides([REL_APP_TO_ITC, REL_APP_TO_BC], "Application"),
       stakeholderRoles: [{ key: "applicationOwner", label: "Application Owner" }],
     });
     openTab("Columns");
@@ -1259,8 +1269,10 @@ describe("InventoryFilterSidebar — Columns tab", () => {
 
     fireEvent.click(screen.getByText("Business Criticality"));
     expect(lastColumns().has("attr_businessCriticality")).toBe(true);
-    fireEvent.click(screen.getByText("IT Component"));
-    expect(lastColumns().has("rel_ITComponent")).toBe(true);
+    // A relation row reads "<verb> <Card type>", as the grid heads the column.
+    fireEvent.click(screen.getByText("uses IT Component"));
+    expect(lastColumns().has("rel_relAppToITC__out")).toBe(true);
+    expect(lastColumns().has("rel_relAppToBC__out")).toBe(false);
     fireEvent.click(screen.getByText("Application Owner"));
     expect(lastColumns().has("stakeholder_applicationOwner")).toBe(true);
 
@@ -1271,7 +1283,7 @@ describe("InventoryFilterSidebar — Columns tab", () => {
 
     const relList = screen.getByText("Relations").parentElement!.nextElementSibling as HTMLElement;
     fireEvent.click(within(relList).getByText("Select all"));
-    expect(lastColumns().has("rel_BusinessCapability")).toBe(true);
+    expect(lastColumns().has("rel_relAppToBC__out")).toBe(true);
 
     // The role is already on, so the section reads fully checked and the
     // first Select all turns it off; the second turns it back on.
@@ -1299,13 +1311,14 @@ describe("InventoryFilterSidebar — Columns tab", () => {
     });
     const { lastColumns } = await renderSidebar({
       initialFilters: { types: ["ITComponent"] },
-      relevantRelTypes: [REL_PROVIDER_TO_ITC, ghost],
+      relationSides: relationColumnSides([REL_PROVIDER_TO_ITC, ghost], "ITComponent"),
     });
     openTab("Columns");
-    fireEvent.click(screen.getByText("Provider"));
-    expect(lastColumns().has("rel_Provider")).toBe(true);
-    fireEvent.click(screen.getByText("Ghost"));
-    expect(lastColumns().has("rel_Ghost")).toBe(true);
+    // The selected type is the target: the reverse verb.
+    fireEvent.click(screen.getByText("is provided by Provider"));
+    expect(lastColumns().has("rel_relProviderToITC__in")).toBe(true);
+    fireEvent.click(screen.getByText("is related to by Ghost"));
+    expect(lastColumns().has("rel_relGhostToITC__in")).toBe(true);
   });
 
   it("offers only the common fields of several types", async () => {
@@ -1334,7 +1347,7 @@ describe("InventoryFilterSidebar — Columns tab", () => {
   it("searches every section by label and clears the query", async () => {
     await renderSidebar({
       initialFilters: { types: ["Application"] },
-      relevantRelTypes: [REL_APP_TO_ITC, REL_APP_TO_BC],
+      relationSides: relationColumnSides([REL_APP_TO_ITC, REL_APP_TO_BC], "Application"),
       stakeholderRoles: [{ key: "applicationOwner", label: "Application Owner" }],
     });
     openTab("Columns");
@@ -1358,8 +1371,13 @@ describe("InventoryFilterSidebar — Columns tab", () => {
     expect(screen.queryByText("Alias")).not.toBeInTheDocument();
 
     fireEvent.change(search, { target: { value: "capab" } });
-    expect(screen.getByText("Business Capability")).toBeInTheDocument();
-    expect(screen.queryByText("IT Component")).not.toBeInTheDocument();
+    expect(screen.getByText("supports Business Capability")).toBeInTheDocument();
+    expect(screen.queryByText("uses IT Component")).not.toBeInTheDocument();
+
+    // The verb is part of the label, so it is searchable too.
+    fireEvent.change(search, { target: { value: "uses" } });
+    expect(screen.getByText("uses IT Component")).toBeInTheDocument();
+    expect(screen.queryByText("supports Business Capability")).not.toBeInTheDocument();
 
     fireEvent.change(search, { target: { value: "owner" } });
     expect(screen.getByText("Application Owner")).toBeInTheDocument();
@@ -1378,12 +1396,44 @@ describe("InventoryFilterSidebar — Columns tab", () => {
     });
     await renderSidebar({
       initialFilters: { types: ["ITComponent"] },
-      relevantRelTypes: [REL_PROVIDER_TO_ITC, ghost],
+      relationSides: relationColumnSides([REL_PROVIDER_TO_ITC, ghost], "ITComponent"),
     });
     openTab("Columns");
     fireEvent.change(screen.getByPlaceholderText("Search columns..."), { target: { value: "gho" } });
-    expect(screen.getByText("Ghost")).toBeInTheDocument();
-    expect(screen.queryByText("Provider")).not.toBeInTheDocument();
+    expect(screen.getByText("is related to by Ghost")).toBeInTheDocument();
+    expect(screen.queryByText("is provided by Provider")).not.toBeInTheDocument();
+  });
+
+  it("lists one row per relation type on a shared pair, and both sides of a self-referencing type", async () => {
+    const { lastColumns } = await renderSidebar({
+      initialFilters: { types: ["Application"] },
+      relationSides: relationColumnSides(
+        [REL_APP_TO_ITC, REL_APP_TO_BC, REL_APP_TO_ITC_HOSTS, REL_APP_TO_APP],
+        "Application",
+      ),
+    });
+    openTab("Columns");
+    const relList = screen.getByText("Relations").parentElement!.nextElementSibling as HTMLElement;
+    const rows = within(relList)
+      .getAllByRole("button")
+      .map((b) => b.textContent)
+      .filter((text) => text && !text.includes("Select all") && !/push_pin/.test(text));
+    // Same-target rows sit together; the self-pair is an outgoing and an incoming row.
+    expect(rows).toEqual([
+      expect.stringContaining("uses IT Component"),
+      expect.stringContaining("is hosted on IT Component"),
+      expect.stringContaining("supports Business Capability"),
+      expect.stringContaining("sends data to Application"),
+      expect.stringContaining("receives data from Application"),
+    ]);
+    fireEvent.click(screen.getByText("is hosted on IT Component"));
+    expect(lastColumns().has("rel_relAppToITCHosts__out")).toBe(true);
+    expect(lastColumns().has("rel_relAppToITC__out")).toBe(false);
+    fireEvent.click(screen.getByText("receives data from Application"));
+    expect(lastColumns().has("rel_relAppToApp__in")).toBe(true);
+    expect(lastColumns().has("rel_relAppToApp__out")).toBe(false);
+    // Each row carries its own freeze pin, keyed on its own column id.
+    expect(within(relList).getAllByRole("button", { name: /freeze column/i })).toHaveLength(5);
   });
 
   it("puts a freeze pin on every row, reporting the frozen state", async () => {
@@ -1621,6 +1671,8 @@ describe("InventoryFilterSidebar — save dialog", () => {
         tagIds: ["t1"],
         mineScope: "stakeholder",
         groupBy: "lifecycle",
+        groupTree: false,
+        groupTreeLevel: null,
       },
       columns: ["core_type", "core_name", "attr_alias"],
       column_state: [{ colId: "core_name", width: 300 }],
@@ -1647,6 +1699,76 @@ describe("InventoryFilterSidebar — save dialog", () => {
     expect(body.column_state).toBeNull();
     expect(body.column_filter_model).toBeNull();
     expect((body.filters as Record<string, unknown>).groupBy).toBeNull();
+    expect((body.filters as Record<string, unknown>).groupTree).toBe(false);
+    expect((body.filters as Record<string, unknown>).groupTreeLevel).toBeNull();
+  });
+
+  it("saves the indent-children option beside the grouping", async () => {
+    mockApi.on("post", "/bookmarks", { id: "bm-new" });
+    await renderSidebar({ groupBy: null, groupTree: true });
+    fireEvent.click(screen.getByRole("button", { name: /Save view/ }));
+    const name = within(screen.getByRole("dialog")).getByLabelText("View name");
+    fireEvent.change(name, { target: { value: "Tree" } });
+    fireEvent.keyDown(name, { key: "Enter" });
+    await waitFor(() => expect(mockApi.callsOf("post")).toHaveLength(1));
+    const body = mockApi.callsOf("post")[0].body as { filters: Record<string, unknown> };
+    expect(body.filters.groupTree).toBe(true);
+    expect(body.filters.groupBy).toBeNull();
+    expect(body.filters.groupTreeLevel).toBeNull();
+  });
+
+  it("saves the chosen tree level beside the parent option", async () => {
+    mockApi.on("post", "/bookmarks", { id: "bm-new" });
+    await renderSidebar({ groupBy: "lifecycle", groupTree: true, groupTreeLevel: 2 });
+    fireEvent.click(screen.getByRole("button", { name: /Save view/ }));
+    const name = within(screen.getByRole("dialog")).getByLabelText("View name");
+    fireEvent.change(name, { target: { value: "Tree L2" } });
+    fireEvent.keyDown(name, { key: "Enter" });
+    await waitFor(() => expect(mockApi.callsOf("post")).toHaveLength(1));
+    const body = mockApi.callsOf("post")[0].body as { filters: Record<string, unknown> };
+    expect(body.filters.groupTree).toBe(true);
+    expect(body.filters.groupTreeLevel).toBe(2);
+  });
+
+  it("restores the tree level from a view, null for legacy or invalid levels", async () => {
+    const levelView = makeBookmark({
+      id: "bm-level",
+      name: "Level View",
+      filters: { types: ["BusinessCapability"], groupBy: null, groupTree: true, groupTreeLevel: 1 },
+    });
+    const badView = makeBookmark({
+      id: "bm-bad",
+      name: "Bad Level",
+      filters: { types: ["BusinessCapability"], groupTree: true, groupTreeLevel: 0 },
+    });
+    mockApi.on("get", "/bookmarks", [levelView, badView, MY_VIEW]);
+    const onGroupTreeLevelChange = vi.fn();
+    await renderSidebar({ onGroupTreeLevelChange });
+    openTab("Views");
+    fireEvent.click(screen.getByRole("button", { name: /Level View/ }));
+    expect(onGroupTreeLevelChange).toHaveBeenLastCalledWith(1);
+    fireEvent.click(screen.getByRole("button", { name: /My App View/ }));
+    expect(onGroupTreeLevelChange).toHaveBeenLastCalledWith(null);
+    fireEvent.click(screen.getByRole("button", { name: /Level View/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Bad Level/ }));
+    expect(onGroupTreeLevelChange).toHaveBeenLastCalledWith(null);
+    expect(onGroupTreeLevelChange).toHaveBeenCalledTimes(4);
+  });
+
+  it("restores the indent-children option from a view, off for views saved without it", async () => {
+    const treeView = makeBookmark({
+      id: "bm-tree",
+      name: "Tree View",
+      filters: { types: ["BusinessCapability"], groupBy: null, groupTree: true },
+    });
+    mockApi.on("get", "/bookmarks", [treeView, MY_VIEW]);
+    const onGroupTreeChange = vi.fn();
+    await renderSidebar({ onGroupTreeChange });
+    openTab("Views");
+    fireEvent.click(screen.getByRole("button", { name: /Tree View/ }));
+    expect(onGroupTreeChange).toHaveBeenLastCalledWith(true);
+    fireEvent.click(screen.getByRole("button", { name: /My App View/ }));
+    expect(onGroupTreeChange).toHaveBeenLastCalledWith(false);
   });
 
   it("closes on Escape without saving", async () => {
@@ -1838,5 +1960,872 @@ describe("InventoryFilterSidebar — resize", () => {
     const calls = onWidthChange.mock.calls.length;
     fireEvent.mouseMove(document, { clientX: 120 });
     expect(onWidthChange.mock.calls).toHaveLength(calls);
+  });
+});
+
+/* ========================================================================= */
+/*  Selected chips and view icons paint their colours                         */
+/* ========================================================================= */
+
+describe("InventoryFilterSidebar — colours", () => {
+  const WHITE = createTheme().palette.common.white;
+  const filled = (bg: string) => ({ backgroundColor: bg, color: WHITE, borderColor: bg });
+
+  it.each([
+    ["Approval Status", "Approved", { approvalStatuses: ["APPROVED"] }, APPROVAL_STATUS_OPTIONS[1].color],
+    ["Lifecycle", "Active", { lifecyclePhases: ["active"] }, LIFECYCLE_PHASES[2].color],
+    ["Data Quality", "Complete (≥80%)", { dataQualityBands: ["complete"] }, DATA_QUALITY_BANDS[0].color],
+  ] as const)("fills a selected %s chip with its colour and white text", async (section, label, f, bg) => {
+    await renderSidebar({ initialFilters: f as Partial<Filters> });
+    expandSection(section);
+    expect(chip(label)).toHaveStyle(filled(bg));
+  });
+
+  it("fills a selected EOL status and link type with their colours", async () => {
+    await renderSidebar({
+      types: [...CARD_TYPES, SITE_TYPE],
+      initialFilters: { types: ["Site"], eolStatuses: ["approaching"], linkTypes: ["primary"] },
+      showEolFacet: true,
+      showLinkTypeFacet: true,
+    });
+    expandSection("End of life");
+    expandSection("Link type");
+    expect(chip("Approaching EOL")).toHaveStyle(filled(EOL_STATUS_COLORS.approaching));
+    expect(chip("Primary")).toHaveStyle(filled(SITE_TYPE.hierarchy_labels![0].color!));
+  });
+
+  it("marks an OData view with a cloud and titles the dialog by its mode", async () => {
+    mockApi.on("get", "/bookmarks", [MY_VIEW, MY_SHARED]);
+    await renderSidebar({ canShareBookmarks: true, canOdataBookmarks: true, currentUserId: ADMIN_USER.id });
+    openTab("Views");
+    const titleIcon = () => within(screen.getByRole("dialog")).getByRole("heading").querySelector(".material-symbols-outlined");
+    expect(screen.getByRole("button", { name: /Shared by me/ })).toHaveTextContent("cloud");
+    expect(screen.getByRole("button", { name: /My App View/ })).not.toHaveTextContent("cloud");
+    fireEvent.click(within(screen.getByRole("button", { name: /Shared by me/ })).getByRole("button", { name: "edit" }));
+    expect(titleIcon()).toHaveTextContent(/^edit$/);
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Cancel" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    openTab("Filters");
+    fireEvent.click(screen.getByRole("button", { name: /Save view/ }));
+    expect(titleIcon()).toHaveTextContent(/^bookmark_add$/);
+  });
+});
+
+describe("treeGroupingApplies", () => {
+  const hierarchical = CARD_TYPES.filter((ct) => ct.has_hierarchy);
+  const flat = CARD_TYPES.filter((ct) => !ct.has_hierarchy);
+
+  it("applies with no type filter when any type has a hierarchy", () => {
+    expect(hierarchical.length).toBeGreaterThan(0);
+    expect(flat.length).toBeGreaterThan(0);
+    expect(treeGroupingApplies(CARD_TYPES, [])).toBe(true);
+    expect(treeGroupingApplies(flat, [])).toBe(false);
+  });
+
+  it("follows the selected types", () => {
+    expect(treeGroupingApplies(CARD_TYPES, [flat[0].key])).toBe(false);
+    expect(treeGroupingApplies(CARD_TYPES, [hierarchical[0].key])).toBe(true);
+    expect(treeGroupingApplies(CARD_TYPES, [flat[0].key, hierarchical[0].key])).toBe(true);
+  });
+});
+
+/* ========================================================================= */
+/*  Query views (an MCP-authored multi-hop query on a saved view)              */
+/* ========================================================================= */
+
+const VIEW_QUERY = {
+  type: "Application",
+  related: [
+    { relation: "relAppToITC", type: "ITComponent", where: { lifecycle_phase: ["active"] } },
+    { relation: "relAppToBC", type: "BusinessCapability", negate: true },
+  ],
+};
+const QUERY_VIEW = makeBookmark({
+  id: "bm-q",
+  name: "Apps on live tech",
+  query: VIEW_QUERY,
+  created_via: "mcp",
+  filters: { search: "erp", lifecyclePhases: ["active"], groupBy: "subtype" },
+  columns: ["core_type", "core_name"],
+  column_state: [{ colId: "core_name", width: 300 }],
+});
+const SHARED_QUERY_VIEW = makeBookmark({
+  id: "bm-q2",
+  name: "Team query",
+  is_owner: false,
+  owner_id: MEMBER_USER.id,
+  owner_name: "Test Member",
+  visibility: "public",
+  can_edit: false,
+  query: { type: "Application", related: [{ relation: "relAppToITC", type: "ITComponent" }] },
+});
+const QUERY_REL_TYPES = [REL_APP_TO_ITC, REL_APP_TO_BC];
+
+describe("InventoryFilterSidebar — query views", () => {
+  it("applies a query view: its start type and stored facets, and puts its query in force", async () => {
+    mockApi.on("get", "/bookmarks", [QUERY_VIEW, MY_VIEW]);
+    const onApplyQuery = vi.fn();
+    const onGroupByChange = vi.fn();
+    const { last } = await renderSidebar({
+      onApplyQuery,
+      onGroupByChange,
+      relationTypes: QUERY_REL_TYPES,
+    });
+    openTab("Views");
+    fireEvent.click(screen.getByRole("button", { name: /Apps on live tech/ }));
+    expect(onApplyQuery).toHaveBeenCalledTimes(1);
+    expect(onApplyQuery).toHaveBeenLastCalledWith({
+      viewId: "bm-q",
+      name: "Apps on live tech",
+      query: VIEW_QUERY,
+      createdVia: "mcp",
+    });
+    expect(last()).toEqual({
+      ...EMPTY_FILTERS,
+      types: ["Application"],
+      search: "erp",
+      lifecyclePhases: ["active"],
+    });
+    expect(onGroupByChange).toHaveBeenLastCalledWith("subtype");
+
+    // A plain view drops the query.
+    fireEvent.click(screen.getByRole("button", { name: /My App View/ }));
+    expect(onApplyQuery).toHaveBeenCalledTimes(2);
+    expect(onApplyQuery).toHaveBeenLastCalledWith(null);
+  });
+
+  it("drops the query on Clear all", async () => {
+    const onApplyQuery = vi.fn();
+    const { last } = await renderSidebar({
+      onApplyQuery,
+      initialFilters: { types: ["Application"] },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /Clear all/ }));
+    expect(last()).toEqual(EMPTY_FILTERS);
+    expect(onApplyQuery).toHaveBeenCalledTimes(1);
+    expect(onApplyQuery).toHaveBeenCalledWith(null);
+  });
+
+  it("badges a query view by its origin and reads it as its path", async () => {
+    mockApi.on("get", "/bookmarks", [QUERY_VIEW, MY_VIEW, SHARED_QUERY_VIEW]);
+    await renderSidebar({ relationTypes: QUERY_REL_TYPES });
+    openTab("Views");
+    const row = screen.getByRole("button", { name: /Apps on live tech/ });
+    // An assistant's view carries the robot, a view built here the query-view glyph.
+    expect(within(row).getByRole("img", { name: "Query view" })).toHaveTextContent(/^smart_toy$/);
+    expect(row).toHaveTextContent("Application › uses IT Component +1");
+    // An owned query view needs no owner tooltip.
+    expect(within(row).queryByTitle(/^by /)).not.toBeInTheDocument();
+
+    const plain = screen.getByRole("button", { name: /My App View/ });
+    expect(within(plain).queryByRole("img", { name: "Query view" })).not.toBeInTheDocument();
+    expect(plain).not.toHaveTextContent("›");
+
+    // Someone else's query view keeps the path on the line; the owner moves
+    // into a tooltip.
+    const shared = screen.getByRole("button", { name: /Team query/ });
+    expect(within(shared).getByRole("img", { name: "Query view" })).toHaveTextContent(
+      /^view_in_ar$/,
+    );
+    expect(shared).toHaveTextContent("Application › uses IT Component");
+    expect(shared).not.toHaveTextContent("+1");
+    expect(shared).not.toHaveTextContent("by Test Member");
+    expect(within(shared).getByTitle("by Test Member")).toHaveTextContent(
+      "Application › uses IT Component",
+    );
+  });
+
+  it("ends a query view's path with its condition count", async () => {
+    const EOL_VIEW = makeBookmark({
+      id: "bm-eol",
+      name: "Apps at or near end of life",
+      query: { type: "Application", where: { eol_status: ["eol", "approaching"], subtype: ["x"] } },
+    });
+    mockApi.on("get", "/bookmarks", [QUERY_VIEW, EOL_VIEW, SHARED_QUERY_VIEW]);
+    await renderSidebar({ relationTypes: QUERY_REL_TYPES });
+    openTab("Views");
+    const secondary = (name: RegExp) =>
+      screen.getByRole("button", { name }).querySelector(".MuiListItemText-secondary")!.textContent;
+    expect(secondary(/Apps at or near end of life/)).toBe("Application · 2 conditions");
+    expect(secondary(/Apps on live tech/)).toBe("Application › uses IT Component +1 · 1 condition");
+    expect(secondary(/Team query/)).toBe("Application › uses IT Component");
+  });
+
+  it("reads a stacked query view as its lines joined by AND and OR, its icon by its start types", async () => {
+    const STACK_VIEW = makeBookmark({
+      id: "bm-s",
+      name: "Stacked",
+      query: {
+        any_of: [
+          { all_of: [{ type: "Application" }, { type: "Application" }] },
+          { type: "BusinessCapability" },
+        ],
+      },
+      filters: { types: ["Application", "BusinessCapability"] },
+    });
+    const ONE_TYPE_VIEW = makeBookmark({
+      id: "bm-a",
+      name: "Anded",
+      query: { all_of: [{ type: "Application" }, { type: "Application" }] },
+      filters: {},
+    });
+    mockApi.on("get", "/bookmarks", [STACK_VIEW, ONE_TYPE_VIEW]);
+    await renderSidebar({ relationTypes: QUERY_REL_TYPES });
+    openTab("Views");
+    const row = screen.getByRole("button", { name: /Stacked/ });
+    expect(row).toHaveTextContent("Application AND Application +1");
+    // Two start types: no one type's icon.
+    expect(row.querySelector(".MuiListItemIcon-root")).toHaveTextContent(/^bookmark$/);
+    const anded = screen.getByRole("button", { name: /Anded/ });
+    expect(anded).toHaveTextContent("Application AND Application");
+    expect(anded).not.toHaveTextContent("+1");
+    expect(anded.querySelector(".MuiListItemIcon-root")).toHaveTextContent(/^apps$/);
+  });
+
+  it("saves a stacked query from the strip with both start types and no card type", async () => {
+    const BUILT = { any_of: [{ type: "Application" }, { type: "BusinessCapability" }] };
+    mockApi.on("post", "/bookmarks", (_path, body) => ({
+      ...makeBookmark({ id: "bm-built", name: "Built" }),
+      ...(body as object),
+      created_via: "web",
+    }));
+    const props = { initialFilters: { types: ["Application", "BusinessCapability"] } };
+    const { rerender } = await renderSidebar(props);
+    rerender(<Harness {...props} pendingSave={BUILT} />);
+    const dialog = screen.getByRole("dialog");
+    fireEvent.change(within(dialog).getByLabelText("View name"), { target: { value: "Built" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(mockApi.callsOf("post")).toHaveLength(1));
+    const body = mockApi.callsOf("post")[0].body as Record<string, unknown>;
+    expect(body.query).toEqual(BUILT);
+    expect(body.card_type).toBeUndefined();
+    expect((body.filters as { types: string[] }).types).toEqual(["Application", "BusinessCapability"]);
+  });
+
+  it("edits a query view's name, sharing, OData and layout, never its facets or query", async () => {
+    mockApi.on("get", "/bookmarks", [QUERY_VIEW]);
+    mockApi.on("patch", "/bookmarks/bm-q", { ...QUERY_VIEW, name: "Renamed" });
+    await renderSidebar({
+      relationTypes: QUERY_REL_TYPES,
+      // Facets on screen differ from the view's stored ones: they must not leak in.
+      initialFilters: { types: ["ITComponent"], search: "linux", staleOnly: true },
+      selectedColumns: new Set(["core_type", "core_name", "core_lifecycle"]),
+      columnState: [{ colId: "core_lifecycle", width: 180 }],
+      columnFilterModel: { core_name: { filter: "sap" } },
+      groupBy: "lifecycle",
+      groupTree: true,
+      groupTreeLevel: 2,
+    });
+    openTab("Views");
+    const row = screen.getByRole("button", { name: /Apps on live tech/ });
+    fireEvent.click(within(row).getByRole("button", { name: "edit" }));
+    const dialog = screen.getByRole("dialog");
+    expect(within(dialog).queryByText(/MCP/)).not.toBeInTheDocument();
+    expect(within(dialog).queryByText(/active filter/)).not.toBeInTheDocument();
+
+    fireEvent.change(within(dialog).getByLabelText("View name"), { target: { value: "Renamed" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Update" }));
+    await waitFor(() => expect(mockApi.callsOf("patch")).toHaveLength(1));
+    const [call] = mockApi.callsOf("patch");
+    expect(call.path).toBe("/bookmarks/bm-q");
+    expect(call.body).toEqual({
+      name: "Renamed",
+      visibility: "private",
+      odata_enabled: false,
+      shared_with: null,
+      columns: ["core_type", "core_name", "core_lifecycle"],
+      column_state: [{ colId: "core_lifecycle", width: 180 }],
+      column_filter_model: { core_name: { filter: "sap" } },
+      filters: {
+        search: "erp",
+        lifecyclePhases: ["active"],
+        groupBy: "lifecycle",
+        groupTree: true,
+        groupTreeLevel: 2,
+      },
+    });
+    expect(call.body).not.toHaveProperty("query");
+    expect(mockApi.callsOf("post")).toHaveLength(0);
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(mockApi.callsOf("get", "/bookmarks")).toHaveLength(2);
+  });
+
+  it("editing a plain view still saves the current facets", async () => {
+    mockApi.on("get", "/bookmarks", [MY_VIEW]);
+    mockApi.on("patch", "/bookmarks/bm-1", MY_VIEW);
+    await renderSidebar({ initialFilters: { types: ["ITComponent"], search: "linux" } });
+    openTab("Views");
+    fireEvent.click(
+      within(screen.getByRole("button", { name: /My App View/ })).getByRole("button", {
+        name: "edit",
+      }),
+    );
+    const dialog = screen.getByRole("dialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Update" }));
+    await waitFor(() => expect(mockApi.callsOf("patch")).toHaveLength(1));
+    expect(mockApi.callsOf("patch")[0].body).toMatchObject({
+      card_type: "ITComponent",
+      filters: { types: ["ITComponent"], search: "linux" },
+    });
+  });
+
+  it("highlights the view the page applied, and lets go of it when the page does", async () => {
+    mockApi.on("get", "/bookmarks", [QUERY_VIEW, MY_VIEW]);
+    const base = { relationTypes: QUERY_REL_TYPES };
+    const { rerender } = await renderSidebar({ ...base, externalActiveViewId: "bm-q" });
+    openTab("Views");
+    const queryRow = () => screen.getByRole("button", { name: /Apps on live tech/ });
+    const plainRow = () => screen.getByRole("button", { name: /My App View/ });
+    expect(queryRow()).toHaveClass("Mui-selected");
+    expect(sidebarPrefs().activeViewId).toBe("bm-q");
+
+    rerender(<Harness {...base} externalActiveViewId={null} />);
+    expect(queryRow()).not.toHaveClass("Mui-selected");
+    expect(sidebarPrefs().activeViewId).toBeNull();
+
+    // A view the user picked since is kept when the page lets go of its own.
+    rerender(<Harness {...base} externalActiveViewId="bm-q" />);
+    expect(queryRow()).toHaveClass("Mui-selected");
+    fireEvent.click(plainRow());
+    rerender(<Harness {...base} externalActiveViewId={null} />);
+    expect(plainRow()).toHaveClass("Mui-selected");
+    expect(queryRow()).not.toHaveClass("Mui-selected");
+  });
+
+  it("saves a copy of the query view in force from Save current, query included", async () => {
+    mockApi.on("get", "/bookmarks", [QUERY_VIEW]);
+    mockApi.on("post", "/bookmarks", { ...QUERY_VIEW, id: "bm-copy", name: "Copy", created_via: "web" });
+    const onApplyQuery = vi.fn();
+    await renderSidebar({
+      relationTypes: QUERY_REL_TYPES,
+      externalActiveViewId: "bm-q",
+      onApplyQuery,
+      initialFilters: { types: ["Application"], search: "erp" },
+    });
+    openTab("Views");
+    const button = screen.getByRole("button", { name: /Save current/ });
+    expect(button.getAttribute("title") ?? "").toBe("");
+    fireEvent.click(button);
+    const dialog = screen.getByRole("dialog");
+    expect(within(dialog).queryByText(/MCP/)).not.toBeInTheDocument();
+    fireEvent.change(within(dialog).getByLabelText("View name"), { target: { value: "Copy" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(mockApi.callsOf("post")).toHaveLength(1));
+    const body = mockApi.callsOf("post")[0].body as Record<string, unknown>;
+    expect(body.query).toEqual(VIEW_QUERY);
+    expect(body.card_type).toBe("Application");
+    expect(body).toMatchObject({ name: "Copy", filters: { types: ["Application"], search: "erp" } });
+    expect(onApplyQuery).toHaveBeenCalledTimes(1);
+    expect(onApplyQuery).toHaveBeenCalledWith({
+      viewId: "bm-copy",
+      name: "Copy",
+      query: VIEW_QUERY,
+      createdVia: "web",
+    });
+  });
+
+  it("saves a plain view from Save current when the applied view is a plain one", async () => {
+    mockApi.on("get", "/bookmarks", [MY_VIEW]);
+    mockApi.on("post", "/bookmarks", { ...MY_VIEW, id: "bm-new" });
+    const onApplyQuery = vi.fn();
+    await renderSidebar({
+      externalActiveViewId: "bm-1",
+      onApplyQuery,
+      initialFilters: { types: ["Application", "ITComponent"] },
+    });
+    openTab("Views");
+    fireEvent.click(screen.getByRole("button", { name: /Save current/ }));
+    const dialog = screen.getByRole("dialog");
+    fireEvent.change(within(dialog).getByLabelText("View name"), { target: { value: "Plain" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(mockApi.callsOf("post")).toHaveLength(1));
+    const body = mockApi.callsOf("post")[0].body as Record<string, unknown>;
+    expect(body).not.toHaveProperty("query");
+    expect(body.card_type).toBeUndefined();
+    expect(body).toMatchObject({ filters: { types: ["Application", "ITComponent"] } });
+    expect(onApplyQuery).not.toHaveBeenCalled();
+  });
+
+  it("offers New query view only to someone who may save views", async () => {
+    const onStartQueryDraft = vi.fn();
+    const { unmount } = await renderSidebar({ onStartQueryDraft });
+    openTab("Views");
+    expect(screen.queryByTestId("new-query-view")).not.toBeInTheDocument();
+    unmount();
+
+    await renderSidebar({ onStartQueryDraft, canManageBookmarks: true });
+    const button = screen.getByRole("button", { name: /New query view/ });
+    expect(button).toHaveAttribute("data-testid", "new-query-view");
+    expect(button).toHaveTextContent(/^view_in_ar/);
+    // Two-row header: the title stands alone, the actions sit on their own
+    // wrapping row, "Save current" first.
+    const title = screen.getByText("Saved Views");
+    const actions = screen.getByTestId("views-header-actions");
+    expect(actions).not.toContainElement(title);
+    expect(actions).toHaveStyle({ flexWrap: "wrap" });
+    expect(within(actions).getAllByRole("button").map((b) => b.dataset.testid)).toEqual([
+      "save-current-view",
+      "new-query-view",
+    ]);
+    expect(onStartQueryDraft).not.toHaveBeenCalled();
+    fireEvent.click(button);
+    expect(onStartQueryDraft).toHaveBeenCalledTimes(1);
+  });
+
+  it("opens the save dialog for a query built in the strip and saves it as a new query view", async () => {
+    const BUILT = { type: "ITComponent", where: { tags: ["tag-1"] } };
+    mockApi.on("post", "/bookmarks", (_path, body) => ({
+      ...makeBookmark({ id: "bm-built", name: "Built" }),
+      ...(body as object),
+      created_via: "web",
+    }));
+    const onPendingSaveHandled = vi.fn();
+    const onApplyQuery = vi.fn();
+    const props = {
+      onPendingSaveHandled,
+      onApplyQuery,
+      initialFilters: { types: ["ITComponent"], search: "linux" },
+    };
+    const { rerender } = await renderSidebar(props);
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(onPendingSaveHandled).not.toHaveBeenCalled();
+
+    rerender(<Harness {...props} pendingSave={BUILT} />);
+    const dialog = screen.getByRole("dialog");
+    expect(onPendingSaveHandled).toHaveBeenCalledTimes(1);
+    fireEvent.change(within(dialog).getByLabelText("View name"), { target: { value: "Built" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(mockApi.callsOf("post")).toHaveLength(1));
+    const body = mockApi.callsOf("post")[0].body as Record<string, unknown>;
+    expect(body.query).toEqual(BUILT);
+    expect(body.card_type).toBe("ITComponent");
+    expect(body).toMatchObject({ name: "Built", filters: { types: ["ITComponent"], search: "linux" } });
+    expect(onApplyQuery).toHaveBeenCalledWith({
+      viewId: "bm-built",
+      name: "Built",
+      query: BUILT,
+      createdVia: "web",
+    });
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(mockApi.callsOf("get", "/bookmarks")).toHaveLength(2);
+  });
+
+  it("forgets a strip query whose save dialog was cancelled", async () => {
+    mockApi.on("post", "/bookmarks", { id: "bm-x" });
+    const props = { initialFilters: { types: ["ITComponent"] } };
+    const { rerender } = await renderSidebar(props);
+    rerender(<Harness {...props} pendingSave={{ type: "ITComponent" }} />);
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Cancel" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    openTab("Views");
+    fireEvent.click(screen.getByRole("button", { name: /Save current/ }));
+    const dialog = screen.getByRole("dialog");
+    fireEvent.change(within(dialog).getByLabelText("View name"), { target: { value: "Plain" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(mockApi.callsOf("post")).toHaveLength(1));
+    expect(mockApi.callsOf("post")[0].body).not.toHaveProperty("query");
+  });
+
+  it("saves the draft open in the strip from Save current, not the view in force", async () => {
+    const DRAFT = { type: "Application", where: { lifecycle_phase: ["active"] } };
+    mockApi.on("get", "/bookmarks", [QUERY_VIEW]);
+    mockApi.on("post", "/bookmarks", (_path, body) => ({
+      ...makeBookmark({ id: "bm-draft", name: "From draft" }),
+      ...(body as object),
+      created_via: "web",
+    }));
+    const onApplyQuery = vi.fn();
+    await renderSidebar({
+      relationTypes: QUERY_REL_TYPES,
+      externalActiveViewId: "bm-q",
+      draftQuery: DRAFT,
+      onApplyQuery,
+      initialFilters: { types: ["Application"] },
+    });
+    openTab("Views");
+    const button = screen.getByRole("button", { name: /Save current/ });
+    expect(button).toBeEnabled();
+    fireEvent.click(button);
+    const dialog = screen.getByRole("dialog");
+    fireEvent.change(within(dialog).getByLabelText("View name"), {
+      target: { value: "From draft" },
+    });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(mockApi.callsOf("post")).toHaveLength(1));
+    const body = mockApi.callsOf("post")[0].body as Record<string, unknown>;
+    expect(body.query).toEqual(DRAFT);
+    expect(body.card_type).toBe("Application");
+    expect(onApplyQuery).toHaveBeenCalledTimes(1);
+    expect(onApplyQuery).toHaveBeenCalledWith({
+      viewId: "bm-draft",
+      name: "From draft",
+      query: DRAFT,
+      createdVia: "web",
+    });
+  });
+
+  it.each([
+    ["without a type", { type: "" }],
+    ["with a condition still empty", { type: "Application", where: { lifecycle_phase: [] } }],
+  ])("holds both save buttons while the draft is %s", async (_label, draft) => {
+    await renderSidebar({ draftQuery: draft, initialFilters: { types: ["Application"] } });
+    const saveView = screen.getByTestId("save-view");
+    expect(saveView).toBeDisabled();
+    fireEvent.mouseOver(saveView.parentElement as HTMLElement);
+    expect(await screen.findByRole("tooltip")).toHaveTextContent("Finish the query first");
+
+    openTab("Views");
+    const saveCurrent = screen.getByRole("button", { name: /Save current/ });
+    expect(saveCurrent).toBeDisabled();
+    fireEvent.click(saveCurrent);
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("leaves the save buttons alone without a draft or with a finished one", async () => {
+    const { unmount } = await renderSidebar();
+    expect(screen.getByTestId("save-view")).toBeEnabled();
+    unmount();
+    await renderSidebar({ draftQuery: { type: "Application" } });
+    expect(screen.getByTestId("save-view")).toBeEnabled();
+    openTab("Views");
+    expect(screen.getByRole("button", { name: /Save current/ })).toBeEnabled();
+  });
+
+  it("locks the Types facet while a query draft is open", async () => {
+    const { changes } = await renderSidebar({
+      typesLocked: true,
+      initialFilters: { types: ["Application"] },
+    });
+    const locked = screen.getAllByTestId("type-facet-locked");
+    expect(locked.length).toBeGreaterThan(0);
+    const row = screen.getByText("IT Component").closest(".MuiListItemButton-root") as HTMLElement;
+    expect(row).toHaveClass("Mui-disabled");
+    const boxes = locked.map((el) => el.querySelector("input[type=checkbox]") as HTMLInputElement);
+    expect(boxes.every((b) => b.disabled)).toBe(true);
+    fireEvent.click(screen.getByText("IT Component"));
+    expect(changes).toHaveLength(0);
+    fireEvent.mouseOver(locked[0]);
+    expect(await screen.findByRole("tooltip")).toHaveTextContent(
+      "Close the query editor to change the type",
+    );
+  });
+
+  it("leaves the Types facet open without a draft", async () => {
+    const { last } = await renderSidebar({ initialFilters: { types: ["Application"] } });
+    expect(screen.queryByTestId("type-facet-locked")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByText("IT Component"));
+    expect(last().types).toEqual(["Application", "ITComponent"]);
+  });
+
+  it("hands every loaded list to the page and reloads when the page bumps the revision", async () => {
+    mockApi.on("get", "/bookmarks", [QUERY_VIEW, MY_VIEW]);
+    const onBookmarksLoaded = vi.fn();
+    const { rerender } = await renderSidebar({ onBookmarksLoaded });
+    expect(onBookmarksLoaded).toHaveBeenCalledTimes(1);
+    expect(onBookmarksLoaded).toHaveBeenLastCalledWith([QUERY_VIEW, MY_VIEW]);
+
+    rerender(<Harness onBookmarksLoaded={onBookmarksLoaded} bookmarksRevision={0} />);
+    await act(async () => {});
+    expect(mockApi.callsOf("get", "/bookmarks")).toHaveLength(1);
+
+    mockApi.on("get", "/bookmarks", [MY_VIEW]);
+    rerender(<Harness onBookmarksLoaded={onBookmarksLoaded} bookmarksRevision={1} />);
+    await waitFor(() => expect(onBookmarksLoaded).toHaveBeenCalledTimes(2));
+    expect(onBookmarksLoaded).toHaveBeenLastCalledWith([MY_VIEW]);
+    expect(mockApi.callsOf("get", "/bookmarks")).toHaveLength(2);
+  });
+});
+
+describe("InventoryFilterSidebar — matched-cards columns", () => {
+  const VIA_VIEW = makeBookmark({
+    ...QUERY_VIEW,
+    columns: ["core_type", "core_name", "via:0:0"],
+  });
+  const OTHER_VIA_VIEW = makeBookmark({
+    ...SHARED_QUERY_VIEW,
+    id: "bm-other",
+    name: "Other query",
+    is_owner: true,
+    can_edit: true,
+    columns: ["core_name", "via:0:0"],
+  });
+
+  it("applies the picker's columns without the via: entries and hands the view to the page", async () => {
+    mockApi.on("get", "/bookmarks", [VIA_VIEW]);
+    const onApplyViewViaColumns = vi.fn();
+    const { lastColumns } = await renderSidebar({
+      relationTypes: QUERY_REL_TYPES,
+      onApplyViewViaColumns,
+    });
+    openTab("Views");
+    fireEvent.click(screen.getByRole("button", { name: /Apps on live tech/ }));
+    expect([...lastColumns()]).toEqual(["core_type", "core_name"]);
+    expect(onApplyViewViaColumns).toHaveBeenCalledTimes(1);
+    expect(onApplyViewViaColumns).toHaveBeenCalledWith(VIA_VIEW);
+  });
+
+  it("leaves the picker alone for a view storing only via: entries", async () => {
+    const onlyVia = makeBookmark({ ...QUERY_VIEW, columns: ["via:0:0"] });
+    mockApi.on("get", "/bookmarks", [onlyVia]);
+    const onApplyViewViaColumns = vi.fn();
+    const { columnChanges } = await renderSidebar({
+      relationTypes: QUERY_REL_TYPES,
+      onApplyViewViaColumns,
+    });
+    openTab("Views");
+    fireEvent.click(screen.getByRole("button", { name: /Apps on live tech/ }));
+    expect(columnChanges).toHaveLength(0);
+    expect(onApplyViewViaColumns).toHaveBeenCalledWith(onlyVia);
+  });
+
+  it("a new view stores the via: entries the page gives for its query", async () => {
+    mockApi.on("get", "/bookmarks", [QUERY_VIEW]);
+    mockApi.on("post", "/bookmarks", { ...QUERY_VIEW, id: "bm-copy", name: "Copy" });
+    const viaColumnsFor = vi.fn(() => ["via:0:0"]);
+    await renderSidebar({
+      relationTypes: QUERY_REL_TYPES,
+      externalActiveViewId: "bm-q",
+      viaColumnsFor,
+      selectedColumns: new Set(["core_type", "core_name"]),
+    });
+    openTab("Views");
+    fireEvent.click(screen.getByRole("button", { name: /Save current/ }));
+    const dialog = screen.getByRole("dialog");
+    fireEvent.change(within(dialog).getByLabelText("View name"), { target: { value: "Copy" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(mockApi.callsOf("post")).toHaveLength(1));
+    expect(viaColumnsFor).toHaveBeenCalledWith(VIEW_QUERY);
+    expect((mockApi.callsOf("post")[0].body as { columns: string[] }).columns).toEqual([
+      "core_type",
+      "core_name",
+      "via:0:0",
+    ]);
+  });
+
+  it("updating the view in force stores the page's via: entries for its query", async () => {
+    mockApi.on("get", "/bookmarks", [VIA_VIEW]);
+    mockApi.on("patch", "/bookmarks/bm-q", VIA_VIEW);
+    const viaColumnsFor = vi.fn(() => ["via:0:0"]);
+    await renderSidebar({
+      relationTypes: QUERY_REL_TYPES,
+      externalActiveViewId: "bm-q",
+      viaColumnsFor,
+      selectedColumns: new Set(["core_name"]),
+    });
+    openTab("Views");
+    const row = screen.getByRole("button", { name: /Apps on live tech/ });
+    fireEvent.click(within(row).getByRole("button", { name: "edit" }));
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Update" }));
+    await waitFor(() => expect(mockApi.callsOf("patch")).toHaveLength(1));
+    expect(viaColumnsFor).toHaveBeenCalledWith(VIEW_QUERY);
+    expect((mockApi.callsOf("patch")[0].body as { columns: string[] }).columns).toEqual([
+      "core_name",
+      "via:0:0",
+    ]);
+  });
+
+  it("updating another query view keeps its own via: entries", async () => {
+    mockApi.on("get", "/bookmarks", [VIA_VIEW, OTHER_VIA_VIEW]);
+    mockApi.on("patch", "/bookmarks/bm-other", OTHER_VIA_VIEW);
+    const viaColumnsFor = vi.fn(() => ["via:9:9"]);
+    await renderSidebar({
+      relationTypes: QUERY_REL_TYPES,
+      externalActiveViewId: "bm-q",
+      viaColumnsFor,
+      selectedColumns: new Set(["core_name"]),
+    });
+    openTab("Views");
+    const row = screen.getByRole("button", { name: /Other query/ });
+    fireEvent.click(within(row).getByRole("button", { name: "edit" }));
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Update" }));
+    await waitFor(() => expect(mockApi.callsOf("patch")).toHaveLength(1));
+    expect(viaColumnsFor).not.toHaveBeenCalled();
+    expect((mockApi.callsOf("patch")[0].body as { columns: string[] }).columns).toEqual([
+      "core_name",
+      "via:0:0",
+    ]);
+  });
+
+  const F_SAP = { filterType: "text", type: "contains", filter: "SAP" };
+  const F_ERP = { filterType: "text", type: "contains", filter: "ERP" };
+
+  it("applies a view's layout less the via: entries for steps it does not switch on", async () => {
+    const stale = makeBookmark({
+      ...QUERY_VIEW,
+      columns: ["core_name", "via:0:0", "via:0:1"],
+      column_filter_model: { core_name: F_ERP, "via:0:0": F_SAP, "via:0:1": F_SAP, "via:5:0": F_SAP },
+      column_state: [
+        { colId: "core_name", width: 300 },
+        { colId: "via:0:0", width: 120 },
+        { colId: "via:0:1", width: 140 },
+      ],
+    });
+    mockApi.on("get", "/bookmarks", [stale]);
+    const onApplyColumnState = vi.fn();
+    const onApplyColumnFilters = vi.fn();
+    await renderSidebar({
+      relationTypes: QUERY_REL_TYPES,
+      onApplyColumnState,
+      onApplyColumnFilters,
+    });
+    openTab("Views");
+    fireEvent.click(screen.getByRole("button", { name: /Apps on live tech/ }));
+    // 0:1 is the "has no" hop, 5:0 no step at all: only 0:0 is on.
+    expect(onApplyColumnFilters).toHaveBeenCalledWith({ core_name: F_ERP, "via:0:0": F_SAP });
+    expect(onApplyColumnState).toHaveBeenCalledWith([
+      { colId: "core_name", width: 300 },
+      { colId: "via:0:0", width: 120 },
+    ]);
+  });
+
+  it("saves the grid's layout less the via: entries for steps the view does not keep", async () => {
+    mockApi.on("get", "/bookmarks", [VIA_VIEW]);
+    mockApi.on("patch", "/bookmarks/bm-q", VIA_VIEW);
+    await renderSidebar({
+      relationTypes: QUERY_REL_TYPES,
+      externalActiveViewId: "bm-q",
+      viaColumnsFor: () => ["via:0:0"],
+      selectedColumns: new Set(["core_name"]),
+      columnFilterModel: { core_name: F_ERP, "via:0:0": F_SAP, "via:0:1": F_SAP },
+      columnState: [
+        { colId: "core_name", width: 300 },
+        { colId: "via:0:1", width: 140 },
+      ],
+    });
+    openTab("Views");
+    const row = screen.getByRole("button", { name: /Apps on live tech/ });
+    fireEvent.click(within(row).getByRole("button", { name: "edit" }));
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Update" }));
+    await waitFor(() => expect(mockApi.callsOf("patch")).toHaveLength(1));
+    expect(mockApi.callsOf("patch")[0].body).toMatchObject({
+      columns: ["core_name", "via:0:0"],
+      column_filter_model: { core_name: F_ERP, "via:0:0": F_SAP },
+      column_state: [{ colId: "core_name", width: 300 }],
+    });
+  });
+
+  it("a filter model left with nothing is saved as none", async () => {
+    mockApi.on("get", "/bookmarks", [VIA_VIEW]);
+    mockApi.on("patch", "/bookmarks/bm-q", VIA_VIEW);
+    await renderSidebar({
+      relationTypes: QUERY_REL_TYPES,
+      externalActiveViewId: "bm-q",
+      viaColumnsFor: () => [],
+      selectedColumns: new Set(["core_name"]),
+      columnFilterModel: { "via:0:0": F_SAP },
+    });
+    openTab("Views");
+    const row = screen.getByRole("button", { name: /Apps on live tech/ });
+    fireEvent.click(within(row).getByRole("button", { name: "edit" }));
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Update" }));
+    await waitFor(() => expect(mockApi.callsOf("patch")).toHaveLength(1));
+    expect(mockApi.callsOf("patch")[0].body).toMatchObject({
+      columns: ["core_name"],
+      column_filter_model: null,
+      column_state: null,
+    });
+  });
+
+  it("updating the view in force re-anchors the page's columns on what was saved", async () => {
+    const saved = makeBookmark({ ...VIA_VIEW, columns: ["core_name", "via:0:0"] });
+    mockApi.on("get", "/bookmarks", [VIA_VIEW]);
+    mockApi.on("patch", "/bookmarks/bm-q", saved);
+    const onApplyViewViaColumns = vi.fn();
+    await renderSidebar({
+      relationTypes: QUERY_REL_TYPES,
+      externalActiveViewId: "bm-q",
+      viaColumnsFor: () => ["via:0:0"],
+      onApplyViewViaColumns,
+      selectedColumns: new Set(["core_name"]),
+    });
+    openTab("Views");
+    const row = screen.getByRole("button", { name: /Apps on live tech/ });
+    fireEvent.click(within(row).getByRole("button", { name: "edit" }));
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Update" }));
+    await waitFor(() => expect(onApplyViewViaColumns).toHaveBeenCalledTimes(1));
+    expect(onApplyViewViaColumns).toHaveBeenCalledWith(saved);
+  });
+
+  it("updating the view in force with no answer re-anchors on what was sent", async () => {
+    mockApi.on("get", "/bookmarks", [VIA_VIEW]);
+    mockApi.on("patch", "/bookmarks/bm-q", undefined);
+    const onApplyViewViaColumns = vi.fn();
+    await renderSidebar({
+      relationTypes: QUERY_REL_TYPES,
+      externalActiveViewId: "bm-q",
+      viaColumnsFor: () => [],
+      onApplyViewViaColumns,
+      selectedColumns: new Set(["core_name"]),
+    });
+    openTab("Views");
+    const row = screen.getByRole("button", { name: /Apps on live tech/ });
+    fireEvent.click(within(row).getByRole("button", { name: "edit" }));
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Update" }));
+    await waitFor(() => expect(onApplyViewViaColumns).toHaveBeenCalledTimes(1));
+    expect(onApplyViewViaColumns).toHaveBeenCalledWith({ ...VIA_VIEW, columns: ["core_name"] });
+  });
+
+  it("updating another view leaves the page's columns alone", async () => {
+    mockApi.on("get", "/bookmarks", [VIA_VIEW, OTHER_VIA_VIEW]);
+    mockApi.on("patch", "/bookmarks/bm-other", OTHER_VIA_VIEW);
+    const onApplyViewViaColumns = vi.fn();
+    await renderSidebar({
+      relationTypes: QUERY_REL_TYPES,
+      externalActiveViewId: "bm-q",
+      viaColumnsFor: () => ["via:0:0"],
+      onApplyViewViaColumns,
+      selectedColumns: new Set(["core_name"]),
+    });
+    openTab("Views");
+    const row = screen.getByRole("button", { name: /Other query/ });
+    fireEvent.click(within(row).getByRole("button", { name: "edit" }));
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Update" }));
+    await waitFor(() => expect(mockApi.callsOf("patch")).toHaveLength(1));
+    await act(async () => {});
+    expect(onApplyViewViaColumns).not.toHaveBeenCalled();
+  });
+
+  it("a new query view is put in force anchored on the query and keys it was saved with", async () => {
+    mockApi.on("get", "/bookmarks", [QUERY_VIEW]);
+    mockApi.on("post", "/bookmarks", { ...QUERY_VIEW, id: "bm-copy", name: "Copy", columns: undefined });
+    const onApplyViewViaColumns = vi.fn();
+    const onApplyQuery = vi.fn();
+    await renderSidebar({
+      relationTypes: QUERY_REL_TYPES,
+      externalActiveViewId: "bm-q",
+      viaColumnsFor: () => ["via:0:0"],
+      onApplyViewViaColumns,
+      onApplyQuery,
+      selectedColumns: new Set(["core_name"]),
+    });
+    openTab("Views");
+    fireEvent.click(screen.getByRole("button", { name: /Save current/ }));
+    const dialog = screen.getByRole("dialog");
+    fireEvent.change(within(dialog).getByLabelText("View name"), { target: { value: "Copy" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(onApplyViewViaColumns).toHaveBeenCalledTimes(1));
+    const anchored = onApplyViewViaColumns.mock.calls[0][0];
+    expect(anchored.id).toBe("bm-copy");
+    expect(anchored.query).toEqual(VIEW_QUERY);
+    expect(anchored.columns).toEqual(["core_name", "via:0:0"]);
+    expect(onApplyQuery).toHaveBeenLastCalledWith(expect.objectContaining({ viewId: "bm-copy" }));
+  });
+
+  it("updating a plain view stores no via: entries", async () => {
+    mockApi.on("get", "/bookmarks", [MY_VIEW]);
+    mockApi.on("patch", "/bookmarks/bm-1", MY_VIEW);
+    const viaColumnsFor = vi.fn(() => ["via:0:0"]);
+    await renderSidebar({ viaColumnsFor, selectedColumns: new Set(["core_name"]) });
+    openTab("Views");
+    fireEvent.click(
+      within(screen.getByRole("button", { name: /My App View/ })).getByRole("button", {
+        name: "edit",
+      }),
+    );
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Update" }));
+    await waitFor(() => expect(mockApi.callsOf("patch")).toHaveLength(1));
+    expect((mockApi.callsOf("patch")[0].body as { columns: string[] }).columns).toEqual([
+      "core_name",
+    ]);
   });
 });

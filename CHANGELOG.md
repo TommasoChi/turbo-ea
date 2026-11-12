@@ -5,6 +5,182 @@ All notable changes to Turbo EA are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.202.0] - 2026-11-11
+
+### Changed
+
+- **Synced with upstream 2.201.2.** Brings the fork up to date with upstream: decision register and discussions, mentions, custom EOL products, multi-hop inventory views, lifecycle phase help, saved-view MCP tools, a token-based colour palette and the Layered Dependency View drag and label fixes. The fork's Cost Report (Sankey, drill-down, cost items) is kept as is, so upstream's Full/Split attribution applies to the capability heatmap only; the upstream migrations 162-171 are renumbered 182-191.
+
+## [2.201.2] - 2026-11-11
+
+### Fixed
+- The role marked as default in Users & Roles is now applied when a user is created from the application: the Create user dialog opens with it selected, and a user invited from a card's Stakeholders tab receives it instead of always becoming a Member ([#1388](https://github.com/vincentmakes/turbo-ea/issues/1388)).
+
+## [2.201.1] - 2026-11-11
+
+### Fixed
+- Azure Hosted OpenAI works with the endpoint the Azure portal shows for newer deployments, the one ending in `/openai/v1/`: Test Connection, AI suggestions and TurboLens no longer fail with 404, and the API Version field is switched off for it because that endpoint takes none ([#1386](https://github.com/vincentmakes/turbo-ea/issues/1386)).
+- A Provider URL pasted with a trailing `/openai` or as a deployment's full target URI is accepted.
+- An Azure 404 in Test Connection says what to check — the Provider URL and whether API Version holds an API version rather than the model's version — instead of always reporting a missing deployment.
+
+## [2.201.0] - 2026-11-11
+
+### Changed
+- **History of decisions and SoAWs** opens from a **History** button at the top of the page, in one view with the timeline and the selected version (or what changed in it) side by side; the side panel now holds the discussion only.
+- **Mentions**: the **@** list shows each card's type, icon, subtype and parent and each decision's reference, title and standing, lists the decision's linked cards and the document's signatories, decision makers and participants first, and a **Browse…** entry and a **Mention…** toolbar button open the standard pickers to insert several mentions at once.
+- **Discussion sections**: a thread is tagged to a section with a chip instead of the *About* dropdown, and chips at the top of the discussion, each with its thread count, filter the threads by section; every section shows a chat icon beside its heading (its open-thread count, or muted once all are resolved) that opens the discussion on it with the section already selected for a new comment.
+- **Deleted comments** in the discussion of decisions and SoAWs shrink to one small line with their author and date, and a thread whose first comment is deleted can no longer be replied to, resolved or reopened; the replies already there stay.
+
+## [2.200.1] - 2026-11-11
+
+### Fixed
+- A card whose children are all archived can be archived or deleted again: the dialog no longer asks for a child strategy it does not offer. Archived children stay under an archived parent, so restoring both brings the hierarchy back, and are detached — never deleted — when the parent is deleted ([#1382](https://github.com/vincentmakes/turbo-ea/issues/1382)).
+- When a card has children the dialog cannot list, such as cards of a type you may not view, the archive and delete dialog now shows the child strategy choices instead of only an error.
+
+## [2.200.0] - 2026-11-10
+
+### Added
+- **Discussion on decisions and SoAWs** ([#1376](https://github.com/vincentmakes/turbo-ea/discussions/1376)): threads with replies, tagged to a section, resolved and reopened in a panel beside the document; the discussion stays open in review and after signing, and requesting signatures, signing or rejecting warns about open threads.
+- **Mentions**: type **@** in a decision or SoAW to mention a card or another decision, and in a comment to mention a colleague; a card the reader may not see reads *Restricted card* everywhere.
+- **Mentioned in** lists, on a card's ADRs tab and on a decision's preview, the decisions and SoAWs that mention them; the decision editor offers **Link this card** for a mentioned card that is not linked.
+- **History** of decisions and SoAWs: a timeline of everything that happened to the document, a version each time a draft is saved with changes, word-by-word comparison of two versions, and restoring an earlier version onto a draft.
+- Two notification types: **Comments on decisions and SoAWs** and **Mentions in discussions**.
+- Permissions `adr.comment` and `soaw.comment` (on for members and admins, off for viewers); a document's signatories can always comment on it.
+- MCP: `get_document_discussion`, `get_document_history` and `add_document_comment` read and post the discussion and read the timeline of a decision or SoAW.
+- The demo dataset (`SEED_DEMO=true`) shows open, resolved and rejection threads, mentions and three versions of a draft on its decisions, and an open thread on a SoAW; an existing demo install gets them once on its next start.
+
+### Changed
+- Review events of decisions and SoAWs (sent for review, signed, recalled, rejected) are now kept, and recent activity shows them to readers who may open the document.
+- A rejection reason opens a thread in the discussion and a signing note becomes a comment, so neither is lost when signatures are recalled; signing a SoAW can now carry a note.
+- Any signatory holding the sign permission may reject a SoAW, as for decisions.
+- The decision editor links cards through the standard card picker.
+
+### Fixed
+- Review events of decisions and SoAWs were shown live but never stored.
+- A signer's note was wiped when signatures were recalled.
+
+## [2.199.0] - 2026-11-10
+
+### Added
+- **The decision register shows what is in force** ([#1376](https://github.com/vincentmakes/turbo-ea/discussions/1376)): every signed decision has a standing — Scheduled, In force, In force (amended), Superseded, Revoked or Expired — worked out from its dates, its revisions and the decisions that act on it, never set by hand; the register gains a Standing column, filter and grouping, and an **In force** preset.
+- Decisions link to each other by kind — **Replaces**, **Amends**, **Revokes** or **Relates to**, with an optional note for partial cases — shown on both decisions and taking effect once the acting decision is signed and effective.
+- A signed decision is revoked or replaced through a new signed decision: **Revise → Replace with a new decision** or **Revoke** opens a pre-filled draft.
+- An amended decision offers **Create consolidated revision**, a revision that folds the amendment in, names the amending decision and carries a change summary.
+- Decisions carry a **Decided on**, an **Effective from** and an optional **Valid until** date: a decision not yet effective is Scheduled, one past its date is Expired.
+- Decisions record their **decision makers** and **participants**, as users or plain names, separately from the signatories; **Add decision makers** adds them as signatories in one click.
+- Files can be attached to a draft decision, with the same formats and 20 MB limit as card attachments; they lock with the decision and carry into its revisions.
+- **Record as decided** enters a decision taken outside Turbo EA without signatures, labelled Recorded; it needs the new `adr.record` permission (Admin role by default) and is logged in the Security & admin log.
+- The author of a decision is notified when a signed decision replaces, amends or revokes it (**ADR Standing Changed**).
+- The register has Decided on, Effective from, Valid until and Decision makers columns, and a **Show earlier revisions** switch.
+- The decisions spreadsheet export adds the standing, the three dates, decision makers, participants and the replaces / amends / revokes / consolidates links; the Word and PDF exports show the dates, people, linked decisions, file names and the recorded line.
+- Statements of Architecture Work follow the same revision rules as decisions: one open revision at a time, a banner on an earlier revision pointing to the current one, and a revisions strip.
+- MCP: a `revise_adr` tool starts the next revision of a signed decision; `list_adrs` filters by standing; `create_adr` and `update_adr` take typed links, dates, decision makers and participants.
+- Extension SDK 1.17: decisions read through the decisions bridge carry their standing, whether they are the current revision, their decided-on / effective-from / valid-until dates and whether they were recorded rather than signed.
+- UI SDK 1.34: decision panels and the `adr.header` slot receive the decision's standing and whether it is the current revision.
+
+### Changed
+- A revision keeps its decision's number, shown as *ADR-012 · Rev 2*; decisions revised earlier keep the numbers they were issued and read as one decision.
+- The register, a card's ADRs tab and the initiative views list the current revision of each decision (and a revision being drafted); earlier revisions show a banner pointing to the current one.
+- A decision or SoAW sent for review can no longer be edited: recall the signatures first. Only its linked cards (a SoAW's initiative) can still change.
+- Extension panels on a decision are read-only whenever it is not a draft (UI SDK 1.34).
+- Signatures can only be requested from a draft decision, and from a draft or approved SoAW.
+- A rejection returns a decision or SoAW to draft without changing its revision number.
+- Only draft SoAWs can be deleted.
+- MCP `list_adrs` and `list_soaws` hide earlier revisions by default (`include_earlier` adds them).
+- Related decisions on a decision are shown as **Relates to** links; TurboLens assessment references on decisions are no longer stored.
+
+### Fixed
+- A signed decision or SoAW could be revised twice in parallel, after which its revision list failed to load.
+- Related decisions were stored but never shown.
+- Signing, recalling or rejecting one decision or SoAW could close the signature to-dos of another with the same name or reference.
+
+## [2.198.2] - 2026-11-10
+
+### Fixed
+- AI suggestions work with OpenAI-compatible servers that refuse JSON mode or a custom temperature — LM Studio, and gateways in front of it such as Bionic — whatever form their error takes: the request is sent again without the refused parameter, with no setting to change ([#1372](https://github.com/vincentmakes/turbo-ea/discussions/1372)).
+- **Test Connection** for OpenAI-compatible and Azure OpenAI providers sends the same request a suggestion does, so it no longer passes while every suggestion is refused, and it names any parameter the provider does not accept.
+- An AI answer that wraps its JSON in a sentence or in the model's reasoning is read correctly instead of producing an empty suggestion.
+
+## [2.198.1] - 2026-11-10
+
+### Fixed
+- In the Layered Dependency View, a card keeps its type line when another **Show on card** option such as Alias is ticked beside it: the type is the first of the card's two lines instead of disappearing as soon as anything else is shown (#1377).
+
+## [2.198.0] - 2026-11-10
+
+### Changed
+- Inventory relation columns are now one per relationship, headed by its verb and card type (*uses IT Component*), so two relation types between the same card types, or the two directions of a self-referencing one, each get their own column; saved views and layouts keep their relation columns.
+
+## [2.197.0] - 2026-11-10
+
+### Added
+- In a query view, click a card type in the query string to add a column after Name listing, for each row, the cards at that step that made it match — such as the Applications and the end-of-life IT Components behind each Organization; click it again to remove the column, and the choice is saved with the view.
+
+## [2.196.0] - 2026-11-10
+
+### Added
+- Query views can combine several query lines — AND within a group, OR between groups — so one view can list several card types, such as Applications and Organizations together; add a line with the plus in the inventory query builder, or through the MCP server with `all_of` / `any_of`.
+- Query views can filter on end-of-life status — End of Life, Approaching EOL, Supported, Unknown or none — at the start card or at any relation step, such as *Applications that use an IT Component at End of Life*; the Views list shows how many conditions a query view has.
+- An **Inventory views** dashboard widget lists your saved inventory views — all you can open, your own or those shared with you, optionally query views only — and opens one in a click.
+
+## [2.195.0] - 2026-11-09
+
+### Added
+- **Multi-hop query views in the inventory**: a saved view can carry a chain of relations with lifecycle, subtype, field-value, approval-status, data-quality band, tag and specific-card conditions (with an *Include sub-cards* switch) at each step — such as *Organizations that use an active Application which an On Track Initiative affects* — re-run every time the view opens; build or edit one with the query builder above the grid (**New query view** in the Views tab), or have an assistant create it through the MCP server ([#1366](https://github.com/vincentmakes/turbo-ea/discussions/1366)).
+- Four MCP tools, `query_cards`, `list_inventory_views`, `save_inventory_view` and `list_tag_groups`, answer multi-hop questions in one call and save the query as an inventory view.
+- A `/inventory?view=<id>` link opens a saved inventory view directly.
+
+### Fixed
+- A saved view's OData feed now returns only the cards its query selects.
+
+## [2.194.0] - 2026-11-08
+
+### Added
+- **Layer boxes in the Layered Dependency View follow their cards**: a layer box (and a box of grouped relations) grows by itself as you drag a card against its edge, so cards can be moved beyond where the box first ended, and shrinks back as you move the card back, never below its original size; Create diagram keeps the size ([#1295](https://github.com/vincentmakes/turbo-ea/issues/1295)).
+
+### Changed
+- **Relation values include yes/no details**: with "Show relationship values" on, the Layered Dependency View lists every ticked yes/no detail after the verb, so a CRUD relation reads *CRUD [Create · Read]* instead of a bare *CRUD* ([#1285](https://github.com/vincentmakes/turbo-ea/issues/1285)).
+- **Long relation labels wrap instead of being cut off** in the Layered Dependency View: a label too long for one line continues on a second line, the values below the verb, so *is supported by [Create · Read · Update · Delete]* reads in full.
+
+## [2.193.0] - 2026-11-06
+
+### Added
+- Inventory: **Parent** in the Group by menu shows cards as a tree, alone or within any grouping; a child whose parent is elsewhere shows its ancestors before its name.
+- Inventory: a level stepper next to Group by expands or collapses the parent tree one level at a time.
+
+## [2.192.0] - 2026-11-06
+
+### Added
+- Cost Report and Capability Map: an **Attribution** choice (Full or Split equally) decides how a related card linked to several cards is counted; shared sources are marked, and the choice is saved with the report ([#1362](https://github.com/vincentmakes/turbo-ea/discussions/1362)).
+- The `get_cost_treemap` and `get_capability_heatmap` MCP tools take the same `attribution` option.
+
+### Fixed
+- The Cost Report's Total Cost no longer adds a related card once per card it links to; it counts each related card once.
+- Grouping the cost treemap by a related type lists a card under every group it links to, in a fixed order, instead of one arbitrary group.
+
+## [2.191.0] - 2026-11-05
+
+### Added
+- The six built-in stakeholder roles now come with a default description in every language, filled in on existing workspaces wherever the role has none.
+
+### Fixed
+- The card type drawer's Save button now also saves a stakeholder role being edited on the Stakeholder roles tab.
+- Clearing a stakeholder role's description and saving now removes it, instead of keeping the old text.
+- A translation you entered for a built-in stakeholder role's name or description is no longer overwritten when the server restarts.
+
+## [2.190.0] - 2026-11-05
+
+### Added
+- A field's help text is now shown while a card is read, as an info icon beside the field's label, and as a tooltip on the field's column header in the Inventory.
+- Stakeholder role descriptions are shown to users: as an info icon beside the role on a card's Stakeholders tab, under the role's name in the role picker, on the role's Inventory column header, in My roles and in the stakeholder directory; descriptions can be translated per language ([#1351](https://github.com/vincentmakes/turbo-ea/discussions/1351)).
+- Admin → Metamodel → Lifecycle phases lets administrators explain what each lifecycle phase means in their organisation, per language; the text appears as an info icon beside the phase on every card's Lifecycle section ([#1351](https://github.com/vincentmakes/turbo-ea/discussions/1351)).
+- Each lifecycle phase comes with a default explanation in every language; administrators can edit or clear it under Admin → Metamodel → Lifecycle phases.
+
+### Changed
+- The collapsible **Help** note under a field while editing a card or answering a survey is replaced by the same info icon shown beside the field when reading, so help looks and works the same in both modes.
+
+### Fixed
+- Role names in My roles, the stakeholder hover card and the stakeholder directory now follow the user's language.
 ## [2.191.0] - 2026-11-10
 
 ### Added
@@ -139,6 +315,73 @@ A fork release that syncs upstream 2.186.3 (ECharts charts, dashboards, MCP writ
 - **A cookie-authenticated write from another site is refused.** Requests that carry an `Origin` that is neither one of the allowed origins nor this site's own host get a 403; API clients using a token are unaffected.
 - **A published web portal no longer lets a visitor probe a hidden description or tag:** searching ignores the description and the tag filter is ignored while the portal hides them; a malformed id in a filter is ignored instead of failing.
 - **Names shown inside confirmation dialogs (cards, roles, fields, sections) are escaped** so a name containing markup is displayed as text.
+- The task list in an initiative's Gantt tab can be sorted by title, completion, responsible, start date or end date by clicking a column header; nested work packages and tasks stay under their parent.
+
+### Fixed
+- The expand/collapse arrow in the Gantt task list no longer shows as an emoji play button on iOS Safari.
+
+## [2.188.0] - 2026-11-04
+
+### Added
+- Custom EOL products: when endoflife.date has no entry for a product, define it yourself with its release cycles and link cards to it like any endoflife.date product. Its status shows on the card, in the inventory's End of life column, in the EOL report and in the data quality figures.
+- Define a custom EOL product straight from a card's End of Life section, through a quiet link under the product search that opens the form with the card's name (or what you typed) filled in, and add a missing cycle from the cycle list.
+- Settings → EOL → Custom products: one row per product with its cycle count, latest cycle and version, worst status and linked cards, with filters, column freeze and reorder. Click a product to open a side panel where its details and release cycles are edited in place. A product or a cycle that cards still link cannot be deleted; rename the cycle instead, and its cards move with it.
+- The product panel's Contribute tab drafts the product's endoflife.date file, with a readiness checklist, the category and a release policy summary saved on the product, and opens it on GitHub so you can contribute the product from your own account.
+- "Switch to endoflife.date product…" moves a custom product's cards onto endoflife.date once it tracks the product, cycle by cycle; the grid points out custom products that endoflife.date now appears to cover.
+- The EOL report's Source filter and badges distinguish custom products from endoflife.date and from dates entered by hand.
+- A custom EOL product's description can be suggested by AI, like a card's, when AI suggestions are enabled.
+- End of Life can be tracked on any card type, custom ones included: turn on the End of Life section in the type's card layout and the type joins the card section, the EOL report, coverage figures, dashboards, the inventory column, bulk linking and the extension SDK's EOL status. It stays on by default for Applications and IT Components only.
+
+### Changed
+- The data quality and dashboard end-of-life coverage label "Linked to endoflife.date" now reads "Linked to an EOL product", since a link to a custom product counts too.
+- A card's End of Life status chip follows the same rule as the EOL report, the inventory column and the dashboards: Supported, Approaching EOL (within six months of the EOL date, or once active support has ended) or End of Life. The card no longer shows a "Security fixes only" status of its own.
+- A cycle whose active support is marked as already ended counts as Approaching EOL until its end of life, as endoflife.date treats it, on custom and endoflife.date products alike.
+- Every custom EOL cycle now needs an End of life value: a date, No end of life announced, or Already ended. Active support may stay unknown.
+- The card's End of Life section only offers Link, Change and Unlink to users who may edit the card.
+
+### Fixed
+- The card layout's End of Life switch showed the section as visible on card types where it never appeared; it now shows the section's real state.
+
+## [2.187.0] - 2026-11-04
+
+### Added
+- EA principles can be exported to Excel and imported back from Admin → Metamodel → EA Principles: a re-import updates the principles you edited, skips the unchanged ones and creates the new ones, with a preview of every change before anything is saved.
+- Every EA principle now has a reference number (P-001, P-002, …), shown next to its title; existing principles are numbered on upgrade.
+- Architecture decisions can be exported to Excel and imported from GRC → Governance → Decisions: the export follows the current filters, and the import creates a draft decision per row, linking cards by name and related decisions by reference, while skipping decisions that already exist.
+
+## [2.186.7] - 2026-11-04
+
+### Fixed
+- AI suggestions and portfolio insights work again with Anthropic Claude models that no longer accept a custom temperature, and Test Connection now fails or passes the same way a real suggestion does.
+- When the AI provider refuses a request, the error now says so and gives the provider's reason instead of reporting the provider as unreachable.
+
+## [2.186.6] - 2026-11-02
+
+### Changed
+- The dashboard's to-do, active-user and data-quality tiles use the same green as every other success indicator; it was a near-identical shade of its own.
+- A few near-identical shades were merged into the palette colour they stood next to: the matrix report's diagonal highlight in light mode, the extension-update notification orange, the timeline's reset mark, the ink, rules and secondary text of printed reports, the approved-signature fill, and the BPMN properties panel's dark surface. None of them differs by more than a barely perceptible step.
+
+## [2.186.5] - 2026-11-02
+
+### Fixed
+- Expanding a card's relations again on a diagram no longer brings back the related cards or relation lines you had removed from the canvas while the group was expanded; an orange `!` on the card restores them when you want them back.
+- Collapsing and re-expanding a card's relations on a diagram puts the related cards back where you had arranged them, as the collapse confirmation always said it would.
+
+### Security
+- Extension licence files are now stored encrypted at rest. Existing licences are encrypted on upgrade. **Upgrade note:** rotating `SECRET_KEY`, or restoring a database onto a host with a different one, now disables paid extensions until each licence file is pasted again under Admin → Extensions; nothing else is affected.
+- ServiceNow connection credentials are stored through the same encryption helper as every other secret, so they are redacted wherever other secrets are.
+
+## [2.186.4] - 2026-11-02
+
+### Changed
+- Lifecycle phase colours are the same on every screen: the Lifecycle report, the inventory's phase filter chips and group headers, the web portal's lifecycle bar and the Layered Dependency View now use the card page's set (grey plan, blue phase-in, green active, orange phase-out, red end of life).
+- Risk levels use one severity scale everywhere: the risk matrix and a card's history tab show "low" in the same green as the risk badges.
+- The capability, process and value-stream catalogues highlight the selected item in the brand blue rather than magenta.
+- Secondary and disabled icon greys follow the theme, so they dim correctly in dark mode instead of staying a fixed light-mode grey.
+- In dark mode, a hovered edge in the TurboLens architecture diagram uses the same light-blue highlight as the Layered Dependency View.
+
+### Security
+- Updated the frontend build's transitive development dependency `minimatch` to 11.0.4 to clear the open Dependabot advisory (GHSA-g3hv-75wg-m249, pattern amplification in glob matching); it does not ship in the application images.
 
 ## [2.186.3] - 2026-11-02
 

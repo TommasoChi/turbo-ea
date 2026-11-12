@@ -41,7 +41,8 @@ export interface PageDef {
    * Route to navigate to. Placeholders are replaced at runtime with ids looked
    * up in the demo data: `{{cardId:<key>}}` (CARD_LOOKUPS), `{{draftId:<key>}}`
    * (a draft flow version of that process card), `{{diagramId:<key>}}`
-   * (DIAGRAM_LOOKUPS) and `{{riskId:<key>}}` (RISK_LOOKUPS).
+   * (DIAGRAM_LOOKUPS), `{{riskId:<key>}}` (RISK_LOOKUPS) and
+   * `{{bookmarkId:<key>}}` (BOOKMARK_LOOKUPS).
    */
   route: string;
 
@@ -99,6 +100,21 @@ export const RISK_LOOKUPS = {
   // plus a quarterly recurring one with completed cycles — so the mitigation
   // panel shows both kinds and a real occurrence history.
   nis2Playbook: "R-000006",
+} as const;
+
+/** Demo saved inventory views looked up by exact name at runtime (`{{bookmarkId:<key>}}`). */
+export const BOOKMARK_LOOKUPS = {
+  // Public view carrying a multi-hop query, marked as saved through MCP —
+  // seed_demo_extras.py. The 98d shot shows its path strip above the grid.
+  mcpQueryView: "Organizations using active apps in flight",
+  // Public view carrying a stacked query (an Application AND group, OR an
+  // Organization line) — seed_demo_extras.py. The 98f shot opens it in the
+  // query builder.
+  stackedQueryView: "Active apps on aging tech, and the organizations using apps",
+  // Public view saved with its two matched-cards columns on (Applications and
+  // IT Components behind each Organization) — seed_demo_extras.py. The 98g
+  // shot shows the filled pills and the columns after Name.
+  matchedColumnsView: "Organizations on applications with components at or near end of life",
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -200,6 +216,7 @@ const TAB_BPM_DASHBOARD = tabSelector(...i18nLabels("bpm:tabs.dashboard"));
 const TAB_METAMODEL_GRAPH = tabSelector(...i18nLabels("admin:metamodel.tabs.graph"));
 const MANAGE_CATEGORIES_BUTTON = buttonSelector(...i18nLabels("admin:metamodel.categories.manage"));
 const TAB_ROLES = tabSelector(...i18nLabels("admin:users.tabs.roles"));
+const TAB_EOL_CUSTOM = tabSelector(...i18nLabels("admin:eol.tabs.customProducts"));
 const TAB_RESOURCES = tabSelector(
   ...i18nLabels(
     "cards:tabs.resources",
@@ -379,6 +396,46 @@ export const DOC_PAGES: PageDef[] = [
       pt: "04_painel_classificacao_qualidade",
       zh: "04_dashboard_quality_leaderboard",
       ru: "04_panel_reyting_kachestva",
+    },
+  },
+  {
+    // The Inventory views widget is on no shipped dashboard, so it is added to
+    // the Workspace dashboard in Customize mode and captured as an unsaved
+    // draft: nothing is saved, the next page load discards it, and the run is
+    // idempotent on any instance.
+    id: "04b_dashboard_inventory_views",
+    route: "/?tab=workspace",
+    waitFor: ".react-grid-item",
+    actions: [
+      { type: "wait", ms: 800 },
+      {
+        type: "click",
+        selector: [
+          buttonSelector(...i18nLabels("common:dashboard.customize.customize")),
+          ariaSelector("button", ...i18nLabels("common:dashboard.customize.customize")),
+        ].join(", "),
+      },
+      { type: "wait", ms: 500 },
+      {
+        type: "click",
+        selector: buttonSelector(...i18nLabels("common:dashboard.customize.addWidget")),
+      },
+      { type: "wait", ms: 500 },
+      { type: "click", selector: '[data-testid="catalogue-inventory_views"]' },
+      { type: "waitFor", selector: '[data-testid="inventory-views"]' },
+      { type: "scroll", target: '[data-testid="inventory-views"]' },
+      { type: "wait", ms: 600 },
+    ],
+    clipSelector: '.react-grid-item:has([data-testid="inventory-views"])',
+    filenames: {
+      en: "04b_dashboard_inventory_views",
+      de: "04b_dashboard_inventarsichten",
+      fr: "04b_tableau_de_bord_vues_inventaire",
+      es: "04b_panel_vistas_inventario",
+      it: "04b_dashboard_viste_inventario",
+      pt: "04b_painel_vistas_inventario",
+      zh: "04b_dashboard_inventory_views",
+      ru: "04b_panel_predstavleniya_inventarya",
     },
   },
 
@@ -1055,6 +1112,47 @@ export const DOC_PAGES: PageDef[] = [
       pt: "29_admin_config_eol",
       zh: "29_admin_settings_eol",
       ru: "29_admin_nastroyki_eol",
+    },
+  },
+  {
+    id: "29b_admin_settings_eol_custom",
+    route: "/admin/settings?tab=eol",
+    waitFor: "[role='tablist']",
+    actions: [
+      { type: "wait", ms: 600 },
+      { type: "click", selector: TAB_EOL_CUSTOM },
+      { type: "wait", ms: 1000 },
+    ],
+    filenames: {
+      en: "29b_admin_settings_eol_custom",
+      de: "29b_admin_einstellungen_eol_eigene",
+      fr: "29b_admin_parametres_eol_personnalises",
+      es: "29b_admin_config_eol_personalizados",
+      it: "29b_admin_impostazioni_eol_personalizzati",
+      pt: "29b_admin_config_eol_personalizados",
+      zh: "29b_admin_settings_eol_custom",
+      ru: "29b_admin_nastroyki_eol_sobstvennye",
+    },
+  },
+  {
+    id: "29c_admin_settings_eol_custom_panel",
+    route: "/admin/settings?tab=eol&eolTab=custom",
+    waitFor: ".ag-row",
+    actions: [
+      { type: "wait", ms: 800 },
+      { type: "click", selector: ".ag-center-cols-container .ag-row" },
+      { type: "waitFor", selector: ".MuiDrawer-paper" },
+      { type: "wait", ms: 600 },
+    ],
+    filenames: {
+      en: "29c_admin_settings_eol_custom_panel",
+      de: "29c_admin_einstellungen_eol_eigene_panel",
+      fr: "29c_admin_parametres_eol_personnalises_panneau",
+      es: "29c_admin_config_eol_personalizados_panel",
+      it: "29c_admin_impostazioni_eol_personalizzati_pannello",
+      pt: "29c_admin_config_eol_personalizados_painel",
+      zh: "29c_admin_settings_eol_custom_panel",
+      ru: "29c_admin_nastroyki_eol_sobstvennye_panel",
     },
   },
 
@@ -2591,6 +2689,25 @@ export const DOC_PAGES: PageDef[] = [
     },
   },
   {
+    id: "98c_inventory_group_by_parents",
+    // The demo seed gives parents to Business Processes (not to
+    // Applications); grouping by Process Type on top shows the two layers
+    // together, which is the point of the option.
+    route: "/inventory?type=BusinessProcess&group_by=attr_processType&group_tree=1",
+    waitFor: ".ag-root",
+    actions: [{ type: "wait", ms: 1500 }],
+    filenames: {
+      en: "98c_inventory_group_by_parents",
+      de: "98c_inventar_gruppierung_eltern",
+      fr: "98c_inventaire_regroupement_parents",
+      es: "98c_inventario_agrupacion_padres",
+      it: "98c_inventario_raggruppamento_genitori",
+      pt: "98c_inventario_agrupamento_pais",
+      zh: "98c_inventory_group_by_parents",
+      ru: "98c_inventarizatsiya_gruppirovka_roditeli",
+    },
+  },
+  {
     id: "98b_inventory_import",
     route: "/inventory?type=Application",
     waitFor: ".ag-root",
@@ -2614,6 +2731,95 @@ export const DOC_PAGES: PageDef[] = [
       pt: "98b_inventario_importacao",
       zh: "98b_inventory_import",
       ru: "98b_inventarizatsiya_import",
+    },
+  },
+  {
+    id: "98d_inventory_mcp_view",
+    // A saved view whose filters are a multi-hop query (the demo one was
+    // created through MCP): the path strip above the grid shows the chain.
+    route: "/inventory?view={{bookmarkId:mcpQueryView}}",
+    waitFor: '[data-testid="query-path-strip"]',
+    actions: [{ type: "wait", ms: 1200 }],
+    filenames: {
+      en: "98d_inventory_mcp_view",
+      de: "98d_inventar_mcp_ansicht",
+      fr: "98d_inventaire_vue_mcp",
+      es: "98d_inventario_vista_mcp",
+      it: "98d_inventario_vista_mcp",
+      pt: "98d_inventario_visao_mcp",
+      zh: "98d_inventory_mcp_view",
+      ru: "98d_inventarizatsiya_predstavlenie_mcp",
+    },
+  },
+  {
+    id: "98e_inventory_query_builder",
+    // The same query view switched into the in-place query builder via the
+    // pencil on the path strip. The demo view is owned by the demo admin the
+    // capture logs in as, so the pencil is shown.
+    route: "/inventory?view={{bookmarkId:mcpQueryView}}",
+    waitFor: '[data-testid="query-path-strip"]',
+    actions: [
+      { type: "click", selector: '[data-testid="query-path-edit"]' },
+      { type: "wait", ms: 800 },
+    ],
+    filenames: {
+      en: "98e_inventory_query_builder",
+      de: "98e_inventar_abfrage_editor",
+      fr: "98e_inventaire_editeur_requete",
+      es: "98e_inventario_editor_consulta",
+      it: "98e_inventario_editor_query",
+      pt: "98e_inventario_editor_consulta",
+      zh: "98e_inventory_query_builder",
+      ru: "98e_inventarizatsiya_konstruktor_zaprosa",
+    },
+  },
+  {
+    id: "98f_inventory_query_stack",
+    // A view stacking several query lines (an Application AND group, OR an
+    // Organization group), opened in the query builder via the pencil so the
+    // AND markers, the OR divider and the per-group plus are shown.
+    route: "/inventory?view={{bookmarkId:stackedQueryView}}",
+    waitFor: '[data-testid="query-path-strip"]',
+    actions: [
+      { type: "click", selector: '[data-testid="query-path-edit"]' },
+      { type: "wait", ms: 800 },
+      // Sort by Type so the one matching Application is listed above the
+      // Organizations instead of below the fold (the view sorts by name).
+      { type: "click", selector: '.ag-header-cell[col-id="core_type"] .ag-header-cell-label' },
+      { type: "wait", ms: 800 },
+    ],
+    filenames: {
+      en: "98f_inventory_query_stack",
+      de: "98f_inventar_abfragen_kombiniert",
+      fr: "98f_inventaire_requetes_combinees",
+      es: "98f_inventario_consultas_combinadas",
+      it: "98f_inventario_query_combinate",
+      pt: "98f_inventario_consultas_combinadas",
+      zh: "98f_inventory_query_stack",
+      ru: "98f_inventarizatsiya_kombinirovannye_zaprosy",
+    },
+  },
+  {
+    id: "98g_inventory_query_matches",
+    // A query view saved with matched-cards columns: clicking a card type in
+    // the query string adds a column after Name listing the cards at that
+    // step that made each row match. The demo view opens with both on, so
+    // the pills are filled and no click is needed.
+    route: "/inventory?view={{bookmarkId:matchedColumnsView}}",
+    waitFor: '[data-testid="query-path-match-switch"][aria-pressed="true"]',
+    actions: [
+      { type: "waitFor", selector: '.ag-header-cell[col-id="via:0:0.0"]', timeout: 15000 },
+      { type: "wait", ms: 1500 },
+    ],
+    filenames: {
+      en: "98g_inventory_query_matches",
+      de: "98g_inventar_abfrage_treffer",
+      fr: "98g_inventaire_correspondances_requete",
+      es: "98g_inventario_coincidencias_consulta",
+      it: "98g_inventario_corrispondenze_query",
+      pt: "98g_inventario_correspondencias_consulta",
+      zh: "98g_inventory_query_matches",
+      ru: "98g_inventarizatsiya_sovpadeniya_zaprosa",
     },
   },
 

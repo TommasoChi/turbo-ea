@@ -23,6 +23,7 @@ import FormGroup from "@mui/material/FormGroup";
 import MaterialSymbol from "@/components/MaterialSymbol";
 import { api } from "@/api/client";
 import type { CardTypePermissionCell, CardTypePermissionMatrix } from "@/types";
+import { STATUS_CHIP_COLORS, STATUS_COLORS, brand } from "@/theme/tokens";
 
 /**
  * Per-card-type RBAC overrides (discussion #1068).
@@ -278,7 +279,7 @@ export default function CardTypePermissionsPanel({
                         <TableCell key={action.key} align="center">
                           <Tooltip title={t("metamodel.permissionsPanel.adminLocked")}>
                             <span>
-                              <MaterialSymbol icon="lock" size={18} color="#9e9e9e" />
+                              <MaterialSymbol icon="lock" size={18} color={STATUS_COLORS.neutral} />
                             </span>
                           </Tooltip>
                         </TableCell>
@@ -300,7 +301,7 @@ export default function CardTypePermissionsPanel({
                         <TableCell key={action.key} align="center">
                           <Tooltip title={t("metamodel.permissionsPanel.lockedByView")}>
                             <span aria-label={t("metamodel.permissionsPanel.lockedByView")}>
-                              <MaterialSymbol icon="visibility_off" size={18} color="#9e9e9e" />
+                              <MaterialSymbol icon="visibility_off" size={18} color={STATUS_COLORS.neutral} />
                             </span>
                           </Tooltip>
                         </TableCell>
@@ -338,7 +339,7 @@ export default function CardTypePermissionsPanel({
                                   <MaterialSymbol
                                     icon={inherited ? "check" : "close"}
                                     size={16}
-                                    color={inherited ? "#2e7d32" : "#9e9e9e"}
+                                    color={inherited ? STATUS_CHIP_COLORS.success.text : STATUS_COLORS.neutral}
                                   />
                                 </span>
                               </Tooltip>
@@ -349,7 +350,7 @@ export default function CardTypePermissionsPanel({
                             >
                               <Tooltip title={t("metamodel.permissionsPanel.allow")}>
                                 <span style={{ display: "flex" }}>
-                                  <MaterialSymbol icon="check_circle" size={16} color="#2e7d32" />
+                                  <MaterialSymbol icon="check_circle" size={16} color={STATUS_CHIP_COLORS.success.text} />
                                 </span>
                               </Tooltip>
                             </ToggleButton>
@@ -359,7 +360,7 @@ export default function CardTypePermissionsPanel({
                             >
                               <Tooltip title={t("metamodel.permissionsPanel.deny")}>
                                 <span style={{ display: "flex" }}>
-                                  <MaterialSymbol icon="block" size={16} color="#c62828" />
+                                  <MaterialSymbol icon="block" size={16} color={STATUS_CHIP_COLORS.error.text} />
                                 </span>
                               </Tooltip>
                             </ToggleButton>
@@ -394,7 +395,7 @@ export default function CardTypePermissionsPanel({
                                 <MaterialSymbol
                                   icon="tune"
                                   size={16}
-                                  color={scopedSubtypes.length > 0 ? "#1976d2" : "#9e9e9e"}
+                                  color={scopedSubtypes.length > 0 ? brand.primary : STATUS_COLORS.neutral}
                                 />
                               </IconButton>
                             </Tooltip>

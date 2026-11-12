@@ -18,10 +18,11 @@ import MaterialSymbol from "@/components/MaterialSymbol";
 import { api } from "@/api/client";
 import { useEventStream } from "@/hooks/useEventStream";
 import { formatDateWith, getCachedDateFormat } from "@/hooks/useDateFormat";
-import { NOTIFICATION_TYPE_COLORS } from "@/theme/tokens";
+import { NOTIFICATION_TYPE_COLORS, brand, NAVBAR_DEFAULTS, STATUS_COLORS } from "@/theme/tokens";
 import type { Notification, NotificationListResponse } from "@/types";
 
 import type { ReleaseNotesVariant } from "@/components/ReleaseNotesDialog";
+import { alpha } from "@mui/material/styles";
 
 const ReleaseNotesDialog = lazy(() => import("@/components/ReleaseNotesDialog"));
 const NotificationDetailDialog = lazy(() => import("@/components/NotificationDetailDialog"));
@@ -66,6 +67,15 @@ const NOTIFICATION_ICONS: Record<string, { icon: string; color: string }> = {
   adr_signed: { icon: "task_alt", color: NOTIFICATION_TYPE_COLORS.adr_signed },
   adr_sign_recalled: { icon: "undo", color: NOTIFICATION_TYPE_COLORS.adr_sign_recalled },
   adr_rejected: { icon: "cancel", color: NOTIFICATION_TYPE_COLORS.adr_rejected },
+  // A decision the user authored was replaced, amended or revoked.
+  adr_standing_changed: {
+    icon: "published_with_changes",
+    color: NOTIFICATION_TYPE_COLORS.adr_standing_changed,
+  },
+  // Discussion on a decision or SoAW. Their link opens the document's preview
+  // with `?thread=<id>`, which brings the side panel up on that thread.
+  document_comment: { icon: "forum", color: NOTIFICATION_TYPE_COLORS.document_comment },
+  document_mention: { icon: "alternate_email", color: NOTIFICATION_TYPE_COLORS.document_mention },
   process_flow_approval_requested: {
     icon: "rule",
     color: NOTIFICATION_TYPE_COLORS.process_flow_approval_requested,
@@ -369,7 +379,7 @@ export default function NotificationBell({
     <>
       <Tooltip title={t("title")}>
         <IconButton
-          sx={{ color: color ?? "#fff", ml: 0.5 }}
+          sx={{ color: color ?? NAVBAR_DEFAULTS.fg, ml: 0.5 }}
           onClick={handleOpen}
         >
           <Badge
@@ -426,7 +436,7 @@ export default function NotificationBell({
           </Box>
         ) : notifications.length === 0 ? (
           <Box sx={{ py: 4, textAlign: "center" }}>
-            <MaterialSymbol icon="notifications_off" size={32} color="#999" />
+            <MaterialSymbol icon="notifications_off" size={32} color={STATUS_COLORS.neutral} />
             <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
               {t("noNotifications")}
             </Typography>
@@ -450,10 +460,10 @@ export default function NotificationBell({
                   key={notif.id}
                   onClick={() => handleClick(notif)}
                   sx={{
-                    bgcolor: notif.is_read ? "transparent" : "rgba(25, 118, 210, 0.04)",
+                    bgcolor: notif.is_read ? "transparent" : alpha(brand.primary, 0.04),
                     borderLeft: notif.is_read
                       ? "3px solid transparent"
-                      : "3px solid #1976d2",
+                      : `3px solid ${brand.primary}`,
                     py: 1.5,
                     alignItems: "flex-start",
                   }}

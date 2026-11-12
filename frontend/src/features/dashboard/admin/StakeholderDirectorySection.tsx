@@ -9,9 +9,12 @@ import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 import { api } from "@/api/client";
 import MaterialSymbol from "@/components/MaterialSymbol";
-import { useResolveLabel, useTypeLabel } from "@/hooks/useResolveLabel";
+import HelpTip from "@/components/HelpTip";
+import { useTypeDescription, useTypeLabel } from "@/hooks/useResolveLabel";
 import { useMetamodel } from "@/hooks/useMetamodel";
 import SectionPaper, { EmptyState } from "../workspace/SectionPaper";
+import { DASHBOARD_KPI_COLORS, STATUS_COLORS } from "@/theme/tokens";
+import type { MetamodelTranslations } from "@/types";
 
 interface DirectoryCard {
   id: string;
@@ -30,7 +33,9 @@ interface DirectoryRole {
   role_key: string;
   role_label: string;
   role_color: string;
-  role_translations: Record<string, string>;
+  /** The role def's JSONB: `{label: {locale: …}, description: {locale: …}}`. */
+  role_translations: MetamodelTranslations;
+  role_description?: string | null;
   users: DirectoryUser[];
 }
 
@@ -47,6 +52,16 @@ interface DirectoryResponse {
   card_types: DirectoryCardType[];
 }
 
+/** The directory row as the role def the entity-aware resolvers take. */
+function roleEntity(role: DirectoryRole) {
+  return {
+    key: role.role_key,
+    label: role.role_label,
+    description: role.role_description,
+    translations: role.role_translations,
+  };
+}
+
 /** Compose a stable key for a specific user-under-a-role placement so the
  * expansion state for the same person under two different roles is
  * independent. */
@@ -57,7 +72,7 @@ function userKey(typeKey: string, roleKey: string, userId: string) {
 export default function StakeholderDirectorySection() {
   const { t } = useTranslation("common");
   const navigate = useNavigate();
-  const rl = useResolveLabel();
+  const roleDescription = useTypeDescription();
   const resolveTypeLabel = useTypeLabel();
   const { getType } = useMetamodel();
   const [loading, setLoading] = useState(true);
@@ -144,7 +159,7 @@ export default function StakeholderDirectorySection() {
   return (
     <SectionPaper
       icon="groups_3"
-      iconColor="#1976d2"
+      iconColor={DASHBOARD_KPI_COLORS.stakeholders}
       title={t("dashboard.admin.stakeholderDirectory")}
     >
       {loading ? (
@@ -164,7 +179,7 @@ export default function StakeholderDirectorySection() {
               input: {
                 startAdornment: (
                   <Box sx={{ display: "flex", alignItems: "center", pr: 1 }}>
-                    <MaterialSymbol icon="search" size={18} color="#999" />
+                    <MaterialSymbol icon="search" size={18} color={STATUS_COLORS.neutral} />
                   </Box>
                 ),
                 endAdornment: filterActive ? (
@@ -266,8 +281,9 @@ export default function StakeholderDirectorySection() {
                                 color: "text.secondary",
                               }}
                             >
-                              {rl(role.role_label, role.role_translations)}
+                              {resolveTypeLabel(roleEntity(role))}
                             </Typography>
+                            <HelpTip text={roleDescription(roleEntity(role))} size={12} />
                           </Box>
                           <Box sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}>
                             {role.users.map((u) => {

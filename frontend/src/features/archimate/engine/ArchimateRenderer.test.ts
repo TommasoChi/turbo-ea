@@ -87,7 +87,7 @@ describe("ArchimateRenderer: shapes", () => {
   it("uses the node's own fill colour over the layer fill", () => {
     const { add, gfx } = setup();
     const shape = add("BusinessActor", { style: { fillColor: { r: 10, g: 20, b: 30 } } });
-    expect(css(gfx(shape).querySelector("path.archimate-body"), "fill")).toBe("rgb(10, 20, 30)");
+    expect(css(gfx(shape).querySelector("path.archimate-body"), "fill")).toBe("#0a141e");
   });
 
   it("uses a standard element's own EnterpriseObject colour once an admin changed it", () => {

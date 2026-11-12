@@ -87,9 +87,7 @@ def _build_signature(input_schema: dict[str, Any]) -> inspect.Signature:
         py_type = _JSON_TYPE_TO_PYTHON.get(prop.get("type"), str)
         if name in required:
             parameters.append(
-                inspect.Parameter(
-                    name, inspect.Parameter.POSITIONAL_OR_KEYWORD, annotation=py_type
-                )
+                inspect.Parameter(name, inspect.Parameter.POSITIONAL_OR_KEYWORD, annotation=py_type)
             )
         else:
             parameters.append(

@@ -19,6 +19,7 @@ from app.services.ai_service import (
     _get_llm_item_description,
     _get_search_suffix,
     _parse_llm_content,
+    _probe_chat_payload,
     _search_duckduckgo,
     _search_google,
     _search_searxng,
@@ -64,6 +65,18 @@ class TestTypeAwareContext:
     def test_llm_description_unknown_type(self):
         desc = _get_llm_item_description("CustomWidget", "Custom Widget")
         assert "custom widget" in desc
+
+    def test_eol_product_context(self):
+        from app.services.ai_service import EOL_PRODUCT_CONTEXT_KEY, _get_extra_fields
+
+        suffix = _get_search_suffix(EOL_PRODUCT_CONTEXT_KEY, None)
+        assert "end of life" in suffix and "support" in suffix
+        desc = _get_llm_item_description(EOL_PRODUCT_CONTEXT_KEY, "Product")
+        assert "support lifecycle" in desc
+        # Description only: no card-type field is asked for.
+        assert _get_extra_fields(EOL_PRODUCT_CONTEXT_KEY, None) == []
+        # Reserved: never a card type key.
+        assert EOL_PRODUCT_CONTEXT_KEY.startswith("__")
 
 
 # ---------------------------------------------------------------------------
@@ -722,6 +735,52 @@ class TestParseLlmContent:
         result = _parse_llm_content("This is not JSON")
         assert result == {}
 
+    def test_an_object_inside_prose(self):
+        """Without JSON mode a model may introduce its answer (#1372)."""
+        answer = 'Here is the JSON you asked for:\n{"description": {"value": "x"}}\nDone.'
+        assert _parse_llm_content(answer) == {"description": {"value": "x"}}
+
+    def test_reasoning_before_the_answer_is_skipped(self):
+        answer = '<think>Maybe {"description": "draft"} fits.</think>\n{"description": "final"}'
+        assert _parse_llm_content(answer) == {"description": "final"}
+
+    def test_the_think_tag_matches_in_any_case_and_only_to_its_end(self):
+        answer = '<THINK>{"a": 1}</THINK>{"description": "kept"}<think>{"b": 2}</think>'
+        assert _parse_llm_content(answer) == {"description": "kept"}
+
+    def test_reasoning_is_removed_not_replaced(self):
+        answer = '{"description": "before<think>hidden</think>after"}'
+        assert _parse_llm_content(answer) == {"description": "beforeafter"}
+
+    def test_a_fence_wins_over_the_braces_around_it(self):
+        answer = 'Of the form {key: value}:\n```json\n{"description": "fenced"}\n```\n{end}'
+        assert _parse_llm_content(answer) == {"description": "fenced"}
+
+    def test_a_fence_without_the_json_tag(self):
+        assert _parse_llm_content('```\n{"description": "plain"}\n```') == {"description": "plain"}
+
+    def test_a_broken_fence_is_empty_rather_than_an_error(self):
+        assert _parse_llm_content("```json\n{not json\n```") == {}
+
+    @pytest.mark.parametrize("content", [None, 7, ["x"], {"description": "a dict"}])
+    def test_content_that_is_not_text_is_empty(self, content, caplog):
+        """A reasoning model can leave ``content`` null; ``json.loads(None)``
+        used to raise a ``TypeError``."""
+        caplog.set_level("WARNING", logger="turboea.ai")
+        assert _parse_llm_content(content) == {}
+        assert caplog.messages == ["LLM returned no text content"]
+
+    @pytest.mark.parametrize("content", ['["a", "b"]', '"just a string"', "42", "null"])
+    def test_json_that_is_not_an_object_is_empty(self, content, caplog):
+        caplog.set_level("WARNING", logger="turboea.ai")
+        assert _parse_llm_content(content) == {}
+        assert caplog.messages == [f"LLM returned non-JSON content: {content}"]
+
+    def test_the_logged_answer_is_cut(self, caplog):
+        caplog.set_level("WARNING", logger="turboea.ai")
+        assert _parse_llm_content("x" * 300) == {}
+        assert caplog.messages == ["LLM returned non-JSON content: " + "x" * 200]
+
 
 # ---------------------------------------------------------------------------
 # _call_openai_compatible
@@ -729,6 +788,39 @@ class TestParseLlmContent:
 
 
 class TestCallOpenAICompatible:
+    @pytest.mark.asyncio
+    async def test_json_mode_refused_in_a_bare_string_still_yields_a_suggestion(self):
+        """#1372: LM Studio behind a Bionic gateway answers ``json_object``
+        with a 400 whose ``error`` is a bare string. The call is repeated
+        without JSON mode and the answer is read from the free text."""
+        request = httpx.Request("POST", "https://bionic.test/v1/chat/completions")
+        refused = httpx.Response(
+            400,
+            json={"error": "'response_format.type' must be 'json_schema' or 'text'"},
+            request=request,
+        )
+        answered = httpx.Response(
+            200,
+            json={
+                "choices": [{"message": {"content": 'Sure:\n{"description": {"value": "A tool"}}'}}]
+            },
+            request=request,
+        )
+        client = AsyncMock()
+        client.post = AsyncMock(side_effect=[refused, answered])
+        with patch("app.services.ai_service._get_llm_client", AsyncMock(return_value=client)):
+            result = await _call_openai_compatible(
+                "https://bionic.test",
+                "key",
+                "google/gemma-4-e4b",
+                [{"role": "user", "content": "test"}],
+            )
+        assert result == {"description": {"value": "A tool"}}
+        first, second = (call.kwargs["json"] for call in client.post.call_args_list)
+        assert first["response_format"] == {"type": "json_object"}
+        assert "response_format" not in second
+        assert second["temperature"] == 0.1
+
     @pytest.mark.asyncio
     async def test_successful_response(self):
         mock_resp = MagicMock()
@@ -871,6 +963,22 @@ class TestCallOpenAICompatible:
 # ---------------------------------------------------------------------------
 
 
+_TEMPERATURE_REFUSED = {
+    "type": "error",
+    "error": {
+        "type": "invalid_request_error",
+        "message": "`temperature` is deprecated for this model.",
+    },
+}
+_ANTHROPIC_OK = {"content": [{"type": "text", "text": '{"description": {"value": "A tool"}}'}]}
+
+
+def _anthropic_response(code: int, body: dict) -> httpx.Response:
+    return httpx.Response(
+        code, json=body, request=httpx.Request("POST", "https://api.anthropic.com/v1/messages")
+    )
+
+
 class TestCallAnthropic:
     @pytest.mark.asyncio
     async def test_successful_response(self):
@@ -942,6 +1050,103 @@ class TestCallAnthropic:
             headers = call_args[1]["headers"]
             assert headers["x-api-key"] == "sk-ant-key"
             assert headers["anthropic-version"] == "2023-06-01"
+
+    @pytest.mark.asyncio
+    async def test_a_model_that_accepts_temperature_keeps_it(self):
+        """Older models (Sonnet 4.6) are asked once, with the low temperature."""
+        with patch("app.services.ai_service._get_llm_client") as mock_get:
+            mock_client = AsyncMock()
+            mock_get.return_value = mock_client
+            mock_client.post = AsyncMock(return_value=_anthropic_response(200, _ANTHROPIC_OK))
+
+            result = await _call_anthropic(
+                "https://api.anthropic.com",
+                "sk-ant-test",
+                "claude-sonnet-4-6",
+                [{"role": "user", "content": "test"}],
+            )
+
+        assert result == {"description": {"value": "A tool"}}
+        mock_client.post.assert_awaited_once()
+        assert mock_client.post.call_args.kwargs["json"]["temperature"] == 0.1
+
+    @pytest.mark.asyncio
+    async def test_a_refused_temperature_is_dropped(self):
+        """#1358: newer Claude models refuse a custom temperature with a 400."""
+        with patch("app.services.ai_service._get_llm_client") as mock_get:
+            mock_client = AsyncMock()
+            mock_get.return_value = mock_client
+            mock_client.post = AsyncMock(
+                side_effect=[
+                    _anthropic_response(400, _TEMPERATURE_REFUSED),
+                    _anthropic_response(200, _ANTHROPIC_OK),
+                ]
+            )
+
+            result = await _call_anthropic(
+                "https://api.anthropic.com",
+                "sk-ant-test",
+                "claude-haiku-5-5",
+                [{"role": "system", "content": "sys"}, {"role": "user", "content": "test"}],
+            )
+
+        assert result == {"description": {"value": "A tool"}}
+        first, second = mock_client.post.call_args_list
+        assert first.kwargs["json"]["temperature"] == 0.1
+        retried = second.kwargs["json"]
+        assert "temperature" not in retried
+        assert retried["model"] == "claude-haiku-5-5"
+        assert retried["system"] == "sys"
+        assert retried["max_tokens"] == 4096
+        assert second.args[0] == "https://api.anthropic.com/v1/messages"
+        assert second.kwargs["headers"]["x-api-key"] == "sk-ant-test"
+
+    @pytest.mark.asyncio
+    async def test_another_400_is_not_retried_and_logs_the_reason(self, caplog):
+        refused = _anthropic_response(
+            400,
+            {"type": "error", "error": {"type": "invalid_request_error", "message": "bad model"}},
+        )
+        with patch("app.services.ai_service._get_llm_client") as mock_get:
+            mock_client = AsyncMock()
+            mock_get.return_value = mock_client
+            mock_client.post = AsyncMock(return_value=refused)
+
+            with (
+                caplog.at_level("WARNING", logger="turboea.ai"),
+                pytest.raises(httpx.HTTPStatusError),
+            ):
+                await _call_anthropic(
+                    "https://api.anthropic.com",
+                    "sk-ant-test",
+                    "nope",
+                    [{"role": "user", "content": "test"}],
+                )
+
+        mock_client.post.assert_awaited_once()
+        assert "HTTPStatusError 400 — bad model" in caplog.text
+
+    @pytest.mark.asyncio
+    async def test_a_refusal_after_the_retry_is_raised(self):
+        with patch("app.services.ai_service._get_llm_client") as mock_get:
+            mock_client = AsyncMock()
+            mock_get.return_value = mock_client
+            mock_client.post = AsyncMock(
+                side_effect=[
+                    _anthropic_response(400, _TEMPERATURE_REFUSED),
+                    _anthropic_response(400, _TEMPERATURE_REFUSED),
+                ]
+            )
+
+            with pytest.raises(httpx.HTTPStatusError):
+                await _call_anthropic(
+                    "https://api.anthropic.com",
+                    "sk-ant-test",
+                    "claude-haiku-5-5",
+                    [{"role": "user", "content": "test"}],
+                )
+
+        assert mock_client.post.await_count == 2
 
     @pytest.mark.asyncio
     async def test_http_error_raises(self):
@@ -1089,6 +1294,29 @@ class TestSuggestMetadataAlwaysSearches:
 # ---------------------------------------------------------------------------
 
 
+class TestProbeChatPayload:
+    """The connection test asks for what a card suggestion asks for (#1372)."""
+
+    MESSAGES = [{"role": "user", "content": 'Reply with this JSON object: {"ok": true}'}]
+
+    def test_openai_names_the_model(self):
+        assert _probe_chat_payload("gpt-6.1-sol") == {
+            "model": "gpt-6.1-sol",
+            "messages": self.MESSAGES,
+            "max_completion_tokens": 16,
+            "temperature": 0.1,
+            "response_format": {"type": "json_object"},
+        }
+
+    def test_azure_names_no_model(self):
+        assert _probe_chat_payload(None) == {
+            "messages": self.MESSAGES,
+            "max_completion_tokens": 16,
+            "temperature": 0.1,
+            "response_format": {"type": "json_object"},
+        }
+
+
 class TestProviderConnection:
     @pytest.mark.asyncio
     async def test_ollama_uses_api_tags(self):
@@ -1166,22 +1394,57 @@ class TestProviderConnection:
             "ok": True,
             "available_models": ["gpt-4o", "gpt-6.1-sol"],
             "model_found": True,
+            "adjusted": [],
         }
         get_args, get_kwargs = client.get.call_args
         assert get_args == ("https://api.openai.com/v1/models",)
         assert get_kwargs["timeout"] == 10.0
         args, kwargs = client.post.call_args
         assert args == ("https://api.openai.com/v1/chat/completions",)
+        # What a suggestion sends (``_call_openai_compatible``), plus a cap.
         assert kwargs["json"] == {
             "model": "gpt-6.1-sol",
-            "messages": [{"role": "user", "content": "Hi"}],
+            "messages": [{"role": "user", "content": 'Reply with this JSON object: {"ok": true}'}],
             "max_completion_tokens": 16,
+            "temperature": 0.1,
+            "response_format": {"type": "json_object"},
         }
         assert kwargs["headers"] == {
             "Authorization": "Bearer sk-test",
             "Content-Type": "application/json",
         }
         assert kwargs["timeout"] == 30.0
+
+    @pytest.mark.asyncio
+    async def test_openai_probe_reports_what_the_provider_refused(self):
+        """#1372: the test passed while every suggestion was refused, because
+        the probe did not ask for JSON mode. It now asks, recovers the way a
+        suggestion does, and says what the provider would not take."""
+        request = httpx.Request("POST", "https://bionic.test/v1/chat/completions")
+        refused = httpx.Response(
+            400,
+            json={"error": "'response_format.type' must be 'json_schema' or 'text'"},
+            request=request,
+        )
+        client = self._openai_client(
+            {"side_effect": [refused, httpx.Response(200, json={}, request=request)]}
+        )
+        with patch("app.services.ai_service._get_llm_client", return_value=client):
+            result = await check_provider_connection(
+                "https://bionic.test",
+                provider_type="openai",
+                api_key="key",
+                model="gpt-4o",
+            )
+        assert result == {
+            "ok": True,
+            "available_models": ["gpt-4o", "gpt-6.1-sol"],
+            "model_found": True,
+            "adjusted": ["response_format"],
+        }
+        first, second = (call.kwargs["json"] for call in client.post.call_args_list)
+        assert "response_format" in first
+        assert "response_format" not in second
 
     @pytest.mark.asyncio
     async def test_openai_probe_surfaces_a_403(self):
@@ -1233,6 +1496,7 @@ class TestProviderConnection:
             )
         assert result["ok"] is True
         assert result["model_found"] is False
+        assert result["adjusted"] == []
         client.post.assert_not_called()
 
     @pytest.mark.asyncio
@@ -1283,6 +1547,35 @@ class TestProviderConnection:
             assert "/v1/messages" in call_args[0][0]
             headers = call_args[1]["headers"]
             assert headers["x-api-key"] == "sk-ant-test"
+
+    @pytest.mark.asyncio
+    async def test_anthropic_probe_sends_what_a_real_call_sends(self):
+        """#1358: the probe carried no temperature, so it passed while every
+        real call was refused. It now sends it, and recovers the same way."""
+        with patch("app.services.ai_service._get_llm_client") as mock_get:
+            mock_client = AsyncMock()
+            mock_get.return_value = mock_client
+            mock_client.post = AsyncMock(
+                side_effect=[
+                    _anthropic_response(400, _TEMPERATURE_REFUSED),
+                    _anthropic_response(200, _ANTHROPIC_OK),
+                ]
+            )
+
+            result = await check_provider_connection(
+                "https://api.anthropic.com",
+                provider_type="anthropic",
+                api_key="sk-ant-test",
+                model="claude-haiku-5-5",
+            )
+
+        assert result == {"ok": True, "available_models": [], "model_found": True}
+        first, second = mock_client.post.call_args_list
+        assert first.kwargs["json"]["temperature"] == 0.1
+        assert first.kwargs["timeout"] == 10.0
+        assert "temperature" not in second.kwargs["json"]
+        assert second.kwargs["json"]["max_tokens"] == 1
+        assert second.kwargs["timeout"] == 10.0
 
 
 # ---------------------------------------------------------------------------
@@ -1356,6 +1649,64 @@ class TestCallAzureOpenAI:
                 [{"role": "user", "content": "test"}],
             )
             assert result == {"description": {"value": "A tool"}}
+
+    @pytest.mark.asyncio
+    async def test_the_v1_endpoint_of_issue_1386_is_called_as_the_v1_api(self):
+        """#1386: with the portal's ``…/openai/v1/`` as Provider URL every
+        call went to ``…/openai/v1/openai/deployments/gpt-5/…`` and was a 404.
+        The v1 API takes the deployment as ``model`` and no api-version."""
+        request = httpx.Request("POST", "https://r.openai.azure.com/openai/v1/chat/completions")
+        answered = httpx.Response(
+            200,
+            json={"choices": [{"message": {"content": '{"description": {"value": "A tool"}}'}}]},
+            request=request,
+        )
+        client = AsyncMock()
+        client.post = AsyncMock(return_value=answered)
+        with patch("app.services.ai_service._get_llm_client", AsyncMock(return_value=client)):
+            result = await _call_azure_openai(
+                "https://r.openai.azure.com/openai/v1/",
+                "azure-key",
+                "gpt-5",
+                [{"role": "user", "content": "test"}],
+                "2025-08-07",
+            )
+        assert result == {"description": {"value": "A tool"}}
+        args, kwargs = client.post.call_args
+        assert args == ("https://r.openai.azure.com/openai/v1/chat/completions",)
+        assert kwargs == {
+            "json": {
+                "model": "gpt-5",
+                "messages": [{"role": "user", "content": "test"}],
+                "temperature": 0.1,
+                "response_format": {"type": "json_object"},
+            },
+            "headers": {"api-key": "azure-key", "Content-Type": "application/json"},
+        }
+
+    @pytest.mark.asyncio
+    async def test_the_resource_endpoint_is_called_as_the_deployment_api(self):
+        request = httpx.Request("POST", "https://r.openai.azure.com")
+        client = AsyncMock()
+        client.post = AsyncMock(
+            return_value=httpx.Response(
+                200, json={"choices": [{"message": {"content": "{}"}}]}, request=request
+            )
+        )
+        with patch("app.services.ai_service._get_llm_client", AsyncMock(return_value=client)):
+            await _call_azure_openai(
+                "https://r.openai.azure.com/openai/",
+                "azure-key",
+                "my-deployment",
+                [{"role": "user", "content": "test"}],
+                "2024-10-21",
+            )
+        args, kwargs = client.post.call_args
+        assert args == (
+            "https://r.openai.azure.com/openai/deployments/my-deployment/chat/completions",
+        )
+        assert kwargs["params"] == {"api-version": "2024-10-21"}
+        assert "model" not in kwargs["json"]
 
     @pytest.mark.asyncio
     async def test_uses_api_key_header_not_bearer(self):
@@ -1557,9 +1908,151 @@ class TestProviderConnectionAzure:
                 api_key="azure-key",
                 model="my-gpt4o-deployment",
             )
-            assert result["ok"] is True
-            assert result["model_found"] is True
-            assert result["available_models"] == []
+            assert result == {
+                "ok": True,
+                "available_models": [],
+                "model_found": True,
+                "adjusted": [],
+            }
+            # What a suggestion sends (``_call_azure_openai``), plus a cap; the
+            # deployment is named in the URL, not the body.
+            kwargs = mock_client.post.call_args.kwargs
+            assert kwargs["json"] == {
+                "messages": [
+                    {"role": "user", "content": 'Reply with this JSON object: {"ok": true}'}
+                ],
+                "max_completion_tokens": 16,
+                "temperature": 0.1,
+                "response_format": {"type": "json_object"},
+            }
+            assert kwargs["timeout"] == 30.0
+
+    @pytest.mark.asyncio
+    async def test_azure_v1_endpoint_of_issue_1386_passes(self):
+        """The reporter's exact settings: the v1 endpoint, and the model's
+        version typed into API Version, which the v1 API never receives."""
+        request = httpx.Request("POST", "https://r.openai.azure.com/openai/v1/chat/completions")
+        client = AsyncMock()
+        client.post = AsyncMock(return_value=httpx.Response(200, json={}, request=request))
+        with patch("app.services.ai_service._get_llm_client", AsyncMock(return_value=client)):
+            result = await check_provider_connection(
+                "https://r.openai.azure.com/openai/v1/",
+                provider_type="azure_openai",
+                api_key="azure-key",
+                model="gpt-5",
+                api_version="2025-08-07",
+            )
+        assert result == {
+            "ok": True,
+            "available_models": [],
+            "model_found": True,
+            "adjusted": [],
+        }
+        args, kwargs = client.post.call_args
+        assert args == ("https://r.openai.azure.com/openai/v1/chat/completions",)
+        assert kwargs == {
+            "json": {
+                "model": "gpt-5",
+                "messages": [
+                    {"role": "user", "content": 'Reply with this JSON object: {"ok": true}'}
+                ],
+                "max_completion_tokens": 16,
+                "temperature": 0.1,
+                "response_format": {"type": "json_object"},
+            },
+            "headers": {"api-key": "azure-key", "Content-Type": "application/json"},
+            "timeout": 30.0,
+        }
+
+    @pytest.mark.asyncio
+    async def test_azure_404_that_is_not_a_missing_deployment_says_what_to_check(self):
+        """#1386: a wrong path or an unknown api-version is a 404 too, and
+        was reported as a deployment that does not exist."""
+        response = httpx.Response(
+            404,
+            json={"error": {"code": "404", "message": "Resource not found"}},
+            request=httpx.Request("POST", "https://x"),
+        )
+        client = AsyncMock()
+        client.post = AsyncMock(return_value=response)
+        with (
+            patch("app.services.ai_service._get_llm_client", AsyncMock(return_value=client)),
+            pytest.raises(httpx.HTTPError) as exc,
+        ):
+            await check_provider_connection(
+                "https://r.openai.azure.com",
+                provider_type="azure_openai",
+                api_key="azure-key",
+                model="gpt-5",
+                api_version="2025-08-07",
+            )
+        assert str(exc.value) == (
+            "Azure OpenAI answered 404 for /openai/deployments/gpt-5/chat/completions: "
+            "check the Provider URL (the resource endpoint, such as "
+            "https://your-resource.openai.azure.com) and the API version '2025-08-07', "
+            "which must be an Azure OpenAI API version, not the version of the model. "
+            "An endpoint ending in /openai/v1/ needs no API version"
+        )
+
+    @pytest.mark.asyncio
+    async def test_azure_reports_what_the_deployment_refused(self):
+        request = httpx.Request("POST", "https://my-resource.openai.azure.com")
+        refused = httpx.Response(
+            400,
+            json={
+                "error": {
+                    "message": "Unsupported value: 'temperature'",
+                    "param": "temperature",
+                    "code": "unsupported_value",
+                }
+            },
+            request=request,
+        )
+        client = AsyncMock()
+        client.post = AsyncMock(
+            side_effect=[refused, httpx.Response(200, json={}, request=request)]
+        )
+        with patch("app.services.ai_service._get_llm_client", AsyncMock(return_value=client)):
+            result = await check_provider_connection(
+                "https://my-resource.openai.azure.com",
+                provider_type="azure_openai",
+                api_key="azure-key",
+                model="my-reasoning-deployment",
+            )
+        assert result == {
+            "ok": True,
+            "available_models": [],
+            "model_found": True,
+            "adjusted": ["temperature"],
+        }
+        assert client.post.await_count == 2
+        assert "temperature" not in client.post.call_args.kwargs["json"]
+
+    @pytest.mark.asyncio
+    async def test_azure_other_refusal_shows_the_providers_reason(self):
+        """A deployment that answers is reachable; "cannot reach" sent admins
+        to the network (#1358)."""
+        response = httpx.Response(
+            400,
+            json={"error": {"message": "The model is overloaded"}},
+            request=httpx.Request("POST", "https://my-resource.openai.azure.com"),
+        )
+        client = AsyncMock()
+        client.post = AsyncMock(return_value=response)
+        with (
+            patch("app.services.ai_service._get_llm_client", AsyncMock(return_value=client)),
+            pytest.raises(httpx.HTTPError) as exc,
+        ):
+            await check_provider_connection(
+                "https://my-resource.openai.azure.com",
+                provider_type="azure_openai",
+                api_key="azure-key",
+                model="my-gpt4o-deployment",
+            )
+        assert str(exc.value) == (
+            "Deployment 'my-gpt4o-deployment' refused the test request (400): "
+            "The model is overloaded"
+        )
 
     @pytest.mark.asyncio
     async def test_azure_url_contains_deployment(self):
@@ -1631,15 +2124,15 @@ class TestProviderConnectionAzure:
         with patch("app.services.ai_service._get_llm_client") as mock_get:
             mock_client = AsyncMock()
             mock_get.return_value = mock_client
-            mock_response = MagicMock()
-            mock_response.status_code = 401
+            # What ``client.post`` really returns for a refused request: a
+            # response, not a raised ``HTTPStatusError``.
             mock_client.post = AsyncMock(
-                side_effect=httpx.HTTPStatusError(
-                    "401", request=MagicMock(), response=mock_response
+                return_value=httpx.Response(
+                    401, json={}, request=httpx.Request("POST", "https://x")
                 )
             )
 
-            with pytest.raises(httpx.HTTPError, match="Invalid Azure OpenAI API key"):
+            with pytest.raises(httpx.HTTPError, match="^Invalid Azure OpenAI API key$"):
                 await check_provider_connection(
                     "https://my-resource.openai.azure.com",
                     provider_type="azure_openai",
@@ -1652,15 +2145,18 @@ class TestProviderConnectionAzure:
         with patch("app.services.ai_service._get_llm_client") as mock_get:
             mock_client = AsyncMock()
             mock_get.return_value = mock_client
-            mock_response = MagicMock()
-            mock_response.status_code = 404
             mock_client.post = AsyncMock(
-                side_effect=httpx.HTTPStatusError(
-                    "404", request=MagicMock(), response=mock_response
+                return_value=httpx.Response(
+                    404,
+                    json={"error": {"code": "DeploymentNotFound", "message": "does not exist"}},
+                    request=httpx.Request("POST", "https://x"),
                 )
             )
 
-            with pytest.raises(httpx.HTTPError, match="not found"):
+            with pytest.raises(
+                httpx.HTTPError,
+                match="^Azure OpenAI deployment 'nonexistent-deployment' not found$",
+            ):
                 await check_provider_connection(
                     "https://my-resource.openai.azure.com",
                     provider_type="azure_openai",

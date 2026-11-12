@@ -20,6 +20,7 @@ import Autocomplete from "@mui/material/Autocomplete";
 import Link from "@mui/material/Link";
 import IconButton from "@mui/material/IconButton";
 import { useTheme } from "@mui/material/styles";
+import { CARD_TYPE_COLORS, STATUS_CHIP_COLORS, brand } from "@/theme/tokens";
 import {
   useResolveLabel,
   useResolveMetaLabel,
@@ -29,6 +30,7 @@ import {
 } from "@/hooks/useResolveLabel";
 import { useMetamodel } from "@/hooks/useMetamodel";
 import { useSurveyFieldLabel } from "@/lib/surveyFieldLabel";
+import HelpTip from "@/components/HelpTip";
 import UserMultiSelect from "@/components/UserMultiSelect";
 import CardDetailSidePanel from "@/components/CardDetailSidePanel";
 import { useDateFormat } from "@/hooks/useDateFormat";
@@ -41,7 +43,6 @@ import { usePageSubject } from "@/hooks/usePageTitle";
 import { useAbortableEffect } from "@/hooks/useLatestRequest";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { ExtensionBoundary, useExtensionFieldTypes } from "@/lib/extensionHost";
-import { FieldHelp } from "@/features/cards/sections/cardDetailUtils";
 import type { SurveyRespondForm, SurveyField, SurveyPersonRef } from "@/types";
 
 type OptionLabelResolver = (key: string, translations?: Record<string, string>) => string;
@@ -566,7 +567,7 @@ export default function SurveyRespond() {
   if (submitted) {
     return (
       <Box sx={{ maxWidth: 600, mx: "auto", py: 6, textAlign: "center" }}>
-        <MaterialSymbol icon="check_circle" size={64} color="#2e7d32" />
+        <MaterialSymbol icon="check_circle" size={64} color={STATUS_CHIP_COLORS.success.text} />
         <Typography variant="h5" sx={{ mt: 2, fontWeight: 700 }}>
           {t("surveys.respond.success")}
         </Typography>
@@ -596,7 +597,7 @@ export default function SurveyRespond() {
             <MaterialSymbol icon="arrow_back" size={22} />
           </IconButton>
         </Tooltip>
-        <MaterialSymbol icon="assignment" size={28} color="#1976d2" />
+        <MaterialSymbol icon="assignment" size={28} color={brand.primary} />
         <Typography variant="h5" sx={{ fontWeight: 700, flex: 1 }}>
           {form.survey.name}
         </Typography>
@@ -604,7 +605,7 @@ export default function SurveyRespond() {
 
       {/* Card info */}
       <Card variant="outlined" sx={{ p: 2, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
-        <MaterialSymbol icon="apps" size={22} color="#0f7eb5" />
+        <MaterialSymbol icon="apps" size={22} color={CARD_TYPE_COLORS.Application} />
         {form.card.can_view ? (
           // The card opens in the side panel, so a half-filled form stays
           // where it is while the respondent checks the card; the panel's own
@@ -680,6 +681,11 @@ export default function SurveyRespond() {
             <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: field.kind === "relation" ? 0.5 : 1 }}>
               <Typography sx={{ fontWeight: 600, flex: 1 }}>
                 {surveyFieldLabel(field)}
+                {(field.kind === undefined || field.kind === "attribute") && (
+                  <HelpTip
+                    text={(field.helpTranslations?.[i18n.language] as string) || field.help || ""}
+                  />
+                )}
               </Typography>
               <Chip
                 label={isMaintain ? t("surveys.respond.maintain") : t("surveys.respond.confirmLabel")}
@@ -713,12 +719,6 @@ export default function SurveyRespond() {
                   { card: form.card.name, role: surveyFieldLabel(field) },
                 )}
               </Typography>
-            )}
-
-            {(field.kind === undefined || field.kind === "attribute") && (
-              <FieldHelp
-                text={(field.helpTranslations?.[i18n.language] as string) || field.help || ""}
-              />
             )}
 
             {field.kind === "relation" && (

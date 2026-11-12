@@ -14,6 +14,7 @@ import {
   resolveFieldLabel,
   type ChangeLabels,
 } from "./historyChanges";
+import { SEVERITY_COLORS, STATUS_COLORS, brand } from "@/theme/tokens";
 
 const echo = (key: string) => `t(${key})`;
 
@@ -32,12 +33,12 @@ describe("eventMeta", () => {
     expect(eventMeta("card.updated", echo)).toEqual({
       label: "t(history.events.updated)",
       icon: "edit",
-      color: "#1976d2",
+      color: brand.primary,
     });
     expect(eventMeta("process_flow.withdrawn", echo)).toEqual({
       label: "t(history.events.processFlowWithdrawn)",
       icon: "unpublished",
-      color: "#f44336",
+      color: STATUS_COLORS.error,
     });
   });
 
@@ -45,7 +46,7 @@ describe("eventMeta", () => {
     expect(eventMeta("something.new", echo)).toEqual({
       label: "something.new",
       icon: "info",
-      color: "#9e9e9e",
+      color: STATUS_COLORS.neutral,
     });
   });
 
@@ -67,7 +68,7 @@ describe("eventMeta", () => {
     expect(EVENT_META["tag.removed"]).toEqual({
       labelKey: "history.events.tagRemoved",
       icon: "label_off",
-      color: "#f44336",
+      color: STATUS_COLORS.error,
     });
   });
 });
@@ -276,12 +277,7 @@ describe("eventDetailModel", () => {
       levelColor: RISK_LEVEL_COLOR.high,
       title: "Outage",
     });
-    expect(RISK_LEVEL_COLOR).toEqual({
-      critical: "#d32f2f",
-      high: "#f57c00",
-      medium: "#fbc02d",
-      low: "#388e3c",
-    });
+    expect(RISK_LEVEL_COLOR).toEqual(SEVERITY_COLORS);
     expect(eventDetailModel("risk.removed", { title: "T" }, null)).toEqual({
       kind: "risk",
       reference: undefined,

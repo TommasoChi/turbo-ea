@@ -36,12 +36,27 @@ The result is displayed to the user with:
 | **Ollama** | Self-hosted | Provider URL (e.g., `http://ollama:11434`) + model name |
 | **OpenAI** | Commercial | API key + model name (e.g., `gpt-4o`) |
 | **Google Gemini** | Commercial | API key + model name |
-| **Azure Hosted OpenAI** | Commercial | API key + Azure resource endpoint + deployment name + API version (default `2025-01-01`) |
+| **Azure Hosted OpenAI** | Commercial | API key + Azure endpoint + deployment name + API version (default `2025-01-01`; not used with an endpoint ending in `/openai/v1/`) |
 | **OpenRouter** | Commercial | API key + model name |
 | **Anthropic Claude** | Commercial | API key + model name |
 | **Amazon Bedrock** | Your AWS account | AWS region + model or inference profile ID; IAM role, or an optional access key |
 
 Commercial providers require an API key, which is stored encrypted in the database using Fernet symmetric encryption. Amazon Bedrock is the exception: it authenticates with the IAM role of the container by default, so there is no key to store or rotate.
+
+### Azure Hosted OpenAI endpoints
+
+Azure shows two different endpoints depending on the page you copy from, and the **Provider URL** accepts either:
+
+- **The resource endpoint**, such as `https://your-resource.openai.azure.com`. Turbo EA calls your deployment with the **API Version** you enter. That is the version of the Azure OpenAI API, such as `2024-10-21`, not the version of the model (`2025-08-07` for GPT-5, for example).
+- **The v1 endpoint**, ending in `/openai/v1/`. It takes no API version, so the **API Version** field is switched off. Azure AI Foundry shows only this endpoint for a deployment, and no API version anywhere: paste it as it is.
+
+In both cases **Model** is the name of your deployment.
+
+### OpenAI-compatible servers and gateways
+
+The **OpenAI** provider type also works with any server that speaks the OpenAI Chat Completions API — LM Studio, vLLM, or a gateway in front of them — by entering that server's address as the **Provider URL**.
+
+Turbo EA asks every such provider for a JSON answer (`response_format`) at a low `temperature`. Not every server or model accepts both. When a provider refuses one of them, Turbo EA sends the request again without it and reads the answer from the model's text instead, so there is nothing to configure. **Test Connection** makes the same request a suggestion does and tells you which parameter, if any, the provider refused.
 
 ---
 
@@ -199,6 +214,10 @@ These fields are only suggested when the AI finds clear evidence — they are no
 !!! note
     Apart from Application-specific fields, AI suggestions primarily generate the **description** field. Custom fields for other card types are not yet covered.
 
+### Custom EOL Products
+
+The same button appears in the **Create a custom EOL product** and **Edit custom EOL product** dialogs ([EOL Administration](eol.md#custom-eol-products)), once the product has a name. The suggestion is drafted from the product name and its vendor link, with a search for the product's support lifecycle. A custom product is not a card type, so the per-type switch above does not apply: the feature only needs AI suggestions to be enabled and configured, plus the `ai.suggest` permission.
+
 ---
 
 ## Portfolio Insights
@@ -264,8 +283,11 @@ Custom roles can be granted these permissions through the Roles administration p
 | Slow suggestions | LLM inference speed depends on hardware (for Ollama) or network latency (for commercial providers). Smaller models like `gemma3:4b` are faster than larger ones. |
 | Low confidence scores | The LLM may not find enough relevant information via web search. Try a more specific card name, or consider using Google Custom Search for better results. |
 | Connection test fails | Verify the provider URL is reachable from the backend container. For Docker setups, ensure both containers are on the same network. |
+| "The AI provider rejected the request" | The provider was reached but refused the request, and the message carries its reason (with a 401 or 403, check the API key and the model access instead). Correct the model name or the provider setting it names, then click Test Connection: it sends the same request a suggestion does, so it now fails or passes the same way. |
 | Bedrock returns "AccessDeniedException" | Two different causes: the IAM role is missing the `bedrock:InvokeModel` permission, or model access has not been enabled for that model in the Bedrock console. Check both. |
 | Bedrock says on-demand throughput is not supported | The model is only reachable through a regional inference profile. Run Test Connection and pick an ID prefixed `eu.`, `us.` or `apac.`. |
+| Test Connection says the provider does not accept `response_format` or `temperature` | Nothing to fix: the provider is working. Turbo EA leaves that parameter out of every request to it. Without `response_format` the answer depends on the model following the instruction to reply in JSON, so if suggestions come back empty, try a more capable model. |
+| Azure Test Connection answers 404 | Azure answers 404 for three different mistakes. "Deployment not found" means the **Model** field does not match a deployment name. Otherwise the message names the path that was called: check that the **Provider URL** is your resource endpoint or ends in `/openai/v1/`, and that **API Version** holds an Azure OpenAI API version rather than the version of the model. If your portal shows no API version, use the endpoint ending in `/openai/v1/`, which needs none. |
 | OpenAI refuses a model with 403 | The key is valid, but the OpenAI project may not call that model. Test Connection sends a short request to the configured model and shows OpenAI's own reason. Grant the project access to the model (or complete organization verification) in the OpenAI dashboard, or pick another model. |
 
 ---

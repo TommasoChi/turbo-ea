@@ -17,7 +17,17 @@ import Chip from "@mui/material/Chip";
 import MaterialSymbol from "@/components/MaterialSymbol";
 import { api } from "@/api/client";
 import { useMetamodel } from "@/hooks/useMetamodel";
-import { AI_PROVIDER_TYPES, providerUi } from "./aiProviderUi";
+import { AI_PROVIDER_TYPES, azureUsesV1, providerUi } from "./aiProviderUi";
+import { useTheme } from "@mui/material/styles";
+
+/** `POST /settings/ai/test`. `adjusted` lists the optional request parameters
+ *  the provider refused; only the Chat Completions providers report it. */
+interface AiConnectionTestResult {
+  ok: boolean;
+  available_models: string[];
+  model_found: boolean;
+  adjusted?: string[];
+}
 
 interface AiSettings {
   enabled: boolean;
@@ -35,6 +45,7 @@ interface AiSettings {
 const AI_KEY_MASK = "\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022";
 
 export default function AiAdmin() {
+  const theme = useTheme();
   const { t } = useTranslation(["admin", "common"]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -112,12 +123,16 @@ export default function AiAdmin() {
     setTestingAi(true);
     setError("");
     try {
-      const res = await api.post<{ ok: boolean; available_models: string[]; model_found: boolean }>(
-        "/settings/ai/test",
-      );
+      const res = await api.post<AiConnectionTestResult>("/settings/ai/test");
       setAiAvailableModels(res.available_models);
       if (res.model_found) {
-        setSnack(t("settings.ai.testSuccess"));
+        // The test asks for what a suggestion asks for; a provider that
+        // refused part of it still works, and the admin is told which part.
+        setSnack(
+          res.adjusted?.length
+            ? t("settings.ai.testSuccessAdjusted", { params: res.adjusted.join(", ") })
+            : t("settings.ai.testSuccess"),
+        );
       } else if (res.available_models.length > 0) {
         setSnack(
           t("settings.ai.testNoModel", { models: res.available_models.slice(0, 5).join(", ") }),
@@ -179,6 +194,8 @@ export default function AiAdmin() {
   const showProviderUrl = ui.showProviderUrl;
   const showApiKey = ui.showApiKey;
   const showApiVersion = ui.showApiVersion;
+  // Azure's v1 endpoint takes no API version, so the field is not sent there.
+  const apiVersionUnused = showApiVersion && azureUsesV1(aiProviderUrl);
   const hasApiKeySet = aiApiKey === AI_KEY_MASK;
 
   const providerUrlPlaceholder = ui.urlPlaceholder;
@@ -225,7 +242,7 @@ export default function AiAdmin() {
 
       <Paper sx={{ p: 3, mb: 3 }}>
         <Box sx={{ display: "flex", alignItems: "center", mb: 2, gap: 1 }}>
-          <MaterialSymbol icon="dns" size={22} color="#555" />
+          <MaterialSymbol icon="dns" size={22} color={theme.palette.text.secondary} />
           <Typography variant="h6" fontWeight={600}>
             {t("settings.ai.providerTitle")}
           </Typography>
@@ -274,7 +291,10 @@ export default function AiAdmin() {
             value={aiApiVersion}
             onChange={(e) => setAiApiVersion(e.target.value)}
             placeholder="2025-01-01"
-            helperText={t("settings.ai.apiVersionHelper")}
+            disabled={apiVersionUnused}
+            helperText={t(
+              apiVersionUnused ? "settings.ai.apiVersionHelperV1" : "settings.ai.apiVersionHelper",
+            )}
             sx={{ mb: 2 }}
           />
         )}
@@ -380,7 +400,7 @@ export default function AiAdmin() {
       {/* AI Description Suggestions */}
       <Paper sx={{ p: 3, mb: 3 }}>
         <Box sx={{ display: "flex", alignItems: "center", mb: 2, gap: 1 }}>
-          <MaterialSymbol icon="auto_awesome" size={22} color="#555" />
+          <MaterialSymbol icon="auto_awesome" size={22} color={theme.palette.text.secondary} />
           <Typography variant="h6" fontWeight={600}>
             {t("settings.ai.title")}
           </Typography>
@@ -447,7 +467,7 @@ export default function AiAdmin() {
       {/* AI Portfolio Insights */}
       <Paper sx={{ p: 3, mb: 3 }}>
         <Box sx={{ display: "flex", alignItems: "center", mb: 2, gap: 1 }}>
-          <MaterialSymbol icon="insights" size={22} color="#555" />
+          <MaterialSymbol icon="insights" size={22} color={theme.palette.text.secondary} />
           <Typography variant="h6" fontWeight={600}>
             {t("settings.ai.portfolioInsightsTitle")}
           </Typography>
@@ -503,7 +523,7 @@ export default function AiAdmin() {
 
       <Paper sx={{ p: 3, mb: 3 }}>
         <Box sx={{ display: "flex", alignItems: "center", mb: 2, gap: 1 }}>
-          <MaterialSymbol icon="smart_toy" size={22} color="#555" />
+          <MaterialSymbol icon="smart_toy" size={22} color={theme.palette.text.secondary} />
           <Typography variant="h6" fontWeight={600}>
             {t("settings.mcp.title")}
           </Typography>

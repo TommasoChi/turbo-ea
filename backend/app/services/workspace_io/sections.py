@@ -4,7 +4,8 @@ the generic :mod:`entities` engine.
 Listed in dependency order: a section's intra-module parents come first
 (``PpmWbs`` before ``PpmTask`` before ``PpmTaskComment``; ``Risk`` before
 ``RiskCard``/``RiskMitigationTask`` before the occurrences; ``ArchitectureDecision``
-before its card links; ``Survey`` before ``SurveyResponse``). Cards and relations
+before its card links, decision links, people and files, with the file contents
+before the files; ``Survey`` before ``SurveyResponse``). Cards and relations
 are applied earlier by the bespoke core sections, so card FKs always resolve.
 
 Deliberately absent: ``events``, ``mutation_batches`` and ``audit_log``. They are
@@ -20,6 +21,12 @@ import sqlalchemy as sa
 
 from app.models.architecture_decision import ArchitectureDecision
 from app.models.architecture_decision_card import ArchitectureDecisionCard
+from app.models.architecture_decision_file import (
+    ArchitectureDecisionFile,
+    ArchitectureDecisionFileContent,
+)
+from app.models.architecture_decision_link import ArchitectureDecisionLink
+from app.models.architecture_decision_person import ArchitectureDecisionPerson
 from app.models.bookmark import Bookmark
 from app.models.card_cost import CardCost
 from app.models.card_license import CardLicense
@@ -29,6 +36,8 @@ from app.models.diagram import Diagram
 from app.models.diagram_favorite import DiagramFavorite
 from app.models.diagram_group import DiagramGroup
 from app.models.document import Document
+from app.models.document_comment import DocumentComment
+from app.models.document_history import DocumentHistoryEntry
 from app.models.file_attachment import FileAttachment
 from app.models.ppm_cost_line import PpmBudgetLine, PpmCostLine
 from app.models.ppm_dependency import PpmDependency
@@ -251,8 +260,18 @@ ENTITY_SECTIONS: tuple[EntitySection, ...] = (
     EntitySection(
         "Adrs",
         ArchitectureDecision,
-        user_fk_columns=("created_by",),
+        user_fk_columns=("created_by", "recorded_by"),
         self_parent_column="parent_id",
+        # Mention spans name cards and users in the four text sections; the
+        # signatories name users.
+        rewrite=remap.rewrite_adr_row,
+        id_bearing_columns=(
+            "context",
+            "decision",
+            "consequences",
+            "alternatives_considered",
+            "signatories",
+        ),
     ),
     EntitySection("AdrCards", ArchitectureDecisionCard, card_fk_columns=("card_id",)),
     # Per-card, per-year cost items; keys name ``CostItemTypes`` rows (applied earlier).
@@ -269,12 +288,57 @@ ENTITY_SECTIONS: tuple[EntitySection, ...] = (
         card_fk_columns=("card_id",),
         natural_key=("card_id", "fiscal_year"),
     ),
+    # Decision-to-decision links: both ends are decision ids, preserved
+    # verbatim like every module PK, so they need no remap.
+    EntitySection("AdrLinks", ArchitectureDecisionLink),
+    # A person whose user has no match on the target keeps the stored name
+    # with user_id null (the FK is nullable).
+    EntitySection("AdrPeople", ArchitectureDecisionPerson, user_fk_columns=("user_id",)),
+    # The bytes before the file rows that point at them: one content row may
+    # be shared by the file rows of several revisions.
+    EntitySection(
+        "AdrFileContents",
+        ArchitectureDecisionFileContent,
+        asset_columns=(("data", "bytes", "bin"),),
+    ),
+    EntitySection("AdrFiles", ArchitectureDecisionFile, user_fk_columns=("created_by",)),
     EntitySection(
         "Soaws",
         SoAW,
         card_fk_columns=("initiative_id",),
         user_fk_columns=("created_by",),
         self_parent_column="parent_id",
+        # Mention spans in each section's rich text; signatories name users.
+        rewrite=remap.rewrite_soaw_row,
+        id_bearing_columns=("sections", "signatories"),
+    ),
+    # The discussion and the timeline of decisions and SoAWs, after both
+    # owners. A reply's parent is a preserved PK, placed before it. Both carry
+    # ``created_at`` (threads and replies are ordered by it; it is a timeline
+    # row's date) and keep an empty ``body`` (a deleted comment, a rejection
+    # without a reason) as ``""``.
+    EntitySection(
+        "DocumentComments",
+        DocumentComment,
+        user_fk_columns=("author_id", "resolved_by"),
+        self_parent_column="parent_id",
+        rewrite=remap.rewrite_document_comment_row,
+        id_bearing_columns=("body",),
+        carry_timestamps=("created_at",),
+        keep_empty_text=True,
+    ),
+    # ``seq`` is an identity the target assigns: never carried. Exported in
+    # ``seq`` order and inserted in sheet order, so the timeline keeps it.
+    EntitySection(
+        "DocumentHistory",
+        DocumentHistoryEntry,
+        user_fk_columns=("actor_id",),
+        exclude_columns=("seq",),
+        export_order_by=(DocumentHistoryEntry.seq,),
+        rewrite=remap.rewrite_document_history_row,
+        id_bearing_columns=("content", "signatories"),
+        carry_timestamps=("created_at",),
+        keep_empty_text=True,
     ),
     # --- Saved views + surveys -------------------------------------------
     # Report scopes and filters, survey targets, portal and bookmark tag
@@ -291,7 +355,7 @@ ENTITY_SECTIONS: tuple[EntitySection, ...] = (
         Bookmark,
         user_fk_columns=("user_id",),
         rewrite=remap.rewrite_bookmark_row,
-        id_bearing_columns=("filters",),
+        id_bearing_columns=("filters", "query"),
     ),
     EntitySection(
         "WebPortals",

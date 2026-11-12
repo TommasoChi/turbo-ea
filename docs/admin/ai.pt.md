@@ -36,12 +36,27 @@ O resultado é exibido ao usuário com:
 | **Ollama** | Auto-hospedado | URL do provedor (ex.: `http://ollama:11434`) + nome do modelo |
 | **OpenAI** | Comercial | Chave API + nome do modelo (ex.: `gpt-4o`) |
 | **Google Gemini** | Comercial | Chave API + nome do modelo |
-| **Azure Hosted OpenAI** | Comercial | Chave API + endpoint do recurso Azure + nome do deployment + versão da API (padrão `2025-01-01`) |
+| **Azure Hosted OpenAI** | Comercial | Chave API + endpoint do Azure + nome do deployment + versão da API (padrão `2025-01-01`; não usada com um endpoint que termina em `/openai/v1/`) |
 | **OpenRouter** | Comercial | Chave API + nome do modelo |
 | **Anthropic Claude** | Comercial | Chave API + nome do modelo |
 | **Amazon Bedrock** | A sua conta AWS | Região AWS + ID de modelo ou de perfil de inferência; papel IAM, ou uma chave de acesso opcional |
 
 Provedores comerciais requerem uma chave API, que é armazenada criptografada no banco de dados usando criptografia simétrica Fernet. O Amazon Bedrock é a exceção: autentica-se por padrão com o papel IAM do contentor, portanto não há chave a armazenar nem a rodar.
+
+### Endpoints do Azure Hosted OpenAI
+
+O Azure mostra dois endpoints diferentes consoante a página de onde copia, e o **URL do fornecedor** aceita ambos:
+
+- **O endpoint do recurso**, como `https://your-resource.openai.azure.com`. O Turbo EA chama o seu deployment com a **versão da API** que introduzir. É a versão da API Azure OpenAI, como `2024-10-21`, e não a versão do modelo (`2025-08-07` para o GPT-5, por exemplo).
+- **O endpoint v1**, que termina em `/openai/v1/`. Não aceita versão da API, por isso o campo **Versão da API** fica desativado. O Azure AI Foundry mostra apenas este endpoint para um deployment, e nenhuma versão da API em lado nenhum: cole-o tal como está.
+
+Em ambos os casos, **Modelo** é o nome do seu deployment.
+
+### Servidores e gateways compatíveis com OpenAI
+
+O tipo de fornecedor **OpenAI** também funciona com qualquer servidor que fale a API Chat Completions da OpenAI — LM Studio, vLLM ou um gateway à frente deles — introduzindo o endereço desse servidor como **URL do fornecedor**.
+
+O Turbo EA pede a cada um desses fornecedores uma resposta JSON (`response_format`) com uma `temperature` baixa. Nem todos os servidores ou modelos aceitam ambos. Quando um fornecedor recusa um deles, o Turbo EA envia o pedido novamente sem esse parâmetro e lê a resposta a partir do texto do modelo, pelo que não há nada a configurar. **Testar ligação** envia o mesmo pedido que uma sugestão e indica qual o parâmetro, se algum, que o fornecedor recusou.
 
 ---
 
@@ -195,6 +210,10 @@ Esses campos só são sugeridos quando a IA encontra evidências claras — não
 !!! note
     Além dos campos específicos de Aplicação, as sugestões de IA geram principalmente o campo **descrição**. Campos personalizados para outros tipos de cards ainda não são cobertos.
 
+### Produtos EOL personalizados
+
+O mesmo botão aparece nas caixas de diálogo **Criar um produto EOL personalizado** e **Editar produto EOL personalizado** ([Administração de EOL](eol.md)), assim que o produto tem um nome. A sugestão é redigida a partir do nome do produto e da sua ligação do fornecedor, com uma pesquisa do ciclo de vida de suporte do produto. Um produto personalizado não é um tipo de ficha, pelo que o interruptor por tipo acima não se aplica: a funcionalidade só precisa de que as sugestões de IA estejam ativadas e configuradas, além da permissão `ai.suggest`.
+
 ---
 
 ## Análises do portfólio
@@ -250,6 +269,9 @@ As chaves de permissão são `ai.suggest` e `ai.portfolio_insights`. Papéis per
 | Sugestões lentas | A velocidade de inferência do LLM depende do hardware (para Ollama) ou da latência de rede (para provedores comerciais). Modelos menores como `gemma3:4b` são mais rápidos que modelos maiores. |
 | Pontuações de confiança baixas | O LLM pode não encontrar informações relevantes suficientes via busca web. Tente um nome de card mais específico, ou considere usar Google Custom Search para melhores resultados. |
 | Teste de conexão falha | Verifique se a URL do provedor é acessível a partir do contêiner do backend. Para configurações Docker, certifique-se de que ambos os contêineres estão na mesma rede. |
+| Testar ligação indica que o fornecedor não aceita `response_format` ou `temperature` | Nada a corrigir: o fornecedor está a funcionar. O Turbo EA omite esse parâmetro de todos os pedidos que lhe envia. Sem `response_format`, a resposta depende de o modelo seguir a instrução de responder em JSON; se as sugestões vierem vazias, experimente um modelo mais capaz. |
+| O teste de ligação do Azure responde 404 | O Azure responde 404 para três erros diferentes. «Deployment not found» significa que o campo **Modelo** não corresponde a nenhum nome de deployment. Caso contrário, a mensagem indica o caminho chamado: verifique se o **URL do fornecedor** é o endpoint do seu recurso ou termina em `/openai/v1/`, e se a **versão da API** contém uma versão da API Azure OpenAI e não a versão do modelo. Se o seu portal não mostrar nenhuma versão da API, utilize o endpoint que termina em `/openai/v1/`, que não precisa de nenhuma. |
+| «O fornecedor de IA rejeitou o pedido» | O fornecedor foi contactado mas recusou o pedido, e a mensagem indica o motivo (com um 401 ou 403, verifique a chave de API e o acesso ao modelo). Corrija o nome do modelo ou a definição do fornecedor indicada e clique em Testar Conexão: envia o mesmo pedido que uma sugestão, pelo que agora falha ou passa da mesma forma. |
 | O Bedrock devolve «AccessDeniedException» | Duas causas possíveis: falta ao papel IAM a permissão `bedrock:InvokeModel`, ou o acesso àquele modelo não foi ativado na consola do Bedrock. Verifique ambas. |
 | O Bedrock diz que o throughput on-demand não é suportado | O modelo só é acessível através de um perfil de inferência regional. Execute o teste de ligação e escolha um ID com prefixo `eu.`, `us.` ou `apac.`. |
 | A OpenAI recusa um modelo com 403 | A chave é válida, mas o projeto OpenAI não pode chamar esse modelo. O teste de ligação envia um pedido curto ao modelo configurado e mostra o motivo indicado pela OpenAI. Conceda ao projeto acesso ao modelo (ou conclua a verificação da organização) no painel da OpenAI, ou escolha outro modelo. |

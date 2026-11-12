@@ -18,6 +18,7 @@ import MenuItem from "@mui/material/MenuItem";
 import MaterialSymbol from "@/components/MaterialSymbol";
 import { LAYER_ORDER, type ArchimateLayer } from "@/features/archimate/taxonomy/elements";
 import type { ArchimateViewpoint, DiagramGroup } from "@/types";
+import { ARCHIMATE_DIAGRAM_COLOR } from "@/theme/tokens";
 
 /** Single-select scope (like mail folders). */
 export type DiagramScope =
@@ -114,7 +115,7 @@ export default function DiagramsFilterSidebar({
             {
               kind: "archimate" as const,
               icon: "hub",
-              color: "#7b1fa2",
+              color: ARCHIMATE_DIAGRAM_COLOR,
               label: t("gallery.diagramTypeArchimate"),
             },
           ]
@@ -334,7 +335,7 @@ export default function DiagramsFilterSidebar({
                 </Tooltip>
                 <Tooltip title={t("gallery.diagramTypeArchimate")}>
                   <Box sx={{ width: 20, display: "flex", justifyContent: "center" }}>
-                    <MaterialSymbol icon="hub" size={14} color="#7b1fa2" />
+                    <MaterialSymbol icon="hub" size={14} color={ARCHIMATE_DIAGRAM_COLOR} />
                   </Box>
                 </Tooltip>
               </Box>

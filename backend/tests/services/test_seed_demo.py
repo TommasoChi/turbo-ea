@@ -12,11 +12,21 @@ from __future__ import annotations
 import datetime as datetime_module
 import importlib.util
 from datetime import date
+from types import SimpleNamespace
 from typing import Self
 
 import pytest
 
 import app.services.seed_demo as seed_demo_module
+from app.services.card_query import (
+    parse_card_query,
+    resolve_groups,
+    start_types,
+    view_fields_for_query,
+)
+from app.services.card_query_matches import match_nodes
+from app.services.eol_service import manual_eol_status
+from app.services.lifecycle import current_lifecycle_phase
 from app.services.seed import RELATIONS as META_RELATIONS
 from app.services.seed import TYPES as META_TYPES
 from app.services.seed_demo import (
@@ -25,6 +35,8 @@ from app.services.seed_demo import (
     BUSINESS_CONTEXTS,
     DATA_OBJECTS,
     DEMO_ADR_EXTRA_CARD_LINKS,
+    DEMO_ADR_REGISTER,
+    DEMO_ADR_REGISTER_CARD_LINKS,
     DEMO_ADRS_EXTRA,
     DEMO_SOAWS,
     INITIATIVES,
@@ -347,6 +359,36 @@ class TestDemoTagGroupsMatchMetamodel:
                     errors.append(f"tag group '{tg['name']}': unknown type '{type_key}'")
         assert not errors, "\n".join(errors)
 
+    def test_related_references_resolve_to_demo_decisions(self):
+        """Related decisions are seeded as ``relates`` links, so every reference
+        must name a demo decision, and none may reach the decision constructor."""
+        from app.services.seed_demo import DEMO_ADRS, demo_relates_links
+
+        adrs = DEMO_ADRS + DEMO_ADRS_EXTRA
+        refs = {a["reference_number"] for a in adrs}
+        assert not any("related_decisions" in a for a in adrs)
+        for a in adrs:
+            assert set(a.get("related_references", [])) <= refs, a["reference_number"]
+        by_ref = {a["reference_number"]: a["id"] for a in adrs}
+        pairs = demo_relates_links(adrs)
+        assert (by_ref["ADR-002"], by_ref["ADR-001"]) in pairs
+        assert (by_ref["ADR-003"], by_ref["ADR-002"]) in pairs
+        assert len(pairs) == sum(len(a.get("related_references", [])) for a in adrs)
+
+    def test_demo_relates_links_skip_unknown_self_and_repeated_references(self):
+        from app.services.seed_demo import demo_relates_links
+
+        one, two = _id("adr_test_one"), _id("adr_test_two")
+        adrs = [
+            {"id": one, "reference_number": "ADR-901"},
+            {
+                "id": two,
+                "reference_number": "ADR-902",
+                "related_references": ["ADR-901", "ADR-901", "ADR-902", "ADR-999"],
+            },
+        ]
+        assert demo_relates_links(adrs) == [(two, one)]
+
 
 # ===========================================================================
 # Tests — BPM demo data (seed_demo_bpm.py)
@@ -518,13 +560,19 @@ class TestExtraAdrsDemoData:
     def test_extra_adr_card_links_valid(self):
         """All card refs in DEMO_ADR_EXTRA_CARD_LINKS must exist in the demo data."""
         errors = []
-        for link in DEMO_ADR_EXTRA_CARD_LINKS:
+        for link in DEMO_ADR_EXTRA_CARD_LINKS + DEMO_ADR_REGISTER_CARD_LINKS:
             card_id = _id(link["card_ref"])
             if card_id not in _all_card_ids:
                 errors.append(
                     f"ADR card link: card_ref '{link['card_ref']}' not found in demo cards"
                 )
         assert not errors, "\n".join(errors)
+
+    def test_register_adrs_all_have_card_links(self):
+        """Every register decision is filed against at least one card."""
+        register_ids = {_id(d["ref"]) for d in DEMO_ADR_REGISTER}
+        linked = {_id(lnk["adr_ref"]) for lnk in DEMO_ADR_REGISTER_CARD_LINKS}
+        assert linked == register_ids
 
     def test_extra_adr_refs_match_links(self):
         """All extra ADR IDs must be referenced in the card links."""
@@ -544,11 +592,14 @@ class TestExtraAdrsDemoData:
         UI's signer chips and the signed-by filter facet) and each persona
         (display_name) must reuse the same id across all documents so the
         signed-by facet dedups to one entry per persona."""
-        from app.services.seed_demo import DEMO_ADRS
+        from datetime import date
 
+        from app.services.seed_demo import DEMO_ADRS, demo_register_decisions
+
+        register = demo_register_decisions(date(2026, 11, 10))
         persona_ids: dict[str, str] = {}
         errors = []
-        for doc in DEMO_ADRS + DEMO_ADRS_EXTRA + DEMO_SOAWS:
+        for doc in DEMO_ADRS + DEMO_ADRS_EXTRA + register + DEMO_SOAWS:
             ref = doc.get("reference_number") or doc.get("title")
             sigs = doc.get("signatories", [])
             ids = [s["user_id"] for s in sigs]
@@ -752,6 +803,11 @@ class TestExtrasDemoData:
         errors = []
         for bm in BOOKMARK_DEFS:
             for col in bm.get("columns") or []:
+                # A matched column (``via:<line>:<hop path>``) belongs to a
+                # query view; its key is checked against the query in
+                # ``test_the_matched_columns_name_switchable_nodes``.
+                if bm.get("query") and col.startswith("via:"):
+                    continue
                 if not col.startswith(valid_prefixes):
                     errors.append(
                         f"Bookmark '{bm['name']}': column key '{col}' must "
@@ -778,6 +834,195 @@ class TestExtrasDemoData:
                             f"not exist on card type '{type_key}'"
                         )
         assert not errors, "\n".join(errors)
+
+    def test_bookmark_queries_resolve_against_the_metamodel(self):
+        """A query view's card query must resolve against the seeded metamodel
+        (``card_query._resolve_node``, what ``resolve_card_query`` runs on the
+        loaded rows), and its ``card_type`` / ``filters.types`` must be the
+        start type ``view_fields_for_query`` pins them to."""
+        types = {
+            t["key"]: SimpleNamespace(
+                key=t["key"],
+                fields_schema=t.get("fields_schema", []),
+                subtypes=t.get("subtypes", []),
+                has_hierarchy=t.get("has_hierarchy", False),
+                section_config=t.get("section_config"),
+                is_hidden=False,
+            )
+            for t in META_TYPES
+        }
+        relation_types = {
+            r["key"]: SimpleNamespace(
+                key=r["key"],
+                source_type_key=r["source_type_key"],
+                target_type_key=r["target_type_key"],
+                is_hidden=False,
+            )
+            for r in META_RELATIONS
+        }
+        query_views = [bm for bm in BOOKMARK_DEFS if bm.get("query")]
+        assert [bm["name"] for bm in query_views] == [
+            "Organizations using active apps in flight",
+            "Active apps on aging tech, and the organizations using apps",
+            "Organizations on applications with components at or near end of life",
+        ]
+        for bm in query_views:
+            query = parse_card_query(bm["query"])
+            groups = resolve_groups(query, types, relation_types, {}, None)
+            starts = start_types(query)
+            assert [group[0].type for group in groups] == starts
+            assert bm["card_type"] == (starts[0] if len(starts) == 1 else None)
+            assert view_fields_for_query(query, bm["card_type"], bm["filters"]) == (
+                bm["card_type"],
+                bm["filters"],
+            )
+        assert [bm.get("created_via") for bm in query_views] == ["mcp", None, None]
+
+    def test_the_matched_columns_name_switchable_nodes(self):
+        """Every ``via:`` column of a demo view names a node its query really
+        has (``card_query_matches.match_node``): the end-of-life view shows its
+        Applications (``0:0``) and IT Components (``0:0.0``), in that order."""
+        types = {
+            t["key"]: SimpleNamespace(
+                key=t["key"],
+                fields_schema=t.get("fields_schema", []),
+                subtypes=t.get("subtypes", []),
+                has_hierarchy=t.get("has_hierarchy", False),
+                section_config=t.get("section_config"),
+                is_hidden=False,
+            )
+            for t in META_TYPES
+        }
+        relation_types = {
+            r["key"]: SimpleNamespace(
+                key=r["key"],
+                source_type_key=r["source_type_key"],
+                target_type_key=r["target_type_key"],
+                is_hidden=False,
+            )
+            for r in META_RELATIONS
+        }
+        matched: dict[str, list[tuple[str, str]]] = {}
+        for bm in BOOKMARK_DEFS:
+            keys = [c[len("via:") :] for c in bm.get("columns") or [] if c.startswith("via:")]
+            if not keys:
+                continue
+            groups = resolve_groups(parse_card_query(bm["query"]), types, relation_types, {}, None)
+            nodes = match_nodes(groups, keys)
+            matched[bm["name"]] = [(n.key, n.hops()[-1].node.type) for n in nodes]
+        assert matched == {
+            "Organizations on applications with components at or near end of life": [
+                ("0:0", "Application"),
+                ("0:0.0", "ITComponent"),
+            ]
+        }
+
+    def test_the_end_of_life_demo_view_matches_demo_cards(self):
+        """The matched-columns demo view lists three Organizations: walking the
+        demo relations in Python with the end-of-life status the query asks
+        for (``manual_eol_status``: the demo cards carry no endoflife.date
+        link) finds exactly these Organizations, Applications and IT
+        Components."""
+        view = next(
+            bm
+            for bm in BOOKMARK_DEFS
+            if bm["name"] == "Organizations on applications with components at or near end of life"
+        )
+        itc_hop = view["query"]["related"][0]["related"][0]
+        assert itc_hop["where"] == {"eol_status": ["eol", "approaching"]}
+        by_id = {c["id"]: c for c in _ALL_DEMO_CARDS}
+        assert not any(
+            (c.get("attributes") or {}).get("eol_product") for c in seed_demo_module.IT_COMPONENTS
+        )
+
+        def ends(rel_type: str) -> list[tuple[dict, dict]]:
+            return [
+                (by_id[r["source_id"]], by_id[r["target_id"]])
+                for r in DEMO_RELATIONS
+                if r["type"] == rel_type
+            ]
+
+        components: dict[str, set[str]] = {}
+        for app, itc in ends("relAppToITC"):
+            if manual_eol_status(itc.get("lifecycle")) in itc_hop["where"]["eol_status"]:
+                components.setdefault(app["name"], set()).add(itc["name"])
+        matches: dict[str, dict[str, set[str]]] = {}
+        for org, app in ends("relOrgToApp"):
+            if app["name"] in components:
+                row = matches.setdefault(org["name"], {"apps": set(), "itcs": set()})
+                row["apps"].add(app["name"])
+                row["itcs"] |= components[app["name"]]
+        assert matches == {
+            "Engineering Division": {
+                "apps": {"PTC Windchill"},
+                "itcs": {"Windchill File Vault Server"},
+            },
+            "Manufacturing Division": {"apps": {"Siemens Opcenter"}, "itcs": {".NET 8"}},
+            "Sales & Marketing": {
+                "apps": {"SalesTrack CRM", "Sales Contact Workbook"},
+                "itcs": {"SalesTrack Oracle Database", "Sales File Server"},
+            },
+        }
+
+    def test_the_stacked_demo_view_lists_two_card_types(self):
+        stack = next(bm for bm in BOOKMARK_DEFS if "any_of" in (bm.get("query") or {}))
+        query = parse_card_query(stack["query"])
+        assert start_types(query) == ["Application", "Organization"]
+        assert stack["card_type"] is None
+        assert stack["filters"]["types"] == ["Application", "Organization"]
+
+    def test_bookmark_query_view_matches_demo_cards(self):
+        """The demo query view is not empty, nor every Organization: walking
+        the demo relations in Python finds the chain it describes."""
+        by_id = {c["id"]: c for c in _ALL_DEMO_CARDS}
+
+        def ends(rel_type: str) -> list[tuple[dict, dict]]:
+            return [
+                (by_id[r["source_id"]], by_id[r["target_id"]])
+                for r in DEMO_RELATIONS
+                if r["type"] == rel_type
+            ]
+
+        on_track_apps = {
+            app["id"]
+            for init, app in ends("relInitiativeToApp")
+            if init["attributes"].get("initiativeStatus") == "onTrack"
+            and current_lifecycle_phase(app.get("lifecycle")) == "active"
+        }
+        orgs = {org["name"] for org, app in ends("relOrgToApp") if app["id"] in on_track_apps}
+        all_orgs = {c["name"] for c in seed_demo_module.ORGANIZATIONS}
+        assert orgs
+        assert orgs < all_orgs
+
+    def test_the_stacked_demo_view_matches_demo_cards_of_both_types(self):
+        """Both groups of the stacked demo view list rows: the AND group finds
+        an active Application on a phasing-out IT Component that an
+        Initiative affects (and not every Application), the OR line the
+        Organizations that use an Application (and not every Organization)."""
+        by_id = {c["id"]: c for c in _ALL_DEMO_CARDS}
+
+        def ends(rel_type: str) -> list[tuple[dict, dict]]:
+            return [
+                (by_id[r["source_id"]], by_id[r["target_id"]])
+                for r in DEMO_RELATIONS
+                if r["type"] == rel_type
+            ]
+
+        on_aging = {
+            app["id"]
+            for app, itc in ends("relAppToITC")
+            if current_lifecycle_phase(app.get("lifecycle")) == "active"
+            and current_lifecycle_phase(itc.get("lifecycle")) in ("phaseOut", "endOfLife")
+        }
+        affected = {app["id"] for _init, app in ends("relInitiativeToApp")}
+        apps = {by_id[i]["name"] for i in on_aging & affected}
+        # The default IT Component dates roll over within a year, so other
+        # components may phase out too; .NET 8 under Opcenter always does.
+        assert "Siemens Opcenter" in apps
+        assert apps < {c["name"] for c in seed_demo_module.APPLICATIONS}
+        orgs = {org["name"] for org, _app in ends("relOrgToApp")}
+        assert orgs
+        assert orgs < {c["name"] for c in seed_demo_module.ORGANIZATIONS}
 
     def test_saved_report_configs_use_valid_keys(self):
         """Each saved report's `config` must only use keys the corresponding

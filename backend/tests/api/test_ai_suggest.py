@@ -180,6 +180,76 @@ class TestSuggest:
         resp = await self._post(client, env["member"])
         assert resp.status_code == 502 and "Could not reach" in resp.json()["detail"]
 
+    async def test_a_provider_refusal_is_502_with_its_reason(self, client, db, env, fakes):
+        """#1358: a refused request was reported as an unreachable provider."""
+        await ai_settings(db, provider_type="anthropic", api_key="sk-live")
+        fakes.suggest_error = _status_error(
+            400, {"error": {"message": "`temperature` is deprecated for this model."}}
+        )
+        resp = await self._post(client, env["member"])
+        assert resp.status_code == 502
+        assert resp.json()["detail"] == (
+            "The AI provider rejected the request (400): "
+            "`temperature` is deprecated for this model."
+        )
+
+    async def test_eol_product_description_uses_the_product_context(self, client, db, env, fakes):
+        """A custom EOL product is not a card type: the per-type switch does
+        not apply, the lifecycle search context does, and the vendor link
+        rides along as context."""
+        await ai_settings(db, enabledTypes=["ITComponent"])
+        resp = await client.post(
+            "/api/v1/ai/suggest-eol-product",
+            json={"name": "Acme ERP", "link": "https://acme.example/lifecycle"},
+            headers=auth_headers(env["member"]),
+        )
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["suggestions"]["description"]["value"] == "A CRM."
+        [call] = fakes.suggest_calls
+        assert call["name"] == "Acme ERP"
+        assert call["type_key"] == "__eol_product__"
+        assert call["fields_schema"] is None
+        assert call["context"] == "Vendor or release policy page: https://acme.example/lifecycle"
+
+    async def test_eol_product_description_without_a_link(self, client, db, env, fakes):
+        await ai_settings(db)
+        resp = await client.post(
+            "/api/v1/ai/suggest-eol-product",
+            json={"name": "Acme ERP"},
+            headers=auth_headers(env["member"]),
+        )
+        assert resp.status_code == 200
+        assert fakes.suggest_calls[0]["context"] is None
+
+    async def test_eol_product_description_is_gated_like_suggest(self, client, db, env, fakes):
+        body = {"name": "Acme ERP"}
+        path = "/api/v1/ai/suggest-eol-product"
+        await ai_settings(db)
+        viewer = await client.post(path, json=body, headers=auth_headers(env["viewer"]))
+        assert viewer.status_code == 403
+        await ai_settings(db, enabled=False)
+        off = await client.post(path, json=body, headers=auth_headers(env["member"]))
+        assert off.status_code == 400 and "not enabled" in off.json()["detail"]
+        await ai_settings(db, model="")
+        bare = await client.post(path, json=body, headers=auth_headers(env["member"]))
+        assert bare.status_code == 400 and "provider URL and model" in bare.json()["detail"]
+        await ai_settings(db)
+        fakes.suggest_error = httpx.ConnectError("refused")
+        down = await client.post(path, json=body, headers=auth_headers(env["member"]))
+        assert down.status_code == 502 and "Could not reach" in down.json()["detail"]
+        empty = await client.post(path, json={"name": ""}, headers=auth_headers(env["member"]))
+        assert empty.status_code == 422
+
+    async def test_an_auth_refusal_does_not_echo_the_provider(self, client, db, env, fakes):
+        await ai_settings(db, provider_type="openai", api_key="sk-live")
+        fakes.suggest_error = _status_error(
+            401, {"error": {"message": "Incorrect API key provided: sk-li***live"}}
+        )
+        resp = await self._post(client, env["member"])
+        assert resp.status_code == 502
+        assert "sk-li" not in resp.json()["detail"]
+        assert resp.json()["detail"].startswith("The AI provider rejected the request (401)")
+
     async def test_any_other_failure_is_502(self, client, db, env, fakes):
         await ai_settings(db)
         fakes.suggest_error = RuntimeError("model crashed")
@@ -258,3 +328,55 @@ class TestPortfolioInsights:
         fakes.insight_error = ValueError("bad json")
         resp = await self._post(client, env["admin"])
         assert resp.status_code == 502 and "Check server logs" in resp.json()["detail"]
+        fakes.insight_error = _status_error(404, {"error": {"message": "model: nope"}})
+        resp = await self._post(client, env["admin"])
+        assert resp.status_code == 502
+        assert resp.json()["detail"] == "The AI provider rejected the request (404): model: nope"
+
+
+def _status_error(code: int, body: dict | None = None) -> httpx.HTTPStatusError:
+    request = httpx.Request("POST", "https://llm.test/v1/messages")
+    response = httpx.Response(code, json=body or {}, request=request)
+    return httpx.HTTPStatusError(str(code), request=request, response=response)
+
+
+class TestProviderFailureDetail:
+    """The message mapping on its own — the route handlers that call it are
+    decorated, so mutmut does not mutate them."""
+
+    def test_a_transport_failure_is_unreachable(self):
+        assert ai_api.provider_failure_detail(httpx.ConnectError("x")) == (
+            "Could not reach the AI provider. Check that it is running and accessible."
+        )
+
+    @pytest.mark.parametrize("status", [401, 403])
+    def test_an_auth_refusal_names_the_key_not_the_provider_text(self, status):
+        exc = _status_error(status, {"error": {"message": "key sk-abc***xyz"}})
+        assert ai_api.provider_failure_detail(exc) == (
+            f"The AI provider rejected the request ({status}): check the API key "
+            "and that it may use the configured model."
+        )
+
+    @pytest.mark.parametrize("status", [402, 429])
+    def test_a_quota_refusal_says_so(self, status):
+        exc = _status_error(status, {"error": {"message": "slow down"}})
+        assert ai_api.provider_failure_detail(exc) == (
+            f"The AI provider rejected the request ({status}): rate limit or quota "
+            "exceeded. Try again later."
+        )
+
+    @pytest.mark.parametrize("status", [400, 404, 500, 529])
+    def test_any_other_refusal_carries_the_providers_reason(self, status):
+        exc = _status_error(status, {"error": {"message": "the reason"}})
+        assert ai_api.provider_failure_detail(exc) == (
+            f"The AI provider rejected the request ({status}): the reason"
+        )
+
+    def test_the_log_names_the_status_and_reason(self, caplog):
+        with caplog.at_level("WARNING", logger="turboea.ai"):
+            ai_api._log_provider_failure(
+                "AI suggestion", _status_error(400, {"error": {"message": "nope"}})
+            )
+            ai_api._log_provider_failure("AI suggestion", httpx.ConnectError("refused"))
+        assert "AI suggestion failed: provider answered 400 — nope" in caplog.text
+        assert "AI suggestion failed: refused" in caplog.text

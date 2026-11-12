@@ -19,7 +19,7 @@ Das linke Seitenpanel ermöglicht es Ihnen, Karten nach verschiedenen Kriterien 
 - **Datenqualität** — Filtern nach Band (Mehrfachauswahl): Vollständig (≥80%), Teilweise (40–79%), Minimal (unter 40%). Dieselben Bänder wie im [Datenqualitätsbericht](reports.md#data-quality-report) — ein Klick auf ein Balkensegment dort führt hierher.
 - **Verwaist** — Nur Karten ohne Beziehung in beide Richtungen. Serverseitig ausgewertet und daher auch ohne ausgewählten Kartentyp nutzbar.
 - **Veraltet** — Nur Karten, die seit 90 Tagen nicht aktualisiert wurden. Beide entsprechen den KPI-Kacheln des [Datenqualitätsberichts](reports.md#data-quality-report) — ein Klick auf eine Kachel führt hierher.
-- **Lebensende** — Für Anwendungen und IT-Komponenten nach dem Support-Status filtern, den Turbo EA aus der [EOL-Verknüpfung](../admin/eol.md) der Karte ermittelt: Lebensende, Bevorstehend, Unterstützt oder Unbekannt. **(leer)** listet die Karten, für die überhaupt nichts erfasst ist. Die zugehörige Spalte **Lebensende** zeigt das Datum neben einem Statuspunkt und wird als Datum sortiert und exportiert.
+- **Lebensende** — Für die Kartentypen, die das Lebensende verfolgen (standardmäßig Anwendungen und IT-Komponenten, siehe [Lebensende bei anderen Kartentypen](../admin/eol.md#lebensende-bei-anderen-kartentypen)), nach dem Support-Status filtern, den Turbo EA aus der [EOL-Verknüpfung](../admin/eol.md) der Karte ermittelt: Lebensende, Bevorstehend, Unterstützt oder Unbekannt. **(leer)** listet die Karten, für die überhaupt nichts erfasst ist. Die zugehörige Spalte **Lebensende** zeigt das Datum neben einem Statuspunkt und wird als Datum sortiert und exportiert.
 - **Verbindungstyp** — Wenn ein einzelner hierarchischer Kartentyp ausgewählt ist und eine Administratorin [Verbindungstypen](../admin/metamodel.md) dafür definiert hat, filtern Sie nach der Art der Verbindung jeder Karte zu ihrer übergeordneten Karte — etwa die Tochtergesellschaften, die *kommerziell* statt *Vertrieb* sind. **(leer)** listet die Karten, deren Verbindung keinen Typ trägt, sowie die obersten Karten, da für beide nichts erfasst ist. Die zugehörige Spalte **Verbindungstyp** zeigt den Wert als farbigen Chip und ist im Bearbeitungsmodus des Rasters editierbar.
 - **Tags** — Filtern nach Tags aus beliebigen Tag-Gruppen
 - **Beziehungen** — Filtern nach verwandten Karten über Beziehungstypen
@@ -60,7 +60,7 @@ Spalten sind in fünf Kategorien gruppiert:
 | **Standardspalten** | Immer aktive Spalten: Typ, Name, Pfad, Beschreibung, Untertyp, Lebenszyklus, Genehmigungsstatus, Datenqualität. Heben Sie eine davon ab, um sie aus dem Raster auszublenden — nützlich, um eine gespeicherte Ansicht auf genau die Spalten zu reduzieren, die Sie wirklich verwenden. |
 | **Metadaten** | Erstellt, Geändert, Erstellt von, Geändert von, Erstellt über, Geändert über. **Geändert** ist der Zeitpunkt, zu dem sich der Inhalt der Karte zuletzt geändert hat — durch eine Person oder eine Integration, nie durch eine systemseitige Neuberechnung eines Werts — sodass Sie danach filtern können, um Karten zu finden, die eine Überprüfung durch den Verantwortlichen benötigen. **Erstellt über** und **Geändert über** zeigen den Kanal hinter dem Erstellen und der letzten Änderung als Chip (MCP, API, Erweiterung, System); für die Weboberfläche bleibt die Zelle leer. |
 | **Attribute** | Im Metamodell definierte benutzerdefinierte Felder (Text, Zahl, Kosten, Datum, Auswahl usw.) |
-| **Beziehungen** | Verknüpfte Kartentypen (z. B. Anwendungen, die mit einer Geschäftsfähigkeit verknüpft sind) |
+| **Beziehungen** | Eine Spalte pro Beziehung, benannt nach ihrem Verb und dem verknüpften Kartentyp — zum Beispiel *nutzt IT-Komponente* oder *wird unterstützt von Anwendung*. Verbinden zwei Beziehungstypen dieselben Kartentypen, erhält jeder seine eigene Spalte, und ein Beziehungstyp zwischen Karten desselben Typs (eine Anwendung, die *Daten sendet an* eine andere) erhält eine Spalte für jede Richtung. Durchsuchen Sie die Liste nach dem Verb oder nach dem Kartentyp. |
 | **Stakeholder** | Eine Spalte pro Stakeholder-Rolle des ausgewählten Kartentyps (z. B. *Stakeholder: Responsible*) mit den zugewiesenen Benutzern als Chips. Im Raster-Bearbeitungsmodus können Sie per Doppelklick Benutzer für die Rolle direkt im Raster zuweisen oder entfernen (erfordert die Berechtigung zum Verwalten von Stakeholdern). |
 
 Die Spalte **Übergeordnetes Element** zeigt nur die direkt darüberliegende Karte, während **Pfad** die gesamte Kette anzeigt. Doppelklicken Sie im Tabellenbearbeitungsmodus auf eine solche Zelle, um die Karte zu verschieben, oder leeren Sie das Feld, um sie auf die oberste Ebene zu setzen. Die Spalte ist nur bearbeitbar, wenn die Tabelle auf einen einzelnen Kartentyp mit Hierarchie gefiltert ist. Wird eine Verschiebung abgelehnt — weil sie eine Schleife erzeugen würde, mit einer gleichnamigen Karte unter dem Ziel kollidiert oder die maximale Hierarchietiefe überschreitet —, erscheint die Begründung am unteren Bildschirmrand und die Zelle wird zurückgesetzt.
@@ -93,7 +93,7 @@ Das Inventar verwendet eine **AG Grid**-Datentabelle mit leistungsstarken Funkti
 | **Lebenszyklus** | Aktueller Lebenszyklusstatus |
 | **Genehmigungsstatus** | Badge des Prüfstatus |
 | **Datenqualität** | Vollständigkeitsprozentsatz mit visuellem Ring |
-| **Beziehungen** | Namen der verwandten Karten, alphabetisch sortiert, mit klickbarem Popover zum Hinzufügen oder Entfernen von Beziehungen — bereits verknüpfte Karten werden in dessen Auswahlliste ausgeblendet; bei einem hierarchischen Typ zeigt die Auswahlliste stattdessen die gesamte Hierarchie als eingerückten Baum und lässt diese Karten ausgegraut an ihrem Platz |
+| **Beziehungen** | Eine Spalte pro Beziehung, überschrieben mit ihrem Verb und dem verknüpften Kartentyp (z. B. *nutzt IT-Komponente*): die Namen der über diese Beziehung verknüpften Karten, alphabetisch sortiert, mit klickbarem Popover zum Hinzufügen oder Entfernen von Beziehungen dieser Art — bereits verknüpfte Karten werden in dessen Auswahlliste ausgeblendet; bei einem hierarchischen Typ zeigt die Auswahlliste stattdessen die gesamte Hierarchie als eingerückten Baum und lässt diese Karten ausgegraut an ihrem Platz. Gespeicherte Ansichten und Spaltenlayouts aus der Zeit, bevor die Beziehungsspalten nach Beziehung aufgeteilt wurden, öffnen sich mit den neuen Spalten anstelle der alten |
 
 **Tabellenfunktionen:**
 
@@ -170,6 +170,19 @@ Klicken Sie in der Symbolleiste auf **Gruppieren nach** (neben der Trefferanzahl
 - Das Kontrollkästchen in der Überschrift wählt alle Karten der Gruppe aus. Eine Neuklassifizierung im Stapel ist damit: **Nicht gesetzt** aufklappen, Überschrift anhaken, dann den Wert per [Massenbearbeitung](#mass-edit) setzen. Auf Drag-and-drop wurde bewusst verzichtet — Auswählen und Setzen funktioniert auf Desktop, Tablet und Smartphone gleich.
 - Die Sortierung wirkt innerhalb jeder Gruppe; die Gruppierung bleibt über Neuladen erhalten, wird in gespeicherten Ansichten abgelegt und lässt sich über den URL-Parameter `group_by` teilen.
 
+### Untergeordnete unter Übergeordneten einrücken { #group-by-parents }
+
+Aktivieren Sie oben im Menü **Gruppieren nach** das Kontrollkästchen **Übergeordnetes**, um die Karten als Baum anzuzeigen: zuerst jede übergeordnete Karte, darunter eingerückt ihre untergeordneten Karten. Die Option funktioniert allein (das ganze Raster wird zu einem Baum) oder zusätzlich zu jeder Gruppierung (jede Gruppe wird zu einem eigenen Baum). Das Menü bleibt beim Aktivieren geöffnet, sodass Sie direkt danach eine Gruppierung wählen können.
+
+![Inventar mit eingerückten Untergeordneten](../assets/img/de/98c_inventar_gruppierung_eltern.png)
+
+- Eine Karte verlässt nie ihre eigene Gruppe. Eine untergeordnete Karte, deren übergeordnete Karte in einer anderen Gruppe liegt, durch einen Spaltenfilter ausgeblendet oder nicht geladen ist, beginnt einen eigenen Zweig; ihre fehlenden Vorfahren erscheinen grau vor ihrem Namen (zum Beispiel *SAP S/4HANA / SAP FI /* vor dem Namen des Moduls). Gruppenanzahlen, Kontrollkästchen in der Überschrift und Massenbearbeitung stimmen deshalb immer mit dem Inhalt der Gruppe überein.
+- Klicken Sie auf den Pfeil vor dem Namen einer übergeordneten Karte, um ihren Zweig aus- oder einzublenden. Eine eingeklappte übergeordnete Karte zählt ihre ausgeblendeten Karten weiterhin in der Elementanzahl und in der Gruppenüberschrift mit. Mit dem Pfeil eingeklappte Zweige werden nicht gespeichert, und eine Änderung des Spaltenfilters klappt sie wieder alle auf; wenn Sie den letzten Spaltenfilter löschen, kehrt die Ansicht zu der mit dem Schrittschalter gewählten Ebene zurück.
+- Solange die Ebene „Übergeordnetes“ aktiv ist, schließt oder öffnet ein Paar **−** / **+** neben der Schaltfläche „Gruppieren nach“ den gesamten Baum Ebene für Ebene. Die gewählte Ebene bleibt über Neuladen erhalten, wird in gespeicherten Ansichten abgelegt und lässt sich mit `group_tree_level=<n>` teilen; die angezeigte Ebene folgt außerdem dem, was Sie von Hand öffnen und schließen.
+- Die Sortierung wirkt unter Geschwistern: Die übergeordneten Karten werden sortiert, und darunter die untergeordneten Karten jeder übergeordneten Karte.
+- Die Option wird nur angeboten, wenn ein Kartentyp in der Ansicht eine Hierarchie hat. Sie bleibt über Neuladen erhalten, wird in gespeicherten Ansichten abgelegt und lässt sich über den URL-Parameter `group_tree=1` teilen.
+- Der **Export** folgt der Baumreihenfolge und lässt die Karten in eingeklappten Zweigen aus, wie er es auch bei eingeklappten Gruppen tut.
+
 ## KI-Beschreibungsvorschläge { #ai-description-suggestions }
 
 Turbo EA kann **KI verwenden, um eine Beschreibung** für jede Karte zu generieren. Dies funktioniert sowohl im Karte-erstellen-Dialog als auch auf bestehenden Kartendetailseiten.
@@ -214,6 +227,70 @@ Gespeicherte Ansichten erscheinen in der Seitenleiste des Filterpanels. Klicken 
 - **Meine Ansichten** — Von Ihnen erstellte Ansichten
 - **Mit mir geteilt** — Ansichten, die andere mit Ihnen geteilt haben
 - **Öffentliche Ansichten** — Ansichten, die für alle verfügbar sind
+
+### Abfrageansichten { #query-views }
+<a id="mcp-views"></a>
+
+Eine **Abfrageansicht** ist eine gespeicherte Ansicht, deren Filter eine **mehrstufige Abfrage** sind — eine Kette von Beziehungen mit Bedingungen an jedem Schritt, etwa *Organisationen, die eine aktive Anwendung nutzen, von der eine Initiative mit dem Status On Track betroffen ist*. Mehrere solcher Abfragen lassen sich in einer Ansicht stapeln und mit **UND** und **ODER** kombinieren (siehe unten). Die Ansicht speichert die Abfrage, nicht ihre Ergebnisse: Sie wird bei jedem Öffnen der Ansicht erneut ausgeführt, sodass die Liste stets die aktuelle Landschaft widerspiegelt.
+
+![Eine Abfrageansicht im Inventar](../assets/img/de/98d_inventar_mcp_ansicht.png)
+
+**Eine Abfrageansicht erstellen.** Klicken Sie im Tab **Ansichten** der Filter-Seitenleiste neben *Aktuelle speichern* auf **Neue Abfrageansicht** (sichtbar für alle, die Ansichten verwalten dürfen). Ist ein Filter aktiv, auch der gewählte Kartentyp, fragt eine Bestätigung nach, bevor er gelöscht wird; **Abbrechen** im Entwurf stellt ihn wieder her. Der Streifen über dem Raster öffnet sich als Abfrage-Editor:
+
+1. Klicken Sie auf den Start-Chip (*Typ wählen*) und wählen Sie den Kartentyp, von dem die Abfrage ausgeht — den Typ, den sie auflistet.
+2. Klicken Sie nach der letzten Karte auf **+ Beziehung**, um einen Schritt hinzuzufügen. Das Menü listet jedes Beziehungsverb mit dem Kartentyp, zu dem es führt; eine Beziehung zwischen Karten desselben Typs wird in beide Richtungen angeboten. Jede Abfragezeile ist eine einzelne Kette mit bis zu drei Schritten.
+3. Klicken Sie unter einer beliebigen Karte auf **+ Bedingung**, um sie einzugrenzen: **Lebenszyklus**, **Subtyp**, **Genehmigungsstatus**, **Datenqualität** (*Vollständig*, *Teilweise* oder *Minimal*, dieselben Bänder wie beim Seitenleistenfilter), **End of Life** (siehe unten), **Tags**, **Bestimmte Karten** oder ein Auswahl- bzw. Ja/Nein-Feld dieses Kartentyps. Bei Tags passt eine Karte, wenn sie irgendeines der gewählten Tags einer Gruppe trägt, und sie muss jede hinzugefügte Gruppe erfüllen; angeboten werden nur Tag-Gruppen, die für diesen Kartentyp gelten. **Bestimmte Karten** öffnet die Kartenauswahl für Karten dieses Typs, und der Schritt trifft dann nur die ausgewählten Karten; bei einem hierarchischen Kartentyp bezieht ein Schalter **Unterkarten einbeziehen** zusätzlich die Karten unterhalb jeder Auswahl ein. Eine ausgewählte Karte, die Sie nicht sehen können, erscheint als *(verborgene Karte)*.
+4. Klicken Sie auf **Speichern**. Es öffnet sich der übliche Dialog zum Speichern einer Ansicht für Name, Sichtbarkeit, Freigabe und OData-Einstellung. **Abbrechen** verwirft die Abfrage.
+
+![Eine Abfrageansicht erstellen](../assets/img/de/98e_inventar_abfrage_editor.png)
+
+Während Sie aufbauen, filtert das Raster live und der Zähler in der Symbolleiste zeigt, wie viele Karten passen, sodass Sie die Wirkung jedes Schritts und jeder Bedingung vor dem Speichern sehen.
+
+**Nach End of Life filtern.** Die Bedingung **End of Life** wird für einen Kartentyp angeboten, der End of Life erfasst – standardmäßig Anwendung und IT-Komponente; sie folgt dem Abschnitt «End of Life» des Typs im Metamodell. Ihre Werte sind **End of Life**, **EOL-Annäherung**, **Unterstützt**, **Unbekannt** und *(leer)* für Karten ohne End-of-Life-Daten. Der Status ist derselbe, den die Spalte **End of Life** des Inventars zeigt: Er stammt aus dem verknüpften endoflife.date-Produkt oder einem benutzerdefinierten EOL-Produkt oder aus einem von Hand eingetragenen End-of-Life-Datum und ist unabhängig von der Lebenszyklusphase der Karte. Die Bedingung funktioniert an der Startkarte und in jedem Beziehungsschritt, in UND- wie in ODER-Zeilen – zum Beispiel *Anwendungen, die eine IT-Komponente mit End of Life nutzen*. Solange eine Abfrage an der Startkarte danach filtert, zeigt das Raster die Spalte End of Life, damit Sie sehen, warum jede Karte passt; die von Ihnen gewählten Spalten bleiben unverändert. Ist endoflife.date nicht erreichbar und nichts zwischengespeichert, werden verknüpfte Karten als *Unbekannt* gelesen, wie in der Spalte End of Life.
+
+Die Bedingung erfordert die Berechtigung zum Anzeigen von End-of-Life-Daten (**EOL-Daten anzeigen**, `eol.view`). Ohne sie wird die Bedingung nicht angeboten, und das Öffnen, Vorschauen oder Speichern einer Ansicht, die sie verwendet, wird mit *Diese Ansicht filtert nach dem End-of-Life-Status, den Ihre Rolle nicht sehen darf.* abgelehnt.
+
+**Schritte und Bedingungen ändern.** Klicken Sie auf den Verb-Chip eines Schritts, um sein Menü zu öffnen: **hat kein** macht aus dem Schritt die Anforderung, dass die Karte **keine** solche Beziehung hat, und **Diesen Schritt entfernen** entfernt ihn samt allen folgenden Schritten. Klicken Sie auf einen Bedingungs-Chip, um seine Werte zu ändern, oder auf sein **×**, um ihn zu entfernen.
+
+**Abfragen mit UND und ODER kombinieren.** Eine Ansicht kann mehrere übereinander gestapelte Abfragezeilen enthalten. Jede Zeile ist eine vollständige Abfrage — Startkarte, Beziehungen und Bedingungen — und wird genau wie die einzelne Abfrage oben aufgebaut. Die Zeilen sind in Gruppen geordnet:
+
+- **UND** fügt der selben Gruppe eine Zeile hinzu: Eine Karte wird nur aufgelistet, wenn sie **jede** Zeile der Gruppe erfüllt. Eine UND-Zeile geht vom selben Kartentyp aus wie ihre Gruppe, dargestellt als fester Chip, und die erste Zeile der Gruppe kann ihren Kartentyp nicht ändern, solange sie UND-Zeilen hat.
+- **ODER** beginnt unter einem **ODER**-Trenner eine neue Gruppe: Ihre Ergebnisse werden der Liste **hinzugefügt**. Eine neue Gruppe darf von einem anderen Kartentyp ausgehen, sodass eine Ansicht zum Beispiel Anwendungen und Organisationen gemeinsam auflisten kann. Listet eine Ansicht mehrere Kartentypen auf, zeigt das Raster die Spalten, die diese Typen gemeinsam haben.
+
+Im Bearbeitungsmodus fragt ein eingekreistes **Plus** unter jeder Gruppe nach **UND** oder **ODER**: UND fügt dieser Gruppe eine Zeile hinzu, ODER öffnet danach eine neue Gruppe. Das **×** am Ende einer Zeile entfernt sie; es wird angezeigt, wenn die Ansicht mehr als eine Zeile hat.
+
+Die Demo-Ansicht *Active apps on aging tech, and the organizations using apps* hat zum Beispiel eine Anwendungsgruppe aus zwei Zeilen — eine aktive Anwendung, die eine IT-Komponente in der Auslaufphase oder am Lebensende nutzt, **UND** eine Anwendung, von der eine Initiative betroffen ist — **ODER** eine Organisation, die eine Anwendung nutzt. Die Liste zeigt die Anwendungen, die beide Zeilen erfüllen, zusammen mit jeder Organisation, die eine Anwendung nutzt.
+
+![Abfragen mit UND und ODER kombinieren](../assets/img/de/98f_inventar_abfragen_kombiniert.png)
+
+Eine Ansicht enthält höchstens **sechs** Abfragezeilen, **zwölf** Beziehungen über alle Zeilen und **drei** Beziehungen in der Tiefe je Zeile. Die Zeilen einer UND-Gruppe treffen sich nur an ihrer Startkarte: Die IT-Komponente der einen Zeile und die Initiative der anderen können verschiedene Karten sein. Zwei Anforderungen an **dieselbe** Karte in der Mitte einer Zeile — etwa dass dieselbe IT-Komponente von einem Anbieter bereitgestellt wird **und** zu einer Tech-Kategorie gehört — lassen sich im Abfrage-Editor nicht aufbauen; ein KI-Assistent kann eine solche Abfrage über den [MCP-Server](../admin/mcp.md#multi-hop-card-queries) schreiben, und der Streifen zeigt sie dann an.
+
+**Eine gespeicherte Abfrageansicht bearbeiten.** Ist eine Abfrageansicht geöffnet, zeigt der Streifen ihren Pfad: die Kartentypen als Chips, verbunden durch das Beziehungsverb, das jeden Schritt verknüpft (zum Beispiel *Organisation → nutzt Anwendung → ist betroffen von Initiative*), mit den Bedingungen jeder Karte darunter. Eine Ansicht mit mehreren Zeilen zeigt denselben Stapel mit seinen UND-Markierungen und ODER-Trennern, ohne die Bearbeitungselemente. Wenn Sie die Ansicht besitzen oder Bearbeitungsrechte darauf haben, schaltet ein **Stift** im Streifen auf denselben Editor um; **Speichern** aktualisiert die Ansicht. Die **×**-Schaltfläche (*Diese Ansicht verlassen*) führt zum normalen Inventar zurück. **Aktuelle Ansicht speichern** speichert, während eine Abfrageansicht geöffnet ist, eine neue Abfrageansicht mit derselben Abfrage.
+
+#### Die Karten hinter einem Treffer anzeigen { #query-view-matches }
+
+Eine Abfrageansicht listet nur die erste Karte ihrer Abfrage auf. Um zu sehen, welche Karten weiter hinten in der Kette eine Zeile zum Treffer gemacht haben, klicken Sie im Abfragepfad auf ihren Kartentyp. Klicken Sie in *Organisationen, die eine Anwendung nutzen, die eine IT-Komponente am oder nahe dem Lebensende nutzt* auf **Anwendung**, listet eine Spalte für jede Organisation die Anwendungen auf, über die sie zutrifft; klicken Sie auf **IT-Komponente**, listet eine weitere Spalte die zutreffenden IT-Komponenten auf. Ein erneuter Klick auf den Kartentyp entfernt seine Spalte.
+
+![Eine Abfrageansicht mit ihren Treffer-Spalten](../assets/img/de/98g_inventar_abfrage_treffer.png)
+
+- **So sieht ein Schalter aus.** Ein anklickbarer Kartentyp zeigt einen Zeiger und den Tooltip *In einer Spalte anzeigen*. Ist seine Spalte eingeblendet, ist der Chip in der Farbe des Kartentyps gefüllt und trägt ein kleines Spaltensymbol; sein Tooltip lautet *Spalte ausblenden*.
+- **Welche Kartentypen Schalter sind.** Jeder Kartentyp nach dem ersten seiner Abfragezeile. Der erste Kartentyp einer Abfragezeile ist keiner, weil seine Karten die Tabellenzeilen sind, ebenso wenig ein Kartentyp hinter **hat kein**, das für eine fehlende Beziehung steht. In einer Ansicht mit mehreren Abfragezeilen sind die Kartentypen jeder Abfragezeile Schalter; bei **ODER** zeigt eine Tabellenzeile nur Karten für die Abfragezeilen, die sie erfüllt. Während Sie die Abfrage bearbeiten, stehen die Schalter nicht zur Verfügung, und die Spalten sind ausgeblendet, bis Sie speichern oder abbrechen.
+- **Wo die Spalte erscheint.** Direkt nach **Name**, betitelt mit dem Kartentyp und *Treffer* — zum Beispiel *Anwendung · Treffer* —, damit sie nicht mit einer Beziehungsspalte wie *nutzt Anwendung* verwechselt wird, die jede auf diese Weise verknüpfte Anwendung auflistet. Haben zwei Schritte denselben Kartentyp, werden die Titel nummeriert. Fahren Sie mit der Maus über den Titel, um den Pfad zu sehen, dem die Spalte folgt.
+- **Was eine Zelle zeigt.** Die Namen der zutreffenden Karten, durch Semikolons getrennt; fahren Sie mit der Maus über die Zelle, um die vollständige Liste zu sehen. Eine Zelle listet höchstens **100** Namen auf; eine längere Liste endet mit *…*, und ihr Tooltip gibt an, dass die ersten 100 angezeigt werden. Sie können die Spalte wie eine Textspalte sortieren und filtern, und **Aktuelle Ansicht exportieren** schließt sie ein.
+- **Jede Karte entlang der Kette, nicht wer zu wem führt.** Eine Tabellenzeile listet jede zutreffende Karte dieses Schritts auf: alle zutreffenden Anwendungen der Organisation und alle zutreffenden IT-Komponenten dieser Anwendungen. Sie zeigt nicht, welche IT-Komponente zu welcher Anwendung gehört. Um die IT-Komponenten selbst aufzulisten, eine pro Zeile, schreiben Sie die Abfrage stattdessen ausgehend von IT-Komponente.
+- **Mit der Ansicht gespeichert.** Die Spalten, die Sie einblenden, werden mit der Ansicht gespeichert (der **Stift** in der Ansichtenliste, dann **Aktualisieren**), sodass sie beim erneuten Öffnen wieder da sind. Beim Bearbeiten der Abfrage bleibt eine Spalte erhalten, solange ihr Schritt noch vorhanden ist, und wird entfernt, wenn Sie diesen Schritt entfernen oder seinen Kartentyp ändern.
+
+Sie sehen nur Karten, die Sie sehen dürfen: Eine für Sie verborgene Karte wird in keiner Zelle genannt, und eine Zeile, die nur über verborgene Karten zutrifft, wird nicht aufgeführt.
+
+Die Demo-Ansicht *Organizations on applications with components at or near end of life* öffnet sich mit beiden Spalten eingeblendet.
+
+**Von einem KI-Assistenten erstellte Ansichten.** Ein über den [MCP-Server](../admin/mcp.md) verbundener Assistent kann ebenfalls Abfrageansichten erstellen. Eine solche Ansicht zeigt in ihrem Streifen einen **MCP**-Chip und den Hinweis *Über MCP erstellt* sowie in der Ansichtenliste ein Roboter-Symbol; sie wird wie jede andere Abfrageansicht bearbeitet. In der Ansichtenliste trägt jede Abfrageansicht ein kleines Abfrageansicht-Symbol (einen Würfel; das Roboter-Symbol, wenn ein Assistent sie erstellt hat) und ihren kompakten Pfad (*Organisation › nutzt Anwendung › ist betroffen von Initiative*) als zweite Zeile; eine gestapelte Ansicht liest sich *… UND … ODER …*. Hat die Ansicht Bedingungen, folgt ihre Anzahl auf den Pfad (*… › ist betroffen von Initiative · 2 Bedingungen*).
+
+**Eine Ansicht per Link öffnen.** Speichert ein Assistent eine Ansicht, liefert er einen Link der Form `/inventory?view=<view id>`; beim Öffnen wird die gespeicherte Ansicht direkt angewendet. Derselbe Link funktioniert für jede gespeicherte Ansicht, die Sie sehen können.
+
+**OData.** Der OData-Feed einer Abfrageansicht liefert dieselben Karten wie das Inventar: Die Abfrage wird auch auf den Feed angewendet.
+
+Zur Abfragegrammatik, ihren Grenzen und den MCP-Werkzeugen (`query_cards`, `list_inventory_views`, `save_inventory_view`, `list_tag_groups`) siehe [Mehrstufige Kartenabfragen](../admin/mcp.md#multi-hop-card-queries).
 
 ## Excel-Import / -Export { #excel-import }
 

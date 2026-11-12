@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { memo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useParams, useNavigate } from "react-router";
 import { sanitizeRichHtml } from "@/lib/richHtml";
@@ -16,10 +16,25 @@ import { alpha, useTheme } from "@mui/material/styles";
 import Divider from "@mui/material/Divider";
 import MaterialSymbol from "@/components/MaterialSymbol";
 import { buildPreviewBody, exportToPdf, PREVIEW_CSS } from "./soawExport";
+import { SoawBanners } from "./DecisionBanners";
+import RevisionStrip, { showsRevisionStrip, soawRevisionItems } from "./RevisionStrip";
+import { soawCurrentRevisionId } from "./soawEditorState";
+import MentionContainer from "./mentions/MentionContainer";
+import DocumentHistoryButton from "./collab/DocumentHistoryButton";
+import DocumentSidePanel from "./collab/DocumentSidePanel";
+import HtmlSectionMarkers from "./collab/HtmlSectionMarkers";
+import { documentPeopleIds } from "./mentions/mentionModel";
+import { sectionOptions, soawSectionOptions } from "./collab/discussionModel";
+import { getTemplateSections } from "./soawTemplate";
 import { api } from "@/api/client";
+import { useAbortableEffect } from "@/hooks/useLatestRequest";
 import { useDateFormat } from "@/hooks/useDateFormat";
 import { usePageSubject } from "@/hooks/usePageTitle";
 import type { SoAW, SoAWSectionData } from "@/types";
+import { DELIVERABLE_COLORS, RAG_COLORS, WARNING_STRONG_COLOR } from "@/theme/tokens";
+
+/** A revision pointer from the preview stays in the preview. */
+const previewHref = (soawId: string) => `/ea-delivery/soaw/${soawId}/preview`;
 
 const STATUS_COLORS: Record<string, "default" | "warning" | "success" | "info"> = {
   draft: "default",
@@ -27,6 +42,27 @@ const STATUS_COLORS: Record<string, "default" | "warning" | "success" | "info"> 
   approved: "success",
   signed: "info",
 };
+
+/**
+ * The document body, rendered from its HTML string. Memoised on that string:
+ * React 19 reassigns `innerHTML` on every render that passes a new
+ * `dangerouslySetInnerHTML` object, which would rebuild the body (and drop
+ * the section markers' hosts) whenever anything else on the page re-renders.
+ */
+const PreviewBody = memo(function PreviewBody({ html }: { html: string }) {
+  const ref = useRef<HTMLDivElement | null>(null);
+  return (
+    <MentionContainer>
+      <Box
+        ref={ref}
+        className="soaw-preview"
+        sx={{ maxWidth: 800, mx: "auto", px: { xs: 1, sm: 0 } }}
+        dangerouslySetInnerHTML={{ __html: sanitizeRichHtml(html) }}
+      />
+      <HtmlSectionMarkers containerRef={ref} html={html} />
+    </MentionContainer>
+  );
+});
 
 export default function SoAWPreview() {
   const { t } = useTranslation(["delivery", "common"]);
@@ -49,21 +85,24 @@ export default function SoAWPreview() {
   const [error, setError] = useState("");
   const [snack, setSnack] = useState("");
 
-  useEffect(() => {
-    if (!id) return;
-    const load = async () => {
+  // Re-keyed on in-page revision navigation: only the latest load may fill
+  // the page, so a late reply for the revision just left is dropped.
+  useAbortableEffect(
+    async ({ signal, isCurrent }) => {
+      if (!id) return;
       setLoading(true);
+      setError("");
       try {
-        const data = await api.get<SoAW>(`/soaw/${id}`);
-        setSoaw(data);
+        const data = await api.get<SoAW>(`/soaw/${id}`, { signal });
+        if (isCurrent()) setSoaw(data);
       } catch (e) {
-        setError(e instanceof Error ? e.message : t("editor.error.loadFailed"));
+        if (isCurrent()) setError(e instanceof Error ? e.message : t("editor.error.loadFailed"));
       } finally {
-        setLoading(false);
+        if (isCurrent()) setLoading(false);
       }
-    };
-    load();
-  }, [id]);
+    },
+    [id],
+  );
 
   const handleCopyLink = () => {
     navigator.clipboard.writeText(window.location.href).then(
@@ -108,13 +147,35 @@ export default function SoAWPreview() {
 
   const docInfo = soaw.document_info ?? { prepared_by: "", reviewed_by: "", review_date: "" };
   const versionHistory = soaw.version_history ?? [];
-  const bodyHtml = buildPreviewBody(soaw.name, docInfo, versionHistory, templateSections, customSections, soaw.revision_number, soaw.signatories, soaw.signed_at);
+  // On screen the section headings carry their key, for the discussion markers.
+  const bodyHtml = buildPreviewBody(soaw.name, docInfo, versionHistory, templateSections, customSections, soaw.revision_number, soaw.signatories, soaw.signed_at, { sectionAnchors: true });
 
   const handleExportPdf = () =>
     exportToPdf(soaw.name, docInfo, versionHistory, templateSections, customSections, soaw.revision_number, soaw.signatories, soaw.signed_at);
 
+  const stripItems = soawRevisionItems(soaw.revisions ?? [], t);
+  const stripShown = showsRevisionStrip(stripItems);
+  const historyButton = (placeCompact: boolean) =>
+    id ? (
+      <DocumentHistoryButton<SoAW>
+        owner={{ kind: "soaw", id }}
+        label={soaw.name}
+        status={soaw.status}
+        refreshKey={soaw.updated_at}
+        onRestored={(restored) => setSoaw(restored)}
+        compact={placeCompact}
+      />
+    ) : null;
+
   return (
     <>
+      <DocumentSidePanel
+        owner={id ? { kind: "soaw", id } : null}
+        sections={sectionOptions("soaw", t, soawSectionOptions(getTemplateSections(), soaw.sections))}
+        openThreadCount={soaw.open_thread_count}
+        refreshKey={soaw.updated_at}
+        mentionContext={{ priorityUserIds: documentPeopleIds(soaw) }}
+      >
       {/* Toolbar (hidden when printing) */}
       <Box
         className="no-print"
@@ -133,7 +194,7 @@ export default function SoAWPreview() {
             <MaterialSymbol icon="arrow_back" size={22} />
           </IconButton>
         </Tooltip>
-        {!compact && <MaterialSymbol icon="description" size={26} color="#e65100" />}
+        {!compact && <MaterialSymbol icon="description" size={26} color={DELIVERABLE_COLORS.soaw} />}
         <Typography
           variant={compact ? "subtitle1" : "h5"}
           sx={{ fontWeight: 700, flex: 1, minWidth: 0 }}
@@ -146,6 +207,7 @@ export default function SoAWPreview() {
           size="small"
           color={STATUS_COLORS[soaw.status] ?? "default"}
         />
+        {!stripShown && historyButton(compact)}
         <Tooltip title={t("preview.copyLink")}>
           <IconButton onClick={handleCopyLink}>
             <MaterialSymbol icon="link" size={20} />
@@ -186,13 +248,28 @@ export default function SoAWPreview() {
         )}
       </Box>
 
+      {/* Chain pointers and the revision strip (links open the preview). */}
+      <Box
+        className="no-print"
+        sx={{ maxWidth: 960, mx: "auto", mb: 2, display: "flex", flexDirection: "column", gap: 1 }}
+      >
+        <SoawBanners soaw={soaw} mode="preview" hrefFor={previewHref} />
+        {stripShown && (
+          <Box sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 1 }}>
+            <RevisionStrip
+              items={stripItems}
+              activeId={soaw.id}
+              currentId={soawCurrentRevisionId(soaw)}
+              hrefFor={previewHref}
+            />
+            {historyButton(false)}
+          </Box>
+        )}
+      </Box>
+
       {/* Styled preview content */}
       <style>{PREVIEW_CSS}</style>
-      <Box
-        className="soaw-preview"
-        sx={{ maxWidth: 800, mx: "auto", px: { xs: 1, sm: 0 } }}
-        dangerouslySetInnerHTML={{ __html: sanitizeRichHtml(bodyHtml) }}
-      />
+      <PreviewBody html={bodyHtml} />
 
       {/* Signature Block */}
       {(soaw.signatories ?? []).length > 0 && (
@@ -210,7 +287,7 @@ export default function SoAWPreview() {
             <MaterialSymbol
               icon={soaw.status === "signed" ? "verified" : "draw"}
               size={24}
-              color={soaw.status === "signed" ? "#2e7d32" : "#ed6c02"}
+              color={soaw.status === "signed" ? RAG_COLORS.green : WARNING_STRONG_COLOR}
             />
             <Typography variant="h6" sx={{ fontWeight: 700 }}>
               {t("editor.signatures")}
@@ -251,7 +328,7 @@ export default function SoAWPreview() {
                         mb: 1,
                       }}
                     >
-                      <MaterialSymbol icon="verified" size={20} color="#2e7d32" />
+                      <MaterialSymbol icon="verified" size={20} color={RAG_COLORS.green} />
                       <Typography
                         variant="subtitle2"
                         sx={{ fontWeight: 700, color: "success.dark" }}
@@ -287,7 +364,7 @@ export default function SoAWPreview() {
                         mb: 1,
                       }}
                     >
-                      <MaterialSymbol icon="pending" size={20} color="#ed6c02" />
+                      <MaterialSymbol icon="pending" size={20} color={WARNING_STRONG_COLOR} />
                       <Typography
                         variant="subtitle2"
                         sx={{ fontWeight: 700, color: "warning.dark" }}
@@ -310,6 +387,7 @@ export default function SoAWPreview() {
           </Box>
         </Box>
       )}
+      </DocumentSidePanel>
 
       <Snackbar
         open={!!snack}

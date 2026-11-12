@@ -17,6 +17,7 @@ import IconPicker from "@/components/IconPicker";
 import KeyInput, { isValidKey } from "@/components/KeyInput";
 import { createEnterpriseObject } from "@/api/enterpriseObjects";
 import { LAYER_ORDER, type ArchimateLayer } from "@/features/archimate/taxonomy/elements";
+import { brand } from "@/theme/tokens";
 
 // The 7 standard ArchiMate layers a custom Enterprise Object can belong to --
 // `LAYER_ORDER` minus its trailing "other" bucket, which only ever holds the
@@ -29,7 +30,7 @@ const EMPTY_FORM = {
   name: "",
   layer: SELECTABLE_LAYERS[0],
   icon: "category",
-  color: "#1976d2",
+  color: brand.primary as string,
   description: "",
 };
 

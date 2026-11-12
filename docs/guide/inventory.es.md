@@ -19,7 +19,7 @@ El panel lateral izquierdo permite **filtrar** las fichas por diferentes criteri
 - **Calidad de Datos** — Filtrado por banda (selección múltiple): Completo (≥80%), Parcial (40–79%), Mínimo (menos del 40%). Son las bandas del [informe de Calidad de datos](reports.md#data-quality-report): al hacer clic en un segmento de barra allí se llega aquí.
 - **Huérfanas** — Solo fichas sin ninguna relación, en ningún sentido. Se evalúa en el servidor, por lo que funciona sin seleccionar un tipo de ficha.
 - **Desactualizadas** — Solo fichas sin actualizar en los últimos 90 días. Ambas reflejan los mosaicos del [informe de Calidad de datos](reports.md#data-quality-report): al hacer clic en uno se llega aquí.
-- **Fin de vida** — Para aplicaciones y componentes de TI, filtra por el estado de soporte que Turbo EA resuelve a partir del [enlace EOL](../admin/eol.md) de cada tarjeta: Fin de vida, Próximo, Con soporte o Desconocido. **(vacío)** lista las tarjetas sin nada registrado. La columna **Fin de vida** correspondiente muestra la fecha junto a un punto de estado, y se ordena y exporta como fecha.
+- **Fin de vida** — Para los tipos de ficha que realizan el seguimiento del fin de vida (Aplicaciones y Componentes de TI por defecto, véase [Fin de vida en otros tipos de ficha](../admin/eol.md#fin-de-vida-en-otros-tipos-de-ficha)), filtra por el estado de soporte que Turbo EA resuelve a partir del [enlace EOL](../admin/eol.md) de cada tarjeta: Fin de vida, Próximo, Con soporte o Desconocido. **(vacío)** lista las tarjetas sin nada registrado. La columna **Fin de vida** correspondiente muestra la fecha junto a un punto de estado, y se ordena y exporta como fecha.
 - **Tipo de vínculo** — Cuando hay un único tipo de ficha jerárquico seleccionado y un administrador ha definido [tipos de vínculo](../admin/metamodel.md) para él, filtra por el tipo del vínculo de cada ficha con su ficha padre — por ejemplo las filiales *comerciales* en lugar de *ventas*. **(vacío)** lista las fichas cuyo vínculo no lleva tipo, y las fichas de primer nivel, ya que para ninguna hay nada registrado. La columna **Tipo de vínculo** correspondiente muestra el valor como una etiqueta de color y es editable en el modo de edición de la cuadrícula.
 - **Etiquetas** — Filtrar por etiquetas de cualquier grupo de etiquetas
 - **Relaciones** — Filtrar por fichas relacionadas a través de tipos de relación
@@ -60,7 +60,7 @@ Las columnas se agrupan en cinco categorías:
 | **Columnas predeterminadas** | Columnas siempre visibles: Tipo, Nombre, Ruta, Descripción, Subtipo, Ciclo de vida, Estado de aprobación, Calidad de datos. Desmárquelas para ocultarlas de la cuadrícula — útil para ajustar una vista guardada solo a las columnas que realmente utiliza. |
 | **Metadatos** | Creado, Modificado, Creado por, Modificado por, Creado mediante, Modificado mediante. **Modificado** es cuándo cambió por última vez el contenido de la ficha — por una persona o una integración, nunca por un recálculo del sistema — de modo que puede filtrar por esa fecha para encontrar fichas pendientes de revisión por su responsable. **Creado mediante** y **Modificado mediante** muestran el canal de la creación y del último cambio como una insignia (MCP, API, Extensión, Sistema); la celda queda vacía para la interfaz web. |
 | **Atributos** | Campos personalizados definidos en el metamodelo (texto, número, coste, fecha, selección, etc.) |
-| **Relaciones** | Tipos de tarjetas relacionados (p. ej., Aplicaciones vinculadas a una Capacidad de Negocio) |
+| **Relaciones** | Una columna por relación, con el nombre de su verbo y del tipo de tarjeta relacionado; por ejemplo, *utiliza Componente TI* o *es apoyado por Aplicación*. Cuando dos tipos de relación conectan los mismos tipos de tarjeta, cada uno tiene su propia columna, y un tipo de relación entre tarjetas del mismo tipo (una Aplicación que *envía datos a* otra) tiene una columna para cada dirección. Busque en la lista por el verbo o por el tipo de tarjeta. |
 | **Partes interesadas** | Una columna por cada rol de parte interesada definido para el tipo seleccionado (p. ej. *Partes interesadas: Responsible*), mostrando los usuarios asignados como chips. En el modo de edición de cuadrícula, haga doble clic en una celda para asignar o quitar usuarios de ese rol directamente desde la cuadrícula (requiere el permiso de gestión de partes interesadas). |
 
 La columna **Padre** muestra solo la tarjeta situada directamente encima, mientras que **Ruta** muestra la cadena completa. En el modo de edición de la cuadrícula, haga doble clic en una celda Padre para mover la tarjeta, o vacíe el campo para llevarla al nivel superior. La columna solo es editable cuando la cuadrícula está filtrada a un único tipo de tarjeta que admite jerarquía. Si un movimiento se rechaza — porque crearía un bucle, chocaría con una tarjeta del mismo nombre bajo el destino o superaría la profundidad máxima —, el motivo aparece en la parte inferior de la pantalla y la celda se revierte.
@@ -93,7 +93,7 @@ El inventario utiliza una tabla de datos **AG Grid** con funciones avanzadas:
 | **Ciclo de Vida** | Estado actual del ciclo de vida |
 | **Estado de Aprobación** | Insignia de estado de revisión |
 | **Calidad de Datos** | Porcentaje de completitud con anillo visual |
-| **Relaciones** | Nombres de las tarjetas relacionadas, en orden alfabético, con un popover interactivo para añadir o quitar relaciones: las tarjetas ya vinculadas se ocultan de su selector, salvo en un tipo jerárquico, donde el selector muestra toda la jerarquía como un árbol indentado y deja esas tarjetas en gris en su sitio |
+| **Relaciones** | Una columna por relación, encabezada por su verbo y el tipo de tarjeta relacionado (p. ej. *utiliza Componente TI*): los nombres de las tarjetas vinculadas mediante esa relación, en orden alfabético, con un popover interactivo para añadir o quitar relaciones de ese tipo; las tarjetas ya vinculadas se ocultan de su selector, salvo en un tipo jerárquico, donde el selector muestra toda la jerarquía como un árbol indentado y deja esas tarjetas en gris en su sitio. Las vistas guardadas y los diseños de columnas anteriores a la división de las columnas de relación por relación se abren con las nuevas columnas en lugar de la antigua |
 
 **Funciones de la tabla:**
 
@@ -170,6 +170,19 @@ Haga clic en **Agrupar por** en la barra de herramientas (junto al recuento de e
 - La casilla de la cabecera selecciona todas las tarjetas del grupo: para reclasificar un lote, despliegue **Sin definir**, marque la cabecera y establezca el valor con la [Edición masiva](#mass-edit). Deliberadamente no hay arrastrar y soltar: seleccionar y establecer funciona igual en escritorio, tableta y móvil.
 - La ordenación se aplica dentro de cada grupo; la agrupación se conserva al recargar, se guarda en las vistas guardadas y puede compartirse mediante el parámetro de URL `group_by`.
 
+### Sangrar los hijos bajo sus padres { #group-by-parents }
+
+Marque **Padre** en la parte superior del menú **Agrupar por** para mostrar las fichas como un árbol: primero cada padre y debajo, sangrados, sus hijos. Funciona por sí sola (toda la cuadrícula se convierte en un único árbol) o sobre cualquier agrupación (cada grupo se convierte en su propio árbol). El menú permanece abierto al marcarla, de modo que puede elegir una agrupación justo después.
+
+![Inventario con los hijos sangrados bajo sus padres](../assets/img/es/98c_inventario_agrupacion_padres.png)
+
+- Una ficha nunca sale de su propio grupo. Un hijo cuyo padre está en otro grupo, oculto por un filtro de columna o sin cargar inicia su propia rama, con sus ancestros ausentes mostrados en gris antes de su nombre (por ejemplo, *SAP S/4HANA / SAP FI /* antes del nombre del módulo). Por ello, los recuentos de los grupos, la casilla del encabezado y la edición masiva siempre coinciden con lo que contiene el grupo.
+- Haga clic en el chevrón antes del nombre de un padre para ocultar o mostrar su rama. Un padre contraído sigue contando sus fichas ocultas en el número de elementos y en el encabezado del grupo. Las ramas que contrae con el chevrón no se recuerdan, y cambiar un filtro de columna las vuelve a abrir todas; al borrar el último filtro de columna se vuelve al nivel que eligió con el selector.
+- Mientras la capa de padres está activada, un par **−** / **+** junto al botón Agrupar por cierra o abre todo el árbol un nivel cada vez. El nivel elegido se recuerda entre recargas, se guarda en las vistas guardadas y se puede compartir con `group_tree_level=<n>`; el nivel mostrado también sigue lo que abre y cierra a mano.
+- La ordenación se aplica entre hermanos: se ordenan los padres y, debajo de cada uno, sus hijos.
+- La opción solo se ofrece cuando un tipo de ficha en pantalla tiene jerarquía. Se recuerda entre recargas, se guarda en las vistas guardadas y se puede compartir con el parámetro de URL `group_tree=1`.
+- **Exportar** sigue el orden del árbol y omite las fichas de las ramas contraídas, igual que hace con los grupos contraídos.
+
 ## Sugerencias de Descripción con IA { #ai-description-suggestions }
 
 Turbo EA puede usar **IA para generar una descripción** para cualquier ficha. Esto funciona tanto en el diálogo de creación de fichas como en las páginas de detalle de fichas existentes.
@@ -214,6 +227,70 @@ Las vistas guardadas aparecen en el panel lateral de filtros. Haga clic en cualq
 - **Mis Vistas** — Vistas que usted creó
 - **Compartidas conmigo** — Vistas que otros compartieron con usted
 - **Vistas Públicas** — Vistas disponibles para todos
+
+### Vistas de consulta { #query-views }
+<a id="mcp-views"></a>
+
+Una **vista de consulta** es una vista guardada cuyos filtros son una **consulta de varios saltos** — una cadena de relaciones con condiciones en cada paso, como *Organizaciones que usan una Aplicación activa afectada por una Iniciativa con estado On Track*. Varias consultas de este tipo pueden apilarse en una vista y combinarse con **Y** y **O** (véase más abajo). La vista guarda la consulta, no sus resultados: se vuelve a ejecutar cada vez que se abre la vista, de modo que la lista siempre refleja el panorama actual.
+
+![Una vista de consulta en el inventario](../assets/img/es/98d_inventario_vista_mcp.png)
+
+**Crear una vista de consulta.** En la pestaña **Vistas** de la barra lateral de filtros, haga clic en **Nueva vista de consulta** junto a *Guardar actual* (se muestra a quien pueda gestionar vistas). Si hay algún filtro activo, incluido el tipo de ficha seleccionado, una confirmación pregunta antes de borrarlos; **Cancelar** en el borrador los restaura. La tira sobre la cuadrícula se abre como un generador de consultas:
+
+1. Haga clic en la pastilla inicial (*Elegir un tipo*) y elija el tipo de ficha del que parte la consulta, es decir, el que lista.
+2. Haga clic en **+ relación** después de la última ficha para añadir un salto. El menú lista cada verbo de relación con el tipo de ficha al que lleva; una relación entre fichas del mismo tipo se ofrece en ambos sentidos. Cada línea de consulta es una única cadena de hasta tres saltos.
+3. Haga clic en **+ condición** bajo cualquier ficha para acotarla: **Ciclo de vida**, **Subtipos**, **Estado de aprobación**, **Calidad de datos** (*Completo*, *Parcial* o *Mínimo*, las mismas bandas que el filtro de la barra lateral), **Fin de vida** (véase más abajo), **Etiquetas**, **Fichas concretas**, o un campo de selección o de sí/no de ese tipo de ficha. Con las etiquetas, una ficha coincide si tiene cualquiera de las etiquetas elegidas de un grupo, y debe coincidir con cada grupo que añada; solo se ofrecen los grupos de etiquetas que se aplican a ese tipo de ficha. **Fichas concretas** abre el selector de fichas de ese tipo, y el paso solo coincide entonces con las fichas elegidas; en un tipo de ficha jerárquico, un interruptor **Incluir subfichas** hace coincidir también las fichas que cuelgan de cada selección. Una ficha elegida que usted no puede ver aparece como *(ficha oculta)*.
+4. Haga clic en **Guardar**. Se abre el diálogo habitual de guardar vista para el nombre, la visibilidad, el uso compartido y el ajuste OData. **Cancelar** descarta la consulta.
+
+![Creación de una vista de consulta](../assets/img/es/98e_inventario_editor_consulta.png)
+
+Mientras construye, la cuadrícula se filtra en directo y el contador de la barra de herramientas muestra cuántas fichas coinciden, de modo que ve el efecto de cada salto y condición antes de guardar.
+
+**Filtrar por fin de vida.** La condición **Fin de vida** se ofrece en un tipo de ficha que registra el fin de vida — por defecto Aplicación y Componente de TI; sigue la sección Fin de vida del tipo en el metamodelo. Sus valores son **Fin de vida**, **Próximo a EOL**, **Con soporte**, **Desconocido** y *(vacío)* para las fichas sin datos de fin de vida. El estado es el que muestra la columna **Fin de vida** del inventario: procede del producto de endoflife.date vinculado o de un producto EOL personalizado, o de una fecha de fin de vida introducida a mano, y es independiente de la fase del ciclo de vida de la ficha. La condición funciona en la ficha de partida y en cualquier paso de relación, tanto en líneas Y como en líneas O — por ejemplo, *Aplicaciones que usan un Componente de TI en fin de vida*. Mientras una consulta filtra por ella en la ficha de partida, la cuadrícula muestra la columna Fin de vida para que vea por qué coincide cada ficha; las columnas que eligió no cambian. Si no se puede acceder a endoflife.date y no hay nada en caché, las fichas vinculadas se leen como *Desconocido*, igual que en la columna Fin de vida.
+
+La condición requiere el permiso para ver los datos de fin de vida (**Ver datos de EOL**, `eol.view`). Sin él, la condición no se ofrece, y abrir, previsualizar o guardar una vista que la use se rechaza con *Esta vista filtra por el estado de fin de vida, que su rol no puede ver.*
+
+**Cambiar saltos y condiciones.** Haga clic en la pastilla de verbo de un salto para abrir su menú: **no tiene** convierte el salto en el requisito de que la ficha **no** tenga ninguna relación así, y **Quitar este salto** lo elimina junto con todos los saltos posteriores. Haga clic en una pastilla de condición para cambiar sus valores, o en su **×** para quitarla.
+
+**Combinar consultas con Y y O.** Una vista puede contener varias líneas de consulta apiladas. Cada línea es una consulta completa — ficha inicial, relaciones y condiciones — construida exactamente como la consulta única anterior. Las líneas se agrupan:
+
+- **Y** añade una línea al mismo grupo: una ficha solo se lista cuando cumple **todas** las líneas del grupo. Una línea Y parte del mismo tipo de ficha que su grupo, mostrado como una pastilla fija, y la primera línea del grupo no puede cambiar su tipo de ficha mientras tenga líneas Y.
+- **O** inicia un grupo nuevo bajo un separador **O**: sus resultados se **añaden** a la lista. Un grupo nuevo puede partir de otro tipo de ficha, de modo que una vista puede listar, por ejemplo, Aplicaciones y Organizaciones juntas. Cuando una vista lista varios tipos de ficha, la cuadrícula muestra las columnas que esos tipos tienen en común.
+
+En modo de edición, un **más** rodeado por un círculo bajo cada grupo pregunta **Y** u **O**: Y añade una línea a ese grupo, O abre un grupo nuevo a continuación. La **×** al final de una línea la quita; se muestra cuando la vista tiene más de una línea.
+
+Por ejemplo, la vista de demostración *Active apps on aging tech, and the organizations using apps* tiene un grupo de Aplicación de dos líneas — una Aplicación activa que usa un Componente de TI en retirada o al final de su vida, **Y** una Aplicación afectada por una Iniciativa — **O** una Organización que usa una Aplicación. La lista muestra las Aplicaciones que cumplen ambas líneas, junto con cada Organización que usa una Aplicación.
+
+![Combinar consultas con Y y O](../assets/img/es/98f_inventario_consultas_combinadas.png)
+
+Una vista contiene como máximo **seis** líneas de consulta, **doce** relaciones entre todas sus líneas y **tres** relaciones de profundidad en cada línea. Las líneas de un grupo Y solo coinciden en su ficha inicial: el Componente de TI de una línea y la Iniciativa de la otra pueden ser fichas distintas. Dos requisitos sobre la **misma** ficha en mitad de una línea — por ejemplo, que el mismo Componente de TI lo ofrezca un Proveedor **y** pertenezca a una Categoría tecnológica — no pueden construirse en el generador de consultas; un asistente de IA puede escribir una consulta así mediante el [servidor MCP](../admin/mcp.md#multi-hop-card-queries), y la tira la muestra entonces.
+
+**Editar una vista de consulta guardada.** Cuando hay una vista de consulta abierta, la tira muestra su ruta: los tipos de ficha como pastillas, unidos por el verbo de relación que enlaza cada paso (por ejemplo *Organización → usa Aplicación → es afectada por Iniciativa*), con las condiciones de cada ficha debajo. Una vista con varias líneas muestra la misma pila, con sus marcas Y y sus separadores O, sin los controles de edición. Si es el propietario de la vista o tiene derechos de edición sobre ella, un **lápiz** en la tira la cambia al mismo generador; **Guardar** actualiza la vista. El botón **×** (*Salir de esta vista*) vuelve al inventario normal. **Guardar vista actual** mientras hay una vista de consulta abierta guarda una nueva vista de consulta con la misma consulta.
+
+#### Ver las fichas detrás de una coincidencia { #query-view-matches }
+
+Una vista de consulta solo lista la primera ficha de su consulta. Para ver qué fichas más adelante en la cadena hicieron coincidir una fila, haga clic en su tipo de ficha en la ruta de la consulta. En *Organizaciones que usan una Aplicación que usa un Componente de TI al final de su vida o cerca de él*, haga clic en **Aplicación** y una columna lista, para cada Organización, las Aplicaciones por las que coincide; haga clic en **Componente de TI** y otra columna lista los Componentes de TI que cumplen. Vuelva a hacer clic en el tipo de ficha para quitar su columna.
+
+![Una vista de consulta con sus columnas de coincidencias](../assets/img/es/98g_inventario_coincidencias_consulta.png)
+
+- **Cómo se ve un interruptor.** Un tipo de ficha en el que se puede hacer clic muestra un puntero y la información emergente *Mostrarlas en una columna*. Una vez activada su columna, la pastilla se rellena con el color del tipo de ficha y lleva un pequeño icono de columna; su información emergente dice *Ocultar la columna*.
+- **Qué tipos de ficha son interruptores.** Todos los tipos de ficha después del primero de su línea. El primer tipo de ficha de una línea no lo es, porque sus fichas son las filas, ni tampoco un tipo de ficha detrás de **no tiene**, que representa una relación ausente. En una vista con varias líneas, los tipos de ficha de cada línea son interruptores; con **O**, una fila muestra fichas solo para las líneas que cumple. Los interruptores no están disponibles mientras edita la consulta, y las columnas se ocultan hasta que guarde o cancele.
+- **Dónde aparece la columna.** Justo después de **Nombre**, titulada con el tipo de ficha y *coincidentes* — por ejemplo *Aplicación · coincidentes* — para que no se confunda con una columna de relación como *utiliza Aplicación*, que lista todas las Aplicaciones relacionadas de esa forma. Cuando dos pasos tienen el mismo tipo de ficha, los títulos se numeran. Pase el ratón sobre el título para ver la ruta que sigue la columna.
+- **Qué muestra una celda.** Los nombres de las fichas coincidentes, separados por punto y coma; pase el ratón sobre la celda para ver la lista completa. Una celda lista como máximo **100** nombres; una lista más larga termina en *…* y su información emergente indica que se muestran las 100 primeras. Puede ordenar y filtrar la columna como una columna de texto, y **Exportar vista actual** la incluye.
+- **Todas las fichas de la cadena, no cuál lleva a cuál.** Una fila lista todas las fichas coincidentes en ese paso: todas las Aplicaciones que cumplen de la Organización y todos los Componentes de TI que cumplen de esas Aplicaciones. No muestra qué Componente de TI pertenece a qué Aplicación. Para listar los propios Componentes de TI, uno por fila, escriba en su lugar la consulta partiendo de Componente de TI.
+- **Guardadas con la vista.** Las columnas que active se guardan con la vista (el **lápiz** en la lista de vistas y luego **Actualizar**), de modo que vuelven a estar al abrirla de nuevo. Editar la consulta conserva una columna mientras su paso siga existiendo, y la quita cuando elimina ese paso o cambia su tipo de ficha.
+
+Solo ve las fichas que tiene permiso para ver: una ficha oculta para usted nunca se nombra en una celda, y una fila que solo coincide a través de fichas ocultas no se lista.
+
+La vista de demostración *Organizations on applications with components at or near end of life* se abre con ambas columnas activadas.
+
+**Vistas creadas por un asistente de IA.** Un asistente conectado mediante el [servidor MCP](../admin/mcp.md) también puede crear vistas de consulta. Una vista así muestra una pastilla **MCP** y la nota *Creada mediante MCP* en su tira, y una insignia de robot en la lista de vistas; se edita como cualquier otra vista de consulta. En la lista de vistas, cada vista de consulta lleva una pequeña insignia de vista de consulta (un cubo; la insignia de robot cuando la creó un asistente) y su ruta compacta (*Organización › usa Aplicación › es afectada por Iniciativa*) como segunda línea; una vista apilada se lee *… Y … O …*. Cuando la vista tiene condiciones, su número sigue a la ruta (*… › es afectada por Iniciativa · 2 condiciones*).
+
+**Abrir una vista mediante enlace.** Cuando un asistente guarda una vista, devuelve un enlace con la forma `/inventory?view=<view id>`; al abrirlo se aplica directamente la vista guardada. El mismo enlace funciona para cualquier vista guardada que pueda ver.
+
+**OData.** El feed OData de una vista de consulta devuelve las mismas fichas que el inventario: la consulta también se aplica al feed.
+
+Para la gramática de consultas, sus límites y las herramientas MCP (`query_cards`, `list_inventory_views`, `save_inventory_view`, `list_tag_groups`), consulte [Consultas de fichas de varios saltos](../admin/mcp.md#multi-hop-card-queries).
 
 ## Importación / Exportación Excel { #excel-import }
 

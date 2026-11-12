@@ -43,7 +43,7 @@ AI 工具通过 MCP 服务器发出的每一次调用在这里都是一个批次
 - 多次失败后的账户锁定；
 - 注册，以及密码的设置、重置和修改；
 - 角色模拟——管理员开始和结束「以角色查看…」；
-- 管理操作——对用户、角色、设置、元模型、标签、计算、扩展、导入、集成、公开门户和已发布图表、调查以及运维访问的更改（参见[管理操作](#administrative-actions)）；
+- 管理操作——对用户、角色、设置、元模型、标签、计算、扩展、导入、集成、公开门户和已发布图表、调查、登记为已决定的决策以及运维访问的更改（参见[管理操作](#administrative-actions)）；
 - 数据导出——卡片的 CSV 和 JSON 导出、工作区导出以及面向其他 EA 平台的导出（参见[数据导出](#data-exports)）——以及对本日志本身的导出。
 
 ### 列
@@ -148,7 +148,7 @@ AI 工具通过 MCP 服务器发出的每一次调用在这里都是一个批次
 |------|---------|------------------|
 | **用户与角色** | `admin.user.created`, `.updated`, `.deleted`, `.bulk_updated`, `.bulk_deleted`, `.unlocked`; `admin.user.invitation.resent`, `.deleted`; `admin.role.created`, `.updated`, `.archived`, `.restored`; `admin.stakeholder_role.created`, `.updated`, `.deleted`, `.archived`, `.restored` | 账户的创建、编辑、启用或停用、删除（逐个或批量）和解锁，并附带更改的字段——角色、电子邮件、名称、启用状态；重新发送或撤销的邀请；应用角色和按类型定义的利益相关者角色，以及授予或撤销的权限 |
 | **设置** | `admin.settings.updated` | 每保存一项设置记录一条——电子邮件、身份验证与 SSO、注册、AI、MCP、语言、模块开关、品牌、徽标与网站图标、保留期限。目标是该设置；详情是其旧值和新值，机密信息已遮蔽 |
-| **元模型** | `admin.metamodel.type.*` (including `.references_generated`), `admin.metamodel.relation_type.*`, `admin.metamodel.resource_type.*`, `admin.metamodel.category.*` (including `.reordered`), `admin.principle.*` (including `.imported`), `admin.regulation.*` | 卡片类型、关系类型和资源类型的创建、更改、删除或恢复，并附带更改的属性；为某一类型生成的卡片编号；EA 原则，包括从目录导入的原则；合规法规；卡片类型分类（架构层）的创建、重命名、改色、重新排序或删除 |
+| **元模型** | `admin.metamodel.type.*` (including `.references_generated`), `admin.metamodel.relation_type.*`, `admin.metamodel.resource_type.*`, `admin.metamodel.category.*` (including `.reordered`), `admin.principle.*` (including `.imported`), `admin.regulation.*` | 卡片类型、关系类型和资源类型的创建、更改、删除或恢复，并附带更改的属性；为某一类型生成的卡片编号；EA 原则，包括从目录或电子表格导入的原则（每次导入记录一条，注明创建、更新、跳过和失败的数量）；合规法规；卡片类型分类（架构层）的创建、重命名、改色、重新排序或删除 |
 | **标签与计算** | `admin.tag_group.*`, `admin.tag.*`, `admin.calculation.*` | 标签组和标签；计算字段的创建、更改、删除、启用或停用，附带旧公式和新公式，以及对所有卡片运行一次计算（`.recalculated`） |
 | **扩展** | `admin.extension.install.uploaded`, `.applied`, `.discarded`; `admin.extension.store.claimed`, `.refreshed`, `.installed`; `admin.extension.enabled`, `.disabled`, `.uninstalled`; `admin.extension.license.updated`, `.removed` | 上传、安装或丢弃的扩展包；来自扩展商店的许可证和下载；扩展的启用、停用和卸载；许可证的替换或移除——记录扩展及其版本，绝不记录许可证文本 |
 | **工作区迁移与平台迁移** | `admin.workspace.import.uploaded`, `.applied`, `.completed`, `.discarded`; `admin.migration.uploaded`, `.field_mappings.updated`, `.applied`, `.deleted` | 上传的[工作区包](workspace-transfer.md)及其导入的开始、完成或丢弃；上传的[平台迁移](migration.md)及其字段映射的编辑、应用或删除 |
@@ -156,6 +156,7 @@ AI 工具通过 MCP 服务器发出的每一次调用在这里都是一个批次
 | **公开暴露** | `admin.web_portal.created`, `.updated`, `.deleted`; `admin.diagram.published`, `.unpublished` | [Web 门户](web-portals.md)和已发布的图表——所有让数据无需账户即可访问的内容 |
 | **主页仪表盘** | `admin.dashboard.created`, `.updated`, `.deleted`, `.duplicated`, `.reset` | [仪表盘](../guide/dashboard.md#customizing-dashboards)的创建、编辑、删除、复制或重置为默认，并记录更改的名称、描述、图标、可见性、顺序和访问角色；每个添加或移除的小部件都按名称列出（移动或调整小部件大小不会被记录） |
 | **调查** | `admin.survey.sent`, `admin.survey.closed` | 发送给收件人或已关闭的调查 |
+| **架构决策** | `admin.adr.recorded` | 在 Turbo EA 之外做出、未经签名即[登记为已决定](../guide/grc.md#recording-a-past-decision)的决策，附带其决定日期、生效日期和决策者 |
 | **运维访问** | `admin.ops.rescue_access.granted`, `.revoked` | 通过[运维 API](ops-api.md) 授予或撤销的救援访问，与现有的 `ops.*` 事件一同记录 |
 
 ### 数据导出 { #data-exports }

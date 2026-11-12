@@ -63,7 +63,8 @@ export function wrapText(text: string, maxChars: number, maxLines = MAX_LINES): 
   return [...lines.slice(0, maxLines - 1), last.length >= maxChars ? `${last.slice(0, maxChars - 1)}…` : `${last}…`];
 }
 
-const rgb = ({ r, g, b }: Rgb) => `rgb(${r}, ${g}, ${b})`;
+const hexOf = ({ r, g, b }: Rgb) =>
+  `#${[r, g, b].map((v) => v.toString(16).padStart(2, "0")).join("")}`;
 
 /** Where the glyph sits: the top-right corner, pulled in on an ellipse or a cut corner so it stays inside. */
 function glyphOrigin(body: string, width: number): { x: number; y: number } {
@@ -118,7 +119,7 @@ export default class ArchimateRenderer extends BaseRenderer {
     const style = (shape as { style?: { fillColor?: Rgb } }).style;
     const cardId = getCardId(bo);
     const card = cardId ? this.cards.get(cardId) : undefined;
-    let fill = card?.color ? tint(card.color) : style?.fillColor ? rgb(style.fillColor) : colors.fill;
+    let fill = card?.color ? tint(card.color) : style?.fillColor ? hexOf(style.fillColor) : colors.fill;
     if (bo.type === "AndJunction") fill = ARCHIMATE_TEXT_COLOR;
     else if (bo.type === "OrJunction") fill = "white";
 

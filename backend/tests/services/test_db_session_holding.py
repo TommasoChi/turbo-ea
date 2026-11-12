@@ -200,7 +200,8 @@ def test_workspace_upload_releases_the_request_session_before_spooling():
 @pytest.mark.parametrize(
     ("func", "call"),
     [
-        ("suggest", "await suggest_metadata("),
+        ("suggest", "await _suggest_or_502("),
+        ("suggest_eol_product", "await _suggest_or_502("),
         ("portfolio_insights", "await generate_portfolio_insights("),
     ],
 )
@@ -236,6 +237,64 @@ def test_eol_card_status_releases_the_request_session_first():
         "the commit hands the connection back, and get_db is a yield-dependency "
         "that would otherwise pin it for the whole endoflife.date round-trip."
     )
+
+
+@pytest.mark.source_scan
+@pytest.mark.parametrize(
+    ("module", "func"),
+    [("app/api/v1/cards.py", "list_cards"), ("app/api/v1/bookmarks.py", "bookmark_odata_feed")],
+)
+def test_an_eol_card_query_releases_the_request_session_first(module, func):
+    """``GET /cards?query=`` and the OData feed evaluate a card query, and a
+    ``where.eol_status`` condition fetches cycles from endoflife.date while
+    compiling (``PreparedCardQuery.compile``). Every database read it needs
+    happens in ``prepare_card_query``; the route must commit between the two,
+    or the inventory would pin a connection per open view for an upstream
+    round-trip. ``tests/api/test_cards.py::TestQueryParam::test_eol_status``
+    checks the same at runtime."""
+    body = _function_source(module, func)
+    prepare_at = body.find("await prepare_card_query(")
+    compile_at = body.find("await prepared.compile(")
+    assert -1 < prepare_at < compile_at, f"{func} must prepare, then compile the query"
+    commit_at = body.rfind("await db.commit()", 0, compile_at)
+    assert commit_at > prepare_at, (
+        f"{func} must `await db.commit()` between prepare_card_query and "
+        "prepared.compile — the compile fetches from endoflife.date, and get_db "
+        "would otherwise pin the connection for the whole round-trip."
+    )
+
+
+@pytest.mark.source_scan
+def test_the_query_matches_route_releases_the_request_session_before_the_fetch():
+    """``POST /cards/query/matches`` evaluates the same card query, and its
+    EOL pair statuses are fetched from endoflife.date by
+    ``prepared.pair_statuses()`` — the route must commit after preparing and
+    before that fetch, exactly like ``GET /cards?query=``."""
+    body = _function_source("app/api/v1/cards.py", "card_query_matches_route")
+    prepare_at = body.find("await prepare_card_query(")
+    fetch_at = body.find("await prepared.pair_statuses(")
+    assert -1 < prepare_at < fetch_at, "the route must prepare, then fetch the statuses"
+    commit_at = body.rfind("await db.commit()", 0, fetch_at)
+    assert commit_at > prepare_at, (
+        "card_query_matches_route must `await db.commit()` between "
+        "prepare_card_query and prepared.pair_statuses."
+    )
+
+
+@pytest.mark.source_scan
+@pytest.mark.parametrize(
+    "module",
+    [
+        "app/services/card_query.py",
+        "app/services/eol_query.py",
+        "app/services/card_query_matches.py",
+    ],
+)
+def test_the_card_query_helpers_never_commit(module):
+    """``prepare_card_query`` and the EOL helpers are handed the route's
+    session: the route commits, they never do."""
+    assert "commit()" not in _source(module)
+    assert "rollback()" not in _source(module)
 
 
 @pytest.mark.source_scan

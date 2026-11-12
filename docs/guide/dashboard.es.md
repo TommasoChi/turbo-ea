@@ -60,6 +60,8 @@ Bajo las tarjetas, el panel Resumen muestra:
 - **Actividad reciente**: un feed de los últimos cambios: quién editó qué y cuándo
 - **Clasificación de calidad de datos**: las personas que mantienen sus fichas completas (véase más abajo)
 
+**Actividad reciente** también muestra lo que ocurre con las decisiones y las Declaraciones de Trabajo de Arquitectura —una decisión creada o vinculada a una ficha, firmas solicitadas, firmadas, retiradas o rechazadas, un comentario publicado— a los lectores que pueden abrirlas: los eventos de decisiones requieren `adr.view` y los de SoAW, `soaw.view`. Los eventos de revisión se conservan a partir de la versión 2.200.0; los anteriores nunca se almacenaron.
+
 Al hacer clic en una barra o en un sector de un gráfico se abre lo que hay detrás: el [Inventario](inventory.md) filtrado por esas fichas para un tipo de ficha o un estado de aprobación, el informe de Ciclo de vida para una fase del ciclo de vida y el informe de Calidad de datos para un tramo de completitud.
 
 ### Clasificación de calidad de datos
@@ -77,6 +79,16 @@ La clasificación requiere el permiso `reports.ea_dashboard`, como el resto del 
 El panel **Mi espacio de trabajo** reúne todo lo que se le ha asignado: favoritos, informes guardados, tareas, encuestas pendientes, las fichas que ha creado, actividad reciente en sus fichas y la sección **Fichas en las que tengo un rol**. Cada uno de estos elementos es un widget, por lo que un administrador puede reorganizarlos o colocarlos en otro panel.
 
 Esta última sección agrupa las fichas por el rol de parte interesada que usted desempeña (Application Owner, Business Owner, etc.) y enumera las fichas bajo cada rol. Si su rol concede el permiso `stakeholders.view` (roles admin, member y viewer por defecto), un pequeño icono de **búsqueda de persona** junto al título de la sección le permite dirigirla a **otra persona**: elija un usuario en el autocompletado y la sección se vuelve a cargar con los roles y las fichas de ese usuario. El título cambia a «Roles de {name}». Haga clic en el pequeño icono de cierre para volver a sus propios roles. Útil para responder a «¿de qué es responsable esta persona?» con un clic.
+
+### Vistas de inventario
+
+El widget **Vistas de inventario** enumera en un panel sus [vistas de inventario](inventory.md) guardadas. No está en ninguno de los paneles integrados: añádalo desde el cajón **Añadir widget** (véase [Añadir y restaurar widgets](#anadir-y-restaurar-widgets)), donde aparece con los widgets de **Mi espacio de trabajo**.
+
+Muestra hasta seis vistas, las más recientes primero. Cada fila incluye el icono del tipo de ficha de la vista, su nombre y, en una segunda línea, su tipo de ficha — o, en una [vista de consulta](inventory.md#query-views), su ruta seguida del número de sus condiciones. Un cubo marca una vista de consulta, o un robot cuando la creó un asistente de IA, y un icono de globo o de grupo marca una vista pública o compartida. Haga clic en una fila para abrir la vista en el inventario; **Ver todo** abre el inventario.
+
+![Widget Vistas de inventario](../assets/img/es/04b_panel_vistas_inventario.png)
+
+Su botón de engranaje establece **Vistas que mostrar** — **Todas las vistas que puedo abrir**, **Mis vistas** o **Vistas compartidas conmigo** — y un interruptor **Solo vistas de consulta**, con una vista previa en vivo del resultado. Un panel puede contener el widget más de una vez, por ejemplo **Mis vistas** junto a **Vistas compartidas conmigo**. Un rol que no puede abrir vistas guardadas ve un breve mensaje en lugar de la lista.
 
 ## Pestaña «Administración» — Directorio de partes interesadas { #admin-tab-stakeholder-directory }
 
@@ -99,14 +111,14 @@ Haga clic en **Personalizar**, junto a las pestañas de los paneles, para editar
 - **Mueva** un widget arrastrándolo por su asa; la cuadrícula tiene 12 columnas de ancho y los demás widgets le hacen sitio.
 - **Cambie el tamaño** de un widget desde su borde derecho, su borde inferior o la esquina, con el ratón o con el tacto (en un móvil o una tableta en vertical el diseño es de solo lectura). El widget contiguo se ajusta mientras arrastra: se estrecha cuando su vecino crece y vuelve a ensancharse cuando este se reduce; si ya no puede estrecharse más, pasa a la fila siguiente. Las filas de debajo bajan y vuelven a subir por sí solas. El widget se ajusta a la cuadrícula mientras se arrastra, y en el modo de personalización la página deja cuatro filas vacías bajo el último widget para poder alargar la fila inferior; desplácese primero hasta que el asa quede bien dentro de la ventana.
 - **Elimine** un widget con su botón de cierre.
-- **Configure** una tarjeta KPI, un gráfico, el feed de actividad o una clasificación de calidad de datos con su botón de engranaje.
+- **Configure** una tarjeta KPI, un gráfico, el feed de actividad o una clasificación de calidad de datos o un widget de [Vistas de inventario](#vistas-de-inventario) con su botón de engranaje.
 - **Deshaga** y **rehaga** los cambios: **Deshacer** y **Rehacer** recorren paso a paso los cambios realizados desde que se abrió Personalizar (un movimiento, cambio de tamaño, adición, eliminación o configuración cada vez) — con los dos botones de la barra de herramientas o con Ctrl+Z / Ctrl+Mayús+Z (⌘ en Mac). **Descartar** sigue eliminándolos todos a la vez.
 
 Haga clic en **Guardar** para conservar los cambios para todos, o en **Descartar** para volver al panel tal como estaba.
 
 ### Añadir y restaurar widgets
 
-**Añadir widget** abre un cajón con todos los widgets, agrupados en **KPI**, **Gráficos**, **Resumen**, **Mi espacio de trabajo** y **Administración**. Haga clic en uno para añadirlo al panel; una tarjeta KPI o un gráfico abre primero su configuración. Todos los widgets integrados permanecen en el catálogo, de modo que un widget eliminado por error —**Actividad reciente**, por ejemplo— se restaura añadiéndolo de nuevo. Los widgets que solo pueden aparecer una vez en un panel aparecen atenuados y marcados como ya añadidos cuando están presentes.
+**Añadir widget** abre un cajón con todos los widgets, agrupados en **KPI**, **Gráficos**, **Resumen**, **Mi espacio de trabajo** y **Administración**. Haga clic en uno para añadirlo al panel; una tarjeta KPI o un gráfico abre primero su configuración. Algunos widgets están solo en el catálogo y en ningún panel integrado — la lista de [Vistas de inventario](#vistas-de-inventario), por ejemplo. Todos los widgets integrados permanecen en el catálogo, de modo que un widget eliminado por error —**Actividad reciente**, por ejemplo— se restaura añadiéndolo de nuevo. Los widgets que solo pueden aparecer una vez en un panel aparecen atenuados y marcados como ya añadidos cuando están presentes.
 
 Un widget conserva su propio permiso dondequiera que se coloque: un widget de Administración añadido al panel Resumen sigue mostrándose solo a los usuarios con `admin.users`.
 

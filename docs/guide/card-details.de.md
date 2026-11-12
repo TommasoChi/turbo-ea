@@ -102,6 +102,8 @@ Jede Phase verfügt über eine **Datumsauswahl**, damit Sie festhalten können, 
 
 Liegt das Datum einer Phase nach dem einer folgenden Phase — zum Beispiel **Auslauf** nach **Lebensende** —, erscheint neben diesem Datum ein Warnsymbol, und beim Bearbeiten steht derselbe Hinweis unter dem Feld. Es ist nur ein Hinweis: Die Daten lassen sich trotzdem wie eingegeben speichern.
 
+Ein Info-Symbol neben jeder Phase auf der Zeitleiste erklärt, was die Phase bedeutet – fahren Sie darüber, um die Definition zu lesen. Es zeigt eine Standarderklärung, sofern Ihr Administrator sie nicht geändert hat, um die Nutzung der Phase in Ihrer Organisation zu beschreiben, oder entfernt hat. Die Zeitleiste mit ihren Symbolen bleibt beim Bearbeiten der Daten sichtbar. Die Texte werden unter **Admin → Metamodell → Lebenszyklusphasen** festgelegt (siehe [Lebenszyklusphasen](../admin/metamodel.md#lifecycle-phases)).
+
 ### Benutzerdefinierte Attributabschnitte
 
 Abhängig vom Kartentyp werden Sie zusätzliche Abschnitte mit **benutzerdefinierten Feldern** sehen, die im Metamodell konfiguriert sind. Feldtypen umfassen:
@@ -115,6 +117,8 @@ Abhängig vom Kartentyp werden Sie zusätzliche Abschnitte mit **benutzerdefinie
 - **URL** — Klickbarer Link (validiert für http/https/mailto)
 - **Einfachauswahl** — Dropdown mit vordefinierten Optionen
 - **Mehrfachauswahl** — Mehrfachauswahl mit Chip-Anzeige
+
+Wo Ihr Administrator einen **Hilfetext** für ein Feld verfasst hat, erscheint neben seiner Bezeichnung ein Info-Symbol: Fahren Sie darüber (oder erreichen Sie es per Tab-Taste), um zu lesen, was das Feld bedeutet. Beim Bearbeiten des Abschnitts steht dasselbe Symbol neben dem Feld. Im Inventar zeigt auch das Darüberfahren über die Spaltenüberschrift des Felds den Text an.
 
 Als **berechnet** markierte Felder zeigen ein Badge und können nicht manuell bearbeitet werden — ihre Werte werden durch [vom Administrator definierte Formeln](../admin/calculations.md) berechnet.
 
@@ -194,11 +198,14 @@ Die **Ressourcen**-Registerkarte bündelt alle unterstützenden Materialien eine
 
 ### EOL-Abschnitt
 
-Wenn die Karte mit einem [endoflife.date](https://endoflife.date/)-Produkt verknüpft ist (über die [EOL-Administration](../admin/eol.md)):
+Standardmäßig bei Anwendungen und IT-Komponenten angezeigt, außerdem bei jedem anderen Kartentyp, bei dem der Administrator ihn [aktiviert hat](../admin/eol.md#lebensende-bei-anderen-kartentypen). Wenn die Karte mit einem [endoflife.date](https://endoflife.date/)-Produkt verknüpft ist (über die [EOL-Administration](../admin/eol.md)):
 
-- **Produktname und Version**
-- **Supportstatus** — Farbcodiert: Unterstützt, EOL nähert sich, Lebensende
-- **Wichtige Daten** — Veröffentlichungsdatum, Ende des aktiven Supports, Ende des Sicherheitssupports, EOL-Datum
+- **Produktname und Version** — ein eigenes Produkt wird mit seinem Titel benannt und als **Eigenes** gekennzeichnet
+- **Supportstatus** — Farbcodiert, nach derselben Regel wie im EOL-Bericht: Unterstützt, EOL nähert sich (innerhalb von sechs Monaten vor dem EOL-Datum oder sobald der aktive Support beendet ist), Lebensende
+- **Wichtige Daten** — Veröffentlichungsdatum, Ende des aktiven Supports, EOL-Datum, die neueste Version und ihr Veröffentlichungsdatum
+- **Versionshinweise** — ein Link zur Produktseite auf endoflife.date oder die **Herstellerseite** eines eigenen Produkts
+
+**Verknüpfen**, **Ändern** und **Verknüpfung aufheben** erscheinen nur, wenn Sie die Karte bearbeiten dürfen. Benutzer mit der Berechtigung **EOL verwalten** können direkt in diesem Abschnitt ein [eigenes EOL-Produkt](../admin/eol.md) definieren, über den Link **Als eigenes Produkt definieren …** unter der Produktsuche: Das Formular öffnet sich mit dem Namen der Karte (oder Ihrer Eingabe) als Produktname, und die Karte wird beim Speichern mit dem neuen Produkt verknüpft. Sie erhalten außerdem eine Verknüpfung zu **Eigene Produkte verwalten** in den Einstellungen und können in der Zyklenliste einen fehlenden Release-Zyklus hinzufügen. Alle anderen sehen einen Hinweis, einen EOL-Manager zu fragen, wenn endoflife.date keinen Treffer hat. Eigene Produkte verhalten sich sonst überall wie Produkte von endoflife.date.
 
 ## Kommentare-Tab
 
@@ -233,13 +240,15 @@ Stakeholder-Zuweisungen beeinflussen **Berechtigungen**: Die effektiven Berechti
 
 Wenn für eine Rolle im Metamodell eine **Farbe** festgelegt ist, wird ihre Gruppe damit gekennzeichnet, sodass Sie einen Eigentümer auf einen Blick von einem Beobachter unterscheiden können.
 
+Hat eine Rolle eine **Beschreibung**, erscheint neben ihrem Namen ein Info-Symbol: Fahren Sie darüber, um zu lesen, was die Rolle bedeutet. Die Beschreibung steht außerdem unter dem Rollennamen in der Rollenauswahl, wenn Sie einen Stakeholder hinzufügen.
+
 ### Suchen und einladen
 
 Wähle einen Stakeholder über das **durchsuchbare Autocomplete** — beginne zu tippen und das Dropdown filtert sowohl nach Name als auch nach E-Mail (die E-Mail erscheint als sekundäre Zeile, sodass zwei Nutzer mit demselben Namen auf einen Blick unterschieden werden können).
 
-Wenn die eingegebene E-Mail keinem bestehenden Nutzer entspricht, erscheint am Ende des Dropdowns eine Option **«Einladen «email» als neuen Nutzer»**. Bei Auswahl klappt direkt im Picker ein Inline-Mini-Formular auf — wähle eine Rolle (standardmäßig Member oder Viewer), bearbeite optional den Anzeigenamen und sende ab. Der neue Nutzer wird über die Standard-Einladungs-E-Mail eingeladen **und** in einem einzigen Schritt mit der gewählten Stakeholder-Rolle auf der Karte zugewiesen, sodass du die Karte nie verlassen musst, um einen Mitwirkenden zu onboarden.
+Wenn die eingegebene E-Mail keinem bestehenden Nutzer entspricht, erscheint am Ende des Dropdowns eine Option **«Einladen «email» als neuen Nutzer»**. Bei Auswahl klappt direkt im Picker ein Inline-Mini-Formular auf — bearbeite optional den Anzeigenamen und sende ab. Der neue Nutzer erhält die unter [Benutzer & Rollen](../admin/users.md#rollen) festgelegte **Standardrolle**. Der neue Nutzer wird über die Standard-Einladungs-E-Mail eingeladen **und** in einem einzigen Schritt mit der gewählten Stakeholder-Rolle auf der Karte zugewiesen, sodass du die Karte nie verlassen musst, um einen Mitwirkenden zu onboarden.
 
-Der Einladungspfad erfordert die **`users.invite`**-Berechtigung, eine delegierte Form von `admin.users`, die Admins an vertrauenswürdige Mitglieder vergeben können. Eine Schutzmechanik gegen Privilege-Escalation verhindert, dass Nicht-Admins Nutzer in Admin-Rollen einladen — das Rollen-Dropdown filtert stillschweigend auf Rollen, die der Einladende delegieren darf.
+Der Einladungspfad erfordert die **`users.invite`**-Berechtigung, eine delegierte Form von `admin.users`, die Admins an vertrauenswürdige Mitglieder vergeben können. Eine Schutzmechanik gegen Privilege-Escalation verhindert, dass Nicht-Admins Nutzer in andere Rollen einladen: Ohne `admin.users` kann ein eingeladener Nutzer nur die Standardrolle, Member oder Viewer erhalten.
 
 ## Verlauf-Tab
 
@@ -255,9 +264,11 @@ Alles, was das Datum **Geändert** der Karte verschiebt, erscheint hier — eine
 
 ## ADRs-Tab
 
-Jede Karte besitzt einen **ADRs**-Tab, der die mit ihr verknüpften [Architekturentscheidungen](delivery.md) auflistet — mit Referenz, Titel, Status, allen verknüpften Karten und dem Zeitpunkt der letzten Änderung. Klicken Sie auf eine Zeile, um die Entscheidung zu öffnen.
+Jede Karte besitzt einen **ADRs**-Tab, der die mit ihr verknüpften [Architekturentscheidungen](delivery.md) auflistet — die aktuelle Revision jeder Entscheidung sowie jede Revision, die gerade entworfen wird — mit Referenz, Titel, Geltung (oder ihrem Status, solange sie noch nicht unterzeichnet ist), allen verknüpften Karten und dem Zeitpunkt der letzten Änderung. Klicken Sie auf eine Zeile, um die Entscheidung zu öffnen; frühere Revisionen erreichen Sie von dort aus.
 
 Wenn Sie ADR-Verknüpfungen verwalten dürfen, bietet der Tab zusätzlich **ADR verknüpfen**, um eine bestehende Entscheidung anzuhängen, und **ADR erstellen**, um eine neue anzulegen, die bereits mit dieser Karte verknüpft ist — sowie eine Aktion zum Aufheben der Verknüpfung in jeder Zeile. Auf Karten ohne verknüpfte Entscheidungen ist der Tab ausgeblendet, sofern Sie diese Berechtigung nicht besitzen; Benutzer mit reinem Lesezugriff sehen also nie einen leeren Tab.
+
+Unter der Liste führt **Erwähnt in** die Entscheidungen und Statements of Architecture Work auf, deren Text diese Karte erwähnt, sowie jene, deren Diskussion sie erwähnt (markiert mit *in der Diskussion*), jeweils mit der Referenz oder Revision des Dokuments und seiner Geltung oder seinem Status. Eine Erwähnung verknüpft die Karte nicht mit der Entscheidung; sie erscheint nur hier. Die Liste zeigt nur Dokumente, die Sie öffnen können, und entfällt, wenn es keine gibt. Siehe [Erwähnungen](grc.md#decision-mentions).
 
 ## Risiken-Tab (GRC aktiviert, falls vorhanden)
 

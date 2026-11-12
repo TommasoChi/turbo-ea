@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from typing import Any
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException
@@ -18,13 +19,16 @@ from app.models.card_type import CardType
 from app.models.ea_principle import EAPrinciple
 from app.models.user import User
 from app.schemas.ai_suggest import (
+    AiEolProductSuggestRequest,
     AiSuggestRequest,
     AiSuggestResponse,
     PortfolioInsightsRequest,
     PortfolioInsightsResponse,
 )
+from app.services import openai_chat
 from app.services.ai_service import (
     DEFAULT_AZURE_API_VERSION,
+    EOL_PRODUCT_CONTEXT_KEY,
     fetch_running_models,
     generate_portfolio_insights,
     suggest_metadata,
@@ -34,6 +38,48 @@ from app.services.permission_service import PermissionService
 logger = logging.getLogger("turboea.ai")
 
 router = APIRouter(prefix="/ai", tags=["AI Suggestions"])
+
+
+UNREACHABLE_DETAIL = "Could not reach the AI provider. Check that it is running and accessible."
+
+
+def provider_failure_detail(exc: httpx.HTTPError) -> str:
+    """What to tell the user when the AI provider call failed.
+
+    A provider that answered with an error status is reachable — it refused the
+    request — and saying "could not reach" sent admins looking at the network
+    while the provider was naming the problem (#1358). Its own reason is shown,
+    except on an auth refusal: OpenAI's 401 message echoes part of the key, and
+    this message reaches every ``ai.suggest`` holder, not only admins.
+    """
+    if not isinstance(exc, httpx.HTTPStatusError):
+        return UNREACHABLE_DETAIL
+    status = exc.response.status_code
+    if status in (401, 403):
+        return (
+            f"The AI provider rejected the request ({status}): check the API key "
+            "and that it may use the configured model."
+        )
+    if status in (402, 429):
+        return (
+            f"The AI provider rejected the request ({status}): rate limit or quota "
+            "exceeded. Try again later."
+        )
+    return (
+        f"The AI provider rejected the request ({status}): {openai_chat.error_detail(exc.response)}"
+    )
+
+
+def _log_provider_failure(what: str, exc: httpx.HTTPError) -> None:
+    if isinstance(exc, httpx.HTTPStatusError):
+        logger.warning(
+            "%s failed: provider answered %s — %s",
+            what,
+            exc.response.status_code,
+            openai_chat.error_detail(exc.response),
+        )
+    else:
+        logger.warning("%s failed: %s", what, exc)
 
 
 def _get_ai_config(general: dict) -> dict:
@@ -57,7 +103,18 @@ def _get_ai_config(general: dict) -> dict:
 async def _load_ai_config(db: AsyncSession) -> dict:
     result = await db.execute(select(AppSettings).where(AppSettings.id == "default"))
     row = result.scalar_one_or_none()
-    return _get_ai_config((row.general_settings if row else None) or {})
+    general = (row.general_settings if row else None) or {}
+    return _get_ai_config(general)
+
+
+def _require_ai_ready(ai_cfg: dict) -> None:
+    """400 unless suggestions are switched on and the provider is usable."""
+    if not ai_cfg["enabled"]:
+        raise HTTPException(
+            status_code=400,
+            detail="AI suggestions are not enabled. An admin must configure this in Settings.",
+        )
+    _require_usable_provider(ai_cfg)
 
 
 def _require_usable_provider(ai_cfg: dict) -> None:
@@ -75,6 +132,21 @@ def _require_usable_provider(ai_cfg: dict) -> None:
         )
 
 
+async def _suggest_or_502(label: str, **kwargs: Any) -> dict:
+    """Run the suggestion pipeline, mapping provider trouble to a 502."""
+    try:
+        return await suggest_metadata(**kwargs)
+    except httpx.HTTPError as exc:
+        _log_provider_failure(f"AI suggestion for '{label}'", exc)
+        raise HTTPException(status_code=502, detail=provider_failure_detail(exc)) from exc
+    except Exception as exc:
+        logger.exception("AI suggestion failed for '%s'", label)
+        raise HTTPException(
+            status_code=502,
+            detail="AI suggestion failed. Check server logs for details.",
+        ) from exc
+
+
 @router.post("/suggest", response_model=AiSuggestResponse)
 async def suggest(
     body: AiSuggestRequest,
@@ -86,17 +158,8 @@ async def suggest(
     Uses a two-step pipeline: web search → local LLM extraction.
     """
     await PermissionService.require_permission(db, user, "ai.suggest")
-
-    # Load AI configuration
     ai_cfg = await _load_ai_config(db)
-
-    if not ai_cfg["enabled"]:
-        raise HTTPException(
-            status_code=400,
-            detail="AI suggestions are not enabled. An admin must configure this in Settings.",
-        )
-
-    _require_usable_provider(ai_cfg)
+    _require_ai_ready(ai_cfg)
 
     # Validate that the card type is enabled for AI suggestions
     if ai_cfg["enabled_types"] and body.type_key not in ai_cfg["enabled_types"]:
@@ -111,36 +174,61 @@ async def suggest(
     if not card_type:
         raise HTTPException(status_code=404, detail=f"Card type '{body.type_key}' not found")
 
-    # Hand the connection back: the search + LLM call below holds no session.
+    # Hand the connection back: the LLM call below holds no session.
     await db.commit()
 
-    try:
-        result_data = await suggest_metadata(
-            name=body.name,
-            type_key=body.type_key,
-            type_label=card_type.label,
-            subtype=body.subtype,
-            provider_url=ai_cfg["provider_url"],
-            model=ai_cfg["model"],
-            context=body.context,
-            provider_type=ai_cfg["provider_type"],
-            api_key=ai_cfg["api_key"],
-            api_version=ai_cfg["api_version"],
-            fields_schema=card_type.fields_schema or [],
-        )
-    except httpx.HTTPError as exc:
-        logger.warning("AI suggestion failed for '%s': %s", body.name, exc)
-        raise HTTPException(
-            status_code=502,
-            detail="Could not reach the AI provider. Check that it is running and accessible.",
-        ) from exc
-    except Exception as exc:
-        logger.exception("AI suggestion failed for '%s'", body.name)
-        raise HTTPException(
-            status_code=502,
-            detail="AI suggestion failed. Check server logs for details.",
-        ) from exc
+    result_data = await _suggest_or_502(
+        body.name,
+        name=body.name,
+        type_key=body.type_key,
+        type_label=card_type.label,
+        subtype=body.subtype,
+        provider_url=ai_cfg["provider_url"],
+        model=ai_cfg["model"],
+        context=body.context,
+        provider_type=ai_cfg["provider_type"],
+        api_key=ai_cfg["api_key"],
+        api_version=ai_cfg["api_version"],
+        fields_schema=card_type.fields_schema or [],
+    )
 
+    return AiSuggestResponse(**result_data)
+
+
+@router.post("/suggest-eol-product", response_model=AiSuggestResponse)
+async def suggest_eol_product(
+    body: AiEolProductSuggestRequest,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Suggest a description for a custom EOL product (Settings → EOL, or a
+    card's End of Life section).
+
+    The same pipeline as ``/suggest`` with a product-lifecycle search context.
+    A product is not a card type, so the per-type enablement does not apply:
+    the switch and the provider configuration are what gate it.
+    """
+    await PermissionService.require_permission(db, user, "ai.suggest")
+    ai_cfg = await _load_ai_config(db)
+    _require_ai_ready(ai_cfg)
+
+    # Hand the connection back: the LLM call below holds no session.
+    await db.commit()
+
+    result_data = await _suggest_or_502(
+        body.name,
+        name=body.name,
+        type_key=EOL_PRODUCT_CONTEXT_KEY,
+        type_label="Product",
+        subtype=None,
+        provider_url=ai_cfg["provider_url"],
+        model=ai_cfg["model"],
+        context=f"Vendor or release policy page: {body.link}" if body.link else None,
+        provider_type=ai_cfg["provider_type"],
+        api_key=ai_cfg["api_key"],
+        api_version=ai_cfg["api_version"],
+        fields_schema=None,
+    )
     return AiSuggestResponse(**result_data)
 
 
@@ -194,11 +282,8 @@ async def portfolio_insights(
             principles=principles,
         )
     except httpx.HTTPError as exc:
-        logger.warning("AI portfolio insights failed: %s", exc)
-        raise HTTPException(
-            status_code=502,
-            detail="Could not reach the AI provider. Check that it is running and accessible.",
-        ) from exc
+        _log_provider_failure("AI portfolio insights", exc)
+        raise HTTPException(status_code=502, detail=provider_failure_detail(exc)) from exc
     except Exception as exc:
         logger.exception("AI portfolio insights failed")
         raise HTTPException(

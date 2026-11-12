@@ -28,6 +28,8 @@ from app.models.compliance_regulation import ComplianceRegulation
 from app.models.cost_item_type import CostItemType
 from app.models.dashboard import Dashboard
 from app.models.ea_principle import EAPrinciple
+from app.models.eol_custom_cycle import EolCustomCycle
+from app.models.eol_custom_product import EolCustomProduct
 from app.models.license_type import LicenseType
 from app.models.resource_type import ResourceType
 from app.models.role import Role
@@ -64,6 +66,8 @@ SHEET_CARD_TYPE_CATEGORIES = "CardTypeCategories"
 SHEET_DASHBOARDS = "Dashboards"
 SHEET_COST_ITEM_TYPES = "CostItemTypes"
 SHEET_LICENSE_TYPES = "LicenseTypes"
+SHEET_EOL_CUSTOM_PRODUCTS = "EolCustomProducts"
+SHEET_EOL_CUSTOM_CYCLES = "EolCustomCycles"
 SHEET_SETTINGS = "Settings"
 SHEET_USERS = "Users"
 SHEET_CARDS = "Cards"
@@ -240,6 +244,10 @@ CONFIG_SECTIONS: tuple[ConfigSection, ...] = (
         sheet=SHEET_PRINCIPLES,
         model=EAPrinciple,
         natural_key=("title",),
+        # ``reference_number`` is deliberately absent: each instance numbers
+        # its own principles (``P-001``), and with the title as the natural key
+        # the source's numbers could collide with the target's. The applier
+        # numbers the rows it creates.
         columns=(
             "title",
             "description",
@@ -340,5 +348,33 @@ CONFIG_SECTIONS: tuple[ConfigSection, ...] = (
         natural_key=("key",),
         columns=("key", "label", "sort_order", "archived", "translations"),
         json_columns=frozenset({"translations"}),
+    ),
+    # Custom EOL products and their cycles: the organisation's own end-of-life
+    # data for products endoflife.date does not track. Both upsert by natural
+    # key — a cycle points at its product by the product's immutable slug, not
+    # its id — so the product sheet must come first. ``created_by`` is
+    # instance-local and stays behind.
+    ConfigSection(
+        sheet=SHEET_EOL_CUSTOM_PRODUCTS,
+        model=EolCustomProduct,
+        natural_key=("key",),
+        columns=("key", "title", "description", "link", "eol_category", "release_policy_note"),
+        skip_columns=frozenset({"created_by"}),
+    ),
+    ConfigSection(
+        sheet=SHEET_EOL_CUSTOM_CYCLES,
+        model=EolCustomCycle,
+        natural_key=("product_key", "cycle"),
+        columns=(
+            "product_key",
+            "cycle",
+            "release_date",
+            "support",
+            "eol",
+            "latest",
+            "latest_release_date",
+            "sort_order",
+        ),
+        json_columns=frozenset({"support", "eol"}),
     ),
 )

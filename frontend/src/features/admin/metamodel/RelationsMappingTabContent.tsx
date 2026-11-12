@@ -21,7 +21,7 @@ import {
   isRelationshipAllowed,
   type RelationshipType,
 } from "@/features/archimate/taxonomy/relationships";
-import { ARCHIMATE_LAYER_COLORS, ARCHIMATE_TEXT_COLOR } from "@/theme/tokens";
+import { ARCHIMATE_LAYER_COLORS, ARCHIMATE_TEXT_COLOR, MUTED_ICON_COLORS } from "@/theme/tokens";
 import { useTypeLabel } from "@/hooks/useResolveLabel";
 import type { CardType, EnterpriseObject, RelationType } from "@/types";
 
@@ -261,7 +261,7 @@ export default function RelationsMappingTabContent({ types }: RelationsMappingTa
                     <Typography variant="caption" sx={{ fontWeight: 600 }}>
                       {t(`relationships.${rel}`, { ns: "archimate" })}
                     </Typography>
-                    <MaterialSymbol icon="info" size={14} color="#999" />
+                    <MaterialSymbol icon="info" size={14} color={MUTED_ICON_COLORS.hint} />
                   </Box>
                 </Tooltip>
               </TableCell>

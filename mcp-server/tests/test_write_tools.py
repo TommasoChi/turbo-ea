@@ -118,9 +118,7 @@ class TestCreateCardsBulk:
 
     @pytest.mark.asyncio
     async def test_single_row(self, fake_token):
-        patcher, write_call = _patched_post_batch_aware(
-            {"results": [], "created": 0, "failed": 0}
-        )
+        patcher, write_call = _patched_post_batch_aware({"results": [], "created": 0, "failed": 0})
         with patcher:
             await server.create_cards_bulk(
                 cards=[
@@ -209,9 +207,7 @@ class TestUpsertRelationsBulk:
     async def test_upsert_dry_run(self, fake_token):
         patcher, write_call = _patched_post_batch_aware(
             {
-                "results": [
-                    {"row_index": 0, "status": "upserted", "relation_id": "r1"}
-                ],
+                "results": [{"row_index": 0, "status": "upserted", "relation_id": "r1"}],
                 "upserted": 1,
                 "deleted": 0,
                 "failed": 0,
@@ -279,7 +275,10 @@ class TestUpsertRelationsBulk:
                     {
                         "row_index": 0,
                         "status": "failed",
-                        "error": "Source type 'X' does not match relation type's expected source 'Application'",
+                        "error": (
+                            "Source type 'X' does not match relation type's "
+                            "expected source 'Application'"
+                        ),
                     }
                 ],
                 "upserted": 0,
@@ -307,16 +306,14 @@ class TestUpsertRelationsBulk:
 
 _IGNORED_DRY_RUN_MESSAGE = (
     "The Turbo EA backend did not honour dry_run (it is older "
-            "than 2.180.0), so this call WAS PERSISTED. Tell the user; "
-            "upgrade the backend before using diagram previews."
+    "than 2.180.0), so this call WAS PERSISTED. Tell the user; "
+    "upgrade the backend before using diagram previews."
 )
 
 
 class TestCreateDiagram:
     @pytest.mark.asyncio
-    async def test_a_backend_that_ignored_dry_run_is_reported_as_persisted(
-        self, fake_token
-    ):
+    async def test_a_backend_that_ignored_dry_run_is_reported_as_persisted(self, fake_token):
         # A backend older than 2.180.0 drops the unknown `dry_run` flag and
         # creates the diagram: the tool must say so, not call it a preview.
         calls: list = []
@@ -342,9 +339,7 @@ class TestCreateDiagram:
         )
 
     @pytest.mark.asyncio
-    async def test_dry_run_is_verified_by_the_backend_inside_a_dry_run_batch(
-        self, fake_token
-    ):
+    async def test_dry_run_is_verified_by_the_backend_inside_a_dry_run_batch(self, fake_token):
         ref = "11111111-2222-3333-4444-555555555555"
         xml = f'<mxGraphModel><object cardId="{ref}"/></mxGraphModel>'
         calls: list = []
@@ -492,9 +487,7 @@ class TestImportBpmn:
                 '<bpmn:task id="t"/><bpmn:endEvent id="e"/></bpmn:process>'
                 "</bpmn:definitions>"
             )
-            out = await server.import_bpmn(
-                business_process_name="Order to Cash", bpmn_xml=bpmn
-            )
+            out = await server.import_bpmn(business_process_name="Order to Cash", bpmn_xml=bpmn)
         # Only the preview's own dry-run batch — no draft, submit or approve.
         assert posted == PREVIEW_BATCH_PATHS
         assert post_mock.call_args_list[0].kwargs["json"] == {
@@ -541,9 +534,7 @@ class TestImportBpmn:
                 '<userTask id="t"/><endEvent id="e"/></process>'
                 "</definitions>"
             )
-            out = await server.import_bpmn(
-                business_process_name="Order to Cash", bpmn_xml=bpmn
-            )
+            out = await server.import_bpmn(business_process_name="Order to Cash", bpmn_xml=bpmn)
         assert posted == PREVIEW_BATCH_PATHS
         data = _parse(out)
         assert data["diagram_preview"]["flow_nodes_estimated"] == 3
@@ -577,18 +568,14 @@ class TestImportBpmn:
                 '<bpmn:endEvent id="e"/></bpmn:process>'
                 "</bpmn:definitions>"
             )
-            out = await server.import_bpmn(
-                business_process_name="Order to Cash", bpmn_xml=bpmn
-            )
+            out = await server.import_bpmn(business_process_name="Order to Cash", bpmn_xml=bpmn)
         assert posted == PREVIEW_BATCH_PATHS
         data = _parse(out)
         assert data["diagram_preview"]["flow_nodes_estimated"] == 5
         assert data["diagram_preview"]["message_flows_estimated"] == 2
 
     @pytest.mark.asyncio
-    async def test_missing_card_returns_card_not_found_with_next_action(
-        self, fake_token
-    ):
+    async def test_missing_card_returns_card_not_found_with_next_action(self, fake_token):
         """import_bpmn no longer auto-creates a BusinessProcess card —
         forcing the agent into the explicit two-step flow (create card
         with all metadata via create_cards_bulk, then import the BPMN).
@@ -781,9 +768,7 @@ class TestImportBpmn:
         assert "processOwner" in data["warning"]
 
     @pytest.mark.asyncio
-    async def test_a_draft_that_was_not_created_closes_the_batch_as_failed(
-        self, fake_token
-    ):
+    async def test_a_draft_that_was_not_created_closes_the_batch_as_failed(self, fake_token):
         get_mock = AsyncMock(
             return_value={"items": [{"id": "bp-1", "name": "P", "parent_id": None}]}
         )
@@ -826,9 +811,7 @@ class TestGuardrails:
     @pytest.mark.asyncio
     async def test_cards_batch_over_cap_rejected(self, fake_token, monkeypatch):
         monkeypatch.setattr(server, "MCP_MAX_CARDS_PER_CALL", 3)
-        rows = [
-            {"row_index": i, "type": "Application", "name": f"A{i}"} for i in range(4)
-        ]
+        rows = [{"row_index": i, "type": "Application", "name": f"A{i}"} for i in range(4)]
         post_mock = AsyncMock()  # must not be called
         with patch.object(server.TurboEAClient, "post", post_mock):
             out = await server.create_cards_bulk(cards=rows)
@@ -845,12 +828,8 @@ class TestGuardrails:
         # without first running a dry-run (3 rows is below the
         # default 20-row threshold anyway, but be explicit).
         monkeypatch.setattr(server, "MCP_REQUIRE_DRYRUN_FIRST", False)
-        rows = [
-            {"row_index": i, "type": "Application", "name": f"A{i}"} for i in range(3)
-        ]
-        patcher, write_call = _patched_post_batch_aware(
-            {"results": [], "created": 0, "failed": 0}
-        )
+        rows = [{"row_index": i, "type": "Application", "name": f"A{i}"} for i in range(3)]
+        patcher, write_call = _patched_post_batch_aware({"results": [], "created": 0, "failed": 0})
         with patcher:
             await server.create_cards_bulk(cards=rows, dry_run=False)
         path, _ = write_call()
@@ -925,9 +904,7 @@ class TestGuardrails:
         assert _parse(out)["deleted"] == 1
 
     @pytest.mark.asyncio
-    async def test_writes_disabled_blocks_all_write_tools(
-        self, fake_token, monkeypatch
-    ):
+    async def test_writes_disabled_blocks_all_write_tools(self, fake_token, monkeypatch):
         monkeypatch.setattr(server, "MCP_WRITES_ENABLED", False)
         post_mock = AsyncMock()
         put_mock = AsyncMock()
@@ -941,9 +918,7 @@ class TestGuardrails:
                 await server.create_cards_bulk(cards=[]),
                 await server.upsert_relations_bulk(operations=[]),
                 await server.create_diagram(name="X", drawio_xml="<x/>"),
-                await server.import_bpmn(
-                    business_process_name="X", bpmn_xml="<bpmn:definitions/>"
-                ),
+                await server.import_bpmn(business_process_name="X", bpmn_xml="<bpmn:definitions/>"),
             ]:
                 assert _parse(out)["error"] == "writes_disabled"
         post_mock.assert_not_called()
@@ -963,9 +938,7 @@ class TestUnauthenticatedWrites:
     def test_create_cards_bulk_requires_auth(self, monkeypatch):
         monkeypatch.setattr(server, "_stdio_token", None)
         out = asyncio.run(
-            server.create_cards_bulk(
-                cards=[{"row_index": 0, "type": "Application", "name": "X"}]
-            )
+            server.create_cards_bulk(cards=[{"row_index": 0, "type": "Application", "name": "X"}])
         )
         assert "Not authenticated" in out
 
@@ -1003,4 +976,536 @@ class TestUnauthenticatedWrites:
                 bpmn_xml="<bpmn:definitions/>",
             )
         )
+        assert "Not authenticated" in out
+
+
+# ── save_inventory_view ────────────────────────────────────────────────────
+
+
+_VIEW_QUERY = {
+    "type": "Organization",
+    "related": [
+        {
+            "relation": "relOrgToApp",
+            "type": "Application",
+            "where": {"lifecycle_phase": ["active"]},
+        }
+    ],
+}
+_VIEW_QUERY_JSON = json.dumps(_VIEW_QUERY, separators=(",", ":"))
+_STACK_QUERY = {
+    "any_of": [
+        {
+            "all_of": [
+                {"type": "Application", "where": {"lifecycle_phase": ["active"]}},
+                {
+                    "type": "Application",
+                    "related": [{"relation": "relInitiativeToApp", "type": "Initiative"}],
+                },
+            ]
+        },
+        _VIEW_QUERY,
+    ]
+}
+
+
+class _ViewBackend:
+    """Records every call, in order, as ``(method, path, body_or_params)``."""
+
+    def __init__(
+        self,
+        cards: dict | None = None,
+        error: Exception | None = None,
+        views: list | None = None,
+        patch_error: Exception | None = None,
+    ) -> None:
+        self.calls: list[tuple[str, str, dict | None]] = []
+        self.cards = cards or {"items": [{"name": "Sales"}, {"name": "Ops"}], "total": 12}
+        self.error = error
+        # What ``GET /bookmarks`` lists: by default an editable ``v-7``.
+        self.views = [{"id": "v-7", "can_edit": True}] if views is None else views
+        self.patch_error = patch_error
+
+    async def post(self, path, json=None):
+        self.calls.append(("post", path, json))
+        if path.endswith("/commit"):
+            return {"id": "B-1", "committed_at": "now"}
+        if path.startswith("/mutation-batches"):
+            return {"id": "B-1", "dry_run": (json or {}).get("dry_run")}
+        if self.error is not None:
+            raise self.error
+        return {"id": "view-9", "name": json["name"]}
+
+    async def get(self, path, params=None):
+        self.calls.append(("get", path, params))
+        if path == "/bookmarks":
+            return self.views
+        if self.error is not None:
+            raise self.error
+        return self.cards
+
+    async def patch(self, path, json=None):
+        self.calls.append(("patch", path, json))
+        if self.patch_error is not None:
+            raise self.patch_error
+        return {"id": path.rsplit("/", 1)[-1]}
+
+    def patched(self):
+        return (
+            patch.object(server.TurboEAClient, "post", AsyncMock(side_effect=self.post)),
+            patch.object(server.TurboEAClient, "get", AsyncMock(side_effect=self.get)),
+            patch.object(server.TurboEAClient, "patch", AsyncMock(side_effect=self.patch)),
+        )
+
+    async def run(self, **kwargs):
+        p1, p2, p3 = self.patched()
+        with p1, p2, p3:
+            return _parse(await server.save_inventory_view(**kwargs))
+
+
+def _http_error(status: int, detail) -> Exception:
+    import httpx
+
+    request = httpx.Request("GET", "http://backend/api/v1/cards")
+    response = httpx.Response(status, json={"detail": detail}, request=request)
+    return httpx.HTTPStatusError(f"{status} error", request=request, response=response)
+
+
+def _http_400(detail) -> Exception:
+    return _http_error(400, detail)
+
+
+_VIEW_HINT = (
+    "List the views with list_inventory_views; only one whose can_edit is true "
+    "can be changed. Leave view_id empty to save a new view."
+)
+
+
+class TestSaveInventoryView:
+    @pytest.mark.asyncio
+    async def test_preview_runs_the_query_inside_a_dry_run_batch(self, fake_token):
+        backend = _ViewBackend()
+        out = await backend.run(name="Orgs", query=_VIEW_QUERY)
+        assert backend.calls == [
+            (
+                "post",
+                "/mutation-batches?row_count=1",
+                {"tool_name": "save_inventory_view", "dry_run": True},
+            ),
+            ("get", "/cards", {"query": _VIEW_QUERY_JSON, "page_size": 5}),
+            (
+                "post",
+                "/mutation-batches/B-1/commit",
+                {"summary": {"status": "previewed", "view_id": None, "matches": 12}},
+            ),
+        ]
+        assert not any(path.startswith("/bookmarks") for _, path, _ in backend.calls)
+        assert out == {
+            "dry_run": True,
+            "would_create": {
+                "name": "Orgs",
+                "card_type": "Organization",
+                "filters": {"types": ["Organization"]},
+                "query": _VIEW_QUERY,
+                "visibility": "private",
+            },
+            "matches": 12,
+            "sample": ["Sales", "Ops"],
+            "note": (
+                "Preview built by the MCP server: the query was validated by running it "
+                "(GET /cards?query=); nothing was saved. Call again with dry_run=False "
+                "to save the view."
+            ),
+            "batch_id": "B-1",
+        }
+
+    @pytest.mark.asyncio
+    async def test_preview_of_an_update_says_would_update(self, fake_token):
+        backend = _ViewBackend()
+        out = await backend.run(name="Orgs", query=_VIEW_QUERY, view_id="v-7")
+        assert "would_create" not in out
+        assert out["would_update"]["name"] == "Orgs"
+        # The view is checked first, then the query is run; nothing written.
+        assert backend.calls[1:] == [
+            ("get", "/bookmarks", None),
+            ("get", "/cards", {"query": _VIEW_QUERY_JSON, "page_size": 5}),
+            (
+                "post",
+                "/mutation-batches/B-1/commit",
+                {"summary": {"status": "previewed", "view_id": "v-7", "matches": 12}},
+            ),
+        ]
+
+    @pytest.mark.asyncio
+    async def test_preview_accepts_a_view_the_caller_owns(self, fake_token):
+        backend = _ViewBackend(views=[{"id": "v-7", "can_edit": False, "is_owner": True}])
+        out = await backend.run(name="Orgs", query=_VIEW_QUERY, view_id="v-7")
+        assert out["matches"] == 12
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("views", "code"),
+        [
+            ([{"id": "v-1", "can_edit": True}], "view_not_found"),
+            ([], "view_not_found"),
+            ([{"id": "v-7", "can_edit": False, "is_owner": False}], "view_not_editable"),
+        ],
+    )
+    async def test_preview_refuses_a_view_the_caller_cannot_change(self, fake_token, views, code):
+        backend = _ViewBackend(views=views)
+        out = await backend.run(name="Orgs", query=_VIEW_QUERY, view_id="v-7")
+        assert out == {"error": code, "hint": _VIEW_HINT, "batch_id": "B-1"}
+        # The query is never run, and the batch records the refusal.
+        assert backend.calls[1:] == [
+            ("get", "/bookmarks", None),
+            (
+                "post",
+                "/mutation-batches/B-1/commit",
+                {"summary": {"status": "rejected", "error": code}},
+            ),
+        ]
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("status", "code"), [(403, "view_not_editable"), (404, "view_not_found")]
+    )
+    async def test_commit_maps_a_refused_update(self, fake_token, status, code):
+        backend = _ViewBackend(patch_error=_http_error(status, "nope"))
+        out = await backend.run(name="Orgs", query=_VIEW_QUERY, view_id="v-7", dry_run=False)
+        assert out == {"error": code, "hint": _VIEW_HINT, "batch_id": "B-1"}
+        assert backend.calls[-1] == (
+            "post",
+            "/mutation-batches/B-1/commit",
+            {"summary": {"status": "rejected", "error": code}},
+        )
+
+    @pytest.mark.asyncio
+    async def test_commit_refused_for_visibility_names_the_argument(self, fake_token):
+        backend = _ViewBackend(patch_error=_http_error(403, "Only the owner can change visibility"))
+        out = await backend.run(
+            name="Orgs", query=_VIEW_QUERY, view_id="v-7", visibility="public", dry_run=False
+        )
+        assert out == {
+            "error": "visibility_not_allowed",
+            "hint": server._VISIBILITY_HINT,
+            "batch_id": "B-1",
+        }
+        assert backend.calls[-1] == (
+            "post",
+            "/mutation-batches/B-1/commit",
+            {"summary": {"status": "rejected", "error": "visibility_not_allowed"}},
+        )
+
+    @pytest.mark.asyncio
+    async def test_commit_404_with_visibility_is_still_view_not_found(self, fake_token):
+        backend = _ViewBackend(patch_error=_http_error(404, "gone"))
+        out = await backend.run(
+            name="Orgs", query=_VIEW_QUERY, view_id="v-7", visibility="public", dry_run=False
+        )
+        assert out == {"error": "view_not_found", "hint": _VIEW_HINT, "batch_id": "B-1"}
+
+    @pytest.mark.parametrize(
+        ("status", "code"), [(403, "view_not_editable"), (404, "view_not_found")]
+    )
+    def test_view_rejection_without_visibility_names_the_view(self, status, code):
+        # No ``visibility`` keyword: the default must mean "not asked for".
+        assert server._view_rejection(_http_error(status, "nope")) == {
+            "error": code,
+            "hint": server._VIEW_HINT,
+        }
+
+    def test_view_rejection_ignores_other_statuses(self):
+        assert server._view_rejection(_http_error(500, "boom")) is None
+
+    @pytest.mark.parametrize("views", [None, {"id": "v-1"}, "v-1"])
+    def test_view_problem_on_a_non_list_answer_is_view_not_found(self, views):
+        # Only a list is iterated: None would raise, a dict yields its keys.
+        assert server._view_problem(views, "v-1") == "view_not_found"
+
+    @pytest.mark.asyncio
+    async def test_a_refused_create_is_not_a_view_error(self, fake_token):
+        import httpx
+
+        backend = _ViewBackend(error=_http_error(403, "Forbidden"))
+        with pytest.raises(httpx.HTTPStatusError):
+            await backend.run(name="Orgs", query=_VIEW_QUERY, dry_run=False)
+
+    @pytest.mark.asyncio
+    async def test_commit_with_another_server_error_raises(self, fake_token):
+        import httpx
+
+        backend = _ViewBackend(patch_error=_http_error(500, "boom"))
+        with pytest.raises(httpx.HTTPStatusError):
+            await backend.run(name="Orgs", query=_VIEW_QUERY, view_id="v-7", dry_run=False)
+
+    @pytest.mark.asyncio
+    async def test_preview_of_a_rejected_query_returns_the_code(self, fake_token):
+        backend = _ViewBackend(error=_http_400("unknown_card_type"))
+        out = await backend.run(name="Orgs", query=_VIEW_QUERY)
+        assert out == {
+            "error": "unknown_card_type",
+            "hint": "Check the keys with list_card_types and get_relation_types.",
+            "batch_id": "B-1",
+        }
+        assert backend.calls[-1] == (
+            "post",
+            "/mutation-batches/B-1/commit",
+            {"summary": {"status": "rejected", "error": "unknown_card_type"}},
+        )
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("view_id", ["", "v-7"])
+    async def test_saving_an_eol_view_without_the_permission_is_explained(
+        self, fake_token, view_id
+    ):
+        """The backend refuses the save itself (``POST`` / ``PATCH
+        /bookmarks``) with 403 ``eol_view_required``: answered with the same
+        hint as a refused preview, not raised."""
+        refusal = _http_error(403, "eol_view_required")
+        backend = _ViewBackend(error=refusal, patch_error=refusal)
+        out = await backend.run(name="Orgs", query=_VIEW_QUERY, view_id=view_id, dry_run=False)
+        assert out == {
+            "error": "eol_view_required",
+            "hint": (
+                "This query filters on end-of-life status (where.eol_status), which needs "
+                "the EOL view permission (eol.view). Remove the eol_status condition, or "
+                "ask an administrator for that permission."
+            ),
+            "batch_id": "B-1",
+        }
+        assert backend.calls[-1] == (
+            "post",
+            "/mutation-batches/B-1/commit",
+            {"summary": {"status": "rejected", "error": "eol_view_required"}},
+        )
+
+    def test_the_eol_refusal_reads_the_same_in_the_docstring_and_the_manual(self):
+        """``save_inventory_view`` and ``docs/admin/mcp.md`` state the same
+        rule in the same words."""
+        import pathlib
+        import re
+
+        sentence = "saving, previewing and opening a view that holds one are refused without it"
+        doc = re.sub(r"\s+", " ", server.save_inventory_view.__doc__ or "")
+        manual = pathlib.Path(__file__).resolve().parents[2] / "docs" / "admin" / "mcp.md"
+        assert f"needs the EOL view permission: {sentence} (``eol_view_required``)" in doc
+        assert f"needs the EOL view permission: {sentence} (`eol_view_required`)" in (
+            manual.read_text(encoding="utf-8")
+        )
+
+    def test_matched_column_keys_are_documented_in_the_docstring_and_the_manual(self):
+        """``save_inventory_view`` and ``docs/admin/mcp.md`` both explain the
+        ``via:<line>:<hop path>`` column keys, say no tool reads them, and say
+        a ``query`` update without ``columns`` keeps the stored keys."""
+        import pathlib
+        import re
+
+        doc = re.sub(r"\s+", " ", server.save_inventory_view.__doc__ or "")
+        manual = pathlib.Path(__file__).resolve().parents[2] / "docs" / "admin" / "mcp.md"
+        text = manual.read_text(encoding="utf-8")
+        assert "A key ``via:<line>:<hop path>`` adds a column" in doc
+        assert "(``via:0:0`` the first hop's cards, ``via:0:0.1`` the second hop" in doc
+        assert "Matches are shown in the web UI only; no tool reads them yet." in doc
+        assert "**matched columns**, `via:<line>:<hop path>`" in text
+        assert "`via:0:0` is the first hop of the first line" in text
+        assert "no MCP tool reads them yet" in text
+        keeps = (
+            "Updating a view's {0}query{0} without sending {0}columns{0} keeps its stored "
+            "{0}via:{0} keys as they are, so send {0}columns{0} when the steps change."
+        )
+        assert keeps.format("``") in doc
+        assert keeps.format("`") in text
+
+    @pytest.mark.asyncio
+    async def test_commit_posts_the_exact_payload(self, fake_token, monkeypatch):
+        monkeypatch.setattr(server, "TURBO_EA_PUBLIC_URL", "https://ea.example.com/")
+        backend = _ViewBackend()
+        out = await backend.run(
+            name="Orgs",
+            query=_VIEW_QUERY,
+            visibility="public",
+            columns=["name", "subtype"],
+            dry_run=False,
+        )
+        assert backend.calls == [
+            (
+                "post",
+                "/mutation-batches?row_count=1",
+                {"tool_name": "save_inventory_view", "dry_run": False},
+            ),
+            (
+                "post",
+                "/bookmarks",
+                {
+                    "name": "Orgs",
+                    "card_type": "Organization",
+                    "filters": {"types": ["Organization"]},
+                    "query": _VIEW_QUERY,
+                    "visibility": "public",
+                    "columns": ["name", "subtype"],
+                },
+            ),
+            (
+                "post",
+                "/mutation-batches/B-1/commit",
+                {"summary": {"view_id": "view-9", "updated": False}},
+            ),
+        ]
+        assert out == {
+            "view_id": "view-9",
+            "batch_id": "B-1",
+            "updated": False,
+            "inventory_url": "https://ea.example.com/inventory?view=view-9",
+        }
+
+    @pytest.mark.asyncio
+    async def test_commit_without_columns_omits_them(self, fake_token):
+        backend = _ViewBackend()
+        await backend.run(name="Orgs", query=_VIEW_QUERY, dry_run=False)
+        body = backend.calls[1][2]
+        assert "columns" not in body
+        assert body["visibility"] == "private"
+
+    @pytest.mark.asyncio
+    async def test_commit_with_view_id_patches_that_view(self, fake_token):
+        backend = _ViewBackend()
+        out = await backend.run(name="Orgs", query=_VIEW_QUERY, view_id="v-7", dry_run=False)
+        # Only name + query (and the card type they imply): no filters, so the
+        # owner's stored grouping survives; no visibility, so sharing is kept.
+        assert backend.calls[1] == (
+            "patch",
+            "/bookmarks/v-7",
+            {"name": "Orgs", "card_type": "Organization", "query": _VIEW_QUERY},
+        )
+        assert not any(c[:2] == ("post", "/bookmarks") for c in backend.calls)
+        assert out["updated"] is True
+        assert out["view_id"] == "v-7"
+        assert out["inventory_url"].endswith("/inventory?view=v-7")
+        assert backend.calls[-1][2] == {"summary": {"view_id": "v-7", "updated": True}}
+
+    @pytest.mark.asyncio
+    async def test_update_includes_visibility_and_columns_only_when_passed(self, fake_token):
+        backend = _ViewBackend()
+        await backend.run(
+            name="Orgs",
+            query=_VIEW_QUERY,
+            view_id="v-7",
+            visibility="public",
+            columns=["name"],
+            dry_run=False,
+        )
+        assert backend.calls[1] == (
+            "patch",
+            "/bookmarks/v-7",
+            {
+                "name": "Orgs",
+                "card_type": "Organization",
+                "query": _VIEW_QUERY,
+                "visibility": "public",
+                "columns": ["name"],
+            },
+        )
+
+    @pytest.mark.asyncio
+    async def test_update_preview_shows_the_patch_body(self, fake_token):
+        backend = _ViewBackend()
+        out = await backend.run(name="Orgs", query=_VIEW_QUERY, view_id="v-7")
+        assert out["would_update"] == {
+            "name": "Orgs",
+            "card_type": "Organization",
+            "query": _VIEW_QUERY,
+        }
+
+    @pytest.mark.asyncio
+    async def test_commit_rejected_by_the_backend_returns_the_code(self, fake_token):
+        backend = _ViewBackend(error=_http_400({"code": "query_type_mismatch"}))
+        out = await backend.run(name="Orgs", query=_VIEW_QUERY, dry_run=False)
+        assert out["error"] == "query_type_mismatch"
+        assert out["batch_id"] == "B-1"
+
+    @pytest.mark.asyncio
+    async def test_writes_disabled(self, fake_token, monkeypatch):
+        monkeypatch.setattr(server, "MCP_WRITES_ENABLED", False)
+        backend = _ViewBackend()
+        out = await backend.run(name="Orgs", query=_VIEW_QUERY, dry_run=False)
+        assert out["error"] == "writes_disabled"
+        assert backend.calls == []
+
+    @pytest.mark.asyncio
+    async def test_bad_visibility_is_refused_before_any_call(self, fake_token):
+        backend = _ViewBackend()
+        out = await backend.run(name="Orgs", query=_VIEW_QUERY, visibility="everyone")
+        assert out["error"] == "invalid_visibility"
+        assert out["received"] == "everyone"
+        assert backend.calls == []
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("query", [{}, {"type": 3}, {"related": []}])
+    async def test_a_query_without_a_string_type_is_refused(self, fake_token, query):
+        backend = _ViewBackend()
+        out = await backend.run(name="Orgs", query=query)
+        assert out["error"] == "invalid_query"
+        assert backend.calls == []
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "query", [[], "x", {"all_of": "x"}, {"any_of": {"type": "A"}}, {"one_of": []}]
+    )
+    async def test_a_malformed_stack_is_refused(self, fake_token, query):
+        backend = _ViewBackend()
+        out = await backend.run(name="Orgs", query=query)
+        assert out["error"] == "invalid_query"
+        assert backend.calls == []
+
+    @pytest.mark.asyncio
+    async def test_preview_of_a_stack_needs_no_type(self, fake_token):
+        backend = _ViewBackend()
+        out = await backend.run(name="Mixed", query=_STACK_QUERY)
+        assert backend.calls[1] == (
+            "get",
+            "/cards",
+            {"query": json.dumps(_STACK_QUERY, separators=(",", ":")), "page_size": 5},
+        )
+        assert out["would_create"] == {
+            "name": "Mixed",
+            "query": _STACK_QUERY,
+            "visibility": "private",
+        }
+        assert out["matches"] == 12
+
+    @pytest.mark.asyncio
+    async def test_commit_of_a_stack_sends_no_type_fields(self, fake_token):
+        backend = _ViewBackend()
+        await backend.run(name="Mixed", query=_STACK_QUERY, columns=["name"], dry_run=False)
+        assert backend.calls[1] == (
+            "post",
+            "/bookmarks",
+            {
+                "name": "Mixed",
+                "query": _STACK_QUERY,
+                "visibility": "private",
+                "columns": ["name"],
+            },
+        )
+
+    @pytest.mark.asyncio
+    async def test_update_to_an_all_of_sends_name_and_query(self, fake_token):
+        backend = _ViewBackend()
+        query = {"all_of": [_VIEW_QUERY, {"type": "Organization"}]}
+        await backend.run(name="Orgs", query=query, view_id="v-7", dry_run=False)
+        assert backend.calls[1] == ("patch", "/bookmarks/v-7", {"name": "Orgs", "query": query})
+
+    @pytest.mark.asyncio
+    async def test_a_rejected_stack_returns_the_code(self, fake_token):
+        backend = _ViewBackend(error=_http_400("any_of_needs_two"))
+        out = await backend.run(name="Mixed", query={"any_of": [_VIEW_QUERY]})
+        assert out == {
+            "error": "any_of_needs_two",
+            "hint": "Check the keys with list_card_types and get_relation_types.",
+            "batch_id": "B-1",
+        }
+
+    def test_requires_auth(self, monkeypatch):
+        monkeypatch.setattr(server, "_stdio_token", None)
+        out = asyncio.run(server.save_inventory_view(name="V", query={"type": "Application"}))
         assert "Not authenticated" in out

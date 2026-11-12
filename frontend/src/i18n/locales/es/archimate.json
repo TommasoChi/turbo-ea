@@ -181,7 +181,6 @@
     "intro": "Prueba Architecture Studio. Los diagramas creados aquí se guardan como archivos ArchiMate Exchange y todavía no aparecen en el menú Diagramas.",
     "newDiagram": "Nuevo diagrama ArchiMate",
     "name": "Nombre",
-    "create": "Crear",
     "empty": "Todavía no hay diagramas ArchiMate.",
     "open": "Abrir",
     "delete": "Eliminar",

@@ -41,7 +41,7 @@ import {
   memberShade,
 } from "./costColors";
 import CostLegend from "./CostLegend";
-import { CHART_OTHER, COST_UNSPECIFIED } from "@/theme/tokens";
+import { CHART_OTHER, COST_UNSPECIFIED, EOL_WARNING_COLOR, RAG_COLORS, STATUS_COLORS } from "@/theme/tokens";
 import MetricCard from "./MetricCard";
 import FullscreenPanel from "./FullscreenPanel";
 import { useMetamodel } from "@/hooks/useMetamodel";
@@ -1087,7 +1087,7 @@ export default function CostReport() {
       <ReportShell
         title={t("cost.title")}
         icon="payments"
-        iconColor="#2e7d32"
+        iconColor={RAG_COLORS.green}
         view={view}
         onViewChange={setView}
       >
@@ -1101,7 +1101,7 @@ export default function CostReport() {
             gap: 1,
           }}
         >
-          <MaterialSymbol icon="lock" size={32} color="#9e9e9e" />
+          <MaterialSymbol icon="lock" size={32} color={STATUS_COLORS.neutral} />
           <Typography variant="h6" color="text.secondary">
             {t("cost.permissionDeniedTitle")}
           </Typography>
@@ -1300,7 +1300,7 @@ export default function CostReport() {
     <ReportShell<CostView>
       title={t("cost.title")}
       icon="payments"
-      iconColor="#2e7d32"
+      iconColor={RAG_COLORS.green}
       view={view}
       onViewChange={setView}
       chartViewLabel={t("cost.treemapChartView")}
@@ -1464,8 +1464,8 @@ export default function CostReport() {
           label={t("cost.totalCost")}
           value={fmt.format(summaryTotal)}
           icon="payments"
-          iconColor="#2e7d32"
-          color="#2e7d32"
+          iconColor={RAG_COLORS.green}
+          color={RAG_COLORS.green}
         />
         <MetricCard
           label={t("cost.items")}
@@ -1483,7 +1483,7 @@ export default function CostReport() {
             value={topDriver.name}
             subtitle={`${fmt.format(topDriver.cost)} (${summaryTotal > 0 ? ((topDriver.cost / summaryTotal) * 100).toFixed(0) : 0}%)`}
             icon="trending_up"
-            iconColor="#e65100"
+            iconColor={EOL_WARNING_COLOR}
           />
         )}
       </Box>

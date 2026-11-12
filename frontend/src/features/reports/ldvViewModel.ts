@@ -8,7 +8,16 @@
  */
 
 import type { CSSProperties } from "react";
-import { STATUS_COLORS, TIMELINE_COLORS } from "@/theme/tokens";
+import { alpha } from "@mui/material/styles";
+import {
+  LIFECYCLE_PHASE_COLORS,
+  SCREEN_INK,
+  STATUS_COLORS,
+  TIMELINE_COLORS,
+  brand,
+  surface,
+} from "@/theme/tokens";
+import { MAX_CARD_LINES } from "@/lib/cardDisplayFields";
 import type { ObstacleBounds } from "./ldvObstacles";
 import type { LdvBackgroundStyle } from "./ldvDisplaySettings";
 import type { TimelineChange } from "./timelineRange";
@@ -18,7 +27,7 @@ import type { TimelineChange } from "./timelineRange";
 /* ------------------------------------------------------------------ */
 
 /** The grey a card falls back to when its type colour is not `#rrggbb`. */
-export const FALLBACK_TYPE_COLOR = "#9e9e9e";
+export const FALLBACK_TYPE_COLOR = STATUS_COLORS.neutral;
 
 /** A type colour the tint maths can use: `#rrggbb`, else neutral grey. */
 export function safeTypeColor(color: string): string {
@@ -30,21 +39,11 @@ export function safeTypeColor(color: string): string {
  * mode, 22 % in dark, and a faint 6 % on a proposed (not yet real) card.
  */
 export function cardTint(color: string, isDark: boolean, proposed: boolean): string {
-  const r = parseInt(color.slice(1, 3), 16);
-  const g = parseInt(color.slice(3, 5), 16);
-  const b = parseInt(color.slice(5, 7), 16);
-  const alpha = proposed ? 0.06 : isDark ? 0.22 : 0.12;
-  return `rgba(${r},${g},${b},${alpha})`;
+  return alpha(color, proposed ? 0.06 : isDark ? 0.22 : 0.12);
 }
 
-/** Lifecycle-phase → dot colour (hex, theme-independent). Mirrors LifecycleBadge. */
-export const PHASE_DOT: Record<string, string> = {
-  plan: "#9e9e9e",
-  phaseIn: "#1976d2",
-  active: "#2e7d32",
-  phaseOut: "#ed6c02",
-  endOfLife: "#d32f2f",
-};
+/** Lifecycle-phase → dot colour (hex, theme-independent), the app-wide phase palette. */
+export const PHASE_DOT: Record<string, string> = LIFECYCLE_PHASE_COLORS;
 
 /** The lifecycle dot's colour, or null when the card shows no phase. */
 export function phaseDotColor(phase: string | null): string | null {
@@ -116,9 +115,27 @@ export function typeIconPlacement(
   return { right: hasDot ? TYPE_ICON_RIGHT_BESIDE_DOT : DOT_INSET };
 }
 
-/** Lines the card's name may wrap to: two, or one when two extra fields are shown. */
-export function nameLineClamp(extraLineCount: number): number {
-  return extraLineCount > 1 ? 1 : 2;
+/**
+ * How a card's caption lines are shared out under its name.
+ *
+ * The type line is the first pick in the Show on card menu, so it takes the
+ * first of the card's `MAX_CARD_LINES` and the extra lines (subtype, alias,
+ * attribute fields, in that order) take what is left. It used to be drawn only
+ * when there was no extra line at all, so ticking Alias beside Card type made
+ * the type disappear (#1377).
+ */
+export function cardLineBudget(
+  showType: boolean,
+  extraLineCount: number,
+): { extraShown: number; total: number } {
+  const typeLines = showType ? 1 : 0;
+  const extraShown = Math.min(extraLineCount, MAX_CARD_LINES - typeLines);
+  return { extraShown, total: extraShown + typeLines };
+}
+
+/** Lines the card's name may wrap to: two, or one when two caption lines are shown. */
+export function nameLineClamp(captionLineCount: number): number {
+  return captionLineCount > 1 ? 1 : 2;
 }
 
 /** A mirrored handle (`ts-N`, `bt-N`) shares its visibility with its base (`t-N`, `b-N`). */
@@ -194,34 +211,31 @@ export function edgeColors(
   severed: boolean,
   isDark: boolean,
 ): { stroke: string; label: string; labelBorder: string; labelBackground: string } {
-  const lit = isDark ? "#4fc3f7" : "#1976d2";
-  const base = severed ? STATUS_COLORS.error : isDark ? "#aaa" : "#777";
+  const lit = isDark ? brand.primaryLight : brand.primary;
+  const base = severed ? STATUS_COLORS.error : isDark ? STATUS_COLORS.neutral : SCREEN_INK.secondary;
   const hover = severed ? STATUS_COLORS.error : lit;
   return {
     stroke: active ? hover : base,
-    label: active ? lit : isDark ? "#aaa" : "#666",
-    labelBorder: active ? lit : isDark ? "#444" : "#ccc",
-    labelBackground: isDark ? "#121212" : "#ffffff",
+    label: active ? lit : isDark ? STATUS_COLORS.neutral : SCREEN_INK.secondary,
+    labelBorder: active ? lit : isDark ? SCREEN_INK.ruleDark : SCREEN_INK.rule,
+    labelBackground: isDark ? surface.dark.default : SCREEN_INK.paper,
   };
 }
 
-/** The longest verb a line label shows before it is cut with an ellipsis. */
-export const MAX_EDGE_LABEL_CHARS = 24;
-
-export function truncateEdgeLabel(label: string): string {
-  return label.length > MAX_EDGE_LABEL_CHARS
-    ? label.slice(0, MAX_EDGE_LABEL_CHARS - 1) + "…"
-    : label;
-}
-
-/** The label box's estimated width: the verb, the flow arrow, and the count pill. */
-export function edgeLabelWidth(displayLabel: string, hasFlow: boolean, countText: string): number {
+/** The label box's estimated width: its longest line, the flow arrow, and the count pill. */
+export function edgeLabelWidth(lines: readonly string[], hasFlow: boolean, countText: string): number {
+  const longest = lines.reduce((m, l) => Math.max(m, l.length), 0);
   return (
-    displayLabel.length * 6.5 +
+    longest * 6.5 +
     16 +
     (hasFlow ? 17 : 0) +
     (countText ? countText.length * 7 + 14 : 0)
   );
+}
+
+/** The label box's height: one 14 px line inside 6 px of padding and border, plus 14 px a line after. */
+export function edgeLabelHeight(lines: readonly string[]): number {
+  return 20 + 14 * Math.max(0, lines.length - 1);
 }
 
 /**

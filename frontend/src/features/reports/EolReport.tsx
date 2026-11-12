@@ -18,6 +18,13 @@ import TextField from "@mui/material/TextField";
 import MenuItem from "@mui/material/MenuItem";
 import Alert from "@mui/material/Alert";
 import MaterialSymbol from "@/components/MaterialSymbol";
+import {
+  EOL_COVERAGE_COLORS,
+  LIFECYCLE_PHASE_COLORS,
+  RAG_COLORS,
+  STATUS_COLORS,
+  brand,
+} from "@/theme/tokens";
 import ReportShell from "./ReportShell";
 import SaveReportDialog from "./SaveReportDialog";
 import ReportLegend from "./ReportLegend";
@@ -28,6 +35,7 @@ import { useTypeLabel } from "@/hooks/useResolveLabel";
 import CardDetailSidePanel from "@/components/CardDetailSidePanel";
 import { api } from "@/api/client";
 import { toLocalDate } from "@/lib/dates";
+import { eolProductLabel } from "@/lib/eolCustom";
 import { useDateFormat } from "@/hooks/useDateFormat";
 
 /* ------------------------------------------------------------------ */
@@ -58,10 +66,13 @@ interface EolItem {
   type: string;
   subtype?: string;
   eol_product: string | null;
+  /** A custom product\'s title; null for endoflife.date links. */
+  eol_product_title?: string | null;
   eol_cycle: string | null;
   status: "eol" | "approaching" | "supported" | "unknown" | "missing";
   /** `"none"` — nothing recorded at all, neither a link nor a manual date. */
-  source: "api" | "manual" | "none";
+  /** `"custom"` — linked to one of the organisation's custom EOL products. */
+  source: "api" | "custom" | "manual" | "none";
   cycle_data: CycleData | null;
   lifecycle?: Record<string, string>;
   affected_apps: AffectedApp[];
@@ -86,14 +97,14 @@ interface EolReportData {
 /* ------------------------------------------------------------------ */
 
 const STATUS_CONFIG = {
-  eol: { labelKey: "eol.statusEol", color: "#d32f2f", icon: "cancel" },
-  approaching: { labelKey: "eol.statusApproaching", color: "#ed6c02", icon: "warning" },
-  supported: { labelKey: "eol.statusSupported", color: "#2e7d32", icon: "check_circle" },
-  unknown: { labelKey: "eol.statusUnknown", color: "#9e9e9e", icon: "help" },
+  eol: { labelKey: "eol.statusEol", color: LIFECYCLE_PHASE_COLORS.endOfLife, icon: "cancel" },
+  approaching: { labelKey: "eol.statusApproaching", color: LIFECYCLE_PHASE_COLORS.phaseOut, icon: "warning" },
+  supported: { labelKey: "eol.statusSupported", color: LIFECYCLE_PHASE_COLORS.active, icon: "check_circle" },
+  unknown: { labelKey: "eol.statusUnknown", color: STATUS_COLORS.neutral, icon: "help" },
   // Not a classification but the absence of one: nobody has recorded an end
   // of life for this card. Grey rather than red — it is a gap in the
   // inventory, not a risk anyone has established.
-  missing: { labelKey: "eol.statusMissing", color: "#9e9e9e", icon: "event_busy" },
+  missing: { labelKey: "eol.statusMissing", color: STATUS_COLORS.neutral, icon: "event_busy" },
 };
 
 /* ------------------------------------------------------------------ */
@@ -126,8 +137,14 @@ function fmtDate(
 }
 
 /** "product cycle", or as much of it as is known ("" for a card with no EOL link). */
-function productName(item: { eol_product: string | null; eol_cycle: string | null }): string {
-  return [item.eol_product, item.eol_cycle].filter(Boolean).join(" ");
+function productName(item: {
+  eol_product: string | null;
+  eol_product_title?: string | null;
+  eol_cycle: string | null;
+}): string {
+  return [item.eol_product && eolProductLabel(item.eol_product, item.eol_product_title), item.eol_cycle]
+    .filter(Boolean)
+    .join(" ");
 }
 
 function daysUntil(dateStr: string | undefined | null): number | null {
@@ -145,19 +162,20 @@ function countdownLabel(days: number | null, t: TFunction): string {
   return t("eol.countdownYears", { count: Number((days / 365).toFixed(1)) });
 }
 
-/** Source badge for manual vs API items */
-function SourceBadge({ source }: { source: "api" | "manual" | "none" }) {
+/** Source badge for manual and custom-product items (API items carry none). */
+function SourceBadge({ source }: { source: "api" | "custom" | "manual" | "none" }) {
   const { t } = useTranslation(["reports"]);
   const theme = useTheme();
   // A missing row's status chip already says everything there is to say
   // about where its data came from: nowhere.
-  if (source !== "manual") return null;
+  if (source !== "manual" && source !== "custom") return null;
+  const custom = source === "custom";
   return (
-    <Tooltip title={t("eol.manualTooltip")}>
+    <Tooltip title={t(custom ? "eol.customTooltip" : "eol.manualTooltip")}>
       <Chip
         size="small"
-        label={t("eol.manual")}
-        icon={<MaterialSymbol icon="edit_note" size={14} />}
+        label={t(custom ? "eol.custom" : "eol.manual")}
+        icon={<MaterialSymbol icon={custom ? "inventory_2" : "edit_note"} size={14} />}
         sx={{
           height: 18,
           fontSize: "0.6rem",
@@ -222,6 +240,7 @@ function KpiCard({
 /* ------------------------------------------------------------------ */
 
 export default function EolReport() {
+  const theme = useTheme();
   const { t } = useTranslation(["reports", "common"]);
   const { getType } = useMetamodel();
   const typeLabel = useTypeLabel();
@@ -283,6 +302,13 @@ export default function EolReport() {
     // Stryker disable next-line ArrayDeclaration: fetched once, on mount, by design
   }, []); // eslint-disable-line react-hooks/exhaustive-deps -- fetched once, on mount
 
+  // The type filter offers the types the report actually holds — whichever
+  // types track End of Life (each type's End of Life section toggle).
+  const reportTypes = useMemo(
+    () => Array.from(new Set((data?.items ?? []).map((i) => i.type))).sort(),
+    [data],
+  );
+
   // Filter items
   const filteredItems = useMemo(() => {
     if (!data) return [];
@@ -309,7 +335,7 @@ export default function EolReport() {
       const d = sortD === "asc" ? 1 : -1;
       if (sortK === "name") return a.name.localeCompare(b.name) * d;
       if (sortK === "type") return a.type.localeCompare(b.type) * d;
-      if (sortK === "product") return (a.eol_product || "").localeCompare(b.eol_product || "") * d;
+      if (sortK === "product") return productName(a).localeCompare(productName(b)) * d;
       if (sortK === "source") return a.source.localeCompare(b.source) * d;
       if (sortK === "status") {
         return ((statusOrder[a.status] ?? 9) - (statusOrder[b.status] ?? 9)) * d;
@@ -412,7 +438,7 @@ export default function EolReport() {
     <ReportShell
       title={t("eol.title")}
       icon="update"
-      iconColor="#d32f2f"
+      iconColor={STATUS_CONFIG.eol.color}
       view={view}
       onViewChange={setView}
       chartRef={chartRef}
@@ -450,8 +476,11 @@ export default function EolReport() {
             sx={{ minWidth: 160 }}
           >
             <MenuItem value="">{t("eol.allTypes")}</MenuItem>
-            <MenuItem value="Application">{typeLabel(getType("Application")) || "Application"}</MenuItem>
-            <MenuItem value="ITComponent">{typeLabel(getType("ITComponent")) || "ITComponent"}</MenuItem>
+            {reportTypes.map((key) => (
+              <MenuItem key={key} value={key}>
+                {typeLabel(getType(key)) || key}
+              </MenuItem>
+            ))}
           </TextField>
           <TextField
             select
@@ -464,13 +493,19 @@ export default function EolReport() {
             <MenuItem value="">{t("eol.allSources")}</MenuItem>
             <MenuItem value="api">
               <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                <MaterialSymbol icon="cloud" size={16} color="#1976d2" />
+                <MaterialSymbol icon="cloud" size={16} color={EOL_COVERAGE_COLORS.linked} />
                 endoflife.date
+              </Box>
+            </MenuItem>
+            <MenuItem value="custom">
+              <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                <MaterialSymbol icon="inventory_2" size={16} color={EOL_COVERAGE_COLORS.linked} />
+                {t("eol.custom")}
               </Box>
             </MenuItem>
             <MenuItem value="manual">
               <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                <MaterialSymbol icon="edit_note" size={16} color="#3949ab" />
+                <MaterialSymbol icon="edit_note" size={16} color={EOL_COVERAGE_COLORS.manual} />
                 {t("eol.manual")}
               </Box>
             </MenuItem>
@@ -484,7 +519,7 @@ export default function EolReport() {
               label: t(s.labelKey),
               color: s.color,
             })),
-            { label: t("eol.manuallyMaintained"), color: "#3949ab" },
+            { label: t("eol.manuallyMaintained"), color: EOL_COVERAGE_COLORS.manual },
           ]}
         />
       }
@@ -495,31 +530,31 @@ export default function EolReport() {
           icon="cancel"
           label={t("eol.statusEol")}
           value={data.summary.eol}
-          color="#d32f2f"
+          color={STATUS_CONFIG.eol.color}
         />
         <KpiCard
           icon="warning"
           label={t("eol.statusApproaching")}
           value={data.summary.approaching}
-          color="#ed6c02"
+          color={STATUS_CONFIG.approaching.color}
         />
         <KpiCard
           icon="check_circle"
           label={t("eol.statusSupported")}
           value={data.summary.supported}
-          color="#2e7d32"
+          color={STATUS_CONFIG.supported.color}
         />
         <KpiCard
           icon="apps"
           label={t("eol.impactedApps")}
           value={data.summary.impacted_apps}
-          color="#1565c0"
+          color={brand.primary}
         />
         <KpiCard
           icon="edit_note"
           label={t("eol.manuallyMaintained")}
           value={data.summary.manual}
-          color="#3949ab"
+          color={EOL_COVERAGE_COLORS.manual}
         />
         {/* The backlog: components nobody has recorded an end of life for.
             Clicking filters the table to exactly them — the question this
@@ -528,7 +563,7 @@ export default function EolReport() {
           icon="event_busy"
           label={t("eol.noEolDataKpi")}
           value={data.summary.missing}
-          color="#9e9e9e"
+          color={STATUS_CONFIG.missing.color}
           onClick={() =>
             setFilterStatus((current) => (current === "missing" ? "" : "missing"))
           }
@@ -537,7 +572,7 @@ export default function EolReport() {
 
       {filteredItems.length === 0 ? (
         <Paper variant="outlined" sx={{ p: 4, textAlign: "center" }}>
-          <MaterialSymbol icon="info" size={40} color="#bdbdbd" />
+          <MaterialSymbol icon="info" size={40} color={theme.palette.action.disabled} />
           <Typography color="text.secondary" sx={{ mt: 1 }}>
             {data.items.length === 0
               ? t("eol.noEolData")
@@ -637,8 +672,8 @@ export default function EolReport() {
                             {item.name}
                           </Typography>
                         </Tooltip>
-                        {isManual && (
-                          <SourceBadge source="manual" />
+                        {(isManual || item.source === "custom") && (
+                          <SourceBadge source={item.source} />
                         )}
                         {item.affected_apps.length > 0 && (
                           <Tooltip title={t("eol.impacts", { count: item.affected_apps.length })}>
@@ -662,7 +697,7 @@ export default function EolReport() {
                           <MaterialSymbol
                             icon={isExpanded ? "expand_less" : "expand_more"}
                             size={14}
-                            color="#999"
+                            color={STATUS_COLORS.neutral}
                           />
                         )}
                       </Box>
@@ -686,8 +721,8 @@ export default function EolReport() {
                               setSidePanelCardId(app.id);
                             }}
                           >
-                            <MaterialSymbol icon="subdirectory_arrow_right" size={14} color="#90caf9" />
-                            <MaterialSymbol icon="apps" size={14} color="#1565c0" />
+                            <MaterialSymbol icon="subdirectory_arrow_right" size={14} color={brand.primaryLight} />
+                            <MaterialSymbol icon="apps" size={14} color={brand.primary} />
                             <Typography variant="caption" noWrap sx={{ flex: 1, minWidth: 0 }}>
                               {app.name}
                             </Typography>
@@ -839,7 +874,7 @@ export default function EolReport() {
                                       cy="12"
                                       r="10"
                                       fill={cfg.color}
-                                      stroke="#fff"
+                                      stroke={theme.palette.common.white}
                                       strokeWidth="2"
                                     />
                                     {isManual ? (
@@ -848,7 +883,7 @@ export default function EolReport() {
                                         x="12"
                                         y="16"
                                         textAnchor="middle"
-                                        fill="#fff"
+                                        fill={theme.palette.common.white}
                                         fontSize="12"
                                         fontWeight="bold"
                                       >
@@ -861,7 +896,7 @@ export default function EolReport() {
                                         width="14"
                                         height="4"
                                         rx="1"
-                                        fill="#fff"
+                                        fill={theme.palette.common.white}
                                       />
                                     )}
                                   </svg>
@@ -904,7 +939,7 @@ export default function EolReport() {
                       top: 0,
                       bottom: 0,
                       width: 0,
-                      borderLeft: "2px dashed #d32f2f",
+                      borderLeft: `2px dashed ${RAG_COLORS.red}`,
                       pointerEvents: "none",
                       zIndex: 3,
                     }}
@@ -916,8 +951,8 @@ export default function EolReport() {
                       left: `${todayPct}%`,
                       top: -2,
                       transform: "translateX(-50%)",
-                      bgcolor: "#d32f2f",
-                      color: "#fff",
+                      bgcolor: RAG_COLORS.red,
+                      color: "common.white",
                       px: 0.5,
                       borderRadius: 0.5,
                       fontSize: "0.6rem",
@@ -1047,7 +1082,9 @@ export default function EolReport() {
                     </TableCell>
                     <TableCell>
                       <Typography variant="body2">
-                        {item.eol_product || "\u2014"}
+                        {item.eol_product
+                          ? eolProductLabel(item.eol_product, item.eol_product_title)
+                          : "\u2014"}
                       </Typography>
                     </TableCell>
                     <TableCell>
@@ -1056,8 +1093,8 @@ export default function EolReport() {
                       </Typography>
                     </TableCell>
                     <TableCell>
-                      {isManual ? (
-                        <SourceBadge source="manual" />
+                      {isManual || item.source === "custom" ? (
+                        <SourceBadge source={item.source} />
                       ) : (
                         <Chip
                           size="small"
@@ -1081,11 +1118,11 @@ export default function EolReport() {
                         label={t(cfg.labelKey)}
                         sx={{
                           bgcolor: cfg.color,
-                          color: "#fff",
+                          color: "common.white",
                           fontWeight: 600,
                           height: 22,
                           fontSize: "0.7rem",
-                          "& .MuiChip-icon": { color: "#fff" },
+                          "& .MuiChip-icon": { color: "common.white" },
                         }}
                       />
                     </TableCell>
@@ -1098,7 +1135,12 @@ export default function EolReport() {
                           <Typography
                             variant="caption"
                             sx={{
-                              color: eolDays <= 0 ? "#d32f2f" : eolDays <= 182 ? "#ed6c02" : "#2e7d32",
+                              color:
+                                eolDays <= 0
+                                  ? STATUS_CONFIG.eol.color
+                                  : eolDays <= 182
+                                    ? STATUS_CONFIG.approaching.color
+                                    : STATUS_CONFIG.supported.color,
                               fontWeight: 600,
                             }}
                           >

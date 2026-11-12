@@ -60,6 +60,8 @@ Unterhalb der Kacheln zeigt das Dashboard «Übersicht»:
 - **Letzte Aktivitäten**: Ein Feed der neuesten Änderungen — wer hat was wann bearbeitet
 - **Rangliste der Datenqualität**: Die Personen, die ihre Karten vollständig pflegen (siehe unten)
 
+**Letzte Aktivitäten** listet auch, was mit Entscheidungen und Statements of Architecture Work geschieht — eine Entscheidung erstellt oder mit einer Karte verknüpft, Unterschriften angefordert, unterzeichnet, zurückgerufen oder abgelehnt, ein Kommentar gepostet —, und zwar für Leser, die sie öffnen dürfen: Entscheidungsereignisse erfordern `adr.view`, SoAW-Ereignisse `soaw.view`. Prüfungsereignisse werden ab Version 2.200.0 aufbewahrt; frühere wurden nie gespeichert.
+
 Ein Klick auf einen Balken oder ein Segment eines Diagramms öffnet, was dahintersteht: das [Inventar](inventory.md), gefiltert auf diese Karten, bei einem Kartentyp oder einem Genehmigungsstatus, den Lebenszyklusbericht bei einer Lebenszyklusphase, den Datenqualitätsbericht bei einer Vollständigkeitsstufe.
 
 ### Rangliste der Datenqualität
@@ -77,6 +79,16 @@ Die Rangliste erfordert wie das übrige Dashboard «Übersicht» die Berechtigun
 Das Dashboard **Mein Arbeitsbereich** bündelt alles, was Ihnen zugewiesen ist: Favoriten, gespeicherte Berichte, Aufgaben, ausstehende Umfragen, die von Ihnen erstellten Karten, jüngste Aktivitäten auf Ihren Karten und den Abschnitt **Karten mit meiner Rolle**. Jedes davon ist ein Widget, sodass ein Administrator sie umordnen oder auf einem anderen Dashboard platzieren kann.
 
 Letzterer gruppiert Karten nach der Stakeholder-Rolle, die Sie innehaben (Application Owner, Business Owner usw.), und listet die Karten unter jeder Rolle auf. Wenn Ihre Rolle die Berechtigung `stakeholders.view` umfasst (standardmäßig Admin, Member und Viewer), erscheint ein kleines **Personensuche**-Symbol neben dem Abschnittstitel: Wählen Sie damit einen anderen Benutzer aus der Autovervollständigung, und der Abschnitt wird mit dessen Rollen und Karten neu geladen. Der Titel ändert sich zu «Rollen von {name}». Mit dem kleinen Schließen-Symbol kehren Sie zu Ihren eigenen Rollen zurück. Praktisch für die Frage «Wem gehört was?» mit einem Klick.
+
+### Inventaransichten
+
+Das Widget **Inventaransichten** listet Ihre gespeicherten [Inventaransichten](inventory.md) auf einem Dashboard auf. Es ist auf keinem der integrierten Dashboards vorhanden: Fügen Sie es über die Seitenleiste **Widget hinzufügen** hinzu (siehe [Widgets hinzufügen und wiederherstellen](#widgets-hinzufugen-und-wiederherstellen)), wo es bei den Widgets von **Mein Arbeitsbereich** steht.
+
+Es zeigt bis zu sechs Ansichten, die neuesten zuerst. Jede Zeile trägt das Symbol des Kartentyps der Ansicht, ihren Namen und in einer zweiten Zeile ihren Kartentyp – bei einer [Abfrageansicht](inventory.md#query-views) stattdessen ihren Pfad, gefolgt von der Anzahl ihrer Bedingungen. Ein Würfel kennzeichnet eine Abfrageansicht, ein Roboter eine von einem KI-Assistenten erstellte, und ein Globus- oder Gruppensymbol eine öffentliche oder geteilte Ansicht. Ein Klick auf eine Zeile öffnet die Ansicht im Inventar; **Alle anzeigen** öffnet das Inventar.
+
+![Widget «Inventaransichten»](../assets/img/de/04b_dashboard_inventarsichten.png)
+
+Die Zahnrad-Schaltfläche legt **Aufzulistende Ansichten** fest – **Alle Ansichten, die ich öffnen kann**, **Meine Ansichten** oder **Mit mir geteilte Ansichten** – sowie einen Schalter **Nur Abfrageansichten**, mit einer Live-Vorschau des Ergebnisses. Ein Dashboard kann das Widget mehrfach enthalten, zum Beispiel **Meine Ansichten** neben **Mit mir geteilte Ansichten**. Eine Rolle, die gespeicherte Ansichten nicht öffnen darf, sieht statt der Liste eine kurze Meldung.
 
 ## Admin-Tab — Stakeholder-Verzeichnis { #admin-tab-stakeholder-directory }
 
@@ -99,14 +111,14 @@ Klicken Sie neben den Dashboard-Tabs auf **Anpassen**, um das aktuelle Dashboard
 - **Verschieben** Sie ein Widget, indem Sie es am Griff ziehen; das Raster ist 12 Spalten breit, und die anderen Widgets machen Platz.
 - **Ändern Sie die Größe** eines Widgets an seinem rechten Rand, seinem unteren Rand oder der Ecke, per Maus oder Touch (auf einem hochkant gehaltenen Smartphone oder Tablet ist das Layout schreibgeschützt). Das benachbarte Widget passt sich beim Ziehen an: Es wird schmaler, wenn sein Nachbar wächst, und wieder breiter, wenn dieser schrumpft; kann es nicht weiter schrumpfen, rutscht es in die nächste Zeile. Darunterliegende Zeilen rücken von selbst nach unten und wieder nach oben. Das Widget rastet beim Ziehen am Raster ein, und im Anpassungsmodus bleiben unter dem letzten Widget vier leere Zeilen frei, sodass sich die unterste Zeile höher ziehen lässt; scrollen Sie zuerst, bis der Griff deutlich innerhalb des Fensters liegt.
 - **Entfernen** Sie ein Widget mit seiner Schließen-Schaltfläche.
-- **Konfigurieren** Sie eine KPI-Kachel, ein Diagramm, den Aktivitäts-Feed oder eine Rangliste der Datenqualität mit der Zahnrad-Schaltfläche.
+- **Konfigurieren** Sie eine KPI-Kachel, ein Diagramm, den Aktivitäts-Feed oder eine Rangliste der Datenqualität oder ein Widget [Inventaransichten](#inventaransichten) mit der Zahnrad-Schaltfläche.
 - **Machen Sie Änderungen rückgängig** oder **wiederholen** Sie sie: **Rückgängig** und **Wiederholen** gehen die seit dem Öffnen von Anpassen vorgenommenen Änderungen Schritt für Schritt durch (je ein Verschieben, Ändern der Größe, Hinzufügen, Entfernen oder Konfigurieren) — mit den beiden Schaltflächen der Symbolleiste oder mit Strg+Z / Strg+Umschalt+Z (⌘ auf dem Mac). **Verwerfen** verwirft weiterhin alle auf einmal.
 
 Klicken Sie auf **Speichern**, um die Änderungen für alle zu übernehmen, oder auf **Verwerfen**, um zum Dashboard im bisherigen Zustand zurückzukehren.
 
 ### Widgets hinzufügen und wiederherstellen
 
-**Widget hinzufügen** öffnet eine Seitenleiste mit allen Widgets, gruppiert nach **KPIs**, **Diagramme**, **Übersicht**, **Mein Arbeitsbereich** und **Administration**. Klicken Sie auf eines, um es zum Dashboard hinzuzufügen; bei einer KPI-Kachel oder einem Diagramm öffnet sich zuerst die Konfiguration. Jedes integrierte Widget bleibt im Katalog, sodass ein versehentlich entferntes Widget — etwa **Letzte Aktivitäten** — durch erneutes Hinzufügen wiederhergestellt wird. Widgets, die nur einmal pro Dashboard vorkommen dürfen, sind ausgegraut und als bereits hinzugefügt markiert, wenn sie vorhanden sind.
+**Widget hinzufügen** öffnet eine Seitenleiste mit allen Widgets, gruppiert nach **KPIs**, **Diagramme**, **Übersicht**, **Mein Arbeitsbereich** und **Administration**. Klicken Sie auf eines, um es zum Dashboard hinzuzufügen; bei einer KPI-Kachel oder einem Diagramm öffnet sich zuerst die Konfiguration. Einige Widgets sind nur im Katalog und auf keinem integrierten Dashboard – etwa die Liste [Inventaransichten](#inventaransichten). Jedes integrierte Widget bleibt im Katalog, sodass ein versehentlich entferntes Widget — etwa **Letzte Aktivitäten** — durch erneutes Hinzufügen wiederhergestellt wird. Widgets, die nur einmal pro Dashboard vorkommen dürfen, sind ausgegraut und als bereits hinzugefügt markiert, wenn sie vorhanden sind.
 
 Ein Widget behält seine eigene Berechtigung, wo immer es platziert wird: Ein zum Dashboard «Übersicht» hinzugefügtes Admin-Widget wird weiterhin nur Benutzern mit `admin.users` angezeigt.
 

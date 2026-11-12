@@ -64,7 +64,7 @@ Felter definerer de brugerdefinerede egenskaber, der er tilgængelige på kort a
 | **Etiket** | Visningsnavn |
 | **Type** | text, multiline_text, number, cost, percentage, boolean, date, url, single_select eller multiple_select. En procent er et tal fra 0 til 100, der vises som en fremgangsbjælke og redigeres med en skyder eller indtastes præcist. En boolean vælges fra en Ja/Nej-liste med **Ingen** til at rydde den og vises som en grøn *Ja*- eller blå *Nej*-mærkat, eller som — når den ikke er angivet, hvilket inventarets filter **(tom)** finder |
 | **Indstillinger** | For udvælgelsesfelter: de tilgængelige valg med etiketter og valgfri farver. Ændr rækkefølgen med pilene op og ned ud for hver valgmulighed: menuer og filtre viser valgmulighederne i den rækkefølge, og chips for en flervalgsværdi følger den på alle kort. |
-| **Hjælpetekst** | Valgfri vejledning, der vises som en sammenklappelig note under feltet, mens et kort redigeres. Den skrives pr. sprog og kan angives af enhver metamodel-administrator; på et felt, som en udvidelse har bidraget med, er den skrivebeskyttet |
+| **Hjælpetekst** | Valgfri vejledning til feltet. Mens et kort læses, vises den som et infoikon ved siden af feltets etiket (hold musen over eller sæt fokus på det for at læse teksten) og som et værktøjstip på feltets kolonneoverskrift i Lageret; mens et kort redigeres, sidder det samme ikon ved siden af feltet. Den skrives pr. sprog og kan angives af enhver metamodel-administrator; på et felt, som en udvidelse har bidraget med, er den skrivebeskyttet |
 | **Påkrævet** | Hvorvidt feltet er obligatorisk — se håndhævelsesreglerne nedenfor |
 | **Datakvalitet** | Hvert felts bidrag til scoren håndteres i panelet **Datakvalitet** (se nedenfor) |
 | **Skrivebeskyttet** | Forhindrer manuel redigering (nyttigt for beregnede felter) |
@@ -146,6 +146,8 @@ Definer brugerdefinerede roller for denne type (f.eks. "Application Owner", "Tec
 
 Hver rolle har en **nøgle** (den identifikator der gemmes på kort, og som bruges af `stakeholder:<rollenøgle>`-import/eksportkolonnerne) og en **etiket** (det brugerne ser). Nøglen følger samme konvention som enhver anden metamodelnøgle — kun bogstaver og cifre, begyndende med et bogstav, 3–50 tegn, efter konvention camelCase som `businessArchitect`. Den udfyldes automatisk ud fra etiketten, så du sjældent selv skal skrive en.
 
+Giv en rolle en **beskrivelse** for at angive, hvad den betyder i din organisation – hvad en *Kontraktejer* underskriver, hvad en *Teknisk ejer* står til ansvar for. Brugerne ser den som et infoikon ved siden af rollen på et korts fane **Interessenter**, under rollens navn i rollevælgeren, som et værktøjstip på rollens kolonneoverskrift i Lageret, i **Mine roller** på dashboardet og i interessentoversigten. Beskrivelsen oversættes pr. sprog ligesom etiketten: hvert aktiveret sprog har sit eget beskrivelsesfelt under **Oversættelser** i rolleeditoren, og typens **oversættelsesdialog** viser den også. Et sprog, der står tomt, falder tilbage til den engelske beskrivelse. De indbyggede roller (**Ansvarlig**, **Observatør**, de to applikationsejere, **IT-projektleder** og **Procesejer**) leveres med en beskrivelse på alle sprog, som du kan redigere eller rydde som enhver anden, og knappen **Gem** i skuffens header gemmer også en rolle, du redigerer under denne fane.
+
 Hver rolle har desuden en **Tæller med i datakvaliteten**-kontakt. Datakvalitetsscoren har én enkelt interessentplads, og den er opfyldt, så snart nogen er tildelt kortet i en rolle, hvor kontakten er slået til. Slå den fra for rent passive roller — den indbyggede **Observatør** leveres med den slået fra, så det at følge et kort aldrig træder i stedet for at eje det. En type, hvor alle roller har den slået fra, bidrager slet ikke med en interessentplads. Skift af kontakten genberegner straks scoren for alle kort af typen.
 
 Roller kan fjernes på to måder:
@@ -209,7 +211,7 @@ Klik på knappen **Oversæt** i typepanelets værktøjslinje for at åbne **Over
 - **Sektioner** — Sektionsoverskrifter på kortdetaljesiden
 - **Felter** — Feltetiketter og udvælgelsesindstillingsetiketter
 - **Hjælpetekst** — Et felts hjælpetekst, vist under feltet, når den er indtastet i felteditoren. Redigeres den på engelsk, opdateres feltets standardhjælpetekst også
-- **Interessentroller** — Rollenavne vist i interessenttildelings-UI'et
+- **Interessentroller** — Rollenavne og -beskrivelser. En rolles beskrivelse vises under dens navn, så snart rollen har en beskrivelse på et eller andet sprog; redigeres den på engelsk, opdateres rollens standardbeskrivelse også
 
 Oversættelser gemmes sammen med hver korttype og opløses ved render-tid ved hjælp af brugerens valgte lokalitet. Uoversatte etiketter falder tilbage til den engelske standard.
 
@@ -255,7 +257,7 @@ At fjerne en forbindelsestype omskriver **ikke** de kort, der allerede bruger de
 
 Nogle relationer bærer ekstra egenskaber, som du angiver på hvert enkelt link i stedet for på relationstypen. For eksempel har den indbyggede relation **Organisation → Applikation** (»bruger«) en **Brugstype**-egenskab — angiv den til **Ejer**, **Bruger** eller **Interessent** på hvert link. Dermed kan du modellere en applikation, der *ejes af* én organisation og *bruges af* andre, via en enkelt relationstype. Den valgte værdi vises som en farvet chip i kortets **Relationer**-sektion; angiv den, når du tilføjer relationen, eller senere via redigeringsikonet på relationsrækken.
 
-Du kan også oprette **flere relationstyper mellem det samme par af korttyper** — for eksempel en organisation, der *ejer* en applikation, ved siden af en, der *bruger* den. Foretræk en egenskab, når du beskriver varianter af én og samme relation (det bevarer én kolonne i inventaret og én linje på et diagram); opret en anden relationstype, når relationerne reelt er forskellige og fortjener deres egne verber, egne egenskaber eller egne filtre. Når et par bærer mere end én relationstype, viser inventaret stadig én kolonne for den relaterede korttype, og når du åbner den celle, får du et afsnit per relationstype. På et kort beholder hver relationstype sit eget afsnit: afsnit, der peger på den samme korttype, vises sammen, og et kort, du har knyttet via mere end én af dem, er markeret med *Også …* i hvert af sine afsnit. En relationstype, hvis to ender er den samme korttype — en organisation, der *har lokation* en anden organisation — viser *begge* verber på et kort som to afsnit og i inventaret som to filterrækker og to redigeringsafsnit; giv sådan en type en omvendt etiket, ellers læses de to afsnit ens.
+Du kan også oprette **flere relationstyper mellem det samme par af korttyper** — for eksempel en organisation, der *ejer* en applikation, ved siden af en, der *bruger* den. Foretræk en egenskab, når du beskriver varianter af én og samme relation (det bevarer én kolonne i inventaret og én linje på et diagram); opret en anden relationstype, når relationerne reelt er forskellige og fortjener deres egne verber, egne egenskaber eller egne filtre. Når et par bærer mere end én relationstype, viser inventaret én kolonne pr. relationstype med dens verbum og den relaterede korttype som overskrift (*ejer Applikation*, *bruger Applikation*). På et kort beholder hver relationstype sit eget afsnit: afsnit, der peger på den samme korttype, vises sammen, og et kort, du har knyttet via mere end én af dem, er markeret med *Også …* i hvert af sine afsnit. En relationstype, hvis to ender er den samme korttype — en organisation, der *har lokation* en anden organisation — viser *begge* verber på et kort som to afsnit og i inventaret som to kolonner og to filterrækker; giv sådan en type en omvendt etiket, ellers læses de to afsnit ens.
 
 Når et par bærer mere end én relationstype, kan rapporter, portaler og undersøgelser målrette en bestemt: Porteføljerapporten tilbyder en grupperingsakse og et filter pr. relation, Kapabilitetskortet tilføjer et filter pr. relation, portalens filtre og relationsafsnit mærkes med deres verbum, og en undersøgelses **relateret til**-filter får en **Via relation**-vælger. At vælge intet betyder fortsat „relateret via en hvilken som helst af dem“.
 
@@ -325,6 +327,23 @@ Hvert princip har fire felter:
 
 Principper kan **aktiveres** eller **deaktiveres** individuelt ved hjælp af omskifteren på hvert kort.
 
+Hvert princip har et **referencenummer** (`P-001`, `P-002`, …), som tildeles ved oprettelsen og vises ved siden af titlen. Referencer nummereres pr. instans: et princip, der bringes ind via [workspace-overførsel](workspace-transfer.md), får det næste ledige nummer på målet.
+
+### Eksport og import af principper {: #principles-import }
+
+**Eksportér** (ved siden af **Nyt princip**) downloader alle principper som en `.xlsx`-fil med kolonnerne `reference_number`, `title`, `description`, `rationale`, `implications`, `is_active` og `sort_order`. Eksporten er en gyldig importfil, så du kan redigere principper i Excel og indlæse dem igen.
+
+**Importér** indlæser principper samlet fra en `.xlsx`-fil. Klik på **Download skabelon** for at få en startprojektmappe, udfyld ét princip pr. række, og upload den. Hver række matches med et eksisterende princip først via `reference_number`, derefter via titlen (uden forskel på store og små bogstaver):
+
+- Et matchet princip **opdateres** med de værdier, der afviger; hvis intet afviger, **springes** rækken **over**. Forhåndsvisningen viser hver opdateret række med de felter, den ændrer.
+- Enhver anden række **opretter** et nyt princip med den næste ledige reference. En reference, der ikke findes på denne instans, genbruges ikke; forhåndsvisningen advarer om det.
+- En række uden reference, hvis titel tilhører to principper, afvises som flertydig: tilføj referencen for at angive, hvilket du mener.
+- En kolonne, der mangler i arket, lader feltet være uændret. En tom celle i `description`, `rationale` eller `implications` rydder den tekst; en tom celle i `is_active` eller `sort_order` lader værdien stå uændret. `title` er den eneste obligatoriske kolonne.
+- `is_active` accepterer `true` / `false` (også `yes` / `no`, `1` / `0`); `sort_order` skal være et heltal. Nye principper uden `sort_order` tilføjes sidst på listen.
+- En titel eller reference, der forekommer to gange i filen, eller en omdøbning til et andet princips titel, får rækken til at fejle.
+
+Før der skrives noget, får du en forhåndsvisning af, hvor mange rækker der bliver oprettet, opdateret, sprunget over og fejler, med hver fejl og advarsel listet pr. række; intet ændres, før du bekræfter. Import kræver tilladelsen `admin.metamodel` og registreres i [sikkerheds- og administrationsloggen](audit-log.md).
+
 ### Import fra Principkataloget
 
 Turbo EA leveres med et **kurateret referencekatalog med 10 industristandard EA-principper**, så du ikke skal starte fra en blank side. Åbn avatarmenuen i øverste højre hjørne og vælg **Referencekataloger → Principkatalog**. Derfra kan du:
@@ -373,12 +392,20 @@ For hver række kan du:
 
 Compliance-scanneren og risiko-forfremmelsesflowet fungerer, **selv når ingen AI-udbyder er konfigureret** — manuel fund-indtastning, statusovergange og forfremmelsesstien til Risiko forbliver alle tilgængelige. AI er kun påkrævet, når du faktisk udløser en ny scanning.
 
+## Livscyklusfaser {: #lifecycle-phases }
+
+Sektionen **Livscyklus** på hvert kort gennemløber fem faste faser: Planlagt, Indfasning, Aktiv, Udfasning og Udløb. Hvad hver fase betyder, varierer mellem organisationer – for eksempel om *Udfasning* stadig tillader nye brugere, eller hvornår en komponent regnes for *Udløb*. Fanen **Livscyklusfaser** lader dig skrive det ned én gang for hele arbejdsområdet.
+
+Fanen viser ét tekstfelt pr. fase og en række sprogfaner (engelsk først, derefter hvert aktiveret sprog). I et nyt arbejdsområde er felterne forudfyldt med en standardforklaring af hver fase på alle sprog, så hjælpen er der fra start; ret en hvilken som helst tekst til, så den passer til, hvordan din organisation arbejder. Et sprog, der står tomt, viser den engelske tekst. Lad en fase stå tom for ikke at vise hjælp til den – hvis du tømmer alle fem faser og gemmer, fjernes hjælpen helt. Klik på **Gem** for at anvende teksterne.
+
+Brugerne ser en fases hjælp som et infoikon ved siden af fasen på livscyklustidslinjen på hvert kort, som forbliver synligt, mens livscyklussen redigeres. Teksterne gælder for alle korttyper. Gemningen registreres i **Sikkerheds- og administrationsloggen**.
+
 ## Kortlayout-editor
 
 For hver korttype styrer afsnittet **Layout** i typepanelet, hvordan kortdetaljesiden er struktureret:
 
 - **Sektionsrækkefølge** — Træk sektioner (Beskrivelse, EOL, Livscyklus, Hierarki, Tags, Relationer og brugerdefinerede sektioner) for at omarrangere dem
-- **Synlighed** — Skjul sektioner, der ikke er relevante for en type
+- **Synlighed** — Skjul sektioner, der ikke er relevante for en type. Sektionen **End of Life** er undtagelsen fra «vist, medmindre skjult»: Den vises som standard kun på Applications og IT Components og er skjult på alle andre typer, også brugerdefinerede, indtil du slår den til. Dens kontakt afgør også, om typen indgår i End of Life-rapporteringen — se [End of life på andre korttyper](eol.md#end-of-life-pa-andre-korttyper)
 - **Standardudvidelse** — Vælg, om hver sektion starter udvidet eller sammenklappet
 - **Kolonnelayout** — Indstil 1 eller 2 kolonner pr. brugerdefineret sektion
 - **Flyt felter mellem afsnit** — Brug et felts **flyt**-handling (ved siden af knapperne rediger og slet) til at flytte det til et andet afsnit, mens dets konfiguration bevares

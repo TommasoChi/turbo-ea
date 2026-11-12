@@ -19,6 +19,7 @@ import { useGrcEnabled } from "@/hooks/useGrcEnabled";
 import { usePpmEnabled } from "@/hooks/usePpmEnabled";
 import { useTurboLensReady } from "@/hooks/useTurboLensReady";
 import { useValueChainEnabled } from "@/hooks/useValueChainEnabled";
+import { STATUS_COLORS } from "@/theme/tokens";
 
 type ModuleKey = "bpm" | "ppm" | "turbolens" | "grc" | "valuechain" | "archimate";
 
@@ -99,7 +100,7 @@ export default function ModuleGate({ module, children }: Props) {
     <Box sx={{ maxWidth: 640, mx: "auto", mt: { xs: 4, sm: 8 }, px: 2 }}>
       <Paper variant="outlined" sx={{ p: 4, textAlign: "center" }}>
         <Stack alignItems="center" spacing={2}>
-          <MaterialSymbol icon={MODULE_ICON[module]} size={56} color="#888" />
+          <MaterialSymbol icon={MODULE_ICON[module]} size={56} color={STATUS_COLORS.neutral} />
           <Typography variant="h5" fontWeight={600}>
             {t("moduleDisabled.title", { module: moduleLabel })}
           </Typography>

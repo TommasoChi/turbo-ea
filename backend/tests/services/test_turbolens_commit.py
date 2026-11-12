@@ -12,6 +12,7 @@ from sqlalchemy import select
 
 from app.models.architecture_decision import ArchitectureDecision
 from app.models.architecture_decision_card import ArchitectureDecisionCard
+from app.models.architecture_decision_link import ArchitectureDecisionLink
 from app.models.card import Card
 from app.models.relation import Relation
 from app.models.turbolens import TurboLensAnalysisRun, TurboLensAssessment
@@ -169,6 +170,31 @@ async def _relations(db) -> set[tuple[str, uuid.UUID, uuid.UUID]]:
 
 
 class TestExecuteCommit:
+    async def test_the_decision_opens_its_timeline(self, db, env):
+        from app.models.document_history import DocumentHistoryEntry
+
+        out = await execute_commit(db, str(env["run"].id), env["data"])
+        rows = (
+            (
+                await db.execute(
+                    select(DocumentHistoryEntry).where(
+                        DocumentHistoryEntry.architecture_decision_id == uuid.UUID(out["adr_id"])
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert [(r.kind, r.actor_id, r.actor_name) for r in rows] == [
+            ("created", env["admin"].id, env["admin"].display_name)
+        ]
+        # The ``created`` row carries the decision's content as it was filed.
+        adr = await db.get(ArchitectureDecision, uuid.UUID(out["adr_id"]))
+        assert rows[0].content["title"] == adr.title
+        assert rows[0].content["context"] == adr.context
+        assert rows[0].content["consequences"] == adr.consequences
+        assert (rows[0].content["decision_makers"], rows[0].content["participants"]) == ([], [])
+
     async def test_creates_the_initiative_cards_relations_and_adr(self, db, env):
         out = await execute_commit(db, str(env["run"].id), env["data"])
         cards = await _cards(db)
@@ -224,7 +250,8 @@ class TestExecuteCommit:
         assert adr.consequences == (
             "New cards introduced: 3\nNew relations created: 5\nNew capability: missing today"
         )
-        assert adr.related_decisions == [{"type": "assessment", "id": str(env["assessment"].id)}]
+        # The assessment is no longer stored on the decision as a related entry.
+        assert (await db.execute(select(ArchitectureDecisionLink))).scalars().all() == []
         assert adr.created_by == env["admin"].id
         linked = (
             await db.execute(

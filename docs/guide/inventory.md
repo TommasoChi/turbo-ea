@@ -19,7 +19,7 @@ The left sidebar panel allows you to **filter** cards by different criteria:
 - **Data Quality** — Band filtering (multi-select): Complete (≥80%), Partial (40–79%), Minimal (below 40%). Same bands the [Data Quality report](reports.md#data-quality-report) charts, so clicking a bar segment there lands here.
 - **Orphaned** — Only cards with no relation in either direction. Evaluated server-side, so it works with no card type selected.
 - **Stale** — Only cards not updated in the last 90 days. Both mirror the [Data Quality report](reports.md#data-quality-report)'s KPI tiles, so clicking a tile there lands here.
-- **End of life** — For Applications and IT Components, filter by the support status Turbo EA resolves from the [EOL link](../admin/eol.md) on each card: End of Life, Approaching, Supported or Unknown. **(empty)** lists the cards with nothing recorded at all. The matching **End of life** column shows the date beside a status dot, and sorts and exports as a date.
+- **End of life** — For the card types that track End of Life (Applications and IT Components by default; see [End of Life on other card types](../admin/eol.md#end-of-life-on-other-card-types)), filter by the support status Turbo EA resolves from the [EOL link](../admin/eol.md) on each card: End of Life, Approaching, Supported or Unknown. **(empty)** lists the cards with nothing recorded at all. The matching **End of life** column shows the date beside a status dot, and sorts and exports as a date.
 - **Link type** — When a single hierarchical card type is selected and an administrator has defined [link types](../admin/metamodel.md) for it, filter by the type of link each card has to its parent — for example the subsidiaries that are *commercial* rather than *sales*. **(empty)** lists the cards whose link carries no type, and the top-level cards, since neither has one recorded. The matching **Link type** column shows the value as a coloured chip and is editable in grid edit mode.
 - **Tags** — Filter by tags from any tag group
 - **Relations** — Filter by related cards across relation types
@@ -60,7 +60,7 @@ Columns are grouped into five categories:
 | **Default columns** | Always-on columns: Type, Name, Path, Description, Subtype, Lifecycle, Approval Status, Data Quality. Untick any of these to hide them from the grid — useful when tightening a saved view to just the columns you actually use. |
 | **Metadata** | Created, Modified, Created by, Modified by, Created via, Modified via. **Modified** is when the card's content last changed — by a person or an integration, never when the system last recomputed a score — so you can filter it by date to find cards due for an owner review. **Created via** and **Modified via** show the channel behind the create and the last change as a chip (MCP, API, Extension, System); a cell stays empty for the web interface. |
 | **Attributes** | Custom fields defined in the metamodel (text, number, cost, date, select, etc.) |
-| **Relations** | Related card types (e.g., Applications linked to a Business Capability) |
+| **Relations** | One column per relationship, named by its verb and the related card type — for example *uses IT Component* or *is supported by Application*. When two relation types connect the same card types, each gets its own column, and a relation type between cards of the same type (an Application that *sends data to* another) gets one column for each direction. Search the list by the verb or by the card type. |
 | **Stakeholders** | One column per stakeholder role defined for the selected card type (e.g. *Stakeholders: Responsible*), showing the assigned users as chips. In grid edit mode, double-click a cell to assign or remove users for that role directly from the grid (requires the *manage stakeholders* permission). |
 
 The **Parent** column shows just the card directly above it in the hierarchy, where **Path** shows the whole chain. In grid edit mode, double-click a Parent cell to move the card somewhere else, or clear the field to move it to the top level. The column is editable only when the grid is filtered to a single card type that supports hierarchy. If a move is refused — because it would create a loop, collide with a same-named card under the target, or exceed the maximum capability depth — the reason appears at the bottom of the screen and the cell reverts.
@@ -94,7 +94,7 @@ The inventory uses an **AG Grid** data table with powerful features:
 | **Lifecycle** | Current lifecycle state |
 | **Approval Status** | Review status badge |
 | **Data Quality** | Completeness percentage with visual ring |
-| **Relations** | Related card names, listed alphabetically, with a clickable popover to add or remove relations — cards already linked are hidden from its picker, except on a hierarchical type, where the picker shows the whole hierarchy as an indented tree and leaves those cards greyed out in place |
+| **Relations** | One column per relationship, headed by its verb and the related card type (e.g. *uses IT Component*): the names of the cards linked through that relationship, listed alphabetically, with a clickable popover to add or remove relations of that relationship — cards already linked are hidden from its picker, except on a hierarchical type, where the picker shows the whole hierarchy as an indented tree and leaves those cards greyed out in place. Saved views and column layouts from before relation columns were split by relationship open with the new columns in place of the old one |
 
 **Table features:**
 
@@ -172,6 +172,19 @@ Click **Group by** in the toolbar (next to the item count) to organise the grid 
 - The header checkbox selects every card in the group, so reclassifying a batch is: expand **Not set**, tick the header, then [Mass Edit](#mass-edit) the value. There is deliberately no drag and drop — select and set works the same on desktop, tablet, and phone.
 - Sorting applies within each group, and the grouping is remembered across reloads, stored in saved views, and shareable via the `group_by` URL parameter.
 
+### Indenting children under parents { #group-by-parents }
+
+Tick **Parent** at the top of the **Group by** menu to show cards as a tree: each parent first, its children indented beneath it. It works on its own (the whole grid becomes one tree) or on top of any grouping (each group becomes its own tree). The menu stays open when you tick it, so you can pick a grouping straight after.
+
+![Inventory indented under parents](../assets/img/en/98c_inventory_group_by_parents.png)
+
+- A card never leaves its own group. A child whose parent sits in another group, is hidden by a column filter, or is not loaded starts its own branch, with its missing ancestors shown in grey before its name (for example *SAP S/4HANA / SAP FI /* before the module's name). Group counts, the header checkbox and Mass Edit therefore always match what the group holds.
+- Click the chevron before a parent's name to hide or show its branch. A collapsed parent still counts its hidden cards in the item count and the group header. Branches you collapse with the chevron are not remembered, and changing a column filter opens them all again; clearing the last column filter returns to the level you chose with the stepper.
+- While the parent layer is on, a **−** / **+** pair next to the Group by button closes or opens the whole tree one level at a time. The level you choose is remembered across reloads, stored in saved views and shareable with `group_tree_level=<n>`; the level shown also follows what you open and close by hand.
+- Sorting applies among siblings: parents are sorted, and each parent's children are sorted beneath it.
+- The option is offered only when a card type in view has a hierarchy. It is remembered across reloads, stored in saved views, and can be shared with the `group_tree=1` URL parameter.
+- **Export** follows the tree order and leaves out the cards inside collapsed branches, as it does for collapsed groups.
+
 ## AI Description Suggestions { #ai-description-suggestions }
 
 Turbo EA can use **AI to generate a description** for any card. This works on both the Create Card dialog and existing card detail pages.
@@ -216,6 +229,70 @@ Saved views appear in the filter panel sidebar. Click any view to instantly appl
 - **My Views** — Views you created
 - **Shared with Me** — Views others shared with you
 - **Public Views** — Views available to everyone
+
+### Query views { #query-views }
+<a id="mcp-views"></a>
+
+A **query view** is a saved view whose filters are a **multi-hop query** — a chain of relations with conditions at each step, such as *Organizations that use an active Application which an Initiative with status On Track affects*. Several such queries can be stacked in one view and combined with **AND** and **OR** (see below). The view stores the query, not its results: it runs again every time the view is opened, so the list always reflects the current landscape.
+
+![A query view in the inventory](../assets/img/en/98d_inventory_mcp_view.png)
+
+**Building a query view.** In the **Views** tab of the filter sidebar, click **New query view** next to *Save current* (shown to anyone who may manage views). If any filter is active, the selected card type included, a confirmation asks before clearing them; **Cancel** on the draft puts them back. The strip above the grid opens as a query builder:
+
+1. Click the start chip (*Choose a type*) and pick the card type the query starts from — the type it lists.
+2. Click **+ relation** after the last card to add a hop. The menu lists each relation verb with the card type it leads to; a relation between cards of the same type is offered in both directions. Each query line is a single chain of up to three hops.
+3. Click **+ condition** under any card to narrow it down: **Lifecycle**, **Subtype**, **Approval status**, **Data quality** (*Complete*, *Partial* or *Minimal*, the same bands as the sidebar filter), **End of life** (see below), **Tags**, **Specific cards**, or a select or yes/no field of that card type. For tags, a card matches when it has any of the chosen tags of a group, and it must match every group you add; only tag groups that apply to that card type are offered. **Specific cards** opens the card picker for cards of that type, and the step then matches only the cards you picked; for a hierarchical card type an **Include sub-cards** switch also matches the cards beneath each pick. A picked card you cannot see shows as *(hidden card)*.
+4. Click **Save**. The usual save-view dialog opens for the name, visibility, sharing and OData setting. **Cancel** discards the query.
+
+![Building a query view](../assets/img/en/98e_inventory_query_builder.png)
+
+While you build, the grid filters live and the toolbar count shows how many cards match, so you can see the effect of each hop and condition before saving.
+
+**Filtering on end of life.** The **End of life** condition is offered on a card type that tracks end of life — by default Application and IT Component; it follows the type's End of Life section in the metamodel. Its values are **End of Life**, **Approaching EOL**, **Supported**, **Unknown** and *(empty)* for cards with no end-of-life data. The status is the one the inventory's **End of life** column shows: it comes from the linked endoflife.date product or custom EOL product, or from an end-of-life date entered by hand, and it is independent of the card's lifecycle phase. The condition works on the start card and at any relation step, in AND and OR lines alike — for example *Applications that use an IT Component at End of Life*. While a query filters on it at the start card, the grid shows the End of life column so you can see why each card matched; the columns you chose are not changed. If endoflife.date cannot be reached and nothing is cached, linked cards read as *Unknown*, as they do in the End of life column.
+
+The condition needs the permission to view end-of-life data (**View EOL data**, `eol.view`). Without it the condition is not offered, and opening, previewing or saving a view that uses it is refused with *This view filters on end-of-life status, which your role cannot see.*
+
+**Changing hops and conditions.** Click a hop's verb chip for its menu: **has no** turns the hop into a requirement that the card has **no** such relation, and **Remove this hop** removes it together with every hop after it. Click a condition chip to change its values, or its **×** to remove it.
+
+**Combining queries with AND and OR.** A view can hold several query lines stacked on top of each other. Each line is a complete query — start card, relations and conditions — built exactly like the single query above. Lines are grouped:
+
+- **AND** adds a line to the same group: a card is listed only when it matches **every** line of the group. An AND line starts from the same card type as its group, shown as a fixed chip, and the group's first line cannot change its card type while it has AND lines.
+- **OR** starts a new group below an **OR** divider: its results are **added** to the list. A new group may start from another card type, so one view can list, for example, Applications and Organizations together. When a view lists several card types, the grid shows the columns those types have in common.
+
+In edit mode a circled **plus** under each group asks **AND** or **OR**: AND adds a line to that group, OR opens a new group after it. The **×** at the end of a line removes it; it is shown when the view has more than one line.
+
+For example, the demo view *Active apps on aging tech, and the organizations using apps* has an Application group of two lines — an active Application that uses an IT Component in phase-out or end of life, **AND** an Application that is affected by an Initiative — **OR** an Organization that uses an Application. The list shows the Applications that meet both lines, together with every Organization that uses an Application.
+
+![Combining queries with AND and OR](../assets/img/en/98f_inventory_query_stack.png)
+
+A view holds at most **six** query lines, **twelve** relations over all its lines, and **three** relations in depth on each line. The lines of an AND group meet on their start card only: the IT Component of one line and the Initiative of the other can be different cards. Two requirements on the **same** card in the middle of a line — say, the same IT Component must be offered by a Provider **and** belong to a Tech Category — cannot be built in the query builder; an AI assistant can write such a query through the [MCP server](../admin/mcp.md#multi-hop-card-queries), and the strip then shows it.
+
+**Editing a saved query view.** When a query view is open, the strip shows its path: the card types as chips, joined by the relation verb that links each step (for example *Organization → uses Application → is affected by Initiative*), with each card's conditions underneath. A view with several lines shows the same stack, with its AND markers and OR dividers, without the editing controls. If you own the view or have edit rights on it, a **pencil** in the strip switches it to the same builder; **Save** updates the view. The **×** button (*Leave this view*) returns to the normal inventory. **Save Current View** while a query view is open saves a new query view with the same query.
+
+#### Seeing the cards behind a match { #query-view-matches }
+
+A query view lists only the first card of its query. To see which cards further along the chain made a row match, click their card type in the query string. In *Organizations that use an Application that uses an IT Component at or near end of life*, click **Application** and a column lists, for each Organization, the Applications through which it matches; click **IT Component** and another column lists the qualifying IT Components. Click the card type again to remove its column.
+
+![A query view with its matched columns](../assets/img/en/98g_inventory_query_matches.png)
+
+- **How a switch looks.** A card type you can click shows a pointer and the tooltip *Show these in a column*. Once its column is on, the chip is filled in the card type's colour and carries a small column icon; its tooltip reads *Hide the column*.
+- **Which card types are switches.** Every card type after the first of its line. The first card type of a line is not one, because its cards are the rows, and neither is a card type behind **has no**, which stands for a missing relation. In a view with several lines, the card types of every line are switches; with **OR**, a row shows cards only for the lines it matches. The switches are not available while you edit the query, and the columns are hidden until you save or cancel.
+- **Where the column appears.** Right after **Name**, titled with the card type and *matched* — for example *Application · matched* — so it is not mistaken for a relation column such as *uses Application*, which lists every Application related that way. When two steps have the same card type, the titles are numbered. Hover the title to see the path the column follows.
+- **What a cell shows.** The names of the matching cards, separated by semicolons; hover the cell for the full list. A cell lists at most **100** names; a longer list ends with *…* and its tooltip says that the first 100 are shown. You can sort and filter the column like a text column, and **Export current view** includes it.
+- **Every card along the chain, not who leads to whom.** A row lists every matching card at that step: all the qualifying Applications of the Organization and all the qualifying IT Components of those Applications. It does not show which IT Component belongs to which Application. To list the IT Components themselves, one per row, write the query starting from IT Component instead.
+- **Saved with the view.** The columns you switch on are saved with the view (the **pencil** in the Views list, then **Update**), so they are back when you open it again. Editing the query keeps a column while its step is still there, and removes it when you remove that step or change its card type.
+
+You only see cards you are allowed to see: a card hidden from you is never named in a cell, and a row that matches only through hidden cards is not listed.
+
+The demo view *Organizations on applications with components at or near end of life* opens with both columns on.
+
+**Views created by an AI assistant.** An assistant connected through the [MCP server](../admin/mcp.md) can create query views too. Such a view shows an **MCP** chip and a *Created via MCP* note in its strip, and a robot badge in the Views list; it is edited like any other query view. In the Views list every query view carries a small query-view badge (a cube; the robot badge when an assistant created it) and its compact path (*Organization › uses Application › is affected by Initiative*) as its second line; a stacked view reads *… AND … OR …*. When the view has conditions, their number follows the path (*… › is affected by Initiative · 2 conditions*).
+
+**Opening a view by link.** When an assistant saves a view it returns a link of the form `/inventory?view=<view id>`; opening it applies the saved view directly. The same link works for any saved view you can see.
+
+**OData.** A query view's OData feed returns the same cards as the inventory: the query is applied to the feed as well.
+
+For the query grammar, its limits and the MCP tools (`query_cards`, `list_inventory_views`, `save_inventory_view`, `list_tag_groups`), see [Multi-hop card queries](../admin/mcp.md#multi-hop-card-queries).
 
 ## Excel Import / Export { #excel-import }
 

@@ -7,14 +7,25 @@ import Button from "@mui/material/Button";
 import CircularProgress from "@mui/material/CircularProgress";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
+import { useTheme } from "@mui/material/styles";
 import { api } from "@/api/client";
 import MaterialSymbol from "@/components/MaterialSymbol";
+import SpreadsheetImportDialog from "@/components/SpreadsheetImportDialog";
 import AdrGrid from "@/features/ea-delivery/AdrGrid";
-import AdrFilterSidebar, {
-  type AdrFilters,
+import AdrFilterSidebar from "@/features/ea-delivery/AdrFilterSidebar";
+import {
   EMPTY_ADR_FILTERS,
-} from "@/features/ea-delivery/AdrFilterSidebar";
+  adrExportPath,
+  filterAdrs,
+  visibleSelection,
+  type AdrFilters,
+} from "@/features/ea-delivery/adrRegisterFilters";
 import { exportAdrsToDocx } from "@/features/ea-delivery/adrExport";
+import {
+  downloadAdrTemplate,
+  exportAdrsToXlsx,
+  parseAdrWorkbook,
+} from "@/features/ea-delivery/adrSpreadsheet";
 import {
   loadAdrGridPrefs,
   updateAdrGridPrefs,
@@ -24,25 +35,7 @@ import { useAuthContext } from "@/hooks/AuthContext";
 import { useExtensionAdrGridColumns } from "@/lib/extensionHost";
 import { useMetamodel } from "@/hooks/useMetamodel";
 import { useTypeLabel } from "@/hooks/useResolveLabel";
-import { toIsoDate, toLocalDate } from "@/lib/dates";
 import type { ArchitectureDecision } from "@/types";
-
-/**
- * A timestamp's local calendar day as `YYYY-MM-DD` — the day the grid shows
- * it on. The From / To filters compare on this, so both days are inclusive
- * whatever offset or fraction the stored timestamp carries.
- */
-function dayOf(value: string | null | undefined): string | null {
-  const d = toLocalDate(value);
-  return d ? toIsoDate(d) : null;
-}
-
-/** Whether `value` falls on or after `from` and on or before `to` (empty = unbounded). */
-function inDayRange(value: string | null | undefined, from: string, to: string): boolean {
-  const day = dayOf(value);
-  if (!day) return false;
-  return (!from || day >= from) && (!to || day <= to);
-}
 
 export default function DecisionsPanel() {
   const { t } = useTranslation(["grc", "delivery", "common"]);
@@ -50,6 +43,8 @@ export default function DecisionsPanel() {
   const { user } = useAuthContext();
   const { types: metamodelTypes } = useMetamodel();
   const typeLabel = useTypeLabel();
+  // A linked card whose type the metamodel does not know gets a neutral swatch.
+  const unknownTypeColor = useTheme().palette.text.secondary;
 
   const canManage = !!user?.permissions?.["*"] || !!user?.permissions?.["adr.manage"];
 
@@ -60,6 +55,8 @@ export default function DecisionsPanel() {
   const [adrSidebarCollapsed, setAdrSidebarCollapsed] = useState(false);
   const [adrSidebarWidth, setAdrSidebarWidth] = useState(280);
   const [createOpen, setCreateOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Grid column visibility (sidebar Columns tab), persisted alongside the
@@ -161,8 +158,18 @@ export default function DecisionsPanel() {
     [navigate, t],
   );
 
+  // ── ADR filter helpers ───────────────────────────────────────────
+  // One `GET /adr` (earlier revisions included) feeds the grid; the
+  // "Show earlier revisions" switch, the "In force" preset and every other
+  // filter narrow the loaded rows here.
+
+  const filteredAdrs = useMemo(() => filterAdrs(adrs, adrFilters), [adrs, adrFilters]);
+
   const handleExport = useCallback(
-    async (selected: ArchitectureDecision[]) => {
+    async (picked: ArchitectureDecision[]) => {
+      // Only rows the filters still show: a selection made before a filter
+      // change never exports a row that is no longer on screen.
+      const selected = visibleSelection(picked, filteredAdrs);
       if (selected.length === 0) return;
       try {
         // List endpoint returns a summary — fetch full ADRs to get rich-text fields.
@@ -174,46 +181,29 @@ export default function DecisionsPanel() {
         setError(e instanceof Error ? e.message : t("delivery:adr.export.error"));
       }
     },
-    [t],
+    [t, filteredAdrs],
   );
 
-  // ── ADR filter helpers ───────────────────────────────────────────
-
-  const filteredAdrs = useMemo(() => {
-    let list = adrs;
-    if (adrFilters.statuses.length > 0) {
-      list = list.filter((a) => adrFilters.statuses.includes(a.status));
-    }
-    if (adrFilters.cardTypes.length > 0) {
-      list = list.filter((a) =>
-        (a.linked_cards ?? []).some((c) => adrFilters.cardTypes.includes(c.type)),
-      );
-    }
-    if (adrFilters.linkedCards.length > 0) {
-      list = list.filter((a) =>
-        (a.linked_cards ?? []).some((c) => adrFilters.linkedCards.includes(c.id)),
-      );
-    }
-    const { dateCreatedFrom, dateCreatedTo, dateModifiedFrom, dateModifiedTo } = adrFilters;
-    const { dateSignedFrom, dateSignedTo } = adrFilters;
-    if (dateCreatedFrom || dateCreatedTo) {
-      list = list.filter((a) => inDayRange(a.created_at, dateCreatedFrom, dateCreatedTo));
-    }
-    if (dateModifiedFrom || dateModifiedTo) {
-      list = list.filter((a) => inDayRange(a.updated_at, dateModifiedFrom, dateModifiedTo));
-    }
-    if (dateSignedFrom || dateSignedTo) {
-      list = list.filter((a) => inDayRange(a.signed_at, dateSignedFrom, dateSignedTo));
-    }
-    if (adrFilters.signedBy.length > 0) {
-      list = list.filter((a) =>
-        a.signatories.some(
-          (s) => s.status === "signed" && adrFilters.signedBy.includes(s.user_id),
-        ),
-      );
-    }
-    return list;
-  }, [adrs, adrFilters]);
+  // Spreadsheet export of what the filters show. The list rows are summaries,
+  // so fetch them again with every section in one request, keep the ones on
+  // screen and keep the on-screen order.
+  const handleSheetExport = useCallback(
+    async (visible: ArchitectureDecision[]) => {
+      setExporting(true);
+      try {
+        const full = await api.get<ArchitectureDecision[]>(
+          adrExportPath(adrFilters.showEarlierRevisions),
+        );
+        const byId = new Map(full.map((a) => [a.id, a]));
+        exportAdrsToXlsx(visible.map((a) => byId.get(a.id) ?? a));
+      } catch (e) {
+        setError(e instanceof Error ? e.message : t("grc:governance.decisions.exportError"));
+      } finally {
+        setExporting(false);
+      }
+    },
+    [t, adrFilters.showEarlierRevisions],
+  );
 
   const availableCardTypes = useMemo(() => {
     const typeKeys = new Set<string>();
@@ -225,10 +215,10 @@ export default function DecisionsPanel() {
       return {
         key,
         label: mt ? typeLabel(mt) : key,
-        color: mt?.color ?? "#666",
+        color: mt?.color ?? unknownTypeColor,
       };
     });
-  }, [adrs, metamodelTypes, typeLabel]);
+  }, [adrs, metamodelTypes, typeLabel, unknownTypeColor]);
 
   const availableLinkedCards = useMemo(() => {
     const seen = new Map<
@@ -246,13 +236,13 @@ export default function DecisionsPanel() {
             id: c.id,
             name: c.name,
             type: c.type,
-            color: mt?.color ?? "#666",
+            color: mt?.color ?? unknownTypeColor,
           });
         }
       }
     }
     return [...seen.values()].sort((a, b) => a.name.localeCompare(b.name));
-  }, [adrs, metamodelTypes, adrFilters.cardTypes]);
+  }, [adrs, metamodelTypes, adrFilters.cardTypes, unknownTypeColor]);
 
   const availableSignatories = useMemo(() => {
     const seen = new Map<string, { userId: string; displayName: string }>();
@@ -278,16 +268,41 @@ export default function DecisionsPanel() {
         <Typography variant="h6" fontWeight={600}>
           {t("grc:governance.decisions.title")}
         </Typography>
-        {canManage && (
+        <Stack direction="row" spacing={1}>
           <Button
-            variant="contained"
+            variant="outlined"
+            color="inherit"
             size="small"
-            startIcon={<MaterialSymbol icon="add" size={18} />}
-            onClick={() => setCreateOpen(true)}
+            startIcon={<MaterialSymbol icon="download" size={18} />}
+            onClick={() => void handleSheetExport(filteredAdrs)}
+            disabled={exporting || filteredAdrs.length === 0}
+            sx={{ textTransform: "none" }}
           >
-            {t("grc:governance.decisions.create")}
+            {t("common:actions.export")}
           </Button>
-        )}
+          {canManage && (
+            <Button
+              variant="outlined"
+              color="inherit"
+              size="small"
+              startIcon={<MaterialSymbol icon="upload" size={18} />}
+              onClick={() => setImportOpen(true)}
+              sx={{ textTransform: "none" }}
+            >
+              {t("common:actions.import")}
+            </Button>
+          )}
+          {canManage && (
+            <Button
+              variant="contained"
+              size="small"
+              startIcon={<MaterialSymbol icon="add" size={18} />}
+              onClick={() => setCreateOpen(true)}
+            >
+              {t("grc:governance.decisions.create")}
+            </Button>
+          )}
+        </Stack>
       </Stack>
 
       {error && (
@@ -356,6 +371,18 @@ export default function DecisionsPanel() {
           </Box>
         </Box>
       )}
+
+      <SpreadsheetImportDialog
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        onComplete={() => void load()}
+        title={t("grc:governance.decisions.import.title")}
+        intro={t("grc:governance.decisions.import.intro")}
+        skippedHint={t("grc:governance.decisions.import.skippedHint")}
+        endpoint="/adr/bulk-import"
+        parse={parseAdrWorkbook}
+        downloadTemplate={downloadAdrTemplate}
+      />
 
       <CreateAdrDialog
         open={createOpen}

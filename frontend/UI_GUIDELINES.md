@@ -53,6 +53,8 @@ The four MUI status hues. Wired into `palette.success/warning/error/info`, so `<
 | `STATUS_COLORS.info` | `#2196f3` | Informational, neutral feedback |
 | `STATUS_COLORS.neutral` | `#9e9e9e` | Draft, not set, archived |
 
+`WARNING_STRONG_COLOR` (`#ed6c02`, orange 800 — MUI's *default* `warning.main`, not wired into the app theme) is the warning drawn as a small icon or dot: a pending signature, an invited user, an at-risk project, a medium TurboLens finding. `STATUS_COLORS.warning` is too faint on white for a glyph (2.2:1); `RAG_COLORS.amber` (`#f57c00`) is the status-report amber, a different role.
+
 ### 2.3 Approval Status
 
 | Token | Hex |
@@ -135,7 +137,45 @@ Section spacing is `mb: 2`. Inline element gap is `gap: 1` or `gap: 1.5`.
 
 Default page header is `<Typography variant="h5">`. Use `variant="h6"` for in-card headers, `variant="subtitle2"` for tile labels.
 
-### 2.10 Value Chain bands
+### 2.10 Lifecycle Phases
+
+One palette wherever a phase is drawn as a colour (card Lifecycle section, LDV phase dot, Lifecycle report, inventory phase filter and group-by, web portal lifecycle bar). Darker Material steps so a phase told apart by colour alone clears 3:1 on both papers.
+
+| Token | Hex |
+| --- | --- |
+| `LIFECYCLE_PHASE_COLORS.plan` | `#9e9e9e` |
+| `LIFECYCLE_PHASE_COLORS.phaseIn` | `#1976d2` |
+| `LIFECYCLE_PHASE_COLORS.active` | `#2e7d32` |
+| `LIFECYCLE_PHASE_COLORS.phaseOut` | `#ed6c02` |
+| `LIFECYCLE_PHASE_COLORS.endOfLife` | `#d32f2f` |
+
+### 2.11 Feature Palettes
+
+| Token | Use |
+| --- | --- |
+| `STATUS_CHIP_COLORS.{success,warning,error}` | A soft status chip: `fill` (Material 50) + `text` (800–900) — portal approval and data-quality chips |
+| `ROLE_COLOR_PRESETS` | The twelve swatches the role editor offers; `[0]` is a new role's colour |
+| `FIELD_TYPE_COLORS` | The field-type chip in the card-layout editor; `other` for a type without its own hue |
+| `PPM_GANTT_COLORS.{status}` | PPM Gantt bars per task status: `bar`, `progress`, `barSelected`, `progressSelected` |
+| `HEATMAP_RAMP.{light,dark}` | Ten discrete steps for a grid of counts (Matrix report). Continuous heatmaps use `CHART_SEQUENTIAL` |
+| `SURFACE_SHADOW.sticky` / `.hover` | Hairline under a pinned bar; lift of a clickable card under the pointer |
+| `THIRD_PARTY_BRAND.{microsoft,google,okta}` | The SSO providers' logo colours on the login page's sign-in button. The colour is the brand (data, like `ROLE_COLOR_PRESETS`): never re-tuned, never reused for anything else |
+| `MEDAL_COLORS.{gold,silver,bronze}` | Ranking tiers in TurboLens (gap-analysis product ranks, Dashboard quality tiers): `fill` for the medal (border, bar, icon), `text` for its label. The colours are the convention, like a brand: never re-tuned, never reused for a status |
+| `DELIVERABLE_COLORS.{soaw,adr,diagram}` | The accent per EA Delivery deliverable kind (initiative deliverable sections, New-artefact menu, SoAW header). Role aliases: orange 900, the info blue, the Application type colour |
+
+### 2.12 Role Aliases
+
+A screen whose meaning is not another feature's does not borrow that feature's token, even when the value matches: it takes a **role alias**, a named token that references the source and adds no colour. Each is pinned equal to its source in `tokens.test.ts`.
+
+| Token | Source | Use |
+| --- | --- | --- |
+| `REPORT_ICON_COLORS.{dataQuality,costDriver,privateReport}` | `FIELD_TYPE_COLORS.{percentage,cost,other}` | Report icon accents: the Data Quality report tile, the Cost report's top-cost-driver KPI, a private saved report's lock |
+| `FAVORITE_COLOR` | `DASHBOARD_KPI_COLORS.favorites` | A favourite: the star on a card, an initiative or a diagram, the favourites-only filter, the My Favourites section |
+| `UNSET_VALUE_COLOR` | `BPM_UNSET_COLOR` | "No value" on any colour-by screen: a diagram card with no value, a PPM project with no RAG yet, a Lifecycle bar in no bucket |
+| `SCREEN_INK.{onLightFill,onDark,secondary,muted,rule,ruleDark,paper}` | `PRINT_COLORS.{text,control,inkSecondary,muted,control,subheading,paper}` | Fixed on-screen inks set by the fill, not the theme: text on a light card-type or heat fill (capability map, portfolio, process map, matrix counts), Layered Dependency View lines, labels and arrowheads |
+| `MATRIX_DIAGONAL_COLOR` | `FIELD_TYPE_COLORS.multiple_select` (deep purple 800) | The Matrix report's hovered diagonal, as a wash: `alpha(…, 0.1)` light, `alpha(…, 0.18)` dark |
+
+### 2.13 Value Chain bands
 
 | Band (process type) | Token | Hex | Use |
 | --- | --- | --- | --- |
@@ -146,7 +186,7 @@ Default page header is `<Typography variant="h5">`. Use `variant="h6"` for in-ca
 
 Text on a band fill = `readableTextColor`, accents = `readableTypeColor`.
 
-### 2.11 ArchiMate layers
+### 2.14 ArchiMate layers
 
 The ArchiMate editor colours each element by its ArchiMate layer with `ARCHIMATE_LAYER_COLORS[layer]` from `theme/tokens.ts` — a pastel `fill` and a darker `stroke` per layer. These follow the ArchiMate notation's own hues (not `LAYER_COLORS`, which is the four metamodel layers).
 
@@ -374,10 +414,19 @@ rules the module exists to hold, each of which has a cheap way to get wrong:
   `stopPropagation()`s so the cell menu's long-press never even arms. Hooks stay
   clear of each other by construction, not by spread order.
 - **A hook never claims a `gridProps` key another hook already owns.**
-  `useRowGrouping` returns `onModelUpdated`; a second hook returning it would
-  silently win in a later spread and break grouping. `useDragFill` returns
-  `onCellFocused` alone and subscribes to everything else through
-  `api.addEventListener`, which is additive.
+  `useRowGrouping`'s `gridProps` own `postSortRows`, `isFullWidthRow`,
+  `fullWidthCellRenderer`, `isRowSelectable` and `context`, and its
+  `handleModelUpdated` / `handleFilterChanged` are chained by each page inside
+  its own `onModelUpdated` / `onFilterChanged`; a second hook returning one of
+  those keys would silently win in a later spread and break grouping.
+  `useDragFill` returns `onCellFocused` alone and subscribes to everything else
+  through `api.addEventListener`, which is additive.
+- **The grouping tree layer ("Indent children under parents") never clones a
+  leaf row.** Depth, ancestor crumb and collapse state live in a side map the
+  hook exposes as `context.getTreeInfo(id)`, and the hook forces
+  `refreshCells` on the tree's columns whenever that map changes, because AG
+  Grid does not re-render a row whose object is unchanged. A clone rebuilt
+  from `data` would revert a Name edit that mutated the row in place.
 - **The fill is write-then-reload, never optimistic.** It persists each row and
   re-reads once at the end — it must not call `node.setDataValue()`, which would
   re-fire `onCellValueChanged` and write every row twice, and it never touches a
@@ -466,6 +515,8 @@ Cards are grouped into swim-lane boundaries representing the four metamodel laye
 
 Layer order is invariant. Layer color = `LAYER_COLORS[layer]` from `theme/tokens.ts`.
 
+**A lane (and an aggregate box) fits its cards** (#1295). On every drag move the view's `onNodeDrag` runs `fitParentForDrag` (`ldvLaneSizing.ts`), which refits the box to the union of its laid-out rectangle and the bounding box of **all** its cards plus the box's inset (`LANE_INSETS` / `CLUSTER_INSETS`). So it grows as a card is dragged past an edge, shrinks back as the card is moved back, and never goes below its laid-out size, which keeps the `DRAG_ROOM` a tight fit would take away. The laid-out rectangle lives on the box as `data.fitBase`, relative to the box's own origin, because a box can be dragged and its layout coordinates stop meaning anything once it has moved; a re-layout or Reset view rebuilds the nodes and drops it. Moving the origin (past the left or top edge, or back) moves the box and shifts its children the other way, so nothing moves on screen but the border. **The card being dragged is not one of those children**: `onNodeDragStart` takes every dragged card out of its box (`detachForDrag`: page position, no `parentId`, no `extent`, the box kept in `data.dragBoxId`) and `onNodeDragStop` puts it back (`reattachAfterDrag`, which refits once more). React Flow keeps its own copy of a dragged node's position relative to its parent, emits a move only when that copy changes, and writes it back on release, so shifting the card under it made the copy stale: a card pressed against the left edge read relative x 0 on every move, the box stopped growing and the card jumped on release. Never move a dragged node's parent origin mid-drag without taking the node out first; `e2e/dependency-view.spec.ts` drives a real drag to guard it, since jsdom never runs React Flow's drag code. The new size goes on `width`/`height` *and* `measured` *and* `style`, so React Flow's next move sees it and every reader agrees; read a box's live size through `boxSize`, never `style.width` alone. There is deliberately **no manual resize handle**: a size the user drags by hand would last only until the view is re-laid out, like a card position, and the handles were chrome on every lane. Create diagram takes the live size.
+
 **Nodes**
 
 | Property | Convention |
@@ -490,7 +541,7 @@ Legacy `proposed: true` input is normalized to `changeKind: "added"` for compati
 | --- | --- |
 | Routing | Smooth-step (curved, orthogonal) |
 | Direction | Always source → target as defined in the metamodel `relation_type` |
-| Label | Forward label of the relation type (e.g. *uses*, *supports*, *runs on*) |
+| Label | Forward label of the relation type (e.g. *uses*, *supports*, *runs on*). A label longer than one 34-character line wraps rather than being cut — the verb on the first line, the bracketed values below, at most three lines — through `wrapEdgeLabel` (`ldvEdgeLabel.ts`), which the edge router's label estimate reads too |
 | Style — idle | 1.2 px, dash pattern from the **Line style** view option — solid, dotted (`1 4`, round cap), dashed (`5 3`, the default) or long dash (`12 5`). Presets only: line style is meaningful vocabulary in ArchiMate/UML/C4, so the set stays short and named. See `ldvLineStyle.ts` |
 | Style — hovered | 2 px solid, label background gains opacity — solid whichever idle style is set, so the highlight reads the same |
 | Style — severed | 2 px error colour, `3 3` dashed. A *state* (an endpoint retires at the viewed date), so it overrides both hover and the chosen idle style |
@@ -518,7 +569,7 @@ The view ships with a top-bar toolbar and is directly manipulable:
   - **One line per pair, whatever the types or directions** — a pair joined by three verbs drawn as three lines is the dense picture the reader turned this on to escape ([#1117](https://github.com/vincentmakes/turbo-ea/discussions/1117)). The verb survives on the line only while it stands for a single relation type (naming one of several would be a claim about the others); the count is always there, the tooltip names every verb behind it, and relations running both ways get an arrowhead at each end.
   - **A connector must read as ONE line, or the merge is invisible.** The data rule above held on the demo landscape from the first cut and the screenshot still showed bundles, because four rendering choices each turned one line into what looks like several: (1) dagre was fed the pairs alphabetically (`lo → hi`), so the centred card had nine connectors on one side and two of them shared a handle slot — two lines leaving the same point of a card *is* a duplicate to the eye; the virtual edges are now oriented the way they are drawn (`forward`), so what points into the centre ranks above it and what it points to ranks below, and `spreadOverflow` moves the sixth-plus connector on a side to the left/right handles before staggering `pathOffset`; (2) a 1.2 px dotted idle stroke is what the eye reads as "several thin lines", so a connector is always **solid** with a width of `1.6 + min(2.8, log2(count))` px; (3) the count was 10 px text in the verb's bracket, so it is now a filled **pill** in the line's colour, with the verb beside it only while the line stands for a single relation type; (4) the card router's 12 px clearance and 12 px corridor separation are right for 1 px lines between cards and wrong beside a 400 px box, where two connectors 12 px apart along its edge read as one bundle — `routeLdvEdges` takes a `ChannelSpacing` (`ldvChannels.ts`) and aggregate mode passes `CONNECTOR_CLEARANCE` / `CONNECTOR_SEP` (28 / 22), with dagre's `ranksep` / `nodesep` derived from the same two numbers so a gap has room for the lines that will run through it. Boxes and the centred card stay obstacles: routing "around nothing" was tried and put lines straight through the centre card, which read as two lines between the boxes either side of it. `ldvAggregate.test.ts` runs every level over the demo fixture and pins pair uniqueness, conservation (`Σ count` + inside lines = relations) and that no two connectors of one node share both a handle and a `pathOffset`.
   - **A box is laid out and routed as a virtual card** — `layoutGroup` inside a lane, `alignLanesX` across lanes, `routeLdvEdges` for every line. Those engines take a `SizeLookup` (`ldvHandles.ts`) and ask each node how big it is instead of assuming 200×80; omit it and every node is a card, exactly as before. A second router was tried first and is the thing to avoid: it meant a second set of rules for ports, obstruction and label placement, and two sets drift. Two size-dependent traps the card case hid, both of which shipped as overlapping boxes: `transposeRow` swaps two x positions outright, which only preserves separation between equally wide nodes, and `alignLanesX` bucketed rows by top-edge y, which puts two boxes of different heights on one rank into different rows and so never keeps them apart.
-  The count rides on `data.count`, never inside `relLabel` — the label's 24-char cap would eat it, and hiding the verbs must still leave the count. **A box drags like a lane**: `buildDisplayNodes` flips `draggable` on for `ldvCluster` exactly as for `ldvGroup`, its cards ride along as its React Flow children (clamped by `extent: "parent"`), the connectors degrade to smoothstep when their stored bends go stale, and positions are not persisted — the same bargain the lanes strike. **Create diagram works while aggregating, with a caveat said first** (`LdvExportAggregatedDialog`, shown before the name prompt): the export (`collectDiagramInputs`, `ldvDiagramExport.ts`, a pure function over the LIVE nodes so a dragged box exports where it was put) turns each box into a DrawIO swimlane container (`DiagramGroupInput`) with its cards as real mxGraph children at their RELATIVE positions, stamped `groupChild="1"` — the third container-child marker `isContainerChild` accepts, so the editor's fixed-height, capped-detail-rows, never-a-paste and detach rules all apply to them and the cards stay fully live (`cardId` on every one; perspectives, logos and sync walk the flat cell map). Each merged connector becomes a **decoration** edge (`DiagramConnectorInput`): a bare `<mxCell>` with no `<object>`, no `relationType`, no `relationId`, no `pending`, so `scanDiagramItems` falls through every branch, the stale check never sees it and deleting it asks nothing; its label carries the count and `relationEdgeStyle({ weight })` thickens the stroke and boxes the label. Lines drawn inside a box export as ordinary relation lines. A line standing for N relations cannot be re-linked later, which is exactly what the dialog says. Anything resolving a node's absolute position must walk the whole parent chain (`absolutePosition`), not one level.
+  The count rides on `data.count`, never inside `relLabel` — the label's three-line cap would eat it, and hiding the verbs must still leave the count. **A box drags like a lane**: `buildDisplayNodes` flips `draggable` on for `ldvCluster` exactly as for `ldvGroup`, its cards ride along as its React Flow children (clamped by `extent: "parent"`), the connectors degrade to smoothstep when their stored bends go stale, and positions are not persisted — the same bargain the lanes strike. **Create diagram works while aggregating, with a caveat said first** (`LdvExportAggregatedDialog`, shown before the name prompt): the export (`collectDiagramInputs`, `ldvDiagramExport.ts`, a pure function over the LIVE nodes so a dragged box exports where it was put) turns each box into a DrawIO swimlane container (`DiagramGroupInput`) with its cards as real mxGraph children at their RELATIVE positions, stamped `groupChild="1"` — the third container-child marker `isContainerChild` accepts, so the editor's fixed-height, capped-detail-rows, never-a-paste and detach rules all apply to them and the cards stay fully live (`cardId` on every one; perspectives, logos and sync walk the flat cell map). Each merged connector becomes a **decoration** edge (`DiagramConnectorInput`): a bare `<mxCell>` with no `<object>`, no `relationType`, no `relationId`, no `pending`, so `scanDiagramItems` falls through every branch, the stale check never sees it and deleting it asks nothing; its label carries the count and `relationEdgeStyle({ weight })` thickens the stroke and boxes the label. Lines drawn inside a box export as ordinary relation lines. A line standing for N relations cannot be re-linked later, which is exactly what the dialog says. Anything resolving a node's absolute position must walk the whole parent chain (`absolutePosition`), not one level.
 - **Bottom-left `Controls` are split into two groups** by a divider rule: a **view group** (**Fullscreen**, then zoom +/-, **Re-center**, **Reset view**) and an **exploration group** (Highlight / Expand / Reveal parent / Reveal children). Reset and Fullscreen live here, not in the top bar. The whole panel is hand-ordered: default zoom + fitView are disabled (`showZoom={false} showFitView={false}`) and every button is a custom `ControlButton`, so Fullscreen can sit first and the fitView frame icon (too like Fullscreen) is swapped for a map-pin. The divider is a full-width inline-styled `<div>` — a filled light-grey band with thin top/bottom rules (an earlier bare 1px line with margins let the canvas show through and read as a glitch).
   - **Fullscreen** (`fullscreen` / `fullscreen_exit`, first button): toggles fullscreen on the view container.
   - **Re-center** (`location_on` map-pin): custom `fitView()` button — the stock frame icon read too much like the Fullscreen button.
@@ -684,10 +735,11 @@ Every user-visible string must use a translation key. See `CLAUDE.md` for the fu
 ## 7. Adding a New Token
 
 1. Decide the **semantic** name. Status? Severity? Layer? Card type?
-2. Add it to `src/theme/tokens.ts`. Use `as const`.
-3. Add a row to the table in this doc (sec. 2).
-4. If it's a status hue, also wire it into the MUI palette in `src/theme/index.ts`.
-5. Confirm WCAG AA contrast against `#ffffff` and the dark `#1e1e1e` paper.
+2. **Reuse before you add — the palette does not grow.** A value within CIEDE2000 ΔE 5 of an existing token with the same kind of role *is* that token: reference it, or add a role alias (§2.12) when the meaning differs. A new hex value is only for a role nothing in the palette can carry, and two members of one scale or categorical group that must be told apart (severity steps, lifecycle phases, chart series, ramps) stay distinct. Brand marks and medal metals are never merged.
+3. Add it to `src/theme/tokens.ts`. Use `as const`.
+4. Add a row to the table in this doc (sec. 2).
+5. If it's a status hue, also wire it into the MUI palette in `src/theme/index.ts`.
+6. Confirm WCAG AA contrast against `#ffffff` and the dark `#1e1e1e` paper.
 
 ### 3.13 Naming a Relation Type in the UI
 
@@ -876,6 +928,54 @@ types). A field is focused through its edit wrapper's `data-field-key`
 - Don't hardcode colours in keyframes or particles — take them from `@/theme/tokens`
   (`STATUS_COLORS`, `brand`) or the band colour (`bandColor`).
 - Don't loop an animation or start one the user did not cause.
+
+---
+
+### 3.17 Help Text: One Shape
+
+Admin-written help (a field's help text, a stakeholder role's description, a
+lifecycle phase's help) has one shape, **`HelpTip`** (`src/components/HelpTip.tsx`):
+a small `help` icon that shows the text in a tooltip on hover, keyboard focus
+or tap. It renders nothing for empty text, so pass whatever the resolver returns.
+The icon opens on a tap or click as well as on hover and focus (a second tap, a
+tap elsewhere or Escape closes it), and its click is prevented, so inside a
+control's `<label>` it never activates or focuses the field.
+
+- **Read mode**: the icon sits beside the label, inside the label's `Typography`.
+- **Edit mode**: the icon sits inside the control's floating label, after the
+  label text, at `HELP_TIP_IN_LABEL_SIZE` (18 px, which the label's 0.75 scale
+  renders level with the label text). Build the label with
+  `labelWithHelp(text, help)`, which returns `{ label, notch }`: `label` goes to
+  the visible label (`TextField label`, `InputLabel` children) and `notch` to
+  the outline's notch label (`slotProps.input.label` on a `TextField`, `Select
+  label`). A component that owns its label (`BooleanField`, `PercentageInput`)
+  takes the icon as `labelAdornment` and builds the pair itself. `FieldEditor`
+  (`features/cards/sections/cardDetailUtils.tsx`) does this for every core
+  control type, so a form built on `FieldEditor` needs nothing more; an
+  extension's own editor takes a string label, so its icon stays beside the
+  control. Where a read-mode icon stays on screen while editing (the Lifecycle
+  timeline above its date fields), the edit row gets none.
+- **The notch gets the spacer, never the icon.** MUI renders an outlined
+  control's label twice: the visible label and an invisible copy in the
+  border's `<legend>` that only sizes the gap in the border line. An icon in
+  both would leave a focusable, invisible duplicate tab stop in the legend, so
+  the notch carries `HelpTipNotchSpacer`, the icon's width and nothing else. On
+  a required field MUI appends the asterisk after the label's children, so it
+  reads "Label (i) *".
+- **Grids** use AG Grid's native `headerTooltip` on the column with the same text.
+
+✅ Do
+- Resolve the text with its localizing resolver (`useFieldHelp`,
+  `useTypeDescription`, `useLifecyclePhaseHelp`) — never show the English
+  column directly.
+- Put the icon after the label text, in read mode and in the floating label in
+  edit mode.
+
+❌ Don't
+- Don't hand-roll a `Tooltip` + icon for help text, don't add a second shape
+  (a collapsible, an always-visible caption), and don't show the same help twice.
+- Don't pass the icon to the notch label, and don't pin `shrink` / `notched` to
+  make room for it (§3.5): the spacer sizes the gap.
 
 ---
 

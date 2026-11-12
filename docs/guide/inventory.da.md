@@ -19,7 +19,7 @@ Det venstre sidepanel lader dig **filtrere** kort efter forskellige kriterier:
 - **Datakvalitet** — Båndfiltrering (multivalg): Komplet (≥80%), Delvis (40–79%), Minimal (under 40%). Samme bånd som [Datakvalitetsrapporten](reports.md#data-quality-report), så et klik på et bjælkesegment der lander her.
 - **Forældreløse** — Kun kort uden relationer i nogen retning. Vurderes på serveren og virker derfor uden en valgt korttype.
 - **Forældede** — Kun kort, der ikke er opdateret de seneste 90 dage. Begge spejler felterne i [Datakvalitetsrapporten](reports.md#data-quality-report), så et klik på et felt lander her.
-- **End of life** — For applikationer og it-komponenter kan du filtrere efter den supportstatus, Turbo EA udleder af kortets [EOL-link](../admin/eol.md): End of life, På vej, Understøttet eller Ukendt. **(tom)** viser de kort, hvor intet er registreret. Den tilhørende kolonne **End of life** viser datoen ved siden af en statusprik og sorteres og eksporteres som en dato.
+- **End of life** — For de korttyper, der sporer End of Life (som standard applikationer og it-komponenter, se [End of life på andre korttyper](../admin/eol.md#end-of-life-pa-andre-korttyper)), kan du filtrere efter den supportstatus, Turbo EA udleder af kortets [EOL-link](../admin/eol.md): End of life, På vej, Understøttet eller Ukendt. **(tom)** viser de kort, hvor intet er registreret. Den tilhørende kolonne **End of life** viser datoen ved siden af en statusprik og sorteres og eksporteres som en dato.
 - **Forbindelsestype** — Når der er valgt én hierarkisk korttype, og en administrator har defineret [forbindelsestyper](../admin/metamodel.md) for den, kan du filtrere efter typen af hvert korts forbindelse til sit overordnede kort — for eksempel de datterselskaber, der er *kommercielle* frem for *salg*. **(tom)** viser de kort, hvis forbindelse ikke bærer nogen type, samt kortene på øverste niveau, da der ikke er registreret noget for nogen af dem. Den tilhørende kolonne **Forbindelsestype** viser værdien som en farvet chip og kan redigeres i gitterets redigeringstilstand.
 - **Tags** — Filtrer efter tags fra en hvilken som helst tag-gruppe
 - **Relationer** — Filtrer efter relaterede kort på tværs af relations­typer
@@ -60,7 +60,7 @@ Kolonner er grupperet i fem kategorier:
 | **Standardkolonner** | Altid-aktive kolonner: Type, Name, Path, Description, Subtype, Lifecycle, Approval Status, Data Quality. Afmarker en hvilken som helst af disse for at skjule dem fra gitteret — nyttigt ved stramning af en gemt visning til bare de kolonner, du faktisk bruger. |
 | **Metadata** | Created, Modified, Created by, Modified by, Created via, Modified via. **Modified** er, hvornår kortets indhold sidst blev ændret — af en person eller en integration, aldrig når systemet sidst genberegnede en score — så du kan filtrere på datoen for at finde kort, der trænger til et gennemsyn af deres ejer. **Created via** og **Modified via** viser kanalen bag oprettelsen og den seneste ændring som en chip (MCP, API, Udvidelse, System); en celle forbliver tom for webgrænsefladen. |
 | **Attributes** | Brugerdefinerede felter defineret i metamodellen (text, number, cost, date, select, osv.) |
-| **Relationer** | Relaterede korttyper (f.eks. applikationer linket til en Business Capability) |
+| **Relationer** | Én kolonne pr. relation, navngivet efter dens verbum og den relaterede korttype — for eksempel *bruger IT-komponent* eller *understøttes af Applikation*. Når to relationstyper forbinder de samme korttyper, får hver sin egen kolonne, og en relationstype mellem kort af samme type (en applikation, der *sender data til* en anden) får én kolonne for hver retning. Søg i listen efter verbet eller korttypen. |
 | **Interessenter** | Én kolonne pr. interessentrolle defineret for den valgte korttype (f.eks. *Interessenter: Responsible*), der viser de tildelte brugere som chips. I gitter-redigeringstilstand kan du dobbeltklikke på en celle for at tildele eller fjerne brugere for rollen direkte fra gitteret (kræver tilladelsen til at administrere interessenter). |
 
 Kolonnen **Overordnet** viser kun kortet lige ovenover, mens **Path** viser hele kæden. I gitterredigeringstilstand kan du dobbeltklikke på en Overordnet-celle for at flytte kortet eller rydde feltet for at flytte det til øverste niveau. Kolonnen kan kun redigeres, når gitteret er filtreret til én korttype, der understøtter hierarki. Hvis en flytning afvises — fordi den ville skabe en løkke, kollidere med et kort med samme navn under målet eller overskride den maksimale dybde — vises årsagen nederst på skærmen, og cellen føres tilbage.
@@ -94,7 +94,7 @@ Lageret bruger en **AG Grid**-datatabel med kraftfulde funktioner:
 | **Lifecycle** | Aktuel livscyklus-tilstand |
 | **Approval Status** | Gennemgangs-status-badge |
 | **Data Quality** | Fuldstændigheds-procent med visuel ring |
-| **Relations** | Navne på relaterede kort, sorteret alfabetisk, med en klikbar popover til at tilføje eller fjerne relationer — kort, der allerede er tilknyttet, skjules fra dens vælger, undtagen ved en hierarkisk type, hvor vælgeren viser hele hierarkiet som et indrykket træ og lader de kort blive liggende nedtonet |
+| **Relations** | Én kolonne pr. relation med dens verbum og den relaterede korttype som overskrift (f.eks. *bruger IT-komponent*): navnene på de kort, der er knyttet via den relation, sorteret alfabetisk, med en klikbar popover til at tilføje eller fjerne relationer af den slags — kort, der allerede er tilknyttet, skjules fra dens vælger, undtagen ved en hierarkisk type, hvor vælgeren viser hele hierarkiet som et indrykket træ og lader de kort blive liggende nedtonet. Gemte visninger og kolonnelayouts fra før relationskolonnerne blev opdelt pr. relation, åbner med de nye kolonner i stedet for den gamle |
 
 **Tabel-funktioner:**
 
@@ -172,6 +172,19 @@ Klik på **Gruppér efter** i værktøjslinjen (ved siden af antallet af element
 - Afkrydsningsfeltet i overskriften vælger alle kort i gruppen: for at omklassificere en stak skal du folde **Ikke angivet** ud, markere overskriften og sætte værdien med [Masseredigering](#mass-edit). Der er bevidst ingen træk-og-slip — vælg og sæt fungerer ens på computer, tablet og telefon.
 - Sortering gælder inden for hver gruppe; grupperingen huskes efter genindlæsning, gemmes i gemte visninger og kan deles via URL-parameteren `group_by`.
 
+### Indryk børn under forældre { #group-by-parents }
+
+Sæt kryds ved **Forælder** øverst i menuen **Gruppér efter** for at vise kortene som et træ: hver forælder først og dens børn indrykket nedenunder. Den virker alene (hele gitteret bliver ét træ) eller oven på en vilkårlig gruppering (hver gruppe bliver sit eget træ). Menuen forbliver åben, når du sætter krydset, så du kan vælge en gruppering lige bagefter.
+
+![Lager med børn indrykket under forældre](../assets/img/da/98c_inventory_group_by_parents.png)
+
+- Et kort forlader aldrig sin egen gruppe. Et barn, hvis forælder ligger i en anden gruppe, er skjult af et kolonnefilter eller ikke er indlæst, starter sin egen gren, hvor de manglende forfædre vises i gråt før navnet (for eksempel *SAP S/4HANA / SAP FI /* før modulets navn). Gruppetællinger, afkrydsningsfeltet i overskriften og masseredigering svarer derfor altid til det, gruppen indeholder.
+- Klik på pilen foran en forælders navn for at skjule eller vise dens gren. En sammenfoldet forælder tæller stadig sine skjulte kort med i antallet af elementer og i gruppeoverskriften. Grene, du folder sammen med pilen, huskes ikke, og en ændring af et kolonnefilter åbner dem alle igen; når du rydder det sidste kolonnefilter, vender visningen tilbage til det niveau, du valgte med trinvælgeren.
+- Mens forældrelaget er slået til, lukker eller åbner et **−** / **+**-par ved siden af knappen Gruppér efter hele træet ét niveau ad gangen. Det valgte niveau huskes ved genindlæsning, gemmes i gemte visninger og kan deles med `group_tree_level=<n>`; det viste niveau følger også det, du åbner og lukker manuelt.
+- Sorteringen gælder blandt søskende: forældrene sorteres, og hver forælders børn sorteres under den.
+- Indstillingen tilbydes kun, når en korttype i visningen har et hierarki. Den huskes ved genindlæsning, gemmes i gemte visninger og kan deles med URL-parameteren `group_tree=1`.
+- **Eksport** følger trærækkefølgen og udelader kortene i sammenfoldede grene, som den også gør for sammenfoldede grupper.
+
 ## AI-beskrivelsesforslag { #ai-description-suggestions }
 
 Turbo EA kan bruge **AI til at generere en beskrivelse** for ethvert kort. Dette virker på både Opret kort-dialogen og eksisterende kortdetaljesider.
@@ -216,6 +229,70 @@ Gemte visninger vises i filterpanelets sidepanel. Klik på en visning for øjebl
 - **My Views** — Visninger du har oprettet
 - **Shared with Me** — Visninger andre har delt med dig
 - **Public Views** — Visninger tilgængelige for alle
+
+### Forespørgselsvisninger { #query-views }
+<a id="mcp-views"></a>
+
+En **forespørgselsvisning** er en gemt visning, hvis filtre er en **forespørgsel med flere led** — en kæde af relationer med betingelser i hvert trin, for eksempel *Organisationer, der bruger en aktiv Applikation, som er berørt af et Initiativ med status On Track*. Flere sådanne forespørgsler kan stables i én visning og kombineres med **OG** og **ELLER** (se nedenfor). Visningen gemmer forespørgslen, ikke dens resultater: Den køres igen, hver gang visningen åbnes, så listen altid afspejler det aktuelle landskab.
+
+![En forespørgselsvisning i inventaret](../assets/img/da/98d_inventory_mcp_view.png)
+
+**Opbygning af en forespørgselsvisning.** I fanen **Visninger** i filtersidebjælken skal du klikke på **Ny forespørgselsvisning** ved siden af *Gem aktuelle* (vises for alle, der må administrere visninger). Hvis et filter er aktivt, også den valgte korttype, beder en bekræftelse om lov, før de ryddes; **Annuller** på kladden henter dem tilbage. Strimlen over gitteret åbner som en forespørgselsbygger:
+
+1. Klik på startchippen (*Vælg en type*), og vælg den korttype, forespørgslen starter fra — den type, den lister.
+2. Klik på **+ relation** efter det sidste kort for at tilføje et led. Menuen lister hvert relationsverbum med den korttype, det fører til; en relation mellem kort af samme type tilbydes i begge retninger. Hver forespørgselslinje er en enkelt kæde på op til tre led.
+3. Klik på **+ betingelse** under et kort for at indsnævre det: **Livscyklus**, **Undertyper**, **Godkendelsesstatus**, **Datakvalitet** (*Komplet*, *Delvis* eller *Minimal*, de samme bånd som sidebjælkens filter), **End of life** (se nedenfor), **Tags**, **Bestemte kort** eller et valg- eller ja/nej-felt for den korttype. For tags matcher et kort, hvis det har et vilkårligt af de valgte tags i en gruppe, og det skal matche hver gruppe, du tilføjer; kun taggrupper, der gælder for den korttype, tilbydes. **Bestemte kort** åbner kortvælgeren for kort af den type, og trinnet matcher så kun de valgte kort; for en hierarkisk korttype får en kontakt **Medtag underkort** også kortene under hvert valg til at matche. Et valgt kort, du ikke kan se, vises som *(skjult kort)*.
+4. Klik på **Gem**. Den sædvanlige dialog til at gemme visninger åbnes med navn, synlighed, deling og OData-indstilling. **Annullér** kasserer forespørgslen.
+
+![Opbygning af en forespørgselsvisning](../assets/img/da/98e_inventory_query_builder.png)
+
+Mens du bygger, filtreres gitteret live, og antallet i værktøjslinjen viser, hvor mange kort der matcher, så du kan se effekten af hvert led og hver betingelse, før du gemmer.
+
+**Filtrering på End of Life.** Betingelsen **End of life** tilbydes for en korttype, der sporer End of Life — som standard Applikation og IT-komponent; den følger typens afsnit om End of Life i metamodellen. Dens værdier er **Udløb**, **Nærmer sig udløb**, **Understøttet**, **Ukendt** og *(tom)* for kort uden End-of-Life-data. Statussen er den, som inventarets kolonne **End of life** viser: Den kommer fra det tilknyttede endoflife.date-produkt eller et brugerdefineret EOL-produkt, eller fra en manuelt indtastet End-of-Life-dato, og den er uafhængig af kortets livscyklusfase. Betingelsen virker på startkortet og i ethvert relationstrin, i både OG- og ELLER-linjer — for eksempel *Applikationer, der bruger en IT-komponent ved End of Life*. Så længe en forespørgsel filtrerer på den på startkortet, viser gitteret kolonnen End of life, så du kan se, hvorfor hvert kort matchede; de kolonner, du har valgt, ændres ikke. Hvis endoflife.date ikke kan nås, og intet er cachet, læses tilknyttede kort som *Ukendt*, som i kolonnen End of life.
+
+Betingelsen kræver tilladelsen til at se End-of-Life-data (**Vis EOL-data**, `eol.view`). Uden den tilbydes betingelsen ikke, og åbning, forhåndsvisning eller lagring af en visning, der bruger den, afvises med *Denne visning filtrerer på End-of-Life-status, som din rolle ikke kan se.*
+
+**Ændring af led og betingelser.** Klik på et leds verbumschip for at åbne dets menu: **har ingen** gør leddet til et krav om, at kortet **ikke** har nogen sådan relation, og **Fjern dette led** fjerner det sammen med alle efterfølgende led. Klik på en betingelseschip for at ændre dens værdier, eller på dens **×** for at fjerne den.
+
+**Kombinér forespørgsler med OG og ELLER.** En visning kan rumme flere forespørgselslinjer stablet oven på hinanden. Hver linje er en komplet forespørgsel — startkort, relationer og betingelser — bygget præcis som den enkelte forespørgsel ovenfor. Linjerne er grupperet:
+
+- **OG** tilføjer en linje til samme gruppe: Et kort vises kun, når det matcher **hver** linje i gruppen. En OG-linje starter fra samme korttype som sin gruppe, vist som en fast chip, og gruppens første linje kan ikke skifte korttype, så længe den har OG-linjer.
+- **ELLER** starter en ny gruppe under en **ELLER**-skillelinje: Dens resultater **føjes til** listen. En ny gruppe kan starte fra en anden korttype, så én visning kan f.eks. liste applikationer og organisationer sammen. Når en visning lister flere korttyper, viser gitteret de kolonner, som typerne har til fælles.
+
+I redigeringstilstand spørger et **plus** i en cirkel under hver gruppe om **OG** eller **ELLER**: OG tilføjer en linje til gruppen, ELLER åbner en ny gruppe efter den. **×** for enden af en linje fjerner den; det vises, når visningen har mere end én linje.
+
+Demovisningen *Active apps on aging tech, and the organizations using apps* har f.eks. en applikationsgruppe med to linjer — en aktiv applikation, der bruger en IT-komponent i udfasning eller ved livets afslutning, **OG** en applikation, der er berørt af et initiativ — **ELLER** en organisation, der bruger en applikation. Listen viser de applikationer, der opfylder begge linjer, sammen med hver organisation, der bruger en applikation.
+
+![Kombinér forespørgsler med OG og ELLER](../assets/img/da/98f_inventory_query_stack.png)
+
+En visning rummer højst **seks** forespørgselslinjer, **tolv** relationer på tværs af alle linjer og **tre** relationer i dybden på hver linje. Linjerne i en OG-gruppe mødes kun ved deres startkort: IT-komponenten i den ene linje og initiativet i den anden kan være forskellige kort. To krav til **det samme** kort midt i en linje — f.eks. at den samme IT-komponent leveres af en leverandør **og** tilhører en teknologikategori — kan ikke bygges i forespørgselseditoren; en AI-assistent kan skrive en sådan forespørgsel via [MCP-serveren](../admin/mcp.md#multi-hop-card-queries), og striben viser den derefter.
+
+**Redigering af en gemt forespørgselsvisning.** Når en forespørgselsvisning er åben, viser strimlen dens sti: korttyperne som chips, forbundet af det relationsverbum, der knytter hvert trin (for eksempel *Organisation → bruger Applikation → er berørt af Initiativ*), med hvert korts betingelser nedenunder. En visning med flere linjer viser den samme stak med sine OG-markører og ELLER-skillelinjer, men uden redigeringsknapperne. Hvis du ejer visningen eller har redigeringsrettigheder til den, skifter en **blyant** i strimlen den til den samme bygger; **Gem** opdaterer visningen. Knappen **×** (*Forlad denne visning*) vender tilbage til det normale inventar. **Gem aktuel visning**, mens en forespørgselsvisning er åben, gemmer en ny forespørgselsvisning med samme forespørgsel.
+
+#### Se kortene bag et match { #query-view-matches }
+
+En forespørgselsvisning viser kun det første kort i sin forespørgsel. For at se, hvilke kort længere henne i kæden der fik en række til at matche, skal du klikke på deres korttype i forespørgslens sti. I *Organisationer, der bruger en applikation, der bruger en IT-komponent ved eller nær livets afslutning* klikker du på **Applikation**, og en kolonne viser for hver organisation de applikationer, den matcher igennem; klik på **IT-komponent**, og en anden kolonne viser de kvalificerende IT-komponenter. Klik på korttypen igen for at fjerne dens kolonne.
+
+![En forespørgselsvisning med dens matchende kolonner](../assets/img/da/98g_inventory_query_matches.png)
+
+- **Sådan ser en kontakt ud.** En korttype, du kan klikke på, viser en markør og værktøjstippet *Vis disse i en kolonne*. Når dens kolonne er slået til, er chippen udfyldt i korttypens farve og har et lille kolonneikon; dens værktøjstip lyder *Skjul kolonnen*.
+- **Hvilke korttyper er kontakter.** Hver korttype efter den første i sin linje. Den første korttype i en linje er ikke en, fordi dens kort er rækkerne, og det er en korttype bag **har ingen** heller ikke, da den står for en manglende relation. I en visning med flere linjer er korttyperne i hver linje kontakter; med **ELLER** viser en række kun kort for de linjer, den matcher. Kontakterne er ikke tilgængelige, mens du redigerer forespørgslen, og kolonnerne er skjult, indtil du gemmer eller annullerer.
+- **Hvor kolonnen vises.** Lige efter **Navn**, med korttypen og *matchende* som titel — for eksempel *Applikation · matchende* — så den ikke forveksles med en relationskolonne som *bruger Applikation*, der viser alle applikationer, der er relateret på den måde. Når to trin har samme korttype, nummereres titlerne. Hold markøren over titlen for at se den sti, kolonnen følger.
+- **Hvad en celle viser.** Navnene på de matchende kort, adskilt af semikoloner; hold markøren over cellen for at se hele listen. En celle viser højst **100** navne; en længere liste slutter med *…*, og dens værktøjstip angiver, at de første 100 vises. Du kan sortere og filtrere kolonnen som en tekstkolonne, og **Eksportér aktuel visning** medtager den.
+- **Hvert kort langs kæden, ikke hvem der fører til hvem.** En række viser hvert matchende kort på det trin: alle organisationens kvalificerende applikationer og alle de kvalificerende IT-komponenter for disse applikationer. Den viser ikke, hvilken IT-komponent der hører til hvilken applikation. For at vise selve IT-komponenterne, én pr. række, skal du i stedet skrive forespørgslen med IT-komponent som start.
+- **Gemt med visningen.** De kolonner, du slår til, gemmes med visningen (**blyanten** i visningslisten, derefter **Opdatér**), så de er der igen, når du åbner den. Når du redigerer forespørgslen, bevares en kolonne, så længe dens trin stadig findes, og den fjernes, når du fjerner trinnet eller ændrer dets korttype.
+
+Du ser kun kort, du har lov til at se: et kort, der er skjult for dig, nævnes aldrig i en celle, og en række, der kun matcher gennem skjulte kort, vises ikke.
+
+Demovisningen *Organizations on applications with components at or near end of life* åbner med begge kolonner slået til.
+
+**Visninger oprettet af en AI-assistent.** En assistent, der er forbundet via [MCP-serveren](../admin/mcp.md), kan også oprette forespørgselsvisninger. En sådan visning viser en **MCP**-chip og noten *Oprettet via MCP* i sin strimmel og et robotmærke i visningslisten; den redigeres som enhver anden forespørgselsvisning. I visningslisten har hver forespørgselsvisning et lille forespørgselsvisningsmærke (en terning; robotmærket, når en assistent har oprettet den) og sin kompakte sti (*Organisation › bruger Applikation › er berørt af Initiativ*) som anden linje; en stablet visning læses som *… OG … ELLER …*. Har visningen betingelser, følger deres antal efter stien (*… › er berørt af Initiativ · 2 betingelser*).
+
+**Åbning af en visning via link.** Når en assistent gemmer en visning, returnerer den et link på formen `/inventory?view=<view id>`; når du åbner det, anvendes den gemte visning direkte. Det samme link virker for enhver gemt visning, du kan se.
+
+**OData.** OData-feedet for en forespørgselsvisning returnerer de samme kort som inventaret: Forespørgslen anvendes også på feedet.
+
+Se [Forespørgsler på kort med flere led](../admin/mcp.md#multi-hop-card-queries) for forespørgselsgrammatikken, dens grænser og MCP-værktøjerne (`query_cards`, `list_inventory_views`, `save_inventory_view`, `list_tag_groups`).
 
 ## Excel-import / -eksport { #excel-import }
 

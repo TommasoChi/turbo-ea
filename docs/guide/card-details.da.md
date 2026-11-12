@@ -97,6 +97,8 @@ Hver fase har en **datovælger**, så du kan registrere, hvornår komponenten er
 
 Hvis en fase er dateret efter en fase, der burde komme efter den — for eksempel **Phase Out** efter **End of Life** — vises et advarselsikon ved siden af datoen, og den samme advarsel vises under feltet under redigering. Det er kun et hint: datoerne kan stadig gemmes, som de er indtastet.
 
+Et infoikon ved siden af hver fase på tidslinjen forklarer, hvad fasen betyder – hold musen over det for at læse definitionen. Det viser en standardforklaring, medmindre din administrator har ændret den, så den beskriver, hvordan din organisation bruger fasen, eller har fjernet den. Tidslinjen med dens ikoner forbliver synlig, mens du redigerer datoerne. Teksterne angives under **Administration → Metamodel → Livscyklusfaser** (se [Livscyklusfaser](../admin/metamodel.md#lifecycle-phases)).
+
 ### Brugerdefinerede egenskabs-sektioner
 
 Afhængigt af korttypen vil du se yderligere sektioner med **brugerdefinerede felter** konfigureret i metamodellen. Felttyper inkluderer:
@@ -110,6 +112,8 @@ Afhængigt af korttypen vil du se yderligere sektioner med **brugerdefinerede fe
 - **URL** — Klikbart link (valideret for http/https/mailto)
 - **Single select** — Dropdown med foruddefinerede muligheder
 - **Multiple select** — Multi-valg med chip-visning
+
+Hvor din administrator har skrevet en **hjælpetekst** til et felt, vises et infoikon ved siden af dets etiket: hold musen over det (eller tab til det med tastaturet) for at læse, hvad feltet betyder. Mens du redigerer sektionen, sidder det samme ikon ved siden af feltet. I Lageret vises den også, når du holder musen over feltets kolonneoverskrift.
 
 Felter markeret som **calculated** viser et badge og kan ikke redigeres manuelt — deres værdier beregnes af [admin-definerede formler](../admin/calculations.md).
 
@@ -179,7 +183,7 @@ Ikonet **åbn i ny fane** i værktøjslinjen åbner den fulde [afhængighedsrapp
 
 Anvend tags fra de konfigurerede [tag-grupper](../admin/tags.md). Afhængigt af gruppe-tilstanden kan du vælge ét tag (single select) eller flere tags (multi select).
 
-### Resources-fane
+### Resources-fane {: #resources-tab }
 
 **Resources**-fanen konsoliderer al understøttende materiale for et kort:
 
@@ -189,11 +193,14 @@ Anvend tags fra de konfigurerede [tag-grupper](../admin/tags.md). Afhængigt af 
 
 ### EOL-sektion
 
-Hvis kortet er linket til et [endoflife.date](https://endoflife.date/)-produkt (via [EOL-administration](../admin/eol.md)):
+Vises som standard på Applications og IT Components og på enhver anden korttype, hvor administratoren har [slået den til](../admin/eol.md#end-of-life-pa-andre-korttyper). Hvis kortet er linket til et [endoflife.date](https://endoflife.date/)-produkt (via [EOL-administration](../admin/eol.md)):
 
-- **Produktnavn og version**
-- **Support-status** — Farvekodet: Supported, Approaching EOL, End of Life
-- **Nøgle-datoer** — Udgivelsesdato, aktiv support slut, sikkerheds-support slut, EOL-dato
+- **Produktnavn og version** – et brugerdefineret produkt navngives med sin titel og er markeret **Brugerdefineret**
+- **Supportstatus** — Farvekodet efter samme regel som EOL-rapporten: Supporteret, Nærmer sig EOL (inden for seks måneder før EOL-datoen eller når den aktive support er ophørt), End of Life
+- **Nøgledatoer** — Udgivelsesdato, aktiv supportafslutning, EOL-dato, den seneste version og dens udgivelsesdato
+- **Udgivelsesnoter** — et link til produktets side på endoflife.date eller **Leverandørside** for et brugerdefineret produkt
+
+**Tilknyt**, **Skift** og **Fjern tilknytning** vises kun, hvis du må redigere kortet. Brugere med tilladelsen **Administrer EOL** kan definere et [brugerdefineret EOL-produkt](../admin/eol.md) direkte fra denne sektion via linket **Definér det som et brugerdefineret produkt…** under produktsøgningen: Formularen åbner med kortets navn (eller det, du skrev) som produktnavn, og kortet tilknyttes det nye produkt ved gemning. De får også en genvej til **Administrer brugerdefinerede produkter** i indstillingerne og kan tilføje en manglende udgivelsescyklus fra cykluslisten. Alle andre ser et tip om at bede en EOL-manager, når endoflife.date ikke har noget match. Brugerdefinerede produkter opfører sig som endoflife.date-produkter alle andre steder.
 
 ## Kommentarer-fane
 
@@ -228,13 +235,15 @@ Interessenttildelinger påvirker **tilladelser**: en brugers effektive tilladels
 
 Når en rolle har en **farve** angivet i metamodellen, markeres dens gruppe med den, så du med et enkelt blik kan skelne en ejer fra en observatør.
 
+Hvor en rolle har en **beskrivelse**, vises et infoikon ved siden af dens navn: hold musen over det for at læse, hvad rollen betyder. Beskrivelsen vises også under rollens navn i rollevælgeren, når du tilføjer en interessent.
+
 ### Søgning og invitation
 
 Vælg en interessent via den **søgbare autocomplete** — begynd at skrive, og dropdownen filtrerer på både navn og e-mail (e-mail vises som den sekundære linje, så to brugere med samme navn kan skelnes med et øjekast).
 
-Hvis den e-mail, du skriver, ikke matcher en eksisterende bruger, vises muligheden **"Invite «email» as a new user"** i slutningen af dropdownen. Vælger du den, udvides en inline mini-formular lige inde i vælgeren — vælg en rolle (Member eller Viewer som standard), rediger eventuelt visningsnavnet, og indsend. Den nye bruger inviteres via standard-invitations-e-mailen **og** tildeles den valgte interessentrolle på kortet i én enkelt handling, så du aldrig behøver at forlade kortet for at onboarde en bidragsyder.
+Hvis den e-mail, du skriver, ikke matcher en eksisterende bruger, vises muligheden **"Invite «email» as a new user"** i slutningen af dropdownen. Vælger du den, udvides en inline mini-formular lige inde i vælgeren — rediger eventuelt visningsnavnet, og indsend. Den nye bruger får den **standardrolle**, der er angivet under [Brugere og roller](../admin/users.md#roller). Den nye bruger inviteres via standard-invitations-e-mailen **og** tildeles den valgte interessentrolle på kortet i én enkelt handling, så du aldrig behøver at forlade kortet for at onboarde en bidragsyder.
 
-Invitations-stien kræver tilladelsen **`users.invite`**, en delegeret form af `admin.users`, som administratorer kan give til betroede medlemmer. En privilegie-eskalerings-vagt forhindrer ikke-administratorer i at invitere brugere ind i admin-roller — rolle-dropdownen filtrerer stille til roller, som indbyderen har lov til at delegere.
+Invitations-stien kræver tilladelsen **`users.invite`**, en delegeret form af `admin.users`, som administratorer kan give til betroede medlemmer. En privilegie-eskalerings-vagt forhindrer ikke-administratorer i at invitere brugere ind i andre roller: uden `admin.users` kan en inviteret bruger kun få standardrollen, Member eller Viewer.
 
 ## History-fane
 
@@ -250,9 +259,11 @@ Alt, der flytter kortets **Ændret**-dato, vises her — en manuel redigering, e
 
 ## ADRs-fane
 
-Hvert kort har en **ADRs**-fane, der viser de [arkitekturbeslutninger](delivery.md), som er tilknyttet kortet, med reference, titel, status, alle tilknyttede kort og tidspunktet for seneste ændring. Klik på en række for at åbne beslutningen.
+Hvert kort har en **ADRs**-fane, der viser de [arkitekturbeslutninger](delivery.md), som er tilknyttet kortet — den aktuelle revision af hver beslutning samt en eventuel revision under udarbejdelse — med reference, titel, gyldighed (eller status, så længe beslutningen endnu ikke er underskrevet), alle tilknyttede kort og tidspunktet for seneste ændring. Klik på en række for at åbne beslutningen; tidligere revisioner nås derfra.
 
 Hvis du må administrere ADR-tilknytninger, tilbyder fanen desuden **Tilknyt ADR** til at vedhæfte en eksisterende beslutning og **Opret ADR** til at oprette en ny, der på forhånd er tilknyttet dette kort, samt en frakoblingshandling på hver række. På kort uden tilknyttede beslutninger er fanen skjult, medmindre du har den tilladelse, så brugere med skrivebeskyttet adgang aldrig ser en tom fane.
+
+Under listen viser **Omtalt i** de beslutninger og Statements of Architecture Work, hvis tekst omtaler dette kort, og dem, hvis diskussion omtaler det (markeret *i diskussionen*), med hvert dokuments reference eller revision og dets gyldighed eller status. En omtale tilknytter ikke kortet til beslutningen; den vises kun her. Listen viser kun de dokumenter, du kan åbne, og udelades, når der ingen er. Se [Omtaler](grc.md#decision-mentions).
 
 ## Risks-fane (GRC aktiveret, når til stede)
 

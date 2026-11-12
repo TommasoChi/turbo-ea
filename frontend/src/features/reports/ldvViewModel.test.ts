@@ -10,7 +10,6 @@ import {
   DOT_BOX,
   DOT_INSET,
   FALLBACK_TYPE_COLOR,
-  MAX_EDGE_LABEL_CHARS,
   PHASE_DOT,
   TYPE_ICON_RIGHT_BESIDE_DOT,
   cardBorder,
@@ -22,6 +21,7 @@ import {
   countByType,
   edgeColors,
   edgeIsActive,
+  edgeLabelHeight,
   edgeLabelWidth,
   edgeStrokeWidth,
   exportFileName,
@@ -31,6 +31,7 @@ import {
   hidesCardsOnView,
   labelHitsObstacle,
   movedBeyondClick,
+  cardLineBudget,
   nameLineClamp,
   nextBackground,
   paintOrder,
@@ -38,9 +39,15 @@ import {
   placeEdgeLabel,
   safeTypeColor,
   touchesHovered,
-  truncateEdgeLabel,
   typeIconPlacement,
 } from "./ldvViewModel";
+import {
+  LIFECYCLE_PHASE_COLORS,
+  SCREEN_INK,
+  STATUS_COLORS,
+  brand,
+  surface,
+} from "@/theme/tokens";
 
 describe("card colour", () => {
   it("keeps a #rrggbb type colour and greys anything else", () => {
@@ -55,24 +62,19 @@ describe("card colour", () => {
   });
 
   it("washes 12 % in light mode, 22 % in dark, 6 % on a proposed card", () => {
-    expect(cardTint("#0f7eb5", false, false)).toBe("rgba(15,126,181,0.12)");
-    expect(cardTint("#0f7eb5", true, false)).toBe("rgba(15,126,181,0.22)");
-    expect(cardTint("#0f7eb5", true, true)).toBe("rgba(15,126,181,0.06)");
-    expect(cardTint("#0f7eb5", false, true)).toBe("rgba(15,126,181,0.06)");
+    expect(cardTint("#0f7eb5", false, false)).toBe("rgba(15, 126, 181, 0.12)");
+    expect(cardTint("#0f7eb5", true, false)).toBe("rgba(15, 126, 181, 0.22)");
+    expect(cardTint("#0f7eb5", true, true)).toBe("rgba(15, 126, 181, 0.06)");
+    expect(cardTint("#0f7eb5", false, true)).toBe("rgba(15, 126, 181, 0.06)");
   });
 });
 
 describe("lifecycle dot", () => {
-  it("colours each phase like the lifecycle badge", () => {
-    expect(PHASE_DOT).toEqual({
-      plan: "#9e9e9e",
-      phaseIn: "#1976d2",
-      active: "#2e7d32",
-      phaseOut: "#ed6c02",
-      endOfLife: "#d32f2f",
-    });
-    expect(phaseDotColor("active")).toBe("#2e7d32");
-    expect(phaseDotColor("phaseOut")).toBe("#ed6c02");
+  it("colours each phase with the app-wide lifecycle palette", () => {
+    expect(PHASE_DOT).toEqual(LIFECYCLE_PHASE_COLORS);
+    expect(phaseDotColor("active")).toBe(LIFECYCLE_PHASE_COLORS.active);
+    expect(phaseDotColor("phaseOut")).toBe(LIFECYCLE_PHASE_COLORS.phaseOut);
+    expect(phaseDotColor("endOfLife")).toBe(LIFECYCLE_PHASE_COLORS.endOfLife);
   });
 
   it("greys an unknown phase and draws no dot without one", () => {
@@ -151,6 +153,19 @@ describe("card chrome placement", () => {
     expect(nameLineClamp(1)).toBe(2);
     expect(nameLineClamp(2)).toBe(1);
     expect(nameLineClamp(3)).toBe(1);
+  });
+
+  it("gives the type line the first of the card's two lines (#1377)", () => {
+    expect(cardLineBudget(true, 0)).toEqual({ extraShown: 0, total: 1 });
+    expect(cardLineBudget(true, 1)).toEqual({ extraShown: 1, total: 2 });
+    expect(cardLineBudget(true, 3)).toEqual({ extraShown: 1, total: 2 });
+  });
+
+  it("leaves both lines to the extra fields when the type is off", () => {
+    expect(cardLineBudget(false, 0)).toEqual({ extraShown: 0, total: 0 });
+    expect(cardLineBudget(false, 1)).toEqual({ extraShown: 1, total: 1 });
+    expect(cardLineBudget(false, 2)).toEqual({ extraShown: 2, total: 2 });
+    expect(cardLineBudget(false, 5)).toEqual({ extraShown: 2, total: 2 });
   });
 });
 
@@ -236,28 +251,28 @@ describe("line state", () => {
 
   it("colours an idle and a lit line per theme", () => {
     expect(edgeColors(false, false, false)).toEqual({
-      stroke: "#777",
-      label: "#666",
-      labelBorder: "#ccc",
-      labelBackground: "#ffffff",
+      stroke: SCREEN_INK.secondary,
+      label: SCREEN_INK.secondary,
+      labelBorder: SCREEN_INK.rule,
+      labelBackground: SCREEN_INK.paper,
     });
     expect(edgeColors(true, false, false)).toEqual({
-      stroke: "#1976d2",
-      label: "#1976d2",
-      labelBorder: "#1976d2",
-      labelBackground: "#ffffff",
+      stroke: brand.primary,
+      label: brand.primary,
+      labelBorder: brand.primary,
+      labelBackground: SCREEN_INK.paper,
     });
     expect(edgeColors(false, false, true)).toEqual({
-      stroke: "#aaa",
-      label: "#aaa",
-      labelBorder: "#444",
-      labelBackground: "#121212",
+      stroke: STATUS_COLORS.neutral,
+      label: STATUS_COLORS.neutral,
+      labelBorder: SCREEN_INK.ruleDark,
+      labelBackground: surface.dark.default,
     });
     expect(edgeColors(true, false, true)).toEqual({
-      stroke: "#4fc3f7",
-      label: "#4fc3f7",
-      labelBorder: "#4fc3f7",
-      labelBackground: "#121212",
+      stroke: brand.primaryLight,
+      label: brand.primaryLight,
+      labelBorder: brand.primaryLight,
+      labelBackground: surface.dark.default,
     });
   });
 
@@ -274,20 +289,22 @@ describe("line state", () => {
 });
 
 describe("line label", () => {
-  it("cuts a verb past 24 characters with an ellipsis", () => {
-    expect(MAX_EDGE_LABEL_CHARS).toBe(24);
-    expect(truncateEdgeLabel("")).toBe("");
-    expect(truncateEdgeLabel("a".repeat(24))).toBe("a".repeat(24));
-    expect(truncateEdgeLabel("is supported by the platform")).toBe("is supported by the pla…");
-    expect(truncateEdgeLabel("a".repeat(25))).toHaveLength(24);
+  it("sizes the label box from its longest line, the arrow and the count", () => {
+    expect(edgeLabelWidth([], false, "")).toBe(16);
+    expect(edgeLabelWidth(["uses"], false, "")).toBe(42);
+    expect(edgeLabelWidth(["uses"], true, "")).toBe(59);
+    expect(edgeLabelWidth(["uses"], false, "12")).toBe(70);
+    expect(edgeLabelWidth(["uses"], true, "3")).toBe(80);
+    // Two lines are as wide as the longer one, whichever comes first.
+    expect(edgeLabelWidth(["uses", "[Create · Read]"], false, "")).toBe(15 * 6.5 + 16);
+    expect(edgeLabelWidth(["[Create · Read]", "uses"], false, "")).toBe(15 * 6.5 + 16);
   });
 
-  it("sizes the label box from the verb, the arrow and the count", () => {
-    expect(edgeLabelWidth("", false, "")).toBe(16);
-    expect(edgeLabelWidth("uses", false, "")).toBe(42);
-    expect(edgeLabelWidth("uses", true, "")).toBe(59);
-    expect(edgeLabelWidth("uses", false, "12")).toBe(70);
-    expect(edgeLabelWidth("uses", true, "3")).toBe(80);
+  it("makes the label box a line taller for every line after the first", () => {
+    expect(edgeLabelHeight([])).toBe(20);
+    expect(edgeLabelHeight(["uses"])).toBe(20);
+    expect(edgeLabelHeight(["uses", "[Read]"])).toBe(34);
+    expect(edgeLabelHeight(["a", "b", "c"])).toBe(48);
   });
 });
 

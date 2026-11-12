@@ -906,6 +906,251 @@ async def test_bookmark_column_state_roundtrips(db):
     assert restored.columns == ["core_name", "core_type"]
 
 
+async def test_bookmark_query_and_provenance_roundtrip(db):
+    """A query view's card query (keys only) and its provenance pair survive
+    an export → delete → import round-trip by introspection, verbatim."""
+    from app.models.bookmark import Bookmark
+
+    user = await create_user(db, email="bm-q@test.com", role="admin")
+    query = {
+        "type": "Organization",
+        "related": [
+            {
+                "relation": "relOrgToApp",
+                "type": "Application",
+                "where": {"lifecycle_phase": ["active"]},
+            }
+        ],
+    }
+    bm = Bookmark(
+        user_id=user.id,
+        name="Query View",
+        card_type="Organization",
+        filters={"types": ["Organization"]},
+        query=query,
+        created_via="mcp",
+        updated_via="mcp",
+    )
+    db.add(bm)
+    await db.flush()
+    bm_id = bm.id
+
+    raw = await build_bundle(db)
+
+    await db.execute(delete(Bookmark).where(Bookmark.id == bm_id))
+    await db.flush()
+
+    result = await apply_bundle(db, parse_bundle(raw), user)
+    assert result.total_failed == 0, result.as_dict()
+
+    restored = (await db.execute(select(Bookmark).where(Bookmark.id == bm_id))).scalar_one()
+    assert restored.query == query
+    assert restored.created_via == "mcp"
+
+
+async def test_bookmark_query_tags_follow_the_tag_and_an_unknown_one_is_dropped(db):
+    """A query view naming a tag lands on the tag's *new* id after the tag is
+    re-created on import; a tag id the bundle does not carry is dropped (it
+    would refuse the view on open), and a ``where`` left empty goes with it."""
+    from app.models.bookmark import Bookmark
+    from app.models.tag import Tag, TagGroup
+
+    user = await create_user(db, email="bm-qt@test.com", role="admin")
+    group = TagGroup(name="Hosting QT", mode="multi")
+    db.add(group)
+    await db.flush()
+    tag = Tag(tag_group_id=group.id, name="Cloud QT")
+    db.add(tag)
+    await db.flush()
+    unknown = "12345678-1234-4234-8234-123456789abc"
+    bm = Bookmark(
+        user_id=user.id,
+        name="Tagged Query View",
+        card_type="Organization",
+        filters={"types": ["Organization"]},
+        query={
+            "type": "Organization",
+            "related": [
+                {
+                    "relation": "relOrgToApp",
+                    "type": "Application",
+                    "where": {"tags": [str(tag.id), unknown], "lifecycle_phase": ["active"]},
+                    "related": [
+                        {
+                            "relation": "relAppToITC",
+                            "type": "ITComponent",
+                            "where": {"tags": [unknown]},
+                        }
+                    ],
+                }
+            ],
+        },
+    )
+    db.add(bm)
+    await db.flush()
+    bm_id, old_tag_id = bm.id, tag.id
+
+    raw = await build_bundle(db)
+
+    await db.execute(delete(Bookmark).where(Bookmark.id == bm_id))
+    await db.execute(delete(TagGroup).where(TagGroup.id == group.id))
+    await db.flush()
+
+    result = await apply_bundle(db, parse_bundle(raw), user)
+    assert result.total_failed == 0, result.as_dict()
+
+    new_tag = (await db.execute(select(Tag).where(Tag.name == "Cloud QT"))).scalar_one()
+    assert new_tag.id != old_tag_id
+    restored = (await db.execute(select(Bookmark).where(Bookmark.id == bm_id))).scalar_one()
+    assert restored.query == {
+        "type": "Organization",
+        "related": [
+            {
+                "relation": "relOrgToApp",
+                "type": "Application",
+                "where": {"tags": [str(new_tag.id)], "lifecycle_phase": ["active"]},
+                "related": [{"relation": "relAppToITC", "type": "ITComponent"}],
+            }
+        ],
+    }
+
+
+async def test_bookmark_query_cards_follow_the_card_and_an_unknown_one_is_dropped(db):
+    """A query view picking a card lands on the card's *new* id after the card
+    is re-created on import; a card id the bundle does not carry is dropped,
+    and ``include_descendants`` goes with a ``cards`` list left empty."""
+    from app.models.bookmark import Bookmark
+
+    user = await create_user(db, email="bm-qc@test.com", role="admin")
+    await create_card_type(db, key="Organization", label="Organization")
+    await create_card_type(db, key="Application", label="Application")
+    org = await create_card(db, card_type="Organization", name="Picked Org QC", user_id=user.id)
+    app = await create_card(db, card_type="Application", name="Picked App QC", user_id=user.id)
+    unknown = "12345678-1234-4234-8234-123456789abd"
+    bm = Bookmark(
+        user_id=user.id,
+        name="Picked Query View",
+        card_type="Organization",
+        filters={"types": ["Organization"]},
+        query={
+            "type": "Organization",
+            "where": {"cards": [str(org.id)], "include_descendants": True},
+            "related": [
+                {
+                    "relation": "relOrgToApp",
+                    "type": "Application",
+                    "where": {"cards": [unknown], "include_descendants": True},
+                },
+                {
+                    "relation": "relOrgToApp",
+                    "type": "Application",
+                    "where": {"cards": [unknown, str(app.id)]},
+                },
+            ],
+        },
+    )
+    db.add(bm)
+    await db.flush()
+    bm_id, old_ids = bm.id, {org.id, app.id}
+
+    raw = await build_bundle(db)
+
+    await db.execute(delete(Bookmark).where(Bookmark.id == bm_id))
+    await db.execute(delete(Card).where(Card.id.in_(old_ids)))
+    await db.flush()
+
+    result = await apply_bundle(db, parse_bundle(raw), user)
+    assert result.total_failed == 0, result.as_dict()
+
+    new_org = (await db.execute(select(Card).where(Card.name == "Picked Org QC"))).scalar_one()
+    new_app = (await db.execute(select(Card).where(Card.name == "Picked App QC"))).scalar_one()
+    assert {new_org.id, new_app.id}.isdisjoint(old_ids)
+    restored = (await db.execute(select(Bookmark).where(Bookmark.id == bm_id))).scalar_one()
+    assert restored.query == {
+        "type": "Organization",
+        "where": {"cards": [str(new_org.id)], "include_descendants": True},
+        "related": [
+            {"relation": "relOrgToApp", "type": "Application"},
+            {
+                "relation": "relOrgToApp",
+                "type": "Application",
+                "where": {"cards": [str(new_app.id)]},
+            },
+        ],
+    }
+
+
+async def test_a_stacked_bookmark_query_follows_the_cards_on_every_line(db):
+    """An ``any_of`` view over two card types round-trips with the picks of
+    every line on the cards' *new* ids, an unknown pick dropped and its
+    negated hop removed, every line kept."""
+    from app.models.bookmark import Bookmark
+
+    user = await create_user(db, email="bm-qs@test.com", role="admin")
+    await create_card_type(db, key="Organization", label="Organization")
+    await create_card_type(db, key="Application", label="Application")
+    org = await create_card(db, card_type="Organization", name="Stack Org QS", user_id=user.id)
+    app = await create_card(db, card_type="Application", name="Stack App QS", user_id=user.id)
+    unknown = "12345678-1234-4234-8234-123456789abe"
+    bm = Bookmark(
+        user_id=user.id,
+        name="Stacked Query View",
+        card_type=None,
+        filters={"types": ["Application", "Organization"]},
+        query={
+            "any_of": [
+                {
+                    "all_of": [
+                        {"type": "Application", "where": {"cards": [str(app.id)]}},
+                        {
+                            "type": "Application",
+                            "related": [
+                                {
+                                    "relation": "relOrgToApp",
+                                    "type": "Organization",
+                                    "where": {"cards": [unknown]},
+                                    "negate": True,
+                                }
+                            ],
+                        },
+                    ]
+                },
+                {"type": "Organization", "where": {"cards": [str(org.id), unknown]}},
+            ]
+        },
+    )
+    db.add(bm)
+    await db.flush()
+    bm_id, old_ids = bm.id, {org.id, app.id}
+
+    raw = await build_bundle(db)
+
+    await db.execute(delete(Bookmark).where(Bookmark.id == bm_id))
+    await db.execute(delete(Card).where(Card.id.in_(old_ids)))
+    await db.flush()
+
+    result = await apply_bundle(db, parse_bundle(raw), user)
+    assert result.total_failed == 0, result.as_dict()
+
+    new_org = (await db.execute(select(Card).where(Card.name == "Stack Org QS"))).scalar_one()
+    new_app = (await db.execute(select(Card).where(Card.name == "Stack App QS"))).scalar_one()
+    assert {new_org.id, new_app.id}.isdisjoint(old_ids)
+    restored = (await db.execute(select(Bookmark).where(Bookmark.id == bm_id))).scalar_one()
+    assert restored.card_type is None
+    assert restored.filters == {"types": ["Application", "Organization"]}
+    assert restored.query == {
+        "any_of": [
+            {
+                "all_of": [
+                    {"type": "Application", "where": {"cards": [str(new_app.id)]}},
+                    {"type": "Application"},
+                ]
+            },
+            {"type": "Organization", "where": {"cards": [str(new_org.id)]}},
+        ]
+    }
+
+
 async def test_resource_types_roundtrip(db):
     """A custom link type / file category survives an export → delete →
     import round-trip, keyed by (kind, key)."""
@@ -2377,3 +2622,806 @@ async def seed_default_categories_for_test(db):
 
     await seed_default_categories(db)
     await db.flush()
+
+
+async def test_custom_eol_products_round_trip(db):
+    """Custom EOL products and their cycles travel by natural key: a product
+    by its slug, a cycle by (slug, cycle). ``eol`` / ``support`` keep their
+    exact JSON value — a date string, ``true`` or ``false`` — and a version
+    string like "1.10" is not read back as a number."""
+    from app.models.eol_custom_cycle import EolCustomCycle
+    from app.models.eol_custom_product import EolCustomProduct
+
+    await create_role(db, key="admin", label="Admin", permissions={"*": True})
+    user = await create_user(db, email="eol-ws@test.com", role="admin")
+    db.add(
+        EolCustomProduct(
+            key="acme-erp",
+            title="Acme ERP",
+            description="In-house ERP",
+            link="https://acme.example/erp",
+            eol_category="server-app",
+            release_policy_note="Two years per release.",
+            created_by=user.id,
+        )
+    )
+    await db.flush()
+    db.add_all(
+        [
+            EolCustomCycle(
+                product_key="acme-erp",
+                cycle="1.10",
+                release_date="2020-01-01",
+                support=True,
+                eol="2024-06-30",
+                latest="1.10.4",
+            ),
+            EolCustomCycle(product_key="acme-erp", cycle="2", eol=False, support=None),
+        ]
+    )
+    await db.flush()
+
+    raw = await build_bundle(db)
+    cycle_rows = parse_bundle(raw).rows(schema.SHEET_EOL_CUSTOM_CYCLES)
+    assert {r["cycle"] for r in cycle_rows} == {"1.10", "2"}
+
+    await db.execute(delete(EolCustomCycle))
+    await db.execute(delete(EolCustomProduct))
+    await db.flush()
+
+    result = await apply_bundle(db, parse_bundle(raw), user)
+    assert result.total_failed == 0, result.as_dict()
+    product = (await db.execute(select(EolCustomProduct))).scalar_one()
+    assert (product.key, product.title, product.link) == (
+        "acme-erp",
+        "Acme ERP",
+        "https://acme.example/erp",
+    )
+    assert (product.eol_category, product.release_policy_note) == (
+        "server-app",
+        "Two years per release.",
+    )
+    cycles = {c.cycle: c for c in (await db.execute(select(EolCustomCycle))).scalars().all()}
+    assert set(cycles) == {"1.10", "2"}
+    old = cycles["1.10"]
+    assert (old.release_date, old.support, old.eol, old.latest) == (
+        "2020-01-01",
+        True,
+        "2024-06-30",
+        "1.10.4",
+    )
+    assert (cycles["2"].eol, cycles["2"].support) == (False, None)
+
+    again = await apply_bundle(db, parse_bundle(raw), user)
+    for sheet in (schema.SHEET_EOL_CUSTOM_PRODUCTS, schema.SHEET_EOL_CUSTOM_CYCLES):
+        section = next(s for s in again.sections if s.sheet == sheet)
+        assert (section.created, section.updated) == (0, 0), sheet
+
+
+async def test_principles_roundtrip_and_are_numbered_by_the_target(db):
+    """Principles travel by title; each instance numbers its own (``P-NNN``).
+
+    The source's reference is not carried (it could collide with a number the
+    target already uses), so a re-created principle takes the target's next
+    reference and a matched one keeps the reference it already had.
+    """
+    from app.models.ea_principle import EAPrinciple
+
+    user = await create_user(db, email="pr-ws@test.com", role="admin")
+    db.add_all(
+        [
+            EAPrinciple(title="Reuse first", reference_number="P-001", sort_order=10),
+            EAPrinciple(
+                title="Cloud first",
+                reference_number="P-002",
+                sort_order=20,
+                rationale="Elastic",
+            ),
+        ]
+    )
+    await db.flush()
+
+    raw = await build_bundle(db)
+    principles_sheet = parse_bundle(raw).rows(schema.SHEET_PRINCIPLES)
+    assert all("reference_number" not in row for row in principles_sheet)
+
+    # "Reuse first" stays (matched by title); "Cloud first" is re-created after
+    # a target-side principle took the next number.
+    await db.execute(delete(EAPrinciple).where(EAPrinciple.title == "Cloud first"))
+    db.add(EAPrinciple(title="Target only", reference_number="P-007", sort_order=5))
+    await db.flush()
+
+    result = await apply_bundle(db, parse_bundle(raw), user)
+    assert result.total_failed == 0, result.as_dict()
+
+    rows = {p.title: p for p in (await db.execute(select(EAPrinciple))).scalars().all()}
+    assert rows["Reuse first"].reference_number == "P-001"
+    assert rows["Target only"].reference_number == "P-007"
+    assert rows["Cloud first"].reference_number == "P-008"
+    assert rows["Cloud first"].rationale == "Elastic"
+
+
+async def _seed_decision_register(db):
+    """Two decisions: ADR-902 replaces ADR-901 (with a note), names a user and a
+    free-text person, and shares one file's bytes with ADR-901."""
+    from datetime import date, datetime, timezone
+
+    from app.models.architecture_decision import ArchitectureDecision
+    from app.models.architecture_decision_file import (
+        ArchitectureDecisionFile,
+        ArchitectureDecisionFileContent,
+    )
+    from app.models.architecture_decision_link import ArchitectureDecisionLink
+    from app.models.architecture_decision_person import ArchitectureDecisionPerson
+
+    admin = await create_user(db, email="adr-admin@test.com", role="admin")
+    maker = await create_user(db, email="adr-maker@test.com", role="admin")
+    old = ArchitectureDecision(
+        reference_number="ADR-901", title="Use one broker", status="signed", created_by=admin.id
+    )
+    new = ArchitectureDecision(
+        reference_number="ADR-902",
+        title="Use two brokers",
+        status="signed",
+        created_by=admin.id,
+        decided_on=date(2026, 3, 2),
+        effective_from=date(2026, 4, 1),
+        valid_until=date(2027, 3, 31),
+        change_summary="Split the broker",
+        recorded_by=maker.id,
+        recorded_at=datetime(2026, 3, 3, 9, 30, tzinfo=timezone.utc),
+    )
+    blob = b"%PDF-1.7\n" + b"minutes" * 300
+    content = ArchitectureDecisionFileContent(size=len(blob), data=blob)
+    db.add_all([old, new, content])
+    await db.flush()
+    db.add_all(
+        [
+            ArchitectureDecisionLink(
+                source_id=new.id, target_id=old.id, kind="replaces", note="§3 only"
+            ),
+            ArchitectureDecisionPerson(
+                architecture_decision_id=new.id,
+                part="decision_maker",
+                user_id=maker.id,
+                name="Uma Maker",
+                position=0,
+            ),
+            ArchitectureDecisionPerson(
+                architecture_decision_id=new.id,
+                part="participant",
+                user_id=None,
+                name="External Auditor",
+                position=1,
+            ),
+            ArchitectureDecisionFile(
+                architecture_decision_id=old.id,
+                content_id=content.id,
+                name="minutes.pdf",
+                mime_type="application/pdf",
+                size=len(blob),
+            ),
+            ArchitectureDecisionFile(
+                architecture_decision_id=new.id,
+                content_id=content.id,
+                name="minutes (copy).pdf",
+                mime_type="application/pdf",
+                size=len(blob),
+                created_by=maker.id,
+            ),
+        ]
+    )
+    await db.flush()
+    return admin, maker, old, new, content, blob
+
+
+ADR_SHEETS = ("Adrs", "AdrLinks", "AdrPeople", "AdrFileContents", "AdrFiles")
+
+
+def _adr_counts(result) -> dict[str, tuple[int, int, int, int]]:
+    by_sheet = {s.sheet: s for s in result.sections}
+    return {
+        sheet: (
+            by_sheet[sheet].created,
+            by_sheet[sheet].skipped,
+            by_sheet[sheet].conflict,
+            by_sheet[sheet].failed,
+        )
+        for sheet in ADR_SHEETS
+    }
+
+
+async def test_decision_register_roundtrips_and_reimports_as_all_skip(db, tmp_path):
+    """Links (with their note), people (a user and a free-text name), dates,
+    the recorder and a file whose bytes two decisions share survive export →
+    delete → re-import from disk; importing the same bundle again changes
+    nothing."""
+    from datetime import date, datetime, timezone
+
+    from app.models.architecture_decision import ArchitectureDecision
+    from app.models.architecture_decision_file import (
+        ArchitectureDecisionFile,
+        ArchitectureDecisionFileContent,
+    )
+    from app.models.architecture_decision_link import ArchitectureDecisionLink
+    from app.models.architecture_decision_person import ArchitectureDecisionPerson
+
+    admin, maker, old, new, content, blob = await _seed_decision_register(db)
+    old_id, new_id, content_id = old.id, new.id, content.id
+
+    raw = await build_bundle(db)
+    # One asset for the shared bytes, not one per file row.
+    _, _, assets = bundle_io.unpack(raw)
+    assert sorted(p for p in assets if p.startswith("AdrFileContents/")) == [
+        f"AdrFileContents/{content_id}__data.bin"
+    ]
+    assert assets[f"AdrFileContents/{content_id}__data.bin"] == blob
+    # User FKs travel as e-mail addresses, never as this instance's user ids.
+    exported = {r["reference_number"]: r for r in parse_bundle(raw).rows("Adrs")}
+    assert "recorded_by" not in exported["ADR-902"]
+    assert exported["ADR-902"]["recorded_by__email"] == "adr-maker@test.com"
+    assert exported["ADR-901"].get("recorded_by__email") is None
+    people_rows = parse_bundle(raw).rows("AdrPeople")
+    assert sorted((r["name"], r.get("user_id__email")) for r in people_rows) == [
+        ("External Auditor", None),
+        ("Uma Maker", "adr-maker@test.com"),
+    ]
+    assert all("user_id" not in r for r in people_rows)
+
+    # Same instance: every row already exists, so it is all-skip.
+    same = await apply_bundle(db, parse_bundle(raw), admin)
+    assert same.total_failed == 0, same.as_dict()
+    assert _adr_counts(same) == {
+        "Adrs": (0, 2, 0, 0),
+        "AdrLinks": (0, 1, 0, 0),
+        "AdrPeople": (0, 2, 0, 0),
+        "AdrFileContents": (0, 1, 0, 0),
+        "AdrFiles": (0, 2, 0, 0),
+    }
+
+    # Wipe the register; the decisions cascade to links, people and files,
+    # and the content goes once nothing points at it.
+    await db.execute(delete(ArchitectureDecision))
+    await db.execute(delete(ArchitectureDecisionFileContent))
+    await db.flush()
+    db.expunge_all()
+
+    path = tmp_path / "workspace.zip"
+    path.write_bytes(raw)
+    with parse_bundle(path) as bundle:
+        result = await apply_bundle(db, bundle, admin)
+    assert result.total_failed == 0, result.as_dict()
+    assert _adr_counts(result) == {
+        "Adrs": (2, 0, 0, 0),
+        "AdrLinks": (1, 0, 0, 0),
+        "AdrPeople": (2, 0, 0, 0),
+        "AdrFileContents": (1, 0, 0, 0),
+        "AdrFiles": (2, 0, 0, 0),
+    }
+
+    restored = (
+        await db.execute(select(ArchitectureDecision).where(ArchitectureDecision.id == new_id))
+    ).scalar_one()
+    assert restored.reference_number == "ADR-902"
+    assert restored.decided_on == date(2026, 3, 2)
+    assert restored.effective_from == date(2026, 4, 1)
+    assert restored.valid_until == date(2027, 3, 31)
+    assert restored.change_summary == "Split the broker"
+    assert restored.recorded_by == maker.id  # remapped by email
+    assert restored.recorded_at == datetime(2026, 3, 3, 9, 30, tzinfo=timezone.utc)
+    assert restored.created_by == admin.id
+
+    links = (await db.execute(select(ArchitectureDecisionLink))).scalars().all()
+    assert [(lk.source_id, lk.target_id, lk.kind, lk.note) for lk in links] == [
+        (new_id, old_id, "replaces", "§3 only")
+    ]
+
+    people = (
+        (
+            await db.execute(
+                select(ArchitectureDecisionPerson).order_by(ArchitectureDecisionPerson.position)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert [
+        (p.architecture_decision_id, p.part, p.user_id, p.name, p.position) for p in people
+    ] == [
+        (new_id, "decision_maker", maker.id, "Uma Maker", 0),
+        (new_id, "participant", None, "External Auditor", 1),
+    ]
+
+    contents = (
+        await db.execute(
+            select(
+                ArchitectureDecisionFileContent.id,
+                ArchitectureDecisionFileContent.size,
+                ArchitectureDecisionFileContent.data,
+            )
+        )
+    ).all()
+    assert [(c.id, c.size, c.data) for c in contents] == [(content_id, len(blob), blob)]
+
+    files = (
+        (await db.execute(select(ArchitectureDecisionFile).order_by(ArchitectureDecisionFile.name)))
+        .scalars()
+        .all()
+    )
+    assert [
+        (f.architecture_decision_id, f.content_id, f.name, f.mime_type, f.size, f.created_by)
+        for f in files
+    ] == [
+        (new_id, content_id, "minutes (copy).pdf", "application/pdf", len(blob), maker.id),
+        (old_id, content_id, "minutes.pdf", "application/pdf", len(blob), None),
+    ]
+
+    # And once more: the re-imported register is left exactly as it is.
+    again = await apply_bundle(db, parse_bundle(raw), admin)
+    assert again.total_failed == 0, again.as_dict()
+    assert _adr_counts(again) == {
+        "Adrs": (0, 2, 0, 0),
+        "AdrLinks": (0, 1, 0, 0),
+        "AdrPeople": (0, 2, 0, 0),
+        "AdrFileContents": (0, 1, 0, 0),
+        "AdrFiles": (0, 2, 0, 0),
+    }
+
+
+async def test_a_decision_person_whose_user_has_no_match_keeps_the_stored_name(db):
+    """A bundle naming a person by a user the target does not have (and no
+    Users sheet to create one) lands the person with the stored name and no
+    user, rather than skipping the row."""
+    from app.models.architecture_decision_person import ArchitectureDecisionPerson
+    from app.services.workspace_io.sections import ENTITY_SECTIONS
+
+    importer = await create_user(db, email="adr-importer@test.com", role="admin")
+    sections = {s.sheet: s for s in ENTITY_SECTIONS}
+    adr_id = "8a1c2f34-0000-4000-8000-0000000000a1"
+    person_id = "8a1c2f34-0000-4000-8000-0000000000b1"
+    adr_row = {c: None for c in sections["Adrs"].header()} | {
+        "id": adr_id,
+        "reference_number": "ADR-950",
+        "title": "Ghost-made decision",
+        "status": "draft",
+        "revision_number": 1,
+        "attributes": "{}",
+        "created_by__email": "ghost@nowhere.example",
+        "recorded_by__email": "ghost@nowhere.example",
+    }
+    person_row = {c: None for c in sections["AdrPeople"].header()} | {
+        "id": person_id,
+        "architecture_decision_id": adr_id,
+        "part": "decision_maker",
+        "name": "Gil Ghost",
+        "position": 0,
+        "user_id__email": "ghost@nowhere.example",
+    }
+    raw = _make_bundle(
+        {
+            "Adrs": (tuple(sections["Adrs"].header()), frozenset(), [adr_row]),
+            "AdrPeople": (tuple(sections["AdrPeople"].header()), frozenset(), [person_row]),
+        }
+    )
+
+    result = await apply_bundle(db, parse_bundle(raw), importer)
+    assert result.total_failed == 0, result.as_dict()
+    people = next(s for s in result.sections if s.sheet == "AdrPeople")
+    assert (people.created, people.conflict) == (1, 0)
+
+    person = (await db.execute(select(ArchitectureDecisionPerson))).scalar_one()
+    assert str(person.id) == person_id
+    assert str(person.architecture_decision_id) == adr_id
+    assert person.user_id is None
+    assert person.name == "Gil Ghost"
+    assert person.part == "decision_maker"
+
+
+async def test_a_revision_chain_sharing_one_reference_roundtrips(db):
+    """Revision 1 (signed) and revision 2 (a draft pointing back at it) carry
+    one reference; both survive export → wipe → import, and a second import
+    is all-skip."""
+    from datetime import datetime, timezone
+
+    from app.models.architecture_decision import ArchitectureDecision
+
+    admin = await create_user(db, email="chain-admin@test.com", role="admin")
+    rev1 = ArchitectureDecision(
+        reference_number="ADR-930",
+        title="Broker",
+        status="signed",
+        signed_at=datetime(2026, 2, 1, 10, tzinfo=timezone.utc),
+        created_by=admin.id,
+    )
+    db.add(rev1)
+    await db.flush()
+    rev2 = ArchitectureDecision(
+        reference_number="ADR-930",
+        title="Broker",
+        status="draft",
+        revision_number=2,
+        parent_id=rev1.id,
+        change_summary="Second broker",
+        created_by=admin.id,
+    )
+    db.add(rev2)
+    await db.flush()
+    rev1_id, rev2_id = rev1.id, rev2.id
+
+    raw = await build_bundle(db)
+    exported = parse_bundle(raw).rows("Adrs")
+    assert sorted((r["reference_number"], r["revision_number"]) for r in exported) == [
+        ("ADR-930", 1),
+        ("ADR-930", 2),
+    ]
+    assert "related_decisions" not in exported[0]
+
+    await db.execute(delete(ArchitectureDecision))
+    await db.flush()
+    db.expunge_all()
+
+    result = await apply_bundle(db, parse_bundle(raw), admin)
+    assert result.total_failed == 0, result.as_dict()
+    adrs = next(s for s in result.sections if s.sheet == "Adrs")
+    assert (adrs.created, adrs.skipped, adrs.conflict) == (2, 0, 0)
+    rows = (
+        (
+            await db.execute(
+                select(ArchitectureDecision).order_by(ArchitectureDecision.revision_number)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert [
+        (r.id, r.reference_number, r.revision_number, r.status, r.parent_id, r.change_summary)
+        for r in rows
+    ] == [
+        (rev1_id, "ADR-930", 1, "signed", None, None),
+        (rev2_id, "ADR-930", 2, "draft", rev1_id, "Second broker"),
+    ]
+
+    again = await apply_bundle(db, parse_bundle(raw), admin)
+    adrs = next(s for s in again.sections if s.sheet == "Adrs")
+    assert (adrs.created, adrs.skipped) == (0, 2)
+
+
+def _legacy_adr_bundle(sections, rows):
+    """A bundle as an instance before the decision register exported it: the
+    Adrs sheet still carries ``related_decisions`` and none of the new columns."""
+    header = tuple(
+        c
+        for c in sections["Adrs"].header()
+        if c
+        not in {
+            "decided_on",
+            "effective_from",
+            "valid_until",
+            "change_summary",
+            "recorded_by__email",
+            "recorded_at",
+        }
+    ) + ("related_decisions",)
+    return _make_bundle({"Adrs": (header, frozenset({"related_decisions"}), rows)})
+
+
+async def test_an_older_bundle_turns_related_decisions_into_links_and_dates(db):
+    """A pre-register bundle: each ``related_decisions`` entry naming a decision
+    of the bundle becomes a ``relates`` link (dict, dangling and self entries
+    dropped), a signed decision takes its dates from ``signed_at``, the dry run
+    counts what the apply does, and a re-import changes nothing."""
+    from datetime import date
+
+    from app.models.architecture_decision import ArchitectureDecision
+    from app.models.architecture_decision_link import ArchitectureDecisionLink
+    from app.services.workspace_io.sections import ENTITY_SECTIONS
+
+    importer = await create_user(db, email="legacy-importer@test.com", role="admin")
+    sections = {s.sheet: s for s in ENTITY_SECTIONS}
+    a_id = "8a1c2f34-0000-4000-8000-0000000000c1"
+    b_id = "8a1c2f34-0000-4000-8000-0000000000c2"
+    c_id = "8a1c2f34-0000-4000-8000-0000000000c3"
+
+    def row(adr_id, ref, status, related, signed_at=None):
+        return {
+            "id": adr_id,
+            "reference_number": ref,
+            "title": f"Legacy {ref}",
+            "status": status,
+            "revision_number": 1,
+            "attributes": {},
+            "signatories": [],
+            "signed_at": signed_at,
+            "related_decisions": related,
+        }
+
+    raw = _legacy_adr_bundle(
+        sections,
+        [
+            row(
+                a_id,
+                "ADR-801",
+                "signed",
+                ["adr-802", c_id, "ADR-801", {"type": "assessment", "id": b_id}, "ADR-999"],
+                signed_at="2026-03-04T23:30:00+00:00",
+            ),
+            row(b_id, "ADR-802", "draft", [a_id]),
+            row(c_id, "ADR-803", "draft", None),
+        ],
+    )
+
+    preview = await diff_bundle(db, parse_bundle(raw), importer)
+    links_preview = next(s for s in preview.sections if s.sheet == "AdrLinks")
+    assert (links_preview.created, links_preview.skipped) == (3, 0)
+    assert (await db.execute(select(ArchitectureDecision))).scalars().all() == []
+
+    result = await apply_bundle(db, parse_bundle(raw), importer)
+    assert result.total_failed == 0, result.as_dict()
+    adrs = next(s for s in result.sections if s.sheet == "Adrs")
+    links_sr = next(s for s in result.sections if s.sheet == "AdrLinks")
+    assert (adrs.created, links_sr.created) == (3, links_preview.created)
+
+    links = (
+        await db.execute(
+            select(
+                ArchitectureDecisionLink.source_id,
+                ArchitectureDecisionLink.target_id,
+                ArchitectureDecisionLink.kind,
+            )
+        )
+    ).all()
+    assert sorted((str(s), str(t), k) for s, t, k in links) == sorted(
+        [
+            (a_id, b_id, "relates"),
+            (a_id, c_id, "relates"),
+            (b_id, a_id, "relates"),
+        ]
+    )
+    by_ref = {
+        r.reference_number: r
+        for r in (await db.execute(select(ArchitectureDecision))).scalars().all()
+    }
+    signed = by_ref["ADR-801"]
+    assert (signed.decided_on, signed.effective_from) == (date(2026, 3, 4), date(2026, 3, 4))
+    assert (by_ref["ADR-802"].decided_on, by_ref["ADR-802"].effective_from) == (None, None)
+
+    again = await apply_bundle(db, parse_bundle(raw), importer)
+    links_sr = next(s for s in again.sections if s.sheet == "AdrLinks")
+    adrs = next(s for s in again.sections if s.sheet == "Adrs")
+    assert (adrs.created, adrs.skipped, links_sr.created) == (0, 3, 0)
+    assert len((await db.execute(select(ArchitectureDecisionLink))).all()) == 3
+
+
+async def test_an_older_bundle_keeps_dates_already_set_and_links_only_what_it_created(db):
+    """A decision already on the target is not given links by an older bundle,
+    and a signed decision's own dates are kept."""
+    from datetime import date, datetime, timezone
+
+    from app.models.architecture_decision import ArchitectureDecision
+    from app.models.architecture_decision_link import ArchitectureDecisionLink
+    from app.services.workspace_io.sections import ENTITY_SECTIONS
+
+    importer = await create_user(db, email="legacy-importer2@test.com", role="admin")
+    sections = {s.sheet: s for s in ENTITY_SECTIONS}
+    existing = ArchitectureDecision(reference_number="ADR-811", title="Here already")
+    db.add(existing)
+    await db.flush()
+    new_id = "8a1c2f34-0000-4000-8000-0000000000d2"
+    header_row = {c: None for c in sections["Adrs"].header()}
+    rows = [
+        header_row
+        | {
+            "id": str(existing.id),
+            "reference_number": "ADR-811",
+            "title": "Here already",
+            "status": "draft",
+            "revision_number": 1,
+            "attributes": {},
+            "related_decisions": ["ADR-812"],
+        },
+        header_row
+        | {
+            "id": new_id,
+            "reference_number": "ADR-812",
+            "title": "Arrives",
+            "status": "signed",
+            "revision_number": 1,
+            "attributes": {},
+            "signed_at": "2026-05-06T08:00:00+00:00",
+            "decided_on": "2026-01-01",
+            "related_decisions": "not json",
+        },
+    ]
+    header = tuple(sections["Adrs"].header()) + ("related_decisions",)
+    raw = _make_bundle({"Adrs": (header, frozenset({"related_decisions", "attributes"}), rows)})
+
+    result = await apply_bundle(db, parse_bundle(raw), importer)
+
+    assert result.total_failed == 0, result.as_dict()
+    assert (await db.execute(select(ArchitectureDecisionLink))).all() == []
+    arrived = (
+        await db.execute(
+            select(ArchitectureDecision).where(ArchitectureDecision.reference_number == "ADR-812")
+        )
+    ).scalar_one()
+    assert (arrived.decided_on, arrived.effective_from) == (date(2026, 1, 1), date(2026, 5, 6))
+    assert arrived.signed_at == datetime(2026, 5, 6, 8, tzinfo=timezone.utc)
+
+
+def _legacy_adr_row(sections, adr_id, ref, status, related, signed_at=None):
+    """One ``Adrs`` row of an older bundle (every current column blank)."""
+    return {c: None for c in sections["Adrs"].header()} | {
+        "id": adr_id,
+        "reference_number": ref,
+        "title": f"Legacy {ref}",
+        "status": status,
+        "revision_number": 1,
+        "attributes": {},
+        "signatories": [],
+        "signed_at": signed_at,
+        "related_decisions": related,
+    }
+
+
+async def test_a_selective_apply_of_an_older_adrs_sheet_files_its_links_on_a_new_section(db):
+    """Applying only the ``Adrs`` sheet of an older bundle still turns
+    ``related_decisions`` into links, and counts them on an ``AdrLinks``
+    section the run adds, since no ``AdrLinks`` section ran."""
+    from app.models.architecture_decision_link import ArchitectureDecisionLink
+    from app.services.workspace_io.applier import apply_selected
+    from app.services.workspace_io.sections import ENTITY_SECTIONS
+
+    importer = await create_user(db, email="legacy-selective@test.com", role="admin")
+    sections = {s.sheet: s for s in ENTITY_SECTIONS}
+    a_id = "8a1c2f34-0000-4000-8000-0000000000e1"
+    b_id = "8a1c2f34-0000-4000-8000-0000000000e2"
+    raw = _legacy_adr_bundle(
+        sections,
+        [
+            _legacy_adr_row(sections, a_id, "ADR-821", "draft", ["ADR-822"]),
+            _legacy_adr_row(sections, b_id, "ADR-822", "draft", None),
+        ],
+    )
+
+    result = await apply_selected(db, parse_bundle(raw), importer, sheets={"Adrs"}, dry_run=False)
+
+    assert result.total_failed == 0, result.as_dict()
+    assert [s.sheet for s in result.sections] == ["Adrs", "AdrLinks"]
+    assert result.sections[1].created == 1
+    links = (
+        await db.execute(
+            select(
+                ArchitectureDecisionLink.source_id,
+                ArchitectureDecisionLink.target_id,
+                ArchitectureDecisionLink.kind,
+            )
+        )
+    ).all()
+    assert [(str(s), str(t), k) for s, t, k in links] == [(a_id, b_id, "relates")]
+
+
+async def test_an_older_bundle_does_not_relink_a_pair_its_links_sheet_already_created(db):
+    """A bundle carrying both an ``AdrLinks`` sheet and ``related_decisions``:
+    a pair the sheet already linked keeps the sheet's link and kind, and the
+    legacy column adds only the pair the sheet did not."""
+    from app.models.architecture_decision_link import ArchitectureDecisionLink
+    from app.services.workspace_io.sections import ENTITY_SECTIONS
+
+    importer = await create_user(db, email="legacy-both@test.com", role="admin")
+    sections = {s.sheet: s for s in ENTITY_SECTIONS}
+    a_id = "8a1c2f34-0000-4000-8000-0000000000f1"
+    b_id = "8a1c2f34-0000-4000-8000-0000000000f2"
+    c_id = "8a1c2f34-0000-4000-8000-0000000000f3"
+    adr_header = tuple(sections["Adrs"].header()) + ("related_decisions",)
+    link_header = tuple(sections["AdrLinks"].header())
+    link_row = {c: None for c in link_header} | {
+        "id": "8a1c2f34-0000-4000-8000-0000000000f9",
+        "source_id": a_id,
+        "target_id": b_id,
+        "kind": "amends",
+    }
+    raw = _make_bundle(
+        {
+            "Adrs": (
+                adr_header,
+                frozenset({"related_decisions", "attributes", "signatories"}),
+                [
+                    _legacy_adr_row(sections, a_id, "ADR-831", "draft", ["ADR-832", "ADR-833"]),
+                    _legacy_adr_row(sections, b_id, "ADR-832", "draft", None),
+                    _legacy_adr_row(sections, c_id, "ADR-833", "draft", None),
+                ],
+            ),
+            "AdrLinks": (link_header, frozenset(), [link_row]),
+        }
+    )
+
+    result = await apply_bundle(db, parse_bundle(raw), importer)
+
+    assert result.total_failed == 0, result.as_dict()
+    links_sr = next(s for s in result.sections if s.sheet == "AdrLinks")
+    assert links_sr.created == 2
+    links = (
+        await db.execute(
+            select(
+                ArchitectureDecisionLink.source_id,
+                ArchitectureDecisionLink.target_id,
+                ArchitectureDecisionLink.kind,
+            )
+        )
+    ).all()
+    assert sorted((str(s), str(t), k) for s, t, k in links) == [
+        (a_id, b_id, "amends"),
+        (a_id, c_id, "relates"),
+    ]
+
+
+async def test_an_older_bundle_dates_only_the_signed_decisions_it_created_in_utc(db):
+    """Only a decision the import created, signed, with a ``signed_at`` takes
+    its dates, and the date is the UTC one whatever the server's zone: a
+    decision already here, a draft with a ``signed_at`` and a signed one
+    without it keep their empty dates."""
+    import os
+    import time
+    from datetime import date, datetime, timezone
+
+    from app.models.architecture_decision import ArchitectureDecision
+    from app.services.workspace_io.sections import ENTITY_SECTIONS
+
+    importer = await create_user(db, email="legacy-dates@test.com", role="admin")
+    sections = {s.sheet: s for s in ENTITY_SECTIONS}
+    here = ArchitectureDecision(
+        reference_number="ADR-840",
+        title="Signed here",
+        status="signed",
+        signed_at=datetime(2026, 2, 2, 9, tzinfo=timezone.utc),
+    )
+    db.add(here)
+    await db.flush()
+    raw = _legacy_adr_bundle(
+        sections,
+        [
+            _legacy_adr_row(
+                sections,
+                "8a1c2f34-0000-4000-8000-0000000000a1",
+                "ADR-841",
+                "signed",
+                None,
+                signed_at="2026-03-04T23:30:00+00:00",
+            ),
+            _legacy_adr_row(
+                sections,
+                "8a1c2f34-0000-4000-8000-0000000000a2",
+                "ADR-842",
+                "draft",
+                None,
+                signed_at="2026-03-04T10:00:00+00:00",
+            ),
+            _legacy_adr_row(
+                sections, "8a1c2f34-0000-4000-8000-0000000000a3", "ADR-843", "signed", None
+            ),
+        ],
+    )
+
+    saved_tz = os.environ.get("TZ")
+    os.environ["TZ"] = "Asia/Tokyo"
+    time.tzset()
+    try:
+        result = await apply_bundle(db, parse_bundle(raw), importer)
+    finally:
+        if saved_tz is None:
+            os.environ.pop("TZ", None)
+        else:
+            os.environ["TZ"] = saved_tz
+        time.tzset()
+
+    assert result.total_failed == 0, result.as_dict()
+    by_ref = {
+        r.reference_number: (r.decided_on, r.effective_from)
+        for r in (await db.execute(select(ArchitectureDecision))).scalars().all()
+    }
+    assert by_ref == {
+        "ADR-840": (None, None),
+        "ADR-841": (date(2026, 3, 4), date(2026, 3, 4)),
+        "ADR-842": (None, None),
+        "ADR-843": (None, None),
+    }

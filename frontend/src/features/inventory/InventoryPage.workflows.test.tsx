@@ -51,6 +51,8 @@ import {
 } from "@/test/fixtures/metamodel";
 import { exportCurrentViewToExcel, exportToExcel } from "./excelExport";
 import type { Card } from "@/types";
+import { createTheme } from "@mui/material/styles";
+import { APPROVAL_STATUS_COLORS, STATUS_CHIP_COLORS, STATUS_COLORS } from "@/theme/tokens";
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -64,6 +66,8 @@ import type { Card } from "@/types";
 const holder = vi.hoisted(() => ({
   filters: {} as Record<string, unknown>,
   groupBy: null as string | null,
+  groupTree: false,
+  groupTreeLevel: null as number | null,
   columnState: null as unknown,
   columnFilters: null as Record<string, unknown> | null,
   columns: null as Set<string> | null,
@@ -93,6 +97,8 @@ vi.mock("./InventoryFilterSidebar", async () => {
         data-testid="filter-sidebar"
         data-collapsed={String(props.collapsed)}
         data-group-by={props.groupBy ?? ""}
+        data-group-tree={String(props.groupTree)}
+        data-group-tree-level={props.groupTreeLevel ?? ""}
         data-tag-groups={props.tagGroups.length}
         data-stakeholder-roles={props.stakeholderRoles.length}
         data-rel-types={props.allRelevantRelTypes.map((rt: any) => rt.key).join(",")}
@@ -102,6 +108,14 @@ vi.mock("./InventoryFilterSidebar", async () => {
           onClick={() => props.onFiltersChange({ ...props.filters, ...holder.filters })}
         />
         <button data-testid="set-group-by" onClick={() => props.onGroupByChange(holder.groupBy)} />
+        <button
+          data-testid="set-group-tree"
+          onClick={() => props.onGroupTreeChange(holder.groupTree)}
+        />
+        <button
+          data-testid="set-group-tree-level"
+          onClick={() => props.onGroupTreeLevelChange(holder.groupTreeLevel)}
+        />
         <button
           data-testid="apply-column-state"
           onClick={() => props.onApplyColumnState(holder.columnState)}
@@ -142,13 +156,14 @@ vi.mock("./ImportDialog", () => ({
 }));
 
 vi.mock("./RelationCellPopover", () => ({
-  default: ({ open, onClose, cardId, cardName, relationTypes, onRelationsChanged }: any) =>
+  default: ({ open, onClose, cardId, cardName, relationTypes, isSource, onRelationsChanged }: any) =>
     open ? (
       <div
         data-testid="relation-popover"
         data-card-id={cardId}
         data-card-name={cardName}
         data-rel-types={relationTypes.map((rt: any) => rt.key).join(",")}
+        data-is-source={String(isSource)}
       >
         <button data-testid="relation-popover-changed" onClick={onRelationsChanged} />
         <button data-testid="relation-popover-close" onClick={onClose} />
@@ -295,6 +310,33 @@ const STAKEHOLDER_ROLES: Record<string, { key: string; label: string }[]> = {
   ITComponent: [{ key: "technicalOwner", label: "Technical Owner" }],
 };
 
+/** A second relation type on the Application → IT Component pair. */
+const REL_APP_TO_ITC_HOSTS = makeRelationType({
+  key: "relAppToITCHosts",
+  label: "is hosted on",
+  reverse_label: "hosts",
+  source_type_key: "Application",
+  target_type_key: "ITComponent",
+});
+
+const REL_ERP_HOSTED_LINUX = {
+  id: "7e1a0000-0000-4000-8000-000000000002",
+  type: "relAppToITCHosts",
+  source_id: CARD_IDS.erp,
+  target_id: CARD_IDS.linux,
+  source: { id: CARD_IDS.erp, type: "Application", name: "ERP Core" },
+  target: { id: CARD_IDS.linux, type: "ITComponent", name: "Linux Server" },
+};
+
+const REL_ERP_TO_CRM = {
+  id: "7e1a0000-0000-4000-8000-000000000003",
+  type: "relAppToApp",
+  source_id: CARD_IDS.erp,
+  target_id: CARD_IDS.crm,
+  source: { id: CARD_IDS.erp, type: "Application", name: "ERP Core" },
+  target: { id: CARD_IDS.crm, type: "Application", name: "CRM Cloud" },
+};
+
 const REL_ERP_PG = {
   id: "7e1a0000-0000-4000-8000-000000000001",
   type: "relAppToITC",
@@ -425,6 +467,8 @@ beforeEach(() => {
   localStorage.clear();
   holder.filters = {};
   holder.groupBy = null;
+  holder.groupTree = false;
+  holder.groupTreeLevel = null;
   holder.columnState = null;
   holder.columnFilters = null;
   holder.columns = null;
@@ -643,6 +687,40 @@ describe("InventoryPage loading and URL parameters", () => {
     await waitFor(() => expect(screen.queryByText("An error occurred")).toBeNull());
   });
 
+  it("shows the load error when the server rejects a query view, keeping its strip", async () => {
+    const query = { type: "Application", related: [{ relation: "relGone", type: "ITComponent" }] };
+    localStorage.setItem(
+      PREFS_KEY,
+      JSON.stringify({
+        filters: { types: ["Application"] },
+        activeQuery: { viewId: "bm-q", name: "Broken query", query },
+      }),
+    );
+    // The view is still saved, so the mount-time revalidation keeps it.
+    mockApi.on("get", /^\/bookmarks/, [
+      {
+        id: "bm-q",
+        name: "Broken query",
+        is_default: false,
+        visibility: "private",
+        odata_enabled: false,
+        owner_id: "u1",
+        is_owner: true,
+        can_edit: true,
+        query,
+      },
+    ]);
+    mockApi.fail("get", /^\/cards\?/, 400, "unknown_relation_type");
+    renderInventory();
+    expect(await screen.findByText("An error occurred")).toBeInTheDocument();
+    // The strip stays, so the user can leave the broken view.
+    const strip = screen.getByTestId("query-path-strip");
+    expect(strip).toHaveTextContent("Broken query");
+    const failed = mockApi.callsOf("get").filter((c) => c.path.startsWith("/cards?"));
+    expect(failed.length).toBeGreaterThan(0);
+    expect(failed.every((c) => c.path.includes("query="))).toBe(true);
+  });
+
   it("degrades to no stakeholder columns and empty relation cells when those fetches fail", async () => {
     mockApi.fail("get", /^\/stakeholder-roles/, 500);
     mockApi.fail("get", /^\/relations\?card_type=/, 500);
@@ -652,7 +730,7 @@ describe("InventoryPage loading and URL parameters", () => {
       expect(screen.getByTestId("filter-sidebar")).toHaveAttribute("data-stakeholder-roles", "0"),
     );
     expect(gridStub.colDef("stakeholder_applicationOwner")).toBeUndefined();
-    expect(gridStub.cellValue("rel_ITComponent", ERP)).toBe("");
+    expect(gridStub.cellValue("rel_relAppToITC__out", ERP)).toBe("");
   });
 });
 
@@ -706,6 +784,326 @@ describe("InventoryPage group by", () => {
     expect(getRowStyle({ data: rows[0] })).toBeUndefined();
     expect(getRowStyle({ data: ERP_ARCHIVED })).toEqual({ opacity: 0.6 });
     expect(getRowStyle({ data: ERP })).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Group by: indent children under parents
+// ---------------------------------------------------------------------------
+
+describe("InventoryPage indent children under parents", () => {
+  const rowIds = () => (gridStub.rows() as any[]).map((r) => (r.__group ? `H:${r.__group.key}` : r.id));
+  const ctx = () => gridStub.lastProps().context;
+  const groupByButton = () => screen.getByRole("button", { name: /Group by/ });
+
+  it("deep-links the tree with group_tree=1 and remembers it", async () => {
+    renderInventory("/inventory?type=Application&group_tree=1");
+    await waitForRows(3);
+    // Loaded as ERP, CRM, HR — HR (a child of ERP) moves under its parent.
+    await waitFor(() => expect(rowIds()).toEqual([ERP.id, HR.id, CRM.id]));
+    expect(ctx().getTreeInfo(HR.id)).toMatchObject({ depth: 1, crumbIds: [] });
+    expect(ctx().getTreeInfo(ERP.id)).toMatchObject({ depth: 0, hasChildren: true });
+    await waitFor(() => expect(prefs().groupTree).toBe(true));
+    expect(groupByButton()).toHaveTextContent("Group by: Parent");
+    expect(screen.getByTestId("filter-sidebar")).toHaveAttribute("data-group-tree", "true");
+  });
+
+  it("orders capabilities as a tree", async () => {
+    renderInventory("/inventory?type=BusinessCapability&group_tree=1");
+    await waitForRows(4);
+    expect(rowIds()).toEqual([
+      CARD_IDS.finance,
+      CARD_IDS.billingUnderFinance,
+      CARD_IDS.sales,
+      CARD_IDS.billingUnderSales,
+    ]);
+    expect(ctx().getTreeInfo(CARD_IDS.billingUnderSales).depth).toBe(1);
+  });
+
+  it("combines with an axis and keeps the URL's word over the pref", async () => {
+    localStorage.setItem(PREFS_KEY, JSON.stringify({ groupTree: true }));
+    renderInventory("/inventory?group_by=lifecycle");
+    await waitFor(() => expect(gridStub.lastProps()).not.toBeNull());
+    // group_by alone in the URL: the tree is off whatever the pref says.
+    expect(screen.getByTestId("filter-sidebar")).toHaveAttribute("data-group-tree", "false");
+    await waitFor(() => expect(prefs().groupTree).toBe(false));
+  });
+
+  it("an axis plus group_tree=1 turns both on", async () => {
+    renderInventory("/inventory?type=Application&group_by=subtype&group_tree=1");
+    await waitForRows(6);
+    expect(groupByButton()).toHaveTextContent("Group by: Subtype · Parent");
+    // HR is in another subtype group than ERP: it stays in its own group as a
+    // root, naming its parent.
+    expect(ctx().getTreeInfo(HR.id)).toMatchObject({ depth: 0, crumbIds: [ERP.id] });
+  });
+
+  it("restores the pref without URL filters and ignores it with them", async () => {
+    localStorage.setItem(PREFS_KEY, JSON.stringify({ groupTree: true }));
+    const first = renderInventory("/inventory");
+    await waitFor(() => expect(gridStub.lastProps()).not.toBeNull());
+    expect(screen.getByTestId("filter-sidebar")).toHaveAttribute("data-group-tree", "true");
+    first.unmount();
+    localStorage.setItem(PREFS_KEY, JSON.stringify({ groupTree: true }));
+    renderInventory("/inventory?type=Application");
+    await waitForRows(3);
+    expect(screen.getByTestId("filter-sidebar")).toHaveAttribute("data-group-tree", "false");
+    expect(rowIds()).toEqual([ERP.id, CRM.id, HR.id]);
+  });
+
+  it("is not offered on a type without a hierarchy, and stays off there", async () => {
+    const { user } = renderInventory("/inventory?type=Provider&group_tree=1");
+    await waitFor(() => expect(gridStub.lastProps()).not.toBeNull());
+    expect(groupByButton()).toHaveTextContent(/^workspacesGroup byarrow_drop_down$/);
+    expect(ctx().getTreeInfo(CARD_IDS.acme)).toBeUndefined();
+    await user.click(groupByButton());
+    const menu = await screen.findByRole("menu");
+    expect(within(menu).queryByRole("menuitemcheckbox")).toBeNull();
+    // The preference itself is kept while the option is not offered.
+    expect(prefs().groupTree).toBe(true);
+  });
+
+  it("toggles from the Group by menu and the sidebar's saved view", async () => {
+    const { user } = renderInventory("/inventory?type=Application");
+    await waitForRows(3);
+    expect(rowIds()).toEqual([ERP.id, CRM.id, HR.id]);
+    await user.click(groupByButton());
+    await user.click(
+      within(await screen.findByRole("menu")).getByRole("menuitemcheckbox", {
+        name: "Parent",
+      }),
+    );
+    await waitFor(() => expect(rowIds()).toEqual([ERP.id, HR.id, CRM.id]));
+    expect(prefs().groupTree).toBe(true);
+    expect(screen.getByTestId("filter-sidebar")).toHaveAttribute("data-group-tree", "true");
+    // A saved view without the option switches it off again.
+    holder.groupTree = false;
+    fireEvent.click(screen.getByTestId("set-group-tree"));
+    await waitFor(() => expect(rowIds()).toEqual([ERP.id, CRM.id, HR.id]));
+    expect(prefs().groupTree).toBe(false);
+  });
+
+  it("counts a collapsed parent's hidden branch in the items pill", async () => {
+    renderInventory("/inventory?type=Application&group_tree=1");
+    await waitForRows(3);
+    act(() => ctx().toggleParentCollapse(ERP.id));
+    await waitForRows(2);
+    act(() => {
+      gridStub.fire("modelUpdated");
+    });
+    expect(await screen.findByText("3 items")).toBeInTheDocument();
+  });
+
+  it("frames the Name cell with indentation, the ancestor crumb and a chevron", async () => {
+    const { user } = renderInventory("/inventory?type=Application");
+    await waitForRows(3);
+    const name = gridStub.colDef("core_name");
+    const toggle = vi.fn();
+    const info = {
+      depth: 1,
+      crumbIds: [ERP.id],
+      crumbTruncated: false,
+      hasChildren: true,
+      collapsed: false,
+      hiddenDescendants: 0,
+    };
+    const context = { getTreeInfo: (id: string) => (id === HR.id ? info : undefined), toggleParentCollapse: toggle };
+    const rowClick = vi.fn();
+    const { container } = mount(
+      <div onClick={rowClick}>{name.cellRenderer({ data: HR, value: HR.name, context })}</div>,
+    );
+    const frame = container.querySelector<HTMLElement>("[style*='padding-inline-start']")!;
+    expect(frame.style.paddingInlineStart).toBe("20px");
+    const crumb = screen.getByText("ERP Core /");
+    expect(crumb).toHaveAttribute("title", "ERP Core");
+    // The card's own link and preview button are still there.
+    expect(screen.getByRole("link", { name: "HR Portal" })).toHaveAttribute("href", `/cards/${HR.id}`);
+    const chevron = screen.getByRole("button", { name: /Hide children of HR Portal/ });
+    expect(chevron).toHaveAttribute("aria-expanded", "true");
+    expect(chevron).toHaveAttribute("data-tree-toggle");
+    await user.click(chevron);
+    expect(toggle).toHaveBeenCalledWith(HR.id);
+    expect(rowClick).not.toHaveBeenCalled();
+  });
+
+  it("marks a truncated crumb and a collapsed parent, and leaves leaves a spacer", async () => {
+    renderInventory("/inventory?type=Application");
+    await waitForRows(3);
+    const name = gridStub.colDef("core_name");
+    const base = { depth: 0, hasChildren: true, collapsed: true, hiddenDescendants: 1 };
+    const context = {
+      getTreeInfo: (id: string) =>
+        id === ERP.id
+          ? { ...base, crumbIds: [CRM.id], crumbTruncated: true }
+          : { ...base, hasChildren: false, collapsed: false, crumbIds: [], crumbTruncated: false },
+      toggleParentCollapse: vi.fn(),
+    };
+    const { container } = mount(name.cellRenderer({ data: ERP, value: ERP.name, context }));
+    expect(screen.getByText("… / CRM Cloud /")).toHaveAttribute("title", "… / CRM Cloud");
+    expect(screen.getByRole("button", { name: /Show children of ERP Core/ })).toHaveAttribute(
+      "aria-expanded",
+      "false",
+    );
+    expect((container.firstChild as HTMLElement).style.paddingInlineStart).toBe("0");
+    const leaf = mount(name.cellRenderer({ data: HR, value: HR.name, context }));
+    expect(screen.queryByRole("button", { name: /children of HR Portal/ })).toBeNull();
+    // A root with no missing ancestors carries no crumb, but keeps the chevron
+    // slot so its name lines up with its siblings'.
+    expect(leaf.container.querySelector("[title]")).toBeNull();
+    const frame = leaf.container.firstChild as HTMLElement;
+    expect(frame.children).toHaveLength(2);
+    expect((frame.children[0] as HTMLElement).childElementCount).toBe(0);
+  });
+
+  it("keeps edit mode's plain Name cell unless the tree is on", async () => {
+    const { user } = renderInventory("/inventory?type=Application");
+    await waitForRows(3);
+    await user.click(screen.getByRole("button", { name: BTN.gridEdit }));
+    await waitFor(() => expect(gridStub.colDef("core_name").editable).toBe(true));
+    expect(gridStub.colDef("core_name").cellRenderer).toBeUndefined();
+
+    await user.click(groupByButton());
+    await user.click(
+      within(await screen.findByRole("menu")).getByRole("menuitemcheckbox", {
+        name: "Parent",
+      }),
+    );
+    await waitFor(() => expect(gridStub.colDef("core_name").cellRenderer).toBeDefined());
+    const renderer = gridStub.colDef("core_name").cellRenderer;
+    // Without tree info (a header row, say) the plain value comes back.
+    expect(renderer({ data: HR, value: "HR Portal", context: {} })).toBe("HR Portal");
+    expect(renderer({ data: undefined, value: undefined })).toBe("");
+    const toggle = vi.fn();
+    mount(
+      renderer({
+        data: ERP,
+        value: "ERP Core",
+        context: {
+          getTreeInfo: () => ({
+            depth: 0,
+            crumbIds: [],
+            crumbTruncated: false,
+            hasChildren: true,
+            collapsed: false,
+            hiddenDescendants: 0,
+          }),
+          toggleParentCollapse: toggle,
+        },
+      }),
+    );
+    // Plain text, no link, in edit mode.
+    expect(screen.getByText("ERP Core")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "ERP Core" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /Hide children of ERP Core/ }));
+    expect(toggle).toHaveBeenCalledWith(ERP.id);
+  });
+
+  const collapseBtn = () => screen.getByRole("button", { name: /^Collapse one level/ });
+  const expandBtn = () => screen.getByRole("button", { name: /^Expand one level/ });
+  const stepper = () => screen.queryByRole("group", { name: "Expand by level" });
+
+  it("shows the level stepper after Group by; − closes a level and is remembered", async () => {
+    const { user } = renderInventory("/inventory?type=Application&group_tree=1");
+    await waitFor(() => expect(rowIds()).toEqual([ERP.id, HR.id, CRM.id]));
+    expect(stepper()).not.toBeNull();
+    // Placed right after the Group by button.
+    expect(groupByButton().nextElementSibling).toBe(stepper());
+    expect(expandBtn()).toBeDisabled();
+    expect(expandBtn()).toHaveAccessibleName("Expand one level (2 of 2)");
+    expect(collapseBtn()).toBeEnabled();
+    await user.click(collapseBtn());
+    // HR (ERP's only child) leaves the grid; the pill still counts it.
+    await waitForRows(2);
+    expect(rowIds()).toEqual([ERP.id, CRM.id]);
+    act(() => {
+      gridStub.fire("modelUpdated");
+    });
+    expect(await screen.findByText("3 items")).toBeInTheDocument();
+    await waitFor(() => expect(prefs().groupTreeLevel).toBe(1));
+    expect(screen.getByTestId("filter-sidebar")).toHaveAttribute("data-group-tree-level", "1");
+    expect(collapseBtn()).toBeDisabled();
+    expect(expandBtn()).toHaveAccessibleName("Expand one level (1 of 2)");
+    await user.click(expandBtn());
+    await waitForRows(3);
+    await waitFor(() => expect(prefs().groupTreeLevel).toBe(2));
+  });
+
+  it("the stepper follows a chevron toggle without writing the preference", async () => {
+    renderInventory("/inventory?type=Application&group_tree=1");
+    await waitForRows(3);
+    act(() => ctx().toggleParentCollapse(ERP.id));
+    await waitForRows(2);
+    expect(expandBtn()).toHaveAccessibleName("Expand one level (1 of 2)");
+    expect(collapseBtn()).toBeDisabled();
+    expect(prefs().groupTreeLevel).toBeNull();
+  });
+
+  it("deep-links a level with group_tree_level", async () => {
+    renderInventory("/inventory?type=Application&group_tree=1&group_tree_level=1");
+    await waitForRows(2);
+    expect(rowIds()).toEqual([ERP.id, CRM.id]);
+    expect(ctx().getTreeInfo(ERP.id)).toMatchObject({ collapsed: true, hiddenDescendants: 1 });
+    await waitFor(() => expect(prefs().groupTreeLevel).toBe(1));
+  });
+
+  it("ignores an invalid group_tree_level", async () => {
+    renderInventory("/inventory?type=Application&group_tree=1&group_tree_level=abc");
+    await waitFor(() => expect(rowIds()).toEqual([ERP.id, HR.id, CRM.id]));
+    expect(ctx().getTreeInfo(ERP.id)!.collapsed).toBe(false);
+    await waitFor(() => expect(prefs()?.groupTreeLevel).toBeNull());
+  });
+
+  it("restores the level pref without URL params and ignores it with URL filters", async () => {
+    localStorage.setItem(PREFS_KEY, JSON.stringify({ groupTree: true, groupTreeLevel: 1 }));
+    const first = renderInventory("/inventory");
+    await waitFor(() => expect(ctx().getTreeInfo(ERP.id)?.collapsed).toBe(true));
+    expect(screen.getByTestId("filter-sidebar")).toHaveAttribute("data-group-tree-level", "1");
+    expect(collapseBtn()).toBeDisabled();
+    first.unmount();
+    localStorage.setItem(PREFS_KEY, JSON.stringify({ groupTree: true, groupTreeLevel: 1 }));
+    renderInventory("/inventory?type=Application");
+    await waitForRows(3);
+    expect(screen.getByTestId("filter-sidebar")).toHaveAttribute("data-group-tree-level", "");
+    await waitFor(() => expect(prefs().groupTreeLevel).toBeNull());
+  });
+
+  it("a saved view's level is applied through the sidebar", async () => {
+    renderInventory("/inventory?type=Application&group_tree=1");
+    await waitForRows(3);
+    holder.groupTreeLevel = 1;
+    fireEvent.click(screen.getByTestId("set-group-tree-level"));
+    await waitForRows(2);
+    await waitFor(() => expect(prefs().groupTreeLevel).toBe(1));
+    holder.groupTreeLevel = null;
+    fireEvent.click(screen.getByTestId("set-group-tree-level"));
+    await waitForRows(3);
+  });
+
+  it("shows no stepper with the tree off or without a hierarchy in view", async () => {
+    const off = renderInventory("/inventory?type=Application");
+    await waitForRows(3);
+    expect(stepper()).toBeNull();
+    off.unmount();
+    renderInventory("/inventory?type=Provider&group_tree=1");
+    await waitFor(() => expect(gridStub.lastProps()).not.toBeNull());
+    expect(stepper()).toBeNull();
+  });
+
+  it("a row click on the chevron does not navigate", async () => {
+    renderInventory("/inventory?type=Application&group_tree=1");
+    await waitForRows(3);
+    const wrapper = document.createElement("button");
+    wrapper.setAttribute("data-tree-toggle", "true");
+    const icon = document.createElement("span");
+    wrapper.appendChild(icon);
+    act(() => {
+      gridStub.fire("rowClicked", { data: ERP, event: { target: icon } });
+    });
+    expect(screen.queryByTestId("card-page")).toBeNull();
+    act(() => {
+      gridStub.fire("rowClicked", { data: ERP, event: { target: document.createElement("span") } });
+    });
+    expect(await screen.findByTestId("card-page")).toHaveAttribute("data-card-id", ERP.id);
   });
 });
 
@@ -772,7 +1170,7 @@ describe("InventoryPage client-side filters", () => {
     mockApi.on("get", /^\/relations\?card_type=/, [REL_ERP_PG]);
     const { user } = renderInventory("/inventory?type=Application");
     await waitForRows(3);
-    await waitFor(() => expect(gridStub.cellValue("rel_ITComponent", ERP)).toBe("PostgreSQL"));
+    await waitFor(() => expect(gridStub.cellValue("rel_relAppToITC__out", ERP)).toBe("PostgreSQL"));
     await applyFilters(user, { relations: { relAppToITC: ["PostgreSQL"] } });
     await waitForRows(1);
     await applyFilters(user, { relations: { relAppToITC: [EMPTY_VALUE] } });
@@ -1511,6 +1909,71 @@ describe("InventoryPage archive, delete and restore", () => {
 // Column definitions
 // ---------------------------------------------------------------------------
 
+describe("InventoryPage colours", () => {
+  const WHITE = createTheme().palette.common.white;
+  const filled = (bg: string) => ({ backgroundColor: bg, color: WHITE });
+  const option = (field: string, key: string) =>
+    APPLICATION_TYPE.fields_schema
+      .flatMap((s) => s.fields)
+      .find((f) => f.key === field)!
+      .options!.find((o) => o.key === key)!.color!;
+
+  it("paints coloured chips white on their colour", async () => {
+    renderInventory("/inventory?type=Application");
+    await waitForRows(3);
+    mount(gridStub.colDef("core_approval_status").cellRenderer({ value: "APPROVED" }));
+    expect(screen.getByText("Approved").closest(".MuiChip-root")).toHaveStyle(
+      filled(APPROVAL_STATUS_COLORS.APPROVED),
+    );
+    mount(gridStub.colDef("core_tags").cellRenderer({ value: ERP.tags }));
+    expect(screen.getByText("On-Prem").closest(".MuiChip-root")).toHaveStyle({
+      ...filled(ERP.tags![0].color!),
+      height: "16px",
+    });
+    mount(gridStub.colDef("attr_businessCriticality").cellRenderer({ value: "missionCritical" }));
+    expect(screen.getByText("Mission Critical").closest(".MuiChip-root")).toHaveStyle(
+      filled(option("businessCriticality", "missionCritical")),
+    );
+  });
+
+  it("paints the Archived status chip neutral", async () => {
+    renderInventory("/inventory?show_archived=true");
+    await waitForRows(2);
+    mount(gridStub.colDef("core_status").cellRenderer({ value: "ARCHIVED" }));
+    expect(screen.getByText("Archived").closest(".MuiChip-root")).toHaveStyle(filled(STATUS_COLORS.neutral));
+  });
+
+  it("paints a common single-select chip in its option colour", async () => {
+    withMetamodel([...CARD_TYPES, VEHICLE_TYPE, VESSEL_TYPE], RELATION_TYPES);
+    scriptCards([...ALL_CARDS, BUS, SHIP]);
+    const { user } = renderInventory();
+    await waitForRows(ALL_CARDS.filter((c) => c.status !== "ARCHIVED").length + 2);
+    await applyFilters(user, { types: ["Vehicle", "Vessel"] });
+    await waitFor(() => expect(gridStub.colDef("attr_grade")).toBeDefined());
+    mount(gridStub.colDef("attr_grade").cellRenderer({ value: "a" }));
+    expect(screen.getByText("Alpha").closest(".MuiChip-root")).toHaveStyle(filled(FLEET_FIELDS[0].options![0].color!));
+  });
+
+  it("colours the archive, restore and delete buttons of the selection bar", async () => {
+    const first = renderInventory("/inventory?type=Application");
+    await waitForRows(3);
+    selectRows([ERP]);
+    expect(await screen.findByRole("button", { name: BTN.archive })).toHaveStyle({
+      color: STATUS_CHIP_COLORS.warning.text,
+    });
+    first.unmount();
+    renderInventory("/inventory?show_archived=true");
+    await waitForRows(2);
+    selectRows([ERP_ARCHIVED]);
+    expect(await screen.findByRole("button", { name: BTN.restore })).toHaveStyle({
+      color: STATUS_CHIP_COLORS.success.text,
+    });
+    expect(screen.getByRole("button", { name: BTN.deleteForever })).toHaveStyle({
+      color: STATUS_CHIP_COLORS.error.text,
+    });
+  });
+});
+
 describe("InventoryPage column definitions", () => {
   it("renders the core cells", async () => {
     renderInventory("/inventory?type=Application");
@@ -1860,20 +2323,21 @@ describe("InventoryPage column definitions", () => {
     mockApi.on("get", /^\/relations\?card_type=/, [REL_ERP_PG]);
     const { user } = renderInventory("/inventory?type=Application");
     await waitForRows(3);
-    await waitFor(() => expect(gridStub.cellValue("rel_ITComponent", ERP)).toBe("PostgreSQL"));
-    const col = gridStub.colDef("rel_ITComponent");
+    await waitFor(() => expect(gridStub.cellValue("rel_relAppToITC__out", ERP)).toBe("PostgreSQL"));
+    const col = gridStub.colDef("rel_relAppToITC__out");
     expect(col.cellRenderer({ value: "", data: CRM })).toBe("");
     mount(col.cellRenderer({ value: "PostgreSQL", data: ERP }));
     expect(screen.getByText("PostgreSQL")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: BTN.gridEdit }));
     await waitFor(() => expect(gridStub.colDef("core_name").editable).toBe(true));
-    mount(gridStub.colDef("rel_ITComponent").cellRenderer({ value: "", data: CRM }));
+    mount(gridStub.colDef("rel_relAppToITC__out").cellRenderer({ value: "", data: CRM }));
     await user.click(screen.getByText("Click to edit"));
     const popover = await screen.findByTestId("relation-popover");
     expect(popover).toHaveAttribute("data-card-id", CARD_IDS.crm);
     expect(popover).toHaveAttribute("data-card-name", "CRM Cloud");
     expect(popover).toHaveAttribute("data-rel-types", "relAppToITC");
+    expect(popover).toHaveAttribute("data-is-source", "true");
     const relCalls = mockApi.callsOf("get", /^\/relations\?card_type=/).length;
     await user.click(screen.getByTestId("relation-popover-changed"));
     await waitFor(() =>
@@ -1881,6 +2345,201 @@ describe("InventoryPage column definitions", () => {
     );
     await user.click(screen.getByTestId("relation-popover-close"));
     await waitFor(() => expect(screen.queryByTestId("relation-popover")).toBeNull());
+  });
+
+  it("builds one column per relation-type side, headed by its verb, each with its own cell", async () => {
+    withMetamodel(CARD_TYPES, [...RELATION_TYPES, REL_APP_TO_ITC_HOSTS]);
+    mockApi.on("get", /^\/relations\?card_type=/, [REL_ERP_PG, REL_ERP_HOSTED_LINUX, REL_ERP_TO_CRM]);
+    const { user } = renderInventory("/inventory?type=Application");
+    await waitForRows(3);
+    await waitFor(() => expect(gridStub.cellValue("rel_relAppToITC__out", ERP)).toBe("PostgreSQL"));
+    // Two relation types on Application → IT Component: two columns, two cells.
+    expect(gridStub.cellValue("rel_relAppToITCHosts__out", ERP)).toBe("Linux Server");
+    expect(gridStub.colDef("rel_relAppToITC__out").headerName).toBe("uses IT Component");
+    expect(gridStub.colDef("rel_relAppToITCHosts__out").headerName).toBe("is hosted on IT Component");
+    expect(gridStub.colDef("rel_relAppToBC__out").headerName).toBe("supports Business Capability");
+    // A self-referencing type is an outgoing and an incoming column.
+    expect(gridStub.colDef("rel_relAppToApp__out").headerName).toBe("sends data to Application");
+    expect(gridStub.colDef("rel_relAppToApp__in").headerName).toBe("receives data from Application");
+    expect(gridStub.cellValue("rel_relAppToApp__out", ERP)).toBe("CRM Cloud");
+    expect(gridStub.cellValue("rel_relAppToApp__in", ERP)).toBe("");
+    expect(gridStub.cellValue("rel_relAppToApp__in", CRM)).toBe("ERP Core");
+    // No merged per-card-type column any more, and every side is on by default.
+    expect(gridStub.colDef("rel_ITComponent")).toBeUndefined();
+    expect(gridStub.colDef("rel_Application")).toBeUndefined();
+    const relIds = gridStub
+      .colDefs()
+      .map((c) => c.colId ?? c.field)
+      .filter((id: string) => id.startsWith("rel_"));
+    // Same-target columns sit together, a self-pair's two sides adjacent.
+    expect(relIds).toEqual([
+      "rel_relAppToITC__out",
+      "rel_relAppToITCHosts__out",
+      "rel_relAppToBC__out",
+      "rel_relAppToApp__out",
+      "rel_relAppToApp__in",
+    ]);
+    expect(relIds.every((id: string) => gridStub.colDef(id).hide === false)).toBe(true);
+
+    // The incoming column edits that one relation type, on its incoming side.
+    await user.click(screen.getByRole("button", { name: BTN.gridEdit }));
+    await waitFor(() => expect(gridStub.colDef("core_name").editable).toBe(true));
+    mount(gridStub.colDef("rel_relAppToApp__in").cellRenderer({ value: "", data: CRM }));
+    await user.click(screen.getByText("Click to edit"));
+    const popover = await screen.findByTestId("relation-popover");
+    expect(popover).toHaveAttribute("data-rel-types", "relAppToApp");
+    expect(popover).toHaveAttribute("data-is-source", "false");
+  });
+
+  it("translates a layout saved with per-card-type relation columns onto the side columns", async () => {
+    withMetamodel(CARD_TYPES, [...RELATION_TYPES, REL_APP_TO_ITC_HOSTS]);
+    const itcFilter = { filterType: "text", type: "contains", filter: "Postgres" };
+    const bcFilter = { filterType: "text", type: "contains", filter: "Finance" };
+    localStorage.setItem(
+      PREFS_KEY,
+      JSON.stringify({
+        filters: { types: ["Application"] },
+        columns: ["core_type", "core_name", "rel_ITComponent", "rel_Ghost"],
+        coreTagsMerged: true,
+        columnState: [{ colId: "rel_ITComponent", width: 250, sort: "asc", sortIndex: 0 }],
+        columnOrder: ["rel_ITComponent", "core_name"],
+        frozenColumns: ["rel_ITComponent"],
+        columnFilterModel: { rel_ITComponent: itcFilter, rel_BusinessCapability: bcFilter },
+        sortModel: [{ colId: "rel_ITComponent", sort: "asc" }],
+      }),
+    );
+    renderInventory();
+    await waitForRows(3);
+    await act(async () => {
+      gridStub.fire("gridReady");
+    });
+    await waitFor(() => expect(prefs().columns).toContain("rel_relAppToITC__out"));
+    const saved = prefs();
+    // The old id meant "the IT Component column" on every type related to IT
+    // Component, so it becomes every such column, metamodel-wide and in place —
+    // the Provider inventory's one included; an id that resolves to nothing is
+    // left alone.
+    const ITC_COLUMNS = [
+      "rel_relAppToITC__out",
+      "rel_relProviderToITC__out",
+      "rel_relAppToITCHosts__out",
+    ];
+    expect(saved.columns).toEqual(["core_type", "core_name", ...ITC_COLUMNS, "rel_Ghost"]);
+    expect(saved.frozenColumns).toEqual(ITC_COLUMNS);
+    // They take the legacy column's place, ahead of Name as it was saved.
+    const order: string[] = saved.columnOrder;
+    expect(order).not.toContain("rel_ITComponent");
+    const at = order.indexOf("rel_relAppToITC__out");
+    expect(order.slice(at, at + 4)).toEqual([...ITC_COLUMNS, "core_name"]);
+    expect(order.filter((id) => id === "rel_relAppToITC__out")).toHaveLength(1);
+    // Width on every column, the sort on the selected type's first side only.
+    const translatedState = [
+      { colId: "rel_relAppToITC__out", width: 250, sort: "asc", sortIndex: 0 },
+      { colId: "rel_relProviderToITC__out", width: 250 },
+      { colId: "rel_relAppToITCHosts__out", width: 250 },
+    ];
+    expect(saved.columnState).toEqual(translatedState);
+    expect(saved.sortModel).toEqual([{ colId: "rel_relAppToITC__out", sort: "asc" }]);
+    // One side: the filter is renamed. Two sides: it cannot be split, so it goes.
+    expect(saved.columnFilterModel).toEqual({ rel_relAppToBC__out: bcFilter });
+    // The grid receives the translated layout and filters, never the stale ones.
+    expect(gridStub.api().getFilterModel()).toEqual({ rel_relAppToBC__out: bcFilter });
+    expect(gridStub.api().getColumnState()).toEqual(translatedState);
+    expect(gridStub.colDef("rel_relAppToITC__out").hide).toBe(false);
+    expect(gridStub.colDef("rel_relAppToITCHosts__out").hide).toBe(false);
+    expect(gridStub.colDef("rel_relAppToBC__out").hide).toBe(true);
+    expect(gridStub.colDef("rel_relAppToITC__out").pinned).toBe("left");
+    expect(gridStub.colDef("rel_relAppToITCHosts__out").pinned).toBe("left");
+  });
+
+  it("keeps a legacy relation column on every card type related to it", async () => {
+    // Saved before the per-side columns: one shared selection, "show Application".
+    localStorage.setItem(
+      PREFS_KEY,
+      JSON.stringify({
+        filters: { types: ["ITComponent"] },
+        columns: ["core_type", "core_name", "rel_Application"],
+        coreTagsMerged: true,
+      }),
+    );
+    const { user } = renderInventory();
+    await waitFor(() => expect(gridStub.colDef("rel_relAppToITC__in")?.hide).toBe(false));
+    // IT Component reaches Provider too, but that column was never selected.
+    expect(gridStub.colDef("rel_relProviderToITC__in").hide).toBe(true);
+    await waitFor(() => expect(prefs().columns).not.toContain("rel_Application"));
+
+    // Another type related to Application still shows its Application columns
+    // (here both sides of the self-referencing type), though the translation
+    // ran while IT Component was selected.
+    holder.filters = { types: ["Application"] };
+    await user.click(screen.getByTestId("apply-filters"));
+    await waitFor(() => expect(gridStub.colDef("rel_relAppToApp__out")?.hide).toBe(false));
+    expect(gridStub.colDef("rel_relAppToApp__in").hide).toBe(false);
+    expect(gridStub.colDef("rel_relAppToITC__out").hide).toBe(true);
+    expect(gridStub.colDef("rel_relAppToBC__out").hide).toBe(true);
+    expect(prefs().columns).toEqual([
+      "core_type",
+      "core_name",
+      "rel_relAppToITC__in",
+      "rel_relAppToBC__in",
+      "rel_relAppToApp__out",
+      "rel_relAppToApp__in",
+    ]);
+  });
+
+  it("gives a cross-type relation its own column at each end, so hiding one leaves the other", async () => {
+    localStorage.setItem(
+      PREFS_KEY,
+      JSON.stringify({
+        filters: { types: ["Application"] },
+        columns: ["core_type", "core_name", "rel_relAppToITC__out", "rel_relAppToITC__in"],
+        coreTagsMerged: true,
+      }),
+    );
+    const { user } = renderInventory();
+    await waitFor(() => expect(gridStub.colDef("rel_relAppToITC__out")?.hide).toBe(false));
+    expect(gridStub.colDef("rel_relAppToITC__in")).toBeUndefined();
+    // Untick "uses IT Component" on the Application inventory…
+    holder.columns = new Set(["core_type", "core_name", "rel_relAppToITC__in"]);
+    await user.click(screen.getByTestId("set-columns"));
+    await waitFor(() => expect(gridStub.colDef("rel_relAppToITC__out").hide).toBe(true));
+    // …and "is used by Application" on the IT Component inventory stays on.
+    holder.filters = { types: ["ITComponent"] };
+    await user.click(screen.getByTestId("apply-filters"));
+    await waitFor(() => expect(gridStub.colDef("rel_relAppToITC__in")?.hide).toBe(false));
+    expect(gridStub.colDef("rel_relAppToITC__in").headerName).toBe("is used by Application");
+    expect(gridStub.colDef("rel_relAppToITC__out")).toBeUndefined();
+  });
+
+  it("opens a view saved with per-card-type relation columns on the side columns", async () => {
+    mockApi.on("get", /^\/bookmarks/, [
+      {
+        id: "bm-legacy",
+        name: "Legacy layout",
+        is_default: false,
+        visibility: "private",
+        odata_enabled: false,
+        owner_id: "u1",
+        is_owner: true,
+        can_edit: true,
+        filters: { types: ["Application"] },
+        columns: ["core_type", "core_name", "rel_BusinessCapability"],
+        column_state: [{ colId: "rel_BusinessCapability", width: 310 }],
+      },
+    ]);
+    renderInventory("/inventory?view=bm-legacy");
+    await waitForRows(3);
+    await waitFor(() => expect(gridStub.colDef("rel_relAppToBC__out")?.hide).toBe(false));
+    expect(gridStub.colDef("rel_relAppToITC__out").hide).toBe(true);
+    await waitFor(() =>
+      expect(prefs().columnState).toEqual([{ colId: "rel_relAppToBC__out", width: 310 }]),
+    );
+    expect(prefs().columns).not.toContain("rel_BusinessCapability");
+    // The translated width reaches the grid.
+    await act(async () => {
+      gridStub.fire("gridReady");
+    });
+    expect(gridStub.api().getColumnState()).toEqual([{ colId: "rel_relAppToBC__out", width: 310 }]);
   });
 
   it("switches grid-edit mode off when the faceted type may not be edited", async () => {
@@ -2122,7 +2781,7 @@ describe("InventoryPage grid handlers", () => {
     await waitForRows(3);
     // While the fetch is open, an empty relation cell says so rather than
     // reading as "no relations".
-    const relCol = gridStub.colDef("rel_ITComponent");
+    const relCol = gridStub.colDef("rel_relAppToITC__out");
     mount(relCol.cellRenderer({ value: "", data: CRM }));
     expect(screen.getByTitle("Loading relations…")).toHaveTextContent("…");
     await user.click(screen.getByRole("button", { name: BTN.exportMenu }));
@@ -2136,7 +2795,11 @@ describe("InventoryPage grid handlers", () => {
     const [rows, columns, opts] = vi.mocked(exportCurrentViewToExcel).mock.calls[0];
     expect(opts).toEqual({ sheetLabel: "Application" });
     expect(columns.map((c) => c.colId)).not.toContain("core_logo");
-    expect(rows.find((r) => r.core_name === "ERP Core")?.rel_ITComponent).toBe("PostgreSQL");
+    expect(rows.find((r) => r.core_name === "ERP Core")?.rel_relAppToITC__out).toBe("PostgreSQL");
+    // The header names the relationship, not just the card type.
+    expect(columns.find((c) => c.colId === "rel_relAppToITC__out")?.headerName).toBe(
+      "uses IT Component",
+    );
   });
 
   it("exports every field through the full workbook writer", async () => {
@@ -2348,7 +3011,7 @@ describe("inventory fill helpers", () => {
   it("offers the fill handle only on columns that persist through a field", () => {
     expect(isInventoryFillable("core_name", { field: "name" })).toBe(false);
     expect(isInventoryFillable("core_logo", { field: "logo" })).toBe(false);
-    expect(isInventoryFillable("rel_ITComponent", { field: "rel_ITComponent" })).toBe(false);
+    expect(isInventoryFillable("rel_relAppToITC__out", { field: "rel_relAppToITC__out" })).toBe(false);
     expect(isInventoryFillable("ag-Grid-SelectionColumn", { field: "x" })).toBe(false);
     expect(isInventoryFillable("core_path", {})).toBe(false);
     expect(isInventoryFillable("core_description", { field: "description" })).toBe(true);

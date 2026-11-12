@@ -8,9 +8,12 @@ import { act, render, screen, within, waitFor } from "@testing-library/react";
 import userEvent, { type UserEvent } from "@testing-library/user-event";
 
 vi.mock("@/api/client", () => import("@/test/apiMock").then((m) => m.apiClientModule()));
+vi.mock("@/hooks/useMetamodel", () => import("@/test/hooks").then((m) => m.useMetamodelModule()));
 
 import { mockApi } from "@/test/apiMock";
 import type { EolCycle, MassEolResult } from "@/types";
+import { createTheme } from "@mui/material/styles";
+import { STATUS_COLORS } from "@/theme/tokens";
 import EolAdmin from "./EolAdmin";
 
 const SEARCH_ITC = "/eol/mass-search?type_key=ITComponent";
@@ -170,6 +173,11 @@ describe("EolAdmin cycle picker", () => {
     expect(
       within(within(listbox).getByRole("option", { name: /18\.04/ })).getByText("End of Life"),
     ).toBeInTheDocument();
+    // Each status chip is white on its status colour.
+    expect(within(supported).getByText("Supported").closest(".MuiChip-root")).toHaveStyle({
+      color: createTheme().palette.common.white,
+      backgroundColor: STATUS_COLORS.success,
+    });
     await user.click(supported);
     await waitFor(() => expect(screen.queryByRole("listbox")).not.toBeInTheDocument());
 

@@ -16,7 +16,7 @@ import CircularProgress from "@mui/material/CircularProgress";
 import MaterialSymbol from "@/components/MaterialSymbol";
 import { listEnterpriseObjects, updateEnterpriseObject } from "@/api/enterpriseObjects";
 import { LAYER_ORDER, type ArchimateLayer } from "@/features/archimate/taxonomy/elements";
-import { ARCHIMATE_LAYER_COLORS, ARCHIMATE_TEXT_COLOR } from "@/theme/tokens";
+import { ARCHIMATE_LAYER_COLORS, ARCHIMATE_TEXT_COLOR, MUTED_ICON_COLORS, RAG_COLORS } from "@/theme/tokens";
 import { useAuthContext } from "@/hooks/AuthContext";
 import { usePermissions } from "@/hooks/usePermissions";
 import type { CardType, EnterpriseObject } from "@/types";
@@ -239,7 +239,7 @@ export default function CardMappingTabContent({ types = [] }: CardMappingTabCont
                                 <MaterialSymbol
                                   icon={eo.aspect === aspect ? "check_circle" : "radio_button_unchecked"}
                                   size={16}
-                                  color={eo.aspect === aspect ? ARCHIMATE_LAYER_COLORS[layer].stroke : "#ddd"}
+                                  color={eo.aspect === aspect ? ARCHIMATE_LAYER_COLORS[layer].stroke : MUTED_ICON_COLORS.faint}
                                 />
                               </IconButton>
                             )}
@@ -264,7 +264,7 @@ export default function CardMappingTabContent({ types = [] }: CardMappingTabCont
                               <MaterialSymbol
                                 icon={expandedKey === eo.key ? "expand_less" : "expand_more"}
                                 size={18}
-                                color="#bbb"
+                                color={MUTED_ICON_COLORS.soft}
                               />
                             </IconButton>
                           )}
@@ -298,7 +298,7 @@ export default function CardMappingTabContent({ types = [] }: CardMappingTabCont
                                 <MaterialSymbol
                                   icon={eo.is_hidden ? "visibility_off" : "visibility"}
                                   size={18}
-                                  color={eo.is_locked ? "#ccc" : eo.is_hidden ? "#f57c00" : "#bbb"}
+                                  color={eo.is_locked ? MUTED_ICON_COLORS.locked : eo.is_hidden ? RAG_COLORS.amber : MUTED_ICON_COLORS.soft}
                                 />
                               </IconButton>
                             </span>

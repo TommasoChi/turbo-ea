@@ -1,6 +1,8 @@
 // Word export of one value stream map: the map as a picture, then the goals and processes as lists.
 // The "595959" / "#ffffff" literals below are docx / print values (a Word page is white whatever the
-// app theme is), not UI colours: this is the only file allowed to hold them.
+// app theme is), not UI colours; the page colour comes from the EXPORT_BACKGROUND_COLOR token.
+
+import { EXPORT_BACKGROUND_COLOR } from "@/theme/tokens";
 
 export interface WordLabels {
   subtitle: string;
@@ -76,7 +78,7 @@ export async function exportValueStreamToWord({ node, rootName, goals, processNa
     const dataUrl = await toPng(node, {
       cacheBust: true,
       pixelRatio: 1.5,
-      backgroundColor: "#ffffff",
+      backgroundColor: EXPORT_BACKGROUND_COLOR,
       // Material Symbols icons too, as reportExport does: their font ligature does not survive the
       // capture, so they would show as raw glyph names ("expand_more", "arrow_upward").
       filter: (el) =>
