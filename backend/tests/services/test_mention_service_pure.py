@@ -80,7 +80,7 @@ class SpyScope:
         self.readable_ids = readable_ids
         self.calls: list[tuple[Any, Any, Any]] = []
 
-    def readable(self, card_id, card_type, *, mode):
+    def readable(self, card_id, card_type, *, mode, subtype=None):
         self.calls.append((card_id, card_type, mode))
         return mode == "module" and card_id in self.readable_ids
 
@@ -177,13 +177,13 @@ def test_a_decision_row_without_a_standing_says_none():
 async def test_a_new_card_mention_is_checked_in_module_mode_with_the_passed_scope(monkeypatch):
     _no_loading(monkeypatch)
     card = uuid.UUID(CARD)
-    session = FakeSession([(card, "Application")])
+    session = FakeSession([(card, "Application", None)])
     scope = SpyScope({card})
     await ms.check_new_mentions(
         session, {("card", CARD)}, user=USER, read_scope=scope, system=False
     )
     assert scope.calls == [(card, "Application", "module")]
-    assert session.sql[0].startswith("SELECT cards.id, cards.type \nFROM cards")
+    assert session.sql[0].startswith("SELECT cards.id, cards.type, cards.subtype \nFROM cards")
 
 
 async def test_a_new_decision_mention_asks_adr_view_on_the_session(monkeypatch):
@@ -204,7 +204,7 @@ async def test_mention_states_use_the_passed_scope_register_and_permission(monke
     card = uuid.UUID(CARD)
     decision = uuid.UUID(DECISION)
     session = FakeSession(
-        [SimpleNamespace(id=card, name="CRM", type="Application", status="ACTIVE")]
+        [SimpleNamespace(id=card, name="CRM", type="Application", subtype=None, status="ACTIVE")]
     )
     calls = _strict_permission(monkeypatch, session, {"adr.view"})
     scope = SpyScope({card})

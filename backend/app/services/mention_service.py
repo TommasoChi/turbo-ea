@@ -317,13 +317,18 @@ async def check_new_mentions(
     card_ids = {uuid.UUID(mid) for kind, mid in mentions if kind == "card"}
     decision_ids = {uuid.UUID(mid) for kind, mid in mentions if kind == "decision"}
     if card_ids:
-        rows = (await db.execute(select(Card.id, Card.type).where(Card.id.in_(card_ids)))).all()
+        rows = (
+            await db.execute(select(Card.id, Card.type, Card.subtype).where(Card.id.in_(card_ids)))
+        ).all()
         if len(rows) != len(card_ids):
             raise MentionRefused(404, "Card not found")
         if not system:
             assert user is not None
             scope = read_scope if read_scope is not None else await CardReadScope.load(db, user)
-            if any(not scope.readable(cid, ctype, mode="module") for cid, ctype in rows):
+            if any(
+                not scope.readable(cid, ctype, mode="module", subtype=csub)
+                for cid, ctype, csub in rows
+            ):
                 raise MentionRefused(404, "Card not found")
     if decision_ids:
         # The permission first: a writer who may not read decisions learns
@@ -413,14 +418,14 @@ async def mention_states(
     if card_ids:
         rows = (
             await db.execute(
-                select(Card.id, Card.name, Card.type, Card.status).where(
+                select(Card.id, Card.name, Card.type, Card.subtype, Card.status).where(
                     Card.id.in_([uuid.UUID(mid) for mid in card_ids])
                 )
             )
         ).all()
         scope = read_scope if read_scope is not None else await CardReadScope.load(db, user)
         for row in rows:
-            if not scope.readable(row.id, row.type, mode="module"):
+            if not scope.readable(row.id, row.type, mode="module", subtype=row.subtype):
                 states[("card", str(row.id))] = restricted()
             else:
                 states[("card", str(row.id))] = resolved(

@@ -28,7 +28,7 @@ def _todo_to_dict(t: Todo, read_scope: CardReadScope | None = None) -> dict:
     """
     card = t.card
     if card is not None and read_scope is not None:
-        if not read_scope.readable(card.id, card.type, mode="module"):
+        if not read_scope.readable(card.id, card.type, mode="module", subtype=card.subtype):
             card = None
     return {
         "id": str(t.id),

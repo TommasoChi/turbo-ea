@@ -568,7 +568,9 @@ async def mass_eol_link(
         stmt = select(Card).where(Card.id == card_id)
         result = await db.execute(stmt)
         card = result.scalar_one_or_none()
-        if not card or not read_scope.readable(card.id, card.type, mode="module"):
+        if not card or not read_scope.readable(
+            card.id, card.type, mode="module", subtype=card.subtype
+        ):
             continue
 
         # Update attributes. Re-linking a card to the product/cycle it already

@@ -92,7 +92,8 @@ describeSourceScan("cards by id go through fetchCardsByIds", () => {
         "it chunks the ids under the proxy's URL limit and reports withheld ids. CLAUDE.md, " +
         "Frontend Conventions.",
     ).toEqual([]);
-  });
+    // Parses every source file: well over the 15 s default on a loaded CI shard.
+  }, 90_000);
 
   itSourceScan("the fetcher itself still builds the query (the exclusion is not stale)", () => {
     const fetcher = path.join(SRC, "api", "cardsByIds.ts");

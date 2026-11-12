@@ -255,18 +255,20 @@ async def _require_card_read(db: AsyncSession, user: User, card_id: uuid.UUID) -
     404 when the card does not exist *or* is hidden from the caller by a type
     deny — a hidden card does not exist for them. 403 otherwise.
     """
-    type_key = await PermissionService._card_type_key(db, card_id)
+    type_key, subtype = await PermissionService._card_type_and_subtype(db, card_id)
     if type_key is None:
         raise HTTPException(404, "Card not found")
     if await PermissionService.check_permission(
-        db, user, "inventory.view", card_id, "card.view", card_type_key=type_key
+        db, user, "inventory.view", card_id, "card.view", card_type_key=type_key, subtype=subtype
     ):
         return type_key
     if type_key == "Initiative" and await PermissionService.has_app_permission(
-        db, user, "ppm.view", card_type_key=type_key
+        db, user, "ppm.view", card_type_key=type_key, subtype=subtype
     ):
         return type_key
-    if await PermissionService.is_type_denied(db, user, "inventory.view", type_key):
+    if await PermissionService.is_type_denied(
+        db, user, "inventory.view", type_key, subtype=subtype
+    ):
         raise HTTPException(404, "Card not found")
     raise HTTPException(403, "Insufficient permissions")
 
@@ -401,11 +403,13 @@ async def list_cards(
         q = q.where(Card.id.in_(id_list))
         count_q = count_q.where(Card.id.in_(id_list))
         if not read_scope.is_unrestricted(mode="inventory"):
-            rows = await db.execute(select(Card.id, Card.type).where(Card.id.in_(id_list)))
+            rows = await db.execute(
+                select(Card.id, Card.type, Card.subtype).where(Card.id.in_(id_list))
+            )
             withheld_ids = [
                 str(cid)
-                for cid, ctype in rows.all()
-                if not read_scope.readable(cid, ctype, mode="inventory")
+                for cid, ctype, csub in rows.all()
+                if not read_scope.readable(cid, ctype, mode="inventory", subtype=csub)
             ]
 
     if type:
@@ -951,10 +955,11 @@ async def bulk_create_cards(
                     resolved_parent = uuid.UUID(r.parent_id)
                 except ValueError as exc:
                     raise HTTPException(422, f"Invalid parent_id UUID: {r.parent_id}") from exc
+                parent_type, parent_subtype = await PermissionService._card_type_and_subtype(
+                    db, resolved_parent
+                )
                 if not read_scope.readable(
-                    resolved_parent,
-                    await PermissionService._card_type_key(db, resolved_parent),
-                    mode="module",
+                    resolved_parent, parent_type, mode="module", subtype=parent_subtype
                 ):
                     raise HTTPException(404, "Parent card not found")
             elif r.parent_name:
@@ -1350,7 +1355,7 @@ async def get_hierarchy(
         if not parent:
             break
         depth += 1
-        if read_scope.readable(parent.id, parent.type, mode="module"):
+        if read_scope.readable(parent.id, parent.type, mode="module", subtype=parent.subtype):
             ancestors.append(
                 {
                     "id": str(parent.id),
@@ -1542,7 +1547,7 @@ async def relation_summary(
         if (
             parent
             and parent.status == "ACTIVE"
-            and read_scope.readable(parent.id, parent.type, mode="module")
+            and read_scope.readable(parent.id, parent.type, mode="module", subtype=parent.subtype)
         ):
             parent_id_str = str(parent.id)
             parent_name = parent.name
@@ -2826,7 +2831,9 @@ async def _ensure_permission_on_each(
             subtype=subtype_by_id.get(cid),
         ):
             # Never echo the id of a card the caller cannot see.
-            if read_scope.readable(cid, type_by_id.get(cid), mode="module"):
+            if read_scope.readable(
+                cid, type_by_id.get(cid), mode="module", subtype=subtype_by_id.get(cid)
+            ):
                 denied.append(str(cid))
             else:
                 hidden_denied += 1

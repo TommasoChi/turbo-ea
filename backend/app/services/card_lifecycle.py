@@ -210,7 +210,9 @@ async def gather_archive_impact(
         if (
             grandparent is not None
             and read_scope is not None
-            and not read_scope.readable(grandparent.id, grandparent.type, mode="module")
+            and not read_scope.readable(
+                grandparent.id, grandparent.type, mode="module", subtype=grandparent.subtype
+            )
         ):
             grandparent = None
 
@@ -249,7 +251,9 @@ async def gather_archive_impact(
         peer = peers_by_id.get(peer_id)
         if peer is None:
             continue
-        if read_scope is not None and not read_scope.readable(peer.id, peer.type, mode="module"):
+        if read_scope is not None and not read_scope.readable(
+            peer.id, peer.type, mode="module", subtype=peer.subtype
+        ):
             continue
         rt = rel_types_by_key.get(rel.type)
         if rt is None:
@@ -346,7 +350,9 @@ async def gather_restore_impact(
     )
     rows = list(res.scalars().all())
     if read_scope is not None:
-        rows = [c for c in rows if read_scope.readable(c.id, c.type, mode="module")]
+        rows = [
+            c for c in rows if read_scope.readable(c.id, c.type, mode="module", subtype=c.subtype)
+        ]
     role_for: dict[uuid.UUID, str] = {}
     for cid in child_ids:
         role_for[cid] = "child"

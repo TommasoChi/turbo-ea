@@ -11,6 +11,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 - **Synced with upstream 2.203.0.** Brings in the MCP process-flow step tools, the BPMN import that saves a draft with submit and approve as separate tools, and MCP tools refusing an argument they do not take.
 
+### Security
+
+- **A View deny scoped to a subtype now hides those cards on every read** — the inventory list and counts, a card's detail and its card-scoped reads, and the reports — not only on the Data Modeller, the relations and the history. Code that cannot tell a card's subtype reads it as hidden.
+- **Writing or deleting a past-year cost (`/cards/{id}/cost-history`) now needs `costs.edit`**, or a stakeholder role with `card.edit` on that card; `inventory.edit` alone no longer changes the costs the reports show.
+
 ## [2.203.0] - 2026-11-12
 
 ### Added

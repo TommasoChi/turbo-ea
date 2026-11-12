@@ -386,3 +386,61 @@ class TestTurboLensVendors:
             "/api/v1/turbolens/vendors/hierarchy", headers=auth_headers(vendors)
         )
         assert resp.json() == []
+
+
+class TestSubtypeViewDeny:
+    """A View deny scoped to one subtype hides those cards on every read, not only the BO ones."""
+
+    @pytest.fixture
+    async def subtypes(self, db, env):
+        await create_card_type(
+            db,
+            key="DataObject",
+            label="Data Object",
+            subtypes=[{"key": "Data", "label": "Data"}, {"key": "Document", "label": "Document"}],
+        )
+        await set_overrides(
+            db,
+            "DataObject",
+            {"member": {"inventory.view": {"value": False, "subtypes": ["Document"]}}},
+        )
+        visible = await create_card(db, card_type="DataObject", name="Visible", subtype="Data")
+        hidden = await create_card(db, card_type="DataObject", name="Hidden", subtype="Document")
+        return {"visible": visible, "hidden": hidden}
+
+    async def test_the_inventory_list_omits_the_denied_subtype(self, client, env, subtypes):
+        resp = await client.get(
+            "/api/v1/cards", params={"type": "DataObject"}, headers=auth_headers(env["member"])
+        )
+        assert resp.status_code == 200
+        names = {c["name"] for c in resp.json()["items"]}
+        assert names == {"Visible"}
+
+    async def test_a_denied_card_is_404_on_its_detail_and_on_card_scoped_reads(
+        self, client, env, subtypes
+    ):
+        headers = auth_headers(env["member"])
+        hidden, visible = subtypes["hidden"], subtypes["visible"]
+        for suffix in ("", "/relations", "/hierarchy"):
+            resp = await client.get(f"/api/v1/cards/{hidden.id}{suffix}", headers=headers)
+            assert resp.status_code == 404, suffix
+        assert (await client.get(f"/api/v1/cards/{visible.id}", headers=headers)).status_code == 200
+
+    async def test_a_stakeholder_still_reads_a_denied_subtype_card(self, client, db, env, subtypes):
+        await create_stakeholder_role_def(
+            db, card_type_key="DataObject", key="responsible", permissions={"card.view": True}
+        )
+        db.add(
+            Stakeholder(card_id=subtypes["hidden"].id, user_id=env["member"].id, role="responsible")
+        )
+        await db.flush()
+        resp = await client.get(
+            f"/api/v1/cards/{subtypes['hidden'].id}", headers=auth_headers(env["member"])
+        )
+        assert resp.status_code == 200
+
+    async def test_an_admin_is_never_narrowed(self, client, env, subtypes):
+        resp = await client.get(
+            f"/api/v1/cards/{subtypes['hidden'].id}", headers=auth_headers(env["admin"])
+        )
+        assert resp.status_code == 200

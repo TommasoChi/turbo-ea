@@ -197,7 +197,8 @@ it.each([true, false])("checks the saved card edit permission before renaming (c
   fireEvent.click(within(modal).getByRole("button", { name: "common:actions.save" }));
   expect(api.patch).toHaveBeenCalledWith(`/cards/${customer.id}`, { name: "Updated BO" });
   await waitFor(() => expect(screen.queryByRole("dialog", { name: "archimate:shortcuts.edit" })).not.toBeInTheDocument());
-  expect(screen.getByRole("button", { name: customer.name })).toBeVisible();
+  // The dialog's exit transition keeps the page aria-hidden a moment after the dialog is gone.
+  expect(await screen.findByRole("button", { name: customer.name })).toBeVisible();
 });
 
 it("updates or clears the master and refreshes both panels", async () => {
