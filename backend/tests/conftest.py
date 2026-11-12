@@ -9,6 +9,7 @@ Provides:
 
 from __future__ import annotations
 
+import itertools
 import os
 import uuid
 
@@ -678,12 +679,17 @@ async def create_stakeholder_role_def(
     return srd
 
 
+# Windows' clock ticks every ~15 ms: two runs made back to back would share a
+# ``started_at`` and the "newest first" listing would have no order to keep.
+_analysis_run_seq = itertools.count()
+
+
 async def create_analysis_run(
     db, *, analysis_type="compliance", status="completed", user_id=None, results=None
 ):
     """Insert a TurboLens analysis run (the parent row every compliance
     finding and every background-analysis result hangs off)."""
-    from datetime import datetime, timezone
+    from datetime import datetime, timedelta, timezone
 
     from app.models.turbolens import TurboLensAnalysisRun
 
@@ -691,7 +697,7 @@ async def create_analysis_run(
         id=uuid.uuid4(),
         analysis_type=analysis_type,
         status=status,
-        started_at=datetime.now(timezone.utc),
+        started_at=datetime.now(timezone.utc) + timedelta(microseconds=next(_analysis_run_seq)),
         results=results,
         created_by=user_id,
     )
