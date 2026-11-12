@@ -7257,6 +7257,10 @@ class RequireBearerForMcp:
         await self.app(scope, receive, send)
 
 
+# Starlette upper-cases methods, so the spelling is not behaviour a test should pin.
+_POST_ONLY = ["POST"]
+
+
 def create_app() -> Starlette:
     """Create the full ASGI application with OAuth + MCP routes."""
     # OAuth routes (handled by Starlette, not MCP)
@@ -7268,11 +7272,7 @@ def create_app() -> Starlette:
         # instead of (or before) the OAuth 2.1 / RFC 8414 well-known.
         Route("/.well-known/openid-configuration", oauth.authorization_server_metadata),
         Route("/oauth/authorize", oauth.authorize),
-        Route(
-            "/oauth/authorize/consent",
-            oauth.authorize_consent,
-            methods=["POST"],  # pragma: no mutate, Starlette upper-cases methods
-        ),
+        Route("/oauth/authorize/consent", oauth.authorize_consent, methods=_POST_ONLY),
         Route("/oauth/callback", oauth.sso_callback),
         Route("/oauth/token", oauth.token_endpoint, methods=["POST"]),
         Route("/oauth/register", oauth.register_client, methods=["POST"]),
