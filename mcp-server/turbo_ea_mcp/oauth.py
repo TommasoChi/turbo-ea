@@ -481,6 +481,7 @@ _CONSENT_BODY = (
 _EXPIRED_BODY = "<h1>This request has expired</h1><p>Start again from the application.</p>"
 _CANCELLED_BODY = "<h1>Cancelled</h1><p>No access was given. You can close this window.</p>"
 _UNNAMED_CLIENT = "MCP Client"
+_FORM_ENCODING = "utf-8"
 # Not readable by script, not sent on a cross-site POST, gone when the request would be.
 _CONSENT_COOKIE_ATTRS = {
     "max_age": AUTH_CODE_TTL,
@@ -519,12 +520,12 @@ def _consent_page(
 async def authorize_consent(request: Request) -> Response:
     """The person answered the consent page: on approval, go on to the identity provider."""
     store.cleanup_expired()
-    fields = parse_qs((await request.body()).decode("utf-8", "replace"))
+    fields = parse_qs((await request.body()).decode(_FORM_ENCODING, "replace"))
     state = (fields.get("state") or [""])[0]
     pending = store.pending.get(state)
     if pending is None or not _consent_cookie_ok(request, state):
         return _html(_EXPIRED_BODY, 400)
-    if (fields.get("decision") or [""])[0] != "approve":
+    if fields.get("decision") != ["approve"]:
         del store.pending[state]
         return _html(_CANCELLED_BODY)
 

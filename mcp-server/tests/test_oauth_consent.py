@@ -296,6 +296,48 @@ def test_the_cookie_must_equal_the_state():
     assert oauth._consent_cookie_ok(request("abc"), "abd") is False
 
 
+def test_a_missing_state_matches_no_request_even_one_named_like_a_default(victim, store):
+    store.pending["XXXX"] = PendingAuth("c", CB, "mcp:read", "s", "chal", "S256")
+    victim.cookies.set(oauth.CONSENT_COOKIE, "XXXX")
+    resp = victim.post(
+        "/oauth/authorize/consent", data={"decision": "approve"}, follow_redirects=False
+    )
+    assert resp.status_code == 400
+    assert store.pending["XXXX"].consented is False
+
+
+def test_the_unconfigured_sso_answer_is_the_documented_error(victim, store, monkeypatch):
+    _start(victim)
+    [state] = store.pending
+    monkeypatch.setattr(oauth, "_get_sso_config", AsyncMock(return_value={"enabled": False}))
+    assert _answer(victim, state).json() == {
+        "error": "server_error",
+        "error_description": "SSO not configured",
+    }
+
+
+def test_the_identity_provider_gets_this_requests_state(victim, store):
+    from urllib.parse import parse_qsl, urlsplit
+
+    _start(victim)
+    [state] = store.pending
+    location = _answer(victim, state).headers["location"]
+    assert dict(parse_qsl(urlsplit(location).query))["state"] == state
+
+
+def test_two_decisions_are_not_an_approval(victim, store):
+    _start(victim)
+    [state] = store.pending
+    resp = victim.post(
+        "/oauth/authorize/consent",
+        content=f"state={state}&decision=approve&decision=deny".encode(),
+        headers={"content-type": "application/x-www-form-urlencoded"},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 200 and "location" not in resp.headers
+    assert store.pending == {}
+
+
 # ── The answer ──────────────────────────────────────────────────────────────
 
 
