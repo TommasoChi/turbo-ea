@@ -11,9 +11,19 @@ import { useEffect } from "react";
 import { MemoryRouter, Route, Routes, useLocation, useNavigate } from "react-router";
 import type { ArchitectureDecision, SoAWSignatory } from "@/types";
 
+// The discussion and history side panel has its own tests: here the page
+// renders alone, and the props it hands the panel are recorded.
+const sidePanel = vi.hoisted(() => ({ props: [] as Record<string, unknown>[] }));
+vi.mock("./collab/DocumentSidePanel", () => ({
+  default: (props: { children: unknown }) => {
+    sidePanel.props.push(props);
+    return props.children;
+  },
+}));
 vi.mock("@/api/client", () => ({
   api: { get: vi.fn(), post: vi.fn(), patch: vi.fn(), delete: vi.fn() },
   ApiError: class ApiError extends Error {},
+  isAbortError: () => false,
 }));
 const authState = vi.hoisted(() => ({
   user: { id: "u1", permissions: {} } as { id: string; permissions: Record<string, boolean> } | null,
@@ -141,7 +151,7 @@ interface ServeOptions {
   patch?: Reply;
   /** Overrides the loaded record — may return a promise to hold the load. */
   adr?: () => unknown;
-  /** Answers `/cards?search=…`. */
+  /** Answers the card picker's `/cards?…` search. */
   cards?: (path: string) => unknown;
 }
 
@@ -163,12 +173,14 @@ function deferred<T = unknown>() {
 function serve(adr: ArchitectureDecision, opts: ServeOptions = {}) {
   vi.mocked(api.get).mockImplementation(async (path: string) => {
     if (path === "/auth/me") return { id: "u1" } as never;
+    if (path.endsWith("/files")) return [] as never;
     if (path.startsWith("/adr/")) {
       await new Promise((r) => setTimeout(r, 0));
       return (await (opts.adr ? opts.adr() : adr)) as never;
     }
-    if (path.startsWith("/cards?search=")) {
-      return (opts.cards ? opts.cards(path) : { items: [] }) as never;
+    if (path.startsWith("/metamodel/")) return [] as never;
+    if (path.startsWith("/cards?")) {
+      return (opts.cards ? opts.cards(path) : { items: [], total: 0 }) as never;
     }
     return {} as never;
   });
@@ -264,6 +276,13 @@ beforeEach(() => {
 // A new decision
 // ---------------------------------------------------------------------------
 
+
+/** Sign through the sign dialog: open it from the toolbar, then confirm. */
+async function signThroughDialog(u: { click: (el: Element) => Promise<void> }) {
+  await u.click(screen.getByRole("button", { name: /^draw Sign$/ }));
+  await u.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Sign" }));
+}
+
 describe("ADREditor — a new decision", () => {
   it("starts empty: only the draft chip, no alerts or dialogs, and exports exactly that", async () => {
     serve(base);
@@ -271,7 +290,7 @@ describe("ADREditor — a new decision", () => {
     renderAt("/ea-delivery/adr/new");
     expect(await screen.findByText("New Architecture Decision")).toBeInTheDocument();
 
-    expect(chipLabels()).toEqual(["draft"]);
+    expect(chipLabels()).toEqual(["Draft"]);
     expect(screen.queryByRole("alert")).toBeNull();
     expect(screen.queryByTestId("sign-dialog")).toBeNull();
     expect(screen.queryByRole("heading", { name: "Signatures" })).toBeNull();
@@ -298,6 +317,12 @@ describe("ADREditor — a new decision", () => {
       revision_number: 1,
       attributes: {},
       linked_cards: [],
+      decided_on: null,
+      effective_from: null,
+      valid_until: null,
+      decision_makers: [],
+      participants: [],
+      change_summary: null,
     });
 
     // The browser tab follows the draft title as it is typed.
@@ -337,6 +362,12 @@ describe("ADREditor — a new decision", () => {
         decision: null,
         consequences: null,
         alternatives_considered: null,
+        decided_on: null,
+        effective_from: null,
+        valid_until: null,
+        decision_makers: [],
+        participants: [],
+        links: [],
       }),
     );
     expect(await screen.findByText("Saved successfully")).toBeInTheDocument();
@@ -386,7 +417,17 @@ describe("ADREditor — loading a decision", () => {
     const user = userEvent.setup();
 
     // Section headings, their hints and the editors' placeholders.
-    for (const heading of ["Context", "Decision", "Alternatives Considered", "Consequences", "Linked Cards"]) {
+    for (const heading of [
+      "Context",
+      "Decision",
+      "Alternatives Considered",
+      "Consequences",
+      "Dates",
+      "People",
+      "This decision…",
+      "Files",
+      "Linked Cards",
+    ]) {
       expect(screen.getByRole("heading", { name: heading })).toBeInTheDocument();
     }
     for (const hint of Object.values(HINT)) {
@@ -413,6 +454,12 @@ describe("ADREditor — loading a decision", () => {
         decision: "<p>do it</p>",
         consequences: "<p>cons</p>",
         alternatives_considered: "<p>alt</p>",
+        decided_on: null,
+        effective_from: null,
+        valid_until: null,
+        decision_makers: [],
+        participants: [],
+        links: [],
       }),
     );
   });
@@ -445,15 +492,21 @@ describe("ADREditor — loading a decision", () => {
         decision: null,
         consequences: null,
         alternatives_considered: null,
+        decided_on: null,
+        effective_from: null,
+        valid_until: null,
+        decision_makers: [],
+        participants: [],
+        links: [],
       }),
     );
   });
 
   it("shows the reference as a chip, no revision chip at revision 1, and no banner on a draft", async () => {
     await renderLoaded({ ...base, signed_at: "2026-06-03T12:00:00Z" });
-    expect(chipLabels()).toEqual(["ADR-0001", "draft"]);
+    expect(chipLabels()).toEqual(["ADR-0001", "Draft"]);
     expect(screen.queryByText(/This decision was signed on/)).toBeNull();
-    expect(screen.queryByText("Revision 1")).toBeNull();
+    expect(screen.queryByText(/Rev 1/)).toBeNull();
   });
 
   it("shows no signed banner when a signed record carries no signing date", async () => {
@@ -476,7 +529,7 @@ describe("ADREditor — signatures", () => {
       signatories: [ME_SIGNED, GRACE_SIGNED],
     });
     expect(screen.getByText("This decision was signed on 2026-06-03 and is read-only.")).toBeInTheDocument();
-    expect(chipLabels()).toEqual(["ADR-0001", "signed"]);
+    expect(chipLabels()).toEqual(["ADR-0001", "Signed"]);
 
     const progress = screen.getByText("2 of 2 signatures collected").closest("[role='alert']") as HTMLElement;
     expect(within(progress).getByTestId("SuccessOutlinedIcon")).toBeInTheDocument();
@@ -574,12 +627,14 @@ describe("ADREditor — workflow actions", () => {
   });
 
   it("confirms a new revision", async () => {
+    authState.user = { id: "u1", permissions: { "adr.manage": true } };
     const signed = { ...base, status: "signed" as const, signed_at: "2026-06-03T12:00:00Z" };
     await renderLoaded(signed, {
       post: (path) => (path === "/adr/adr-1/revise" ? { ...signed, id: "adr-rev" } : {}),
     });
     const user = userEvent.setup();
-    await user.click(screen.getByRole("button", { name: /New Revision/ }));
+    await user.click(screen.getByRole("button", { name: /Revise/ }));
+    await user.click(screen.getByRole("menuitem", { name: /Revise this decision/ }));
     expect(await screen.findByText("New revision created")).toBeInTheDocument();
   });
 
@@ -589,6 +644,7 @@ describe("ADREditor — workflow actions", () => {
     // And it must be ONE toast: the page switches from the old decision to the
     // spinner to the new one, and a toast remounted at each switch re-animates
     // and restarts its timer (and detached the element a test had just found).
+    authState.user = { id: "u1", permissions: { "adr.manage": true } };
     const signed = { ...base, status: "signed" as const, signed_at: "2026-06-03T12:00:00Z" };
     const reload = deferred();
     let loads = 0;
@@ -597,7 +653,8 @@ describe("ADREditor — workflow actions", () => {
       post: (path) => (path === "/adr/adr-1/revise" ? { ...signed, id: "adr-rev" } : {}),
     });
     const user = userEvent.setup();
-    await user.click(screen.getByRole("button", { name: /New Revision/ }));
+    await user.click(screen.getByRole("button", { name: /Revise/ }));
+    await user.click(screen.getByRole("menuitem", { name: /Revise this decision/ }));
     const toast = await screen.findByText("New revision created");
     await waitFor(() => expect(location()).toBe("/ea-delivery/adr/adr-rev"));
     // The spinner follows the URL by an effect, so wait for it rather than read
@@ -638,7 +695,7 @@ describe("ADREditor — workflow actions", () => {
     await user.click(screen.getByRole("button", { name: "request-one" }));
     expect(await screen.findByText("Signature requests sent")).toBeInTheDocument();
     expect(screen.queryByTestId("sign-dialog")).toBeNull();
-    expect(chipLabels()).toEqual(["ADR-0001", "in review"]);
+    expect(chipLabels()).toEqual(["ADR-0001", "In Review"]);
     expect(screen.queryByText(/signatures collected/)).toBeNull();
   });
 
@@ -652,7 +709,7 @@ describe("ADREditor — workflow actions", () => {
       }),
     });
     const user = userEvent.setup();
-    await user.click(screen.getByRole("button", { name: /^draw Sign$/ }));
+    await signThroughDialog(user);
     expect(await screen.findByText("Decision fully signed")).toBeInTheDocument();
     expect(screen.getByText("2 of 2 signatures collected")).toBeInTheDocument();
   });
@@ -660,7 +717,7 @@ describe("ADREditor — workflow actions", () => {
   it("signing with a reply that carries no signatories empties the list", async () => {
     await renderLoaded(IN_REVIEW, { post: () => ({ ...IN_REVIEW, signatories: undefined }) });
     const user = userEvent.setup();
-    await user.click(screen.getByRole("button", { name: /^draw Sign$/ }));
+    await signThroughDialog(user);
     expect(await screen.findByText("Signature recorded")).toBeInTheDocument();
     expect(screen.queryByText(/signatures collected/)).toBeNull();
   });
@@ -699,7 +756,8 @@ describe("ADREditor — workflow actions", () => {
     recall.reject(new Error("x"));
     expect(await screen.findByText("Failed to recall signatures")).toBeInTheDocument();
     expect(button).toBeEnabled();
-    expect(screen.getByRole("button", { name: /Save$/ })).toBeEnabled();
+    // Still in review, so still locked: no Save.
+    expect(screen.queryByRole("button", { name: /Save$/ })).toBeNull();
   });
 
   it("rejecting: needs real text, is busy in flight, closes, applies the reply and clears the reason", async () => {
@@ -722,10 +780,10 @@ describe("ADREditor — workflow actions", () => {
     // The row button behind the modal is busy too.
     expect(screen.getByRole("button", { name: /^block Reject$/, hidden: true })).toBeDisabled();
 
-    reject.resolve({ ...IN_REVIEW, status: "draft", revision_number: 2, signatories: [GRACE_SIGNED] });
+    reject.resolve({ ...IN_REVIEW, status: "draft", signatories: [GRACE_SIGNED] });
     expect(await screen.findByText("Decision rejected and reset to draft")).toBeInTheDocument();
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
-    expect(chipLabels()).toEqual(["ADR-0001", "Revision 2", "draft"]);
+    expect(chipLabels()).toEqual(["ADR-0001", "Draft"]);
     expect(screen.getByText("1 of 1 signatures collected")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Save$/ })).toBeEnabled();
 
@@ -808,8 +866,8 @@ describe("ADREditor — deep links", () => {
   });
 
   it("the consumed action replaces its history entry, so Back leaves the editor", async () => {
-    await renderLoaded(IN_REVIEW, {}, "/ea-delivery/adr/adr-1?action=sign");
-    expect(screen.getByTestId("sign-dialog")).toBeInTheDocument();
+    await renderLoaded({ ...IN_REVIEW, signatories: [GRACE_SIGNED] }, {}, "/ea-delivery/adr/adr-1?action=sign");
+    expect(await screen.findByTestId("sign-dialog")).toBeInTheDocument();
     await waitFor(() => expect(location()).toBe("/ea-delivery/adr/adr-1"));
     const user = userEvent.setup();
     await user.click(screen.getByRole("button", { name: "close-sign-dialog" }));
@@ -826,73 +884,59 @@ describe("ADREditor — linking cards", () => {
   const KAFKA = { id: "card-2", name: "Kafka", type: "ITComponent" };
   const SAP = { id: "card-1", name: "SAP S/4HANA", type: "Application" };
 
-  it("the picker starts empty, ignores blank input, and closes with Escape", async () => {
-    await renderLoaded(base, { cards: () => ({ items: [KAFKA] }) });
+  it("the picker browses on open, searches what is typed, and closes with Escape", async () => {
+    await renderLoaded(base, { cards: () => ({ items: [KAFKA], total: 1 }) });
     const user = userEvent.setup();
-    const optionButtons = () =>
-      within(screen.getByRole("dialog"))
-        .queryAllByRole("button")
-        .filter((b) => b.textContent !== "Cancel");
-
     await user.click(screen.getByRole("button", { name: /Add Card/ }));
     const dialog = within(await screen.findByRole("dialog"));
     expect(dialog.getByRole("heading", { name: "Link Card" })).toBeInTheDocument();
-    expect(optionButtons()).toHaveLength(0);
-
-    const box = dialog.getByPlaceholderText("Search cards...");
-    await user.type(box, "ka");
-    const kafka = (await dialog.findByText("Kafka")).closest("[role='button']") as HTMLElement;
-    // Nothing is linked yet, so nothing is marked as such.
-    expect(kafka).not.toHaveAttribute("aria-disabled", "true");
+    // Nothing is linked yet: no "Already linked" block.
     expect(dialog.queryByText("Already linked")).toBeNull();
+    expect(await screen.findByRole("option", { name: "Kafka" })).toBeInTheDocument();
+    expect(api.get).toHaveBeenCalledWith("/cards?page=1&page_size=50");
 
-    await user.clear(box);
-    expect(optionButtons()).toHaveLength(0);
-    await user.type(box, " ");
-    expect(api.get).not.toHaveBeenCalledWith("/cards?search=%20&page_size=20");
+    await user.type(dialog.getByPlaceholderText("Search cards..."), "ka");
+    await waitFor(() => expect(api.get).toHaveBeenCalledWith("/cards?page=1&page_size=50&search=ka"));
 
     await user.keyboard("{Escape}");
+    await user.keyboard("{Escape}");
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(api.post).not.toHaveBeenCalled();
   });
 
-  it("reopening the picker drops the previous results", async () => {
-    await renderLoaded(base, { cards: () => ({ items: [KAFKA] }) });
+  it("reopening the picker starts from an empty search", async () => {
+    await renderLoaded(base, { cards: () => ({ items: [KAFKA], total: 1 }) });
     const user = userEvent.setup();
     await user.click(screen.getByRole("button", { name: /Add Card/ }));
     let dialog = within(await screen.findByRole("dialog"));
     await user.type(dialog.getByPlaceholderText("Search cards..."), "ka");
-    await dialog.findByText("Kafka");
     await user.click(dialog.getByRole("button", { name: "Cancel" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
 
     await user.click(screen.getByRole("button", { name: /Add Card/ }));
     dialog = within(await screen.findByRole("dialog"));
     expect(dialog.getByPlaceholderText("Search cards...")).toHaveValue("");
-    expect(dialog.queryAllByRole("button").filter((b) => b.textContent !== "Cancel")).toHaveLength(0);
   });
 
-  it("marks only the card that is already linked", async () => {
-    await renderLoaded({ ...base, linked_cards: [SAP] }, { cards: () => ({ items: [SAP, KAFKA] }) });
+  it("offers only the cards not yet linked, and lists the linked ones", async () => {
+    await renderLoaded({ ...base, linked_cards: [SAP] }, { cards: () => ({ items: [SAP, KAFKA], total: 2 }) });
     const user = userEvent.setup();
     await user.click(screen.getByRole("button", { name: /Add Card/ }));
     const dialog = within(await screen.findByRole("dialog"));
-    await user.type(dialog.getByPlaceholderText("Search cards..."), "a");
-    const kafka = (await dialog.findByText("Kafka")).closest("[role='button']") as HTMLElement;
-    const sap = dialog.getByText("SAP S/4HANA").closest("[role='button']") as HTMLElement;
-    expect(within(sap).getByText("Already linked")).toBeInTheDocument();
-    expect(within(kafka).queryByText("Already linked")).toBeNull();
+    expect(await screen.findByRole("option", { name: "Kafka" })).toBeInTheDocument();
+    expect(screen.getAllByRole("option").map((o) => o.textContent)).toEqual(["Kafka"]);
+    expect(dialog.getByText("Already linked")).toBeInTheDocument();
+    expect(dialog.getByText("SAP S/4HANA")).toBeInTheDocument();
   });
 
   it("a link reply that carries no cards leaves the list empty", async () => {
     await renderLoaded(base, {
-      cards: () => ({ items: [KAFKA] }),
+      cards: () => ({ items: [KAFKA], total: 1 }),
       post: () => ({ ...base, linked_cards: undefined }),
     });
     const user = userEvent.setup();
     await user.click(screen.getByRole("button", { name: /Add Card/ }));
-    const dialog = within(await screen.findByRole("dialog"));
-    await user.type(dialog.getByPlaceholderText("Search cards..."), "ka");
-    await user.click(await dialog.findByText("Kafka"));
+    await user.click(await screen.findByRole("option", { name: "Kafka" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     expect(api.post).toHaveBeenCalledWith("/adr/adr-1/cards", { card_id: "card-2" });
     expect(screen.getByText("No cards linked to this decision.")).toBeInTheDocument();

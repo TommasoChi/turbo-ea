@@ -96,7 +96,10 @@ def test_the_declined_and_dedupe_tables():
         ),
         "diagram.updated": "The previous canvas is not snapshotted.",
         "diagram.deleted": "A deleted diagram cannot be rebuilt — no snapshot is recorded.",
+        "adr.comment_": "A posted comment has been read; delete it from the discussion.",
+        "soaw.comment_": "A posted comment has been read; delete it from the discussion.",
     }
+    assert rs._FAMILY_PREFIX_ENDINGS == (".", "_")
     assert rs._DEDUPE_KEYS == {
         "delete_risk": ("risk_id",),
         "restore_risk_fields": ("risk_id",),
@@ -343,6 +346,11 @@ def test_adr_created():
     }
     assert plan("adr.created", {"id": "a-2"})["adr_id"] == "a-2"
     assert plan("adr.created", {"id": "a-2"})["detail"] == ""
+    # A revision is named from Rev 2 on, but never without its reference.
+    assert plan("adr.created", {"id": "a-3", "reference_number": "ADR-7", "revision_number": 2})[
+        "detail"
+    ] == ("ADR-7 · Rev 2")
+    assert plan("adr.created", {"id": "a-3", "revision_number": 2})["detail"] == ""
     assert plan("adr.created", {}) == unsupported(
         "adr.created", "adr.created carries no decision id"
     )
@@ -402,6 +410,9 @@ def test_todos_that_are_not_the_extensions_to_take_back():
     )
 
 
+COMMENT_READ = "A posted comment has been read; delete it from the discussion."
+
+
 @pytest.mark.parametrize(
     "event_type, reason",
     [
@@ -413,6 +424,10 @@ def test_todos_that_are_not_the_extensions_to_take_back():
             "diagram.deleted",
             "A deleted diagram cannot be rebuilt — no snapshot is recorded.",
         ),
+        ("adr.comment_added", COMMENT_READ),
+        ("adr.comment_edited", COMMENT_READ),
+        ("soaw.comment_added", COMMENT_READ),
+        ("soaw.comment_deleted", COMMENT_READ),
     ],
 )
 def test_declined_families(event_type, reason):
@@ -422,11 +437,22 @@ def test_declined_families(event_type, reason):
 
 
 @pytest.mark.parametrize(
-    "event_type", ["risk.removed_later", "todo", "notification", "comment.added"]
+    "event_type",
+    [
+        "risk.removed_later",
+        "todo",
+        "notification",
+        "comment.added",
+        "adr.comment",
+        "adr.commented",
+        "soaw.comment",
+        "adr.signed",
+        "soaw.rejected",
+    ],
 )
 def test_anything_else_is_unsupported_generically(event_type):
-    """A decline without a trailing dot matches its own name only; a family
-    prefix needs the dot."""
+    """A decline without a trailing dot or underscore matches its own name
+    only; a family prefix needs one."""
     assert plan(event_type, {}) == unsupported(event_type, f"{event_type} {GENERIC}")
 
 
@@ -504,6 +530,8 @@ def test_each_dedupe_key(event_type, data, key):
         ("adr.created", {"adr_id": "a", "id": "x"}, CID, ("adr", "a")),
         ("adr.signed", {"id": "x"}, CID, ("adr", "x")),
         ("adr.signed", {}, CID, None),
+        ("adr.linked", {"adr_id": "a", "title": "T"}, CID, ("adr", "a")),
+        ("soaw.signed", {"id": "s"}, None, None),
         ("diagram.created", {"id": "d-1", "card_ids": ["c"]}, None, ("diagram", "d-1")),
         ("diagram.updated", {"id": "d-1"}, None, ("diagram", "d-1")),
         ("diagram.deleted", {}, None, None),

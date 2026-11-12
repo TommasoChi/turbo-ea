@@ -35,8 +35,20 @@ class TestRolesForType:
 
         roles = await stakeholder_service.roles_for_type(db, "Application")
         assert roles == [
-            {"key": "bRole", "label": "B", "color": "#111111", "translations": {"it": "Bi"}},
-            {"key": "aRole", "label": "A", "color": "#222222", "translations": {}},
+            {
+                "key": "bRole",
+                "label": "B",
+                "color": "#111111",
+                "description": None,
+                "translations": {"it": "Bi"},
+            },
+            {
+                "key": "aRole",
+                "label": "A",
+                "color": "#222222",
+                "description": None,
+                "translations": {},
+            },
         ]
 
     async def test_falls_back_to_legacy_jsonb_when_no_definitions(self, db):

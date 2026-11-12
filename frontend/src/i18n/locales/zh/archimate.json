@@ -181,7 +181,6 @@
     "intro": "试用 Architecture Studio。在此创建的图以 ArchiMate Exchange 文件形式存储，目前不会列在“图”菜单中。",
     "newDiagram": "新建 ArchiMate 图",
     "name": "名称",
-    "create": "创建",
     "empty": "还没有 ArchiMate 图。",
     "open": "打开",
     "delete": "删除",

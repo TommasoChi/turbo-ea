@@ -6,6 +6,7 @@ import hashlib
 import hmac
 import os
 from pathlib import Path
+from urllib.parse import urlparse
 
 
 def _read_version() -> str:
@@ -22,9 +23,53 @@ def _read_version() -> str:
 # Internal backend URL (Docker: http://backend:8000)
 TURBO_EA_URL: str = os.environ.get("TURBO_EA_URL", "http://localhost:8000")
 
-# Public URL of the Turbo EA instance (used for OAuth redirect URIs)
-TURBO_EA_PUBLIC_URL: str = os.environ.get(
-    "TURBO_EA_PUBLIC_URL", "http://localhost:8920"
+_DEFAULT_TURBO_EA_PUBLIC_URL = "http://localhost:8920"
+
+#: Host names that only ever mean "this machine": a link on one opens nothing
+#: for anyone else. ``urlparse`` lower-cases a host and strips IPv6 brackets.
+_LOOPBACK_HOSTS = frozenset({"localhost", "127.0.0.1", "::1"})
+
+
+def _origin(url: str) -> str:
+    """``scheme://host[:port]`` of ``url``, or ``""`` when it has neither."""
+    parsed = urlparse(url)
+    if parsed.scheme and parsed.netloc:
+        return f"{parsed.scheme}://{parsed.netloc}"
+    return ""
+
+
+def _is_loopback(url: str) -> bool:
+    return urlparse(url).hostname in _LOOPBACK_HOSTS
+
+
+def public_app_url(explicit: str | None, mcp_public_url: str) -> str:
+    """The address people open the Turbo EA web app at.
+
+    Every link an MCP tool hands back is built on it, so a localhost value is
+    the last resort, not the first:
+
+    - ``TURBO_EA_PUBLIC_URL`` on a real host always wins;
+    - set to a loopback host (``localhost``, ``127.0.0.1``, ``[::1]``, any
+      port) — ``.env.example`` ships ``http://localhost``, which the bundled
+      nginx also reads — it loses to the origin of ``MCP_PUBLIC_URL`` when
+      that names a real host, since an OAuth install has to set that variable
+      to the public address to work at all;
+    - unset (or empty: compose passes one through), the origin of
+      ``MCP_PUBLIC_URL`` (scheme and host, path dropped: the bundled stack
+      serves MCP at ``/mcp`` on the app's own host);
+    - else ``http://localhost:8920``."""
+    mcp_origin = _origin(mcp_public_url)
+    mcp_is_real = bool(mcp_origin) and not _is_loopback(mcp_origin)
+    if explicit and (not mcp_is_real or not _is_loopback(explicit)):
+        return explicit
+    return mcp_origin or _DEFAULT_TURBO_EA_PUBLIC_URL
+
+
+# Public URL of the Turbo EA instance: the base of every link a tool returns,
+# and a host the DNS-rebinding guard admits. Read from the raw variables, not
+# from MCP_PUBLIC_URL below, whose code default is this server's own port.
+TURBO_EA_PUBLIC_URL: str = public_app_url(
+    os.environ.get("TURBO_EA_PUBLIC_URL"), os.environ.get("MCP_PUBLIC_URL", "")
 )
 
 # Port for the MCP server
@@ -51,9 +96,7 @@ def _env_bool(name: str, default: bool) -> bool:
 # something an attentive reviewer can scan in a dry-run preview. Operators
 # can raise these if their use case demands it.
 MCP_MAX_CARDS_PER_CALL: int = int(os.environ.get("MCP_MAX_CARDS_PER_CALL", "200"))
-MCP_MAX_RELATIONS_PER_CALL: int = int(
-    os.environ.get("MCP_MAX_RELATIONS_PER_CALL", "500")
-)
+MCP_MAX_RELATIONS_PER_CALL: int = int(os.environ.get("MCP_MAX_RELATIONS_PER_CALL", "500"))
 # Logos are uploaded one HTTP request per card and carry image bytes, so
 # the cap is lower than the card cap — 50 images is already several
 # megabytes of base64 in the agent's context.
@@ -109,11 +152,14 @@ _DEFAULT_LOGO_FETCH_HOSTS = (
     "cdn.simpleicons.org",
     "upload.wikimedia.org",
 )
-MCP_LOGO_FETCH_HOSTS: tuple[str, ...] = tuple(
-    h.strip().lower()
-    for h in os.environ.get("MCP_LOGO_FETCH_HOSTS", "").split(",")
-    if h.strip()
-) or _DEFAULT_LOGO_FETCH_HOSTS
+MCP_LOGO_FETCH_HOSTS: tuple[str, ...] = (
+    tuple(
+        h.strip().lower()
+        for h in os.environ.get("MCP_LOGO_FETCH_HOSTS", "").split(",")
+        if h.strip()
+    )
+    or _DEFAULT_LOGO_FETCH_HOSTS
+)
 
 # ── OAuth authorization-server guardrails ──────────────────────────────────
 #
@@ -124,10 +170,9 @@ MCP_LOGO_FETCH_HOSTS: tuple[str, ...] = tuple(
 # This is an escape hatch for first-party / non-DCR integrations that pin a
 # fixed redirect. Comma-separated; exact string match only, no wildcards.
 MCP_OAUTH_ALLOWED_REDIRECT_URIS: list[str] = [
-    u.strip()
-    for u in os.environ.get("MCP_OAUTH_ALLOWED_REDIRECT_URIS", "").split(",")
-    if u.strip()
+    u.strip() for u in os.environ.get("MCP_OAUTH_ALLOWED_REDIRECT_URIS", "").split(",") if u.strip()
 ]
+
 
 # Origins, beyond the two public URLs above, whose browser-borne requests the
 # MCP endpoint accepts. FastMCP's DNS-rebinding guard refuses a request that

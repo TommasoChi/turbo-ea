@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { useParams, useNavigate, useSearchParams } from "react-router";
 import Box from "@mui/material/Box";
@@ -18,30 +18,69 @@ import DialogContent from "@mui/material/DialogContent";
 import DialogActions from "@mui/material/DialogActions";
 import List from "@mui/material/List";
 import ListItem from "@mui/material/ListItem";
-import ListItemButton from "@mui/material/ListItemButton";
 import ListItemIcon from "@mui/material/ListItemIcon";
 import ListItemText from "@mui/material/ListItemText";
 import Link from "@mui/material/Link";
 import useMediaQuery from "@mui/material/useMediaQuery";
 import { useTheme } from "@mui/material/styles";
 import MaterialSymbol from "@/components/MaterialSymbol";
+import CardPicker from "@/components/CardPicker";
+import { DateField } from "@/components/DateField";
 import RichTextEditor from "./RichTextEditor";
 import SignatureRequestDialog from "./SignatureRequestDialog";
-import { api } from "@/api/client";
+import DecisionBanners from "./DecisionBanners";
+import RevisionStrip, { decisionRevisionItems, showsRevisionStrip } from "./RevisionStrip";
+import DecisionPeopleField from "./DecisionPeopleField";
+import DecisionLinksBlock from "./DecisionLinksBlock";
+import DecisionFilesSection from "./DecisionFilesSection";
+import RecordAsDecidedDialog from "./RecordAsDecidedDialog";
+import ReviseMenu, { createRevision } from "./ReviseMenu";
+import { DecisionStandingChip, DecisionStatusChip } from "./DecisionStandingChip";
+import { decisionRefLabel } from "./decisionStanding";
+import { problemMessage } from "./decisionProblems";
+import {
+  buildSavePayload,
+  canRecord,
+  chainIds,
+  contentFromDetail,
+  currentRevisionId,
+  editorAccess,
+  storedPayload,
+  type SavePayload,
+} from "./adrEditorModel";
+import { hasUnsavedEdits } from "./editorDirty";
+import DocumentHistoryButton from "./collab/DocumentHistoryButton";
+import DocumentSidePanel from "./collab/DocumentSidePanel";
+import SectionDiscussionMarker from "./collab/SectionDiscussionMarker";
+import { RejectDocumentDialog, SignDocumentDialog } from "./collab/ReviewDialogs";
+import { deepLinkDialog } from "./collab/reviewDeepLink";
+import { sectionOptions, signBody } from "./collab/discussionModel";
+import {
+  documentPeopleIds,
+  unlinkedMentionedCards,
+  type MentionContext,
+} from "./mentions/mentionModel";
+import type { MentionKind } from "@/lib/mentionHtml";
+import { api, ApiError } from "@/api/client";
 import { useSubmitOnce } from "@/hooks/useSubmitOnce";
+import { useAbortableEffect } from "@/hooks/useLatestRequest";
 import { useDateFormat } from "@/hooks/useDateFormat";
 import { usePageSubject } from "@/hooks/usePageTitle";
 import { useAuth } from "@/hooks/useAuth";
 import { hasPermission } from "@/components/RequirePermission";
 import { ExtensionBoundary, ExtensionSlot, useExtensionAdrPanels } from "@/lib/extensionHost";
 import { printAdr } from "./adrPrint";
-import type { Card, ArchitectureDecision, SoAWSignatory } from "@/types";
+import type {
+  ArchitectureDecision,
+  DecisionLinkInput,
+  DecisionPerson,
+  SoAWSignatory,
+} from "@/types";
+import { STATUS_COLORS as STATUS_HUES } from "@/theme/tokens";
 
-const STATUS_COLORS: Record<string, "default" | "warning" | "success"> = {
-  draft: "default",
-  in_review: "warning",
-  signed: "success",
-};
+const CHANGE_SUMMARY_MAX = 2000;
+/** What "@" offers in a decision's text. */
+const DOCUMENT_MENTIONS: MentionKind[] = ["card", "decision"];
 
 export default function ADREditor() {
   const { t } = useTranslation(["delivery", "common"]);
@@ -57,6 +96,20 @@ export default function ADREditor() {
   // The record as last loaded, so an export keeps the audit fields (creator,
   // created / modified dates) the editor has no state for.
   const loadedRef = useRef<ArchitectureDecision | null>(null);
+  // The same record as state, for what renders from it: banners, the revision
+  // strip, standing, links, files.
+  const [detail, setDetail] = useState<ArchitectureDecision | null>(null);
+  // Bumped to load the record again (a save refused because it was locked).
+  const [reloadKey, setReloadKey] = useState(0);
+  // What the server holds, as the payload Save would send for it: compared
+  // with the live payload to know whether there are edits to save first.
+  const storedRef = useRef<SavePayload | null>(null);
+  // The decision this page shows now: a reply for another one (the user moved
+  // to another revision while it was in flight) is not applied.
+  const idRef = useRef(id);
+  useEffect(() => {
+    idRef.current = id;
+  }, [id]);
 
   // ADR state
   const [title, setTitle] = useState("");
@@ -78,9 +131,18 @@ export default function ADREditor() {
   const [linkedCards, setLinkedCards] = useState<
     { id: string; name: string; type: string }[]
   >([]);
+  const [decidedOn, setDecidedOn] = useState("");
+  const [effectiveFrom, setEffectiveFrom] = useState("");
+  const [validUntil, setValidUntil] = useState("");
+  const [decisionMakers, setDecisionMakers] = useState<DecisionPerson[]>([]);
+  const [participants, setParticipants] = useState<DecisionPerson[]>([]);
+  const [links, setLinks] = useState<DecisionLinkInput[]>([]);
+  const [changeSummary, setChangeSummary] = useState("");
 
   // UI state
-  const [loading, setLoading] = useState(false);
+  // Loading from the first render for a saved decision: the page (and the
+  // discussion panel, which reads on mount) is not mounted before the load.
+  const [loading, setLoading] = useState(Boolean(id));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [snackbar, setSnackbar] = useState("");
@@ -95,66 +157,118 @@ export default function ADREditor() {
   const [signDialogOpen, setSignDialogOpen] = useState(false);
   const [requestingSignatures, setRequestingSignatures] = useState(false);
 
-  // Reject dialog
+  // Record-as-decided dialog
+  const [recordOpen, setRecordOpen] = useState(false);
+
+  // Sign (with an optional note) and reject dialogs, and why the last
+  // attempt from each was refused (shown inside the dialog).
+  const [signOpen, setSignOpen] = useState(false);
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
-  const [rejectComment, setRejectComment] = useState("");
+  const [signError, setSignError] = useState("");
+  const [rejectError, setRejectError] = useState("");
+  const openSign = () => {
+    setSignError("");
+    setSignOpen(true);
+  };
+  const openReject = () => {
+    setRejectError("");
+    setRejectDialogOpen(true);
+  };
+  // Open discussion threads on this revision: the detail's count, then the
+  // side panel's live one. Shown as a warning by the review dialogs.
+  const [openThreads, setOpenThreads] = useState<number | undefined>(undefined);
 
   // Deep-link handler: when the MCP server returns a `pending` response
   // with `deep_link: /ea-delivery/adr/{id}?action=sign|reject|request-
   // signatures`, the user clicks it and lands here. Auto-open the
   // matching dialog so the human can finish the workflow in one click.
-  // The param is consumed (cleared) so a refresh doesn't re-open.
+  // The param is consumed (cleared) so a refresh doesn't re-open; the dialog
+  // opens once the decision and the reader are known (`deepLinkDialog`).
+  const [deepLink, setDeepLink] = useState<string | null>(null);
   useEffect(() => {
     if (isNew) return;
     const action = searchParams.get("action");
     if (!action) return;
-    if (action === "sign") setSignDialogOpen(true);
-    else if (action === "reject") setRejectDialogOpen(true);
+    setDeepLink(action);
     setSearchParams({}, { replace: true });
   }, [isNew, searchParams, setSearchParams]);
 
-  // Current user
+  // Current user (`meLoaded` once the answer, or its failure, is in)
   const [currentUserId, setCurrentUserId] = useState<string>("");
+  const [meLoaded, setMeLoaded] = useState(false);
 
   // Card link dialog
   const [cardLinkOpen, setCardLinkOpen] = useState(false);
-  const [cardSearch, setCardSearch] = useState("");
-  const [searchResults, setSearchResults] = useState<Card[]>([]);
 
   const isSigned = status === "signed";
+  const access = editorAccess(status, isNew);
+  const locked = access.locked;
+  const canManage = hasPermission(user?.permissions, "adr.manage");
+  const isRevision = Boolean(detail?.parent_id);
 
   // Load current user
   useEffect(() => {
     api
       .get<{ id: string }>("/auth/me")
       .then((res) => setCurrentUserId(res.id))
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => setMeLoaded(true));
   }, []);
 
-  // Load existing ADR
-  useEffect(() => {
-    if (!id) return;
-    setLoading(true);
-    api
-      .get<ArchitectureDecision>(`/adr/${id}`)
-      .then((adr) => {
-        loadedRef.current = adr;
-        setTitle(adr.title);
-        setStatus(adr.status);
-        setContext(adr.context || "");
-        setDecision(adr.decision || "");
-        setConsequences(adr.consequences || "");
-        setAlternatives(adr.alternatives_considered || "");
-        setReferenceNumber(adr.reference_number);
-        setRevisionNumber(adr.revision_number);
-        setSignatories(adr.signatories || []);
-        setSignedAt(adr.signed_at);
-        setAttributes(adr.attributes || {});
-        setLinkedCards(adr.linked_cards || []);
-      })
-      .catch(() => setError(t("adr.editor.error.loadFailed")))
-      .finally(() => setLoading(false));
-  }, [id, t]);
+  // Every field from a decision as the server returned it. The ONE path for
+  // the detail: the load and every action whose reply is the detail (save,
+  // request signatures, sign, recall, reject, record) go through it, so the
+  // links block, banners, standing chip and revise menu never go stale.
+  const applyLoaded = useCallback((adr: ArchitectureDecision) => {
+    const content = contentFromDetail(adr);
+    loadedRef.current = adr;
+    storedRef.current = storedPayload(adr);
+    setDetail(adr);
+    setTitle(content.title);
+    setStatus(adr.status);
+    setContext(content.context);
+    setDecision(content.decision);
+    setConsequences(content.consequences);
+    setAlternatives(content.alternatives);
+    setReferenceNumber(adr.reference_number);
+    setRevisionNumber(adr.revision_number);
+    setSignatories(adr.signatories || []);
+    setSignedAt(adr.signed_at);
+    setAttributes(adr.attributes || {});
+    setLinkedCards(adr.linked_cards || []);
+    setDecidedOn(content.decidedOn);
+    setEffectiveFrom(content.effectiveFrom);
+    setValidUntil(content.validUntil);
+    setDecisionMakers(content.decisionMakers);
+    setParticipants(content.participants);
+    setLinks(content.links);
+    setChangeSummary(content.changeSummary);
+    setOpenThreads(adr.open_thread_count);
+  }, []);
+
+  // An action's reply, applied only while the page still shows that decision.
+  const applyReply = (adr: ArchitectureDecision | null | undefined) => {
+    if (adr && adr.id === idRef.current) applyLoaded(adr);
+  };
+
+  // Load existing ADR. Re-keyed on in-page revision navigation: only the
+  // latest load may fill the page (a late reply for the revision just left
+  // would otherwise show, and be saved over, the one now open).
+  useAbortableEffect(
+    async ({ signal, isCurrent }) => {
+      if (!id) return;
+      setLoading(true);
+      try {
+        const adr = await api.get<ArchitectureDecision>(`/adr/${id}`, { signal });
+        if (isCurrent()) applyLoaded(adr);
+      } catch {
+        if (isCurrent()) setError(t("adr.editor.error.loadFailed"));
+      } finally {
+        if (isCurrent()) setLoading(false);
+      }
+    },
+    [id, reloadKey],
+  );
 
   // Save
   // Exports read the editor's live state, unsaved edits included — the SoAW
@@ -179,6 +293,12 @@ export default function ADREditor() {
     revision_number: revisionNumber,
     attributes,
     linked_cards: linkedCards,
+    decided_on: decidedOn || null,
+    effective_from: effectiveFrom || null,
+    valid_until: validUntil || null,
+    decision_makers: decisionMakers,
+    participants,
+    change_summary: changeSummary || null,
   });
 
   const handleExportPdf = () => printAdr(editorAdr());
@@ -193,47 +313,101 @@ export default function ADREditor() {
     }
   };
 
-  const handleSave = useCallback(async () => {
+  const savePayload = () =>
+    buildSavePayload(
+      {
+        title,
+        context,
+        decision,
+        consequences,
+        alternatives,
+        decidedOn,
+        effectiveFrom,
+        validUntil,
+        decisionMakers,
+        participants,
+        links,
+        changeSummary,
+      },
+      isRevision,
+    );
+
+  // Edits the server does not hold yet (always true on a new decision).
+  const hasEdits = () => hasUnsavedEdits(savePayload(), storedRef.current);
+
+  // Saves the editor; true when it saved. Errors are shown here.
+  const saveEdits = async (): Promise<boolean> => {
     if (!title.trim()) {
       setError(t("adr.editor.titleRequired"));
-      return;
+      return false;
     }
-    await save.run(async () => {
-    setSaving(true);
-    try {
-      const payload = {
-        title,
-        context: context || null,
-        decision: decision || null,
-        consequences: consequences || null,
-        alternatives_considered: alternatives || null,
-      };
-      if (isNew) {
-        const created = await api.post<ArchitectureDecision>("/adr", payload);
-        navigate(`/ea-delivery/adr/${created.id}`, { replace: true });
-        setSnackbar(t("adr.editor.savedSuccessfully"));
-      } else {
-        await api.patch(`/adr/${id}`, payload);
-        setSnackbar(t("adr.editor.savedSuccessfully"));
+    const saved = await save.run(async () => {
+      setSaving(true);
+      try {
+        const payload = savePayload();
+        if (isNew) {
+          const created = await api.post<ArchitectureDecision>("/adr", payload);
+          navigate(`/ea-delivery/adr/${created.id}`, { replace: true });
+        } else {
+          applyReply(await api.patch<ArchitectureDecision>(`/adr/${id}`, payload));
+        }
+        return true;
+      } catch (err) {
+        if (err instanceof ApiError && err.status === 403) {
+          // Locked meanwhile (sent for review elsewhere): show what it now is.
+          setError(t("adr.editor.error.locked"));
+          setReloadKey((k) => k + 1);
+        } else {
+          setError(problemMessage(err, t) ?? t("adr.editor.error.saveFailed"));
+        }
+        return false;
+      } finally {
+        setSaving(false);
       }
-    } catch {
-      setError(t("adr.editor.error.saveFailed"));
-    } finally {
-      setSaving(false);
-    }
     });
-  }, [
-    save,
-    title,
-    context,
-    decision,
-    consequences,
-    alternatives,
-    isNew,
-    id,
-    navigate,
-    t,
-  ]);
+    return saved === true;
+  };
+
+  const handleSave = async () => {
+    if (await saveEdits()) setSnackbar(t("adr.editor.savedSuccessfully"));
+  };
+
+  // Requesting signatures locks the decision, and the server sends what it
+  // holds for review: pending edits are saved first, and the dialog opens only
+  // once they are (a failed save shows its error and opens nothing).
+  const openRequestSignatures = async () => {
+    if (hasEdits() && !(await saveEdits())) return;
+    setSignDialogOpen(true);
+  };
+
+  // Record as decided saves pending edits first too: the backend checks the
+  // decision makers it holds, not the ones on screen. A failure throws, and
+  // the dialog shows it without recording.
+  const saveBeforeRecord = async () => {
+    if (!hasEdits()) return;
+    applyReply(await api.patch<ArchitectureDecision>(`/adr/${id}`, savePayload()));
+  };
+
+  const handleRecorded = (adr: ArchitectureDecision) => {
+    applyReply(adr);
+    setRecordOpen(false);
+    setSnackbar(t("adr.record.done"));
+  };
+
+  // "Create consolidated revision" on an amended decision: a revision naming
+  // the amending decisions, then open it.
+  const handleConsolidate = () =>
+    action.run(async () => {
+      if (!id) return;
+      const amenders = (detail?.amended_by ?? []).map((r) => r.id);
+      const out = await createRevision(id, { consolidates: amenders }, t);
+      if ("error" in out) {
+        setError(out.error);
+        return;
+      }
+      navigate(`/ea-delivery/adr/${out.id}`);
+      setSnackbar(out.notice);
+    });
 
   // Duplicate
   const handleDuplicate = () =>
@@ -260,52 +434,37 @@ export default function ADREditor() {
         `/adr/${id}/request-signatures`,
         { user_ids: userIds },
       );
-      setSignatories(updated.signatories || []);
-      setStatus(updated.status);
+      applyReply(updated);
       setSignDialogOpen(false);
       setSnackbar(t("adr.editor.signatureRequestsSent"));
-    } catch {
-      setError(t("adr.editor.error.requestSignaturesFailed"));
+    } catch (err) {
+      // A lock refusal names what blocks it (an unsigned linked decision, a
+      // past "valid until", …).
+      setError(problemMessage(err, t) ?? t("adr.editor.error.requestSignaturesFailed"));
     } finally {
       setRequestingSignatures(false);
     }
   };
 
-  // Sign
-  const handleSign = () =>
+  // Sign, with the note (if any) the dialog collected
+  const handleSign = (note: string) =>
     action.run(async () => {
       if (!id) return;
       try {
         const updated = await api.post<ArchitectureDecision>(
           `/adr/${id}/sign`,
-          {},
+          signBody("adr", note),
         );
-        setSignatories(updated.signatories || []);
-        setStatus(updated.status);
-        setSignedAt(updated.signed_at);
+        applyReply(updated);
+        setSignOpen(false);
         setSnackbar(
           updated.status === "signed"
             ? t("adr.editor.documentFullySigned")
             : t("adr.editor.signatureRecorded"),
         );
-      } catch {
-        setError(t("adr.editor.error.signFailed"));
-      }
-    });
-
-  // Revise
-  const handleRevise = () =>
-    action.run(async () => {
-      if (!id) return;
-      try {
-        const rev = await api.post<ArchitectureDecision>(
-          `/adr/${id}/revise`,
-          {},
-        );
-        navigate(`/ea-delivery/adr/${rev.id}`);
-        setSnackbar(t("adr.editor.revised"));
-      } catch {
-        setError(t("adr.editor.error.reviseFailed"));
+      } catch (err) {
+        // Shown in the dialog, which stays open (the page's alert is behind it).
+        setSignError(problemMessage(err, t) ?? t("adr.editor.error.signFailed"));
       }
     });
 
@@ -318,8 +477,7 @@ export default function ADREditor() {
         `/adr/${id}/recall-signatures`,
         {},
       );
-      setSignatories(updated.signatories || []);
-      setStatus(updated.status);
+      applyReply(updated);
       setSnackbar(t("adr.editor.signaturesRecalled"));
     } catch {
       setError(t("adr.editor.error.recallFailed"));
@@ -329,49 +487,26 @@ export default function ADREditor() {
   };
 
   // Reject
-  const handleReject = async () => {
-    if (!id || !rejectComment.trim()) return;
+  const handleReject = async (reason: string) => {
+    if (!id || !reason) return;
     setSaving(true);
     try {
       const updated = await api.post<ArchitectureDecision>(
         `/adr/${id}/reject`,
-        { comment: rejectComment.trim() },
+        { comment: reason },
       );
-      setSignatories(updated.signatories || []);
-      setStatus(updated.status);
-      setRevisionNumber(updated.revision_number);
+      applyReply(updated);
       setRejectDialogOpen(false);
-      setRejectComment("");
       setSnackbar(t("adr.editor.documentRejected"));
-    } catch {
-      setError(t("adr.editor.error.rejectFailed"));
+    } catch (err) {
+      setRejectError(problemMessage(err, t) ?? t("adr.editor.error.rejectFailed"));
     } finally {
       setSaving(false);
     }
   };
 
   // Card linking
-  const openCardLink = () => {
-    setCardLinkOpen(true);
-    setCardSearch("");
-    setSearchResults([]);
-  };
-
-  const searchCards = async (q: string) => {
-    setCardSearch(q);
-    if (!q.trim()) {
-      setSearchResults([]);
-      return;
-    }
-    try {
-      const res = await api.get<{ items: Card[] }>(
-        `/cards?search=${encodeURIComponent(q)}&page_size=20`,
-      );
-      setSearchResults(res.items);
-    } catch {
-      /* ignore */
-    }
-  };
+  const openCardLink = () => setCardLinkOpen(true);
 
   const handleLinkCard = (cardId: string) =>
     action.run(async () => {
@@ -398,10 +533,52 @@ export default function ADREditor() {
     }
   };
 
+  // Cards the text mentions that are not linked: offered one click each.
+  const mentionedUnlinked = unlinkedMentionedCards(
+    [context, decision, consequences, alternatives].join(""),
+    linkedCards.map((c) => c.id),
+  );
+
+  // The "@" list's order: linked cards first in the text, and the
+  // decision's people first in its comments.
+  const linkedKey = linkedCards.map((c) => c.id).join(",");
+  const peopleKey = documentPeopleIds({
+    signatories,
+    decision_makers: decisionMakers,
+    participants,
+  }).join(",");
+  const textMentionContext = useMemo<MentionContext>(
+    () => ({ linkedCardIds: linkedKey ? linkedKey.split(",") : [] }),
+    [linkedKey],
+  );
+  const commentMentionContext = useMemo<MentionContext>(
+    () => ({
+      linkedCardIds: linkedKey ? linkedKey.split(",") : [],
+      priorityUserIds: peopleKey ? peopleKey.split(",") : [],
+    }),
+    [linkedKey, peopleKey],
+  );
+
   const currentUserIsSignatory = signatories.some(
     (s) => s.user_id === currentUserId && s.status === "pending",
   );
   const signedCount = signatories.filter((s) => s.status === "signed").length;
+
+  // A deep link's dialog, once this decision and the reader are known.
+  const deepLinkReady = deepLink !== null && meLoaded && detail !== null && detail.id === id;
+  useEffect(() => {
+    if (!deepLinkReady || deepLink === null) return;
+    setDeepLink(null);
+    const dialog = deepLinkDialog(deepLink, status === "in_review" && currentUserIsSignatory);
+    if (dialog === "sign") {
+      setSignError("");
+      setSignOpen(true);
+    } else if (dialog === "request-signatures") setSignDialogOpen(true);
+    else if (dialog === "reject") {
+      setRejectError("");
+      setRejectDialogOpen(true);
+    }
+  }, [deepLinkReady, deepLink, status, currentUserIsSignatory]);
 
   // Save (on a new decision), Duplicate and New Revision navigate to another
   // decision and confirm in the same breath, so the page goes from the old
@@ -436,8 +613,38 @@ export default function ADREditor() {
     );
   }
 
+  const stripItems = detail ? decisionRevisionItems(detail.revisions ?? [], t) : [];
+  const stripShown = showsRevisionStrip(stripItems);
+  const historyButton = (placeCompact: boolean) =>
+    !isNew && id ? (
+      <DocumentHistoryButton<ArchitectureDecision>
+        owner={{ kind: "adr", id }}
+        label={[
+          referenceNumber
+            ? decisionRefLabel({ reference_number: referenceNumber, revision_number: revisionNumber }, t)
+            : "",
+          title || t("adr.editor.untitled"),
+        ]
+          .filter(Boolean)
+          .join(" · ")}
+        status={status}
+        refreshKey={detail?.updated_at ?? undefined}
+        isDirty={hasEdits}
+        onRestored={(adr) => applyReply(adr)}
+        compact={placeCompact}
+      />
+    ) : null;
+
   return (
     <>
+    <DocumentSidePanel
+      owner={!isNew && id ? { kind: "adr", id } : null}
+      sections={sectionOptions("adr", t)}
+      openThreadCount={detail?.open_thread_count}
+      onOpenCountChange={setOpenThreads}
+      refreshKey={detail?.updated_at ?? undefined}
+      mentionContext={commentMentionContext}
+    >
     <Box sx={{ maxWidth: 900, mx: "auto", p: 2 }}>
       {/* ── Header ── */}
       <Box
@@ -457,7 +664,10 @@ export default function ADREditor() {
 
         {referenceNumber && (
           <Chip
-            label={referenceNumber}
+            label={decisionRefLabel(
+              { reference_number: referenceNumber, revision_number: revisionNumber },
+              t,
+            )}
             variant="outlined"
             size="small"
             sx={{ fontWeight: 700 }}
@@ -468,19 +678,11 @@ export default function ADREditor() {
           {isNew ? t("adr.editor.newTitle") : title || t("adr.editor.untitled")}
         </Typography>
 
-        {revisionNumber > 1 && (
-          <Chip
-            label={t("adr.editor.revisionLabel", { number: revisionNumber })}
-            size="small"
-            color="info"
-          />
-        )}
+        <DecisionStatusChip adr={{ status: status as ArchitectureDecision["status"], recorded_at: detail?.recorded_at }} />
+        <DecisionStandingChip standing={detail?.standing} />
 
-        <Chip
-          label={status.replace("_", " ")}
-          color={STATUS_COLORS[status] || "default"}
-          size="small"
-        />
+        {/* History sits beside the revision strip when one is shown. */}
+        {!stripShown && historyButton(compact)}
 
         {/* Preview / PDF / Word — the SoAW editor's export trio, same shape. */}
         {!isNew &&
@@ -535,14 +737,35 @@ export default function ADREditor() {
           ))}
       </Box>
 
-      {/* ── Signed Banner ── */}
+      {/* ── Where the decision stands, and its chain ── */}
+      {detail && !isNew && (
+        <Box sx={{ display: "flex", flexDirection: "column", gap: 1, mb: 2, "&:empty": { display: "none" } }}>
+          <DecisionBanners
+            adr={{ ...detail, status: status as ArchitectureDecision["status"] }}
+            mode="editor"
+            onCreateConsolidatedRevision={canManage ? handleConsolidate : undefined}
+          />
+          {stripShown && (
+            <Box sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 1 }}>
+              <RevisionStrip
+                items={stripItems}
+                activeId={detail.id}
+                currentId={currentRevisionId(detail)}
+                hrefFor={(rid) => `/ea-delivery/adr/${rid}`}
+              />
+              {historyButton(false)}
+            </Box>
+          )}
+        </Box>
+      )}
+
+      {/* ── Signed Banner (a recorded decision has no signing date: the
+          recorded line above says how it was locked) ── */}
       {isSigned && signedAt && (
         <Alert severity="info" sx={{ mb: 2 }}>
           {t("adr.editor.signedBanner", {
             date: formatDate(signedAt),
           })}
-          {revisionNumber > 1 &&
-            t("adr.editor.signedBannerRevision", { number: revisionNumber })}
         </Alert>
       )}
 
@@ -554,7 +777,7 @@ export default function ADREditor() {
 
       {/* ── Action Buttons ── */}
       <Box sx={{ display: "flex", gap: 1, mb: 3, flexWrap: "wrap" }}>
-        {!isSigned && (
+        {!locked && (
           <Button
             variant="contained"
             startIcon={<MaterialSymbol icon="save" size={18} />}
@@ -569,10 +792,21 @@ export default function ADREditor() {
           <Button
             variant="outlined"
             startIcon={<MaterialSymbol icon="send" size={18} />}
-            onClick={() => setSignDialogOpen(true)}
+            onClick={openRequestSignatures}
+            disabled={saving}
             sx={{ textTransform: "none" }}
           >
             {t("adr.editor.requestSignatures")}
+          </Button>
+        )}
+        {canRecord(user?.permissions, status, isNew) && (
+          <Button
+            variant="outlined"
+            startIcon={<MaterialSymbol icon="history_edu" size={18} />}
+            onClick={() => setRecordOpen(true)}
+            sx={{ textTransform: "none" }}
+          >
+            {t("adr.record.open")}
           </Button>
         )}
         {!isNew && status === "in_review" && (
@@ -595,7 +829,7 @@ export default function ADREditor() {
               variant="contained"
               color="success"
               startIcon={<MaterialSymbol icon="draw" size={18} />}
-              onClick={handleSign}
+              onClick={openSign}
               disabled={action.busy}
               sx={{ textTransform: "none" }}
             >
@@ -605,7 +839,7 @@ export default function ADREditor() {
               variant="outlined"
               color="error"
               startIcon={<MaterialSymbol icon="block" size={18} />}
-              onClick={() => setRejectDialogOpen(true)}
+              onClick={openReject}
               disabled={saving}
               sx={{ textTransform: "none" }}
             >
@@ -613,16 +847,13 @@ export default function ADREditor() {
             </Button>
           </>
         )}
-        {isSigned && (
-          <Button
-            variant="outlined"
-            startIcon={<MaterialSymbol icon="edit_note" size={18} />}
-            onClick={handleRevise}
-            disabled={action.busy}
-            sx={{ textTransform: "none" }}
-          >
-            {t("adr.editor.newRevision")}
-          </Button>
+        {isSigned && detail && (
+          <ReviseMenu
+            adr={{ ...detail, status, title, linked_cards: linkedCards } as ArchitectureDecision}
+            canManage={canManage}
+            onNotice={setSnackbar}
+            onError={setError}
+          />
         )}
         {!isNew && (
           <Button
@@ -643,7 +874,15 @@ export default function ADREditor() {
         {!isNew && id && (
           <ExtensionSlot
             name="adr.header"
-            context={{ adrId: id, status, signed: isSigned, attributes }}
+            context={{
+              adrId: id,
+              status,
+              signed: isSigned,
+              readOnly: access.panelReadOnly,
+              attributes,
+              standing: detail?.standing ?? null,
+              isCurrent: detail?.is_current,
+            }}
           />
         )}
       </Box>
@@ -668,74 +907,197 @@ export default function ADREditor() {
           fullWidth
           value={title}
           onChange={(e) => setTitle(e.target.value)}
-          disabled={isSigned}
+          disabled={locked}
           sx={{ mb: 2 }}
         />
       </Paper>
 
       {/* ── Context ── */}
       <Paper sx={{ p: 3, mb: 3 }}>
-        <Typography variant="h6" sx={{ mb: 1 }}>
-          {t("adr.context")}
-        </Typography>
+        <Box sx={{ display: "flex", alignItems: "center", mb: 1 }}>
+          <Typography variant="h6">{t("adr.context")}</Typography>
+          <SectionDiscussionMarker section="context" />
+        </Box>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
           {t("adr.contextHint")}
         </Typography>
         <RichTextEditor
+          mentions={DOCUMENT_MENTIONS}
+          mentionContext={textMentionContext}
           content={context}
           onChange={setContext}
-          readOnly={isSigned}
+          readOnly={locked}
           placeholder={t("adr.contextHint")}
         />
       </Paper>
 
       {/* ── Decision ── */}
       <Paper sx={{ p: 3, mb: 3 }}>
-        <Typography variant="h6" sx={{ mb: 1 }}>
-          {t("adr.decision")}
-        </Typography>
+        <Box sx={{ display: "flex", alignItems: "center", mb: 1 }}>
+          <Typography variant="h6">{t("adr.decision")}</Typography>
+          <SectionDiscussionMarker section="decision" />
+        </Box>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
           {t("adr.decisionHint")}
         </Typography>
         <RichTextEditor
+          mentions={DOCUMENT_MENTIONS}
+          mentionContext={textMentionContext}
           content={decision}
           onChange={setDecision}
-          readOnly={isSigned}
+          readOnly={locked}
           placeholder={t("adr.decisionHint")}
         />
       </Paper>
 
       {/* ── Alternatives Considered ── */}
       <Paper sx={{ p: 3, mb: 3 }}>
-        <Typography variant="h6" sx={{ mb: 1 }}>
-          {t("adr.alternativesConsidered")}
-        </Typography>
+        <Box sx={{ display: "flex", alignItems: "center", mb: 1 }}>
+          <Typography variant="h6">{t("adr.alternativesConsidered")}</Typography>
+          <SectionDiscussionMarker section="alternatives_considered" />
+        </Box>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
           {t("adr.alternativesHint")}
         </Typography>
         <RichTextEditor
+          mentions={DOCUMENT_MENTIONS}
+          mentionContext={textMentionContext}
           content={alternatives}
           onChange={setAlternatives}
-          readOnly={isSigned}
+          readOnly={locked}
           placeholder={t("adr.alternativesHint")}
         />
       </Paper>
 
       {/* ── Consequences ── */}
       <Paper sx={{ p: 3, mb: 3 }}>
-        <Typography variant="h6" sx={{ mb: 1 }}>
-          {t("adr.consequences")}
-        </Typography>
+        <Box sx={{ display: "flex", alignItems: "center", mb: 1 }}>
+          <Typography variant="h6">{t("adr.consequences")}</Typography>
+          <SectionDiscussionMarker section="consequences" />
+        </Box>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
           {t("adr.consequencesHint")}
         </Typography>
         <RichTextEditor
+          mentions={DOCUMENT_MENTIONS}
+          mentionContext={textMentionContext}
           content={consequences}
           onChange={setConsequences}
-          readOnly={isSigned}
+          readOnly={locked}
           placeholder={t("adr.consequencesHint")}
         />
       </Paper>
+
+      {/* ── Dates ── */}
+      <Paper sx={{ p: 3, mb: 3 }}>
+        <Typography variant="h6" sx={{ mb: 2 }}>
+          {t("adr.dates.title")}
+        </Typography>
+        <Box sx={{ display: "flex", gap: 2, flexWrap: "wrap" }}>
+          <DateField
+            label={t("adr.dates.decidedOn")}
+            value={decidedOn}
+            onChange={setDecidedOn}
+            disabled={locked}
+            size="small"
+          />
+          <DateField
+            label={t("adr.dates.effectiveFrom")}
+            value={effectiveFrom}
+            onChange={setEffectiveFrom}
+            disabled={locked}
+            size="small"
+          />
+          <DateField
+            label={t("adr.dates.validUntil")}
+            value={validUntil}
+            onChange={setValidUntil}
+            disabled={locked}
+            size="small"
+            helperText={t("adr.dates.validUntilHint")}
+          />
+        </Box>
+      </Paper>
+
+      {/* ── People ── */}
+      <Paper sx={{ p: 3, mb: 3 }}>
+        <Typography variant="h6" sx={{ mb: 2 }}>
+          {t("adr.people.title")}
+        </Typography>
+        <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+          <DecisionPeopleField
+            part="decision_makers"
+            value={decisionMakers}
+            onChange={setDecisionMakers}
+            readOnly={locked}
+          />
+          <DecisionPeopleField
+            part="participants"
+            value={participants}
+            onChange={setParticipants}
+            readOnly={locked}
+          />
+        </Box>
+      </Paper>
+
+      {/* ── Links to other decisions ── */}
+      <Paper sx={{ p: 3, mb: 3 }}>
+        <Typography variant="h6" sx={{ mb: 2 }}>
+          {t("adr.links.title")}
+        </Typography>
+        {locked && (detail?.links?.outgoing.length ?? 0) + (detail?.links?.incoming.length ?? 0) === 0 ? (
+          <Typography variant="body2" color="text.secondary">
+            {t("adr.links.none")}
+          </Typography>
+        ) : (
+          <DecisionLinksBlock
+            links={detail?.links}
+            value={links}
+            onChange={setLinks}
+            ownIds={detail ? chainIds(detail) : []}
+            readOnly={locked}
+          />
+        )}
+      </Paper>
+
+      {/* ── Change summary (a revision only) ── */}
+      {isRevision && (
+        <Paper sx={{ p: 3, mb: 3 }}>
+          <Typography variant="h6" sx={{ mb: 2 }}>
+            {t("adr.revise.changeSummary")}
+          </Typography>
+          <TextField
+            fullWidth
+            multiline
+            minRows={2}
+            label={t("adr.revise.changeSummary")}
+            placeholder={t("adr.revise.changeSummaryHint")}
+            value={changeSummary}
+            onChange={(e) => setChangeSummary(e.target.value)}
+            disabled={locked}
+            error={changeSummary.length > CHANGE_SUMMARY_MAX}
+            helperText={t("adr.revise.changeSummaryCount", {
+              length: changeSummary.length,
+              max: CHANGE_SUMMARY_MAX,
+            })}
+          />
+        </Paper>
+      )}
+
+      {/* ── Files ── */}
+      {!isNew && id && (
+        <Paper sx={{ p: 3, mb: 3 }}>
+          <Typography variant="h6" sx={{ mb: 2 }}>
+            {t("adr.files.title")}
+          </Typography>
+          <DecisionFilesSection
+            adrId={id}
+            files={detail?.files}
+            editable={access.filesEditable && canManage}
+            locked={locked}
+          />
+        </Paper>
+      )}
 
       {/* ── Linked Cards ── */}
       {!isNew && (
@@ -749,7 +1111,7 @@ export default function ADREditor() {
             }}
           >
             <Typography variant="h6">{t("adr.linkedCards")}</Typography>
-            {!isSigned && (
+            {access.cardsEditable && (
               <Button
                 size="small"
                 startIcon={<MaterialSymbol icon="add" size={18} />}
@@ -770,7 +1132,7 @@ export default function ADREditor() {
                 <ListItem
                   key={card.id}
                   secondaryAction={
-                    !isSigned ? (
+                    access.cardsEditable ? (
                       <Tooltip title={t("adr.editor.unlinkCard")}>
                         <IconButton
                           size="small"
@@ -800,6 +1162,30 @@ export default function ADREditor() {
               ))}
             </List>
           )}
+          {access.cardsEditable && canManage && mentionedUnlinked.length > 0 && (
+            <Box sx={{ mt: 2 }} data-testid="mentioned-unlinked">
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                {t("adr.editor.mentionedNotLinked")}
+              </Typography>
+              <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
+                {mentionedUnlinked.map((card) => (
+                  // describeChild: the card's name stays the button's name.
+                  <Tooltip key={card.id} title={t("adr.editor.linkThisCard")} describeChild>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      startIcon={<MaterialSymbol icon="add_link" size={18} />}
+                      onClick={() => handleLinkCard(card.id)}
+                      disabled={action.busy}
+                      sx={{ textTransform: "none" }}
+                    >
+                      {card.label}
+                    </Button>
+                  </Tooltip>
+                ))}
+              </Box>
+            </Box>
+          )}
         </Paper>
       )}
 
@@ -822,7 +1208,9 @@ export default function ADREditor() {
                   adrId={id}
                   status={status}
                   signed={isSigned}
-                  readOnly={isSigned}
+                  readOnly={access.panelReadOnly}
+                  standing={detail?.standing ?? null}
+                  isCurrent={detail?.is_current}
                 />
               </Paper>
             </ExtensionBoundary>
@@ -845,7 +1233,7 @@ export default function ADREditor() {
                         : "radio_button_unchecked"
                     }
                     size={20}
-                    color={sig.status === "signed" ? "#4caf50" : "#ff9800"}
+                    color={sig.status === "signed" ? STATUS_HUES.success : STATUS_HUES.warning}
                   />
                 </ListItemIcon>
                 <ListItemText
@@ -871,7 +1259,15 @@ export default function ADREditor() {
       {!isNew && id && (
         <ExtensionSlot
           name="adr.signature.footer"
-          context={{ adrId: id, status, signed: isSigned, readOnly: false, attributes }}
+          context={{
+            adrId: id,
+            status,
+            signed: isSigned,
+            readOnly: false,
+            attributes,
+            standing: detail?.standing ?? null,
+            isCurrent: detail?.is_current,
+          }}
         />
       )}
 
@@ -883,7 +1279,21 @@ export default function ADREditor() {
         title={t("adr.editor.signDialog.title")}
         description={t("adr.editor.signDialog.description")}
         requesting={requestingSignatures}
+        decisionMakers={decisionMakers}
+        openThreadCount={openThreads}
       />
+
+      {/* ── Record as decided ── */}
+      {!isNew && id && (
+        <RecordAsDecidedDialog
+          open={recordOpen}
+          adrId={id}
+          decisionMakers={decisionMakers}
+          onClose={() => setRecordOpen(false)}
+          onRecorded={handleRecorded}
+          prepare={saveBeforeRecord}
+        />
+      )}
 
       {/* ── Card Link Dialog ── */}
       <Dialog
@@ -894,39 +1304,32 @@ export default function ADREditor() {
       >
         <DialogTitle>{t("adr.editor.linkCard")}</DialogTitle>
         <DialogContent>
-          <TextField
+          <CardPicker
+            value={null}
+            onChange={(card) => {
+              if (card) handleLinkCard(card.id);
+            }}
+            excludeIds={linkedCards.map((c) => c.id)}
+            enabled={cardLinkOpen}
             autoFocus
-            placeholder={t("adr.editor.searchCards")}
             fullWidth
             size="small"
-            value={cardSearch}
-            onChange={(e) => searchCards(e.target.value)}
-            sx={{ mt: 1, mb: 2 }}
+            placeholder={t("adr.editor.searchCards")}
+            disabled={action.busy}
+            sx={{ mt: 1 }}
           />
-          <List dense>
-            {searchResults.map((card) => {
-              const alreadyLinked = linkedCards.some((lc) => lc.id === card.id);
-              return (
-                <ListItemButton
-                  key={card.id}
-                  onClick={() => !alreadyLinked && handleLinkCard(card.id)}
-                  disabled={alreadyLinked}
-                >
-                  <ListItemText
-                    primary={card.name}
-                    secondary={card.type}
-                  />
-                  {alreadyLinked && (
-                    <Chip
-                      label={t("adr.editor.alreadyLinked")}
-                      size="small"
-                      variant="outlined"
-                    />
-                  )}
-                </ListItemButton>
-              );
-            })}
-          </List>
+          {linkedCards.length > 0 && (
+            <Box sx={{ mt: 2 }}>
+              <Typography variant="caption" color="text.secondary" component="p" sx={{ mb: 0.5 }}>
+                {t("adr.editor.alreadyLinked")}
+              </Typography>
+              <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
+                {linkedCards.map((card) => (
+                  <Chip key={card.id} label={card.name} size="small" variant="outlined" />
+                ))}
+              </Box>
+            </Box>
+          )}
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setCardLinkOpen(false)}>
@@ -935,45 +1338,34 @@ export default function ADREditor() {
         </DialogActions>
       </Dialog>
 
-      {/* ── Reject Dialog ── */}
-      <Dialog
+      {/* ── Sign and Reject Dialogs ── */}
+      <SignDocumentDialog
+        open={signOpen}
+        onClose={() => setSignOpen(false)}
+        onSign={handleSign}
+        title={t("collab.sign.adrTitle")}
+        description={t("collab.sign.adrDescription")}
+        openThreadCount={openThreads}
+        busy={action.busy}
+        error={signError}
+        onDismissError={() => setSignError("")}
+      />
+      <RejectDocumentDialog
         open={rejectDialogOpen}
         onClose={() => setRejectDialogOpen(false)}
-        maxWidth="sm"
-        fullWidth
-      >
-        <DialogTitle>{t("adr.editor.rejectDialog.title")}</DialogTitle>
-        <DialogContent>
-          <Typography variant="body2" sx={{ mb: 2 }}>
-            {t("adr.editor.rejectDialog.description")}
-          </Typography>
-          <TextField
-            autoFocus
-            label={t("adr.editor.rejectDialog.commentLabel")}
-            fullWidth
-            multiline
-            minRows={3}
-            value={rejectComment}
-            onChange={(e) => setRejectComment(e.target.value)}
-            sx={{ mt: 1 }}
-          />
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setRejectDialogOpen(false)}>
-            {t("common:actions.cancel")}
-          </Button>
-          <Button
-            variant="contained"
-            color="error"
-            disabled={!rejectComment.trim() || saving}
-            onClick={handleReject}
-          >
-            {t("adr.editor.reject")}
-          </Button>
-        </DialogActions>
-      </Dialog>
+        onReject={handleReject}
+        title={t("adr.editor.rejectDialog.title")}
+        description={t("adr.editor.rejectDialog.description")}
+        label={t("adr.editor.rejectDialog.commentLabel")}
+        submitLabel={t("adr.editor.reject")}
+        openThreadCount={openThreads}
+        busy={saving}
+        error={rejectError}
+        onDismissError={() => setRejectError("")}
+      />
 
     </Box>
+    </DocumentSidePanel>
     {/* ── Snackbar ── */}
     {snackbarEl}
     </>

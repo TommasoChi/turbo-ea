@@ -13,6 +13,7 @@ import {
   type GEdge,
 } from "./layeredDependencyLayout";
 import type { CardType, CardTypeCategory, RelationType, FieldOption } from "@/types";
+import { ARROW_COLOR, SEVERED_ARROW_COLOR } from "./ldvLayoutShared";
 
 const PAST = "2000-01-01";
 const FUTURE = "2999-01-01";
@@ -790,6 +791,139 @@ describe("relationValueSuffix", () => {
       " [Owner · Leading]",
     );
   });
+
+  // #1285: the seeded relAppToDataObj is labelled "CRUD" and carries four
+  // yes/no flags; its lines must say which ones are ticked.
+  describe("yes/no flags", () => {
+    const crudRel = {
+      ...makeRel([
+        { key: "crudCreate", label: "Create", type: "boolean" },
+        { key: "crudRead", label: "Read", type: "boolean" },
+        { key: "crudUpdate", label: "Update", type: "boolean" },
+        { key: "crudDelete", label: "Delete", type: "boolean" },
+      ]),
+      key: "relAppToDataObj",
+      label: "CRUD",
+    } as RelationType;
+    const crudMap = new Map([[crudRel.key, crudRel]]);
+    const crud = (attributes: Record<string, unknown>): GEdge => ({
+      source: "a",
+      target: "b",
+      type: "relAppToDataObj",
+      attributes,
+    });
+
+    it("lists every ticked flag by its label, in schema order", () => {
+      expect(
+        relationValueSuffix(
+          crud({ crudCreate: true, crudRead: true, crudUpdate: true, crudDelete: true }),
+          crudMap,
+          resolve,
+        ),
+      ).toBe(" [Create · Read · Update · Delete]");
+    });
+
+    it("lists only the ticked ones when they are mixed", () => {
+      expect(
+        relationValueSuffix(
+          crud({ crudDelete: true, crudRead: true, crudCreate: false, crudUpdate: false }),
+          crudMap,
+          resolve,
+        ),
+      ).toBe(" [Read · Delete]");
+    });
+
+    it("adds nothing when no flag is ticked", () => {
+      expect(
+        relationValueSuffix(
+          crud({ crudCreate: false, crudRead: false, crudUpdate: false, crudDelete: false }),
+          crudMap,
+          resolve,
+        ),
+      ).toBeUndefined();
+      expect(relationValueSuffix(crud({}), crudMap, resolve)).toBeUndefined();
+    });
+
+    it("counts only a real true, not a truthy string", () => {
+      expect(
+        relationValueSuffix(crud({ crudRead: "true", crudCreate: 1 }), crudMap, resolve),
+      ).toBeUndefined();
+    });
+
+    it("resolves a flag through the field's own translations", () => {
+      const translated = {
+        ...crudRel,
+        attributes_schema: [
+          { key: "crudRead", label: "Read", type: "boolean", translations: { de: "Lesen" } },
+        ],
+      } as RelationType;
+      const seen: FieldOption[] = [];
+      const suffix = relationValueSuffix(
+        crud({ crudRead: true }),
+        new Map([[translated.key, translated]]),
+        (o) => {
+          seen.push(o);
+          return o.translations?.de ?? o.label;
+        },
+      );
+      expect(suffix).toBe(" [Lesen]");
+      expect(seen[0]).toMatchObject({ label: "Read", translations: { de: "Lesen" } });
+    });
+
+    it("mixes flags and single-select values in schema order", () => {
+      const mixed = makeRel([
+        {
+          key: "usageType",
+          label: "Usage Type",
+          type: "single_select",
+          options: [{ key: "owner", label: "Owner" }],
+        },
+        { key: "crudRead", label: "Read", type: "boolean" },
+        {
+          key: "flowDirection",
+          label: "Flow direction",
+          type: "single_select",
+          options: [{ key: "forward", label: "Source → Target" }],
+        },
+        { key: "crudUpdate", label: "Update", type: "boolean" },
+      ]);
+      const edge: GEdge = {
+        source: "a",
+        target: "b",
+        type: "relAppToBC",
+        attributes: {
+          usageType: "owner",
+          crudRead: true,
+          flowDirection: "forward",
+          crudUpdate: true,
+        },
+      };
+      expect(relationValueSuffix(edge, new Map([[mixed.key, mixed]]), resolve)).toBe(
+        " [Owner · Read · Update]",
+      );
+    });
+
+    it("reaches the edge label buildLdvFlow draws", () => {
+      const { edges } = buildLdvFlow(
+        [
+          { id: "a", name: "App", type: "Application" },
+          { id: "d", name: "Orders DB", type: "ITComponent" },
+        ],
+        [
+          {
+            source: "a",
+            target: "d",
+            type: "relAppToDataObj",
+            label: "CRUD",
+            attributes: { crudCreate: true, crudRead: true },
+          },
+        ],
+        TYPES,
+        (e) => relationValueSuffix(e, crudMap, resolve),
+      );
+      expect((edges[0].data as { relLabel: string }).relLabel).toBe("CRUD [Create · Read]");
+    });
+  });
 });
 
 describe("filterEndOfLifeNodes", () => {
@@ -1119,8 +1253,8 @@ describe("stripEdgeLabels with aggregate connectors", () => {
 });
 
 describe("buildLdvFlow arrowheads", () => {
-  const grey = { type: "arrowclosed", color: "#888" };
-  const red = { type: "arrowclosed", color: "#d32f2f" };
+  const grey = { type: "arrowclosed", color: ARROW_COLOR };
+  const red = { type: "arrowclosed", color: SEVERED_ARROW_COLOR };
   const nodes: GNode[] = [
     { id: "a", name: "A", type: "Application" },
     { id: "b", name: "B", type: "ITComponent" },

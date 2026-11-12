@@ -535,8 +535,13 @@ class TestStakeholderCarveOut:
         assert await landscape_only.hidden_card_ids(db, requested, mode="module") == (
             hidden | stakeholder_ids
         )
+        # A scope loads the subtype denials by default: the unheld card of the denied subtype
+        # is hidden here too, not only the one of the denied type.
         default = await CardReadScope.load(db, user)
-        assert await default.hidden_card_ids(db, requested, mode="module") == {denied_unheld.id}
+        assert await default.hidden_card_ids(db, requested, mode="module") == {
+            unheld.id,
+            denied_unheld.id,
+        }
 
 
 class TestSingleCardGuards:
@@ -561,13 +566,13 @@ class TestSingleCardGuards:
 def type_lookups(monkeypatch):
     """Card ids whose type the permission layer looked up."""
     looked_up: list[uuid.UUID] = []
-    real = PermissionService._card_type_key
+    real = PermissionService._card_type_and_subtype
 
     async def counting(db, card_id):
         looked_up.append(card_id)
         return await real(db, card_id)
 
-    monkeypatch.setattr(PermissionService, "_card_type_key", staticmethod(counting))
+    monkeypatch.setattr(PermissionService, "_card_type_and_subtype", staticmethod(counting))
     return looked_up
 
 
@@ -603,7 +608,7 @@ class TestOneTypeLookupPerCard:
 async def test_module_mode_asks_whether_view_is_denied(db, carve, monkeypatch):
     asked: list[tuple[str, str]] = []
 
-    async def is_type_denied(db, user, permission, type_key):
+    async def is_type_denied(db, user, permission, type_key, *, subtype=None):
         asked.append((permission, type_key))
         return False
 

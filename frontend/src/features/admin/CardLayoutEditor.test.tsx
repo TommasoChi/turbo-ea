@@ -27,6 +27,9 @@ import { renderWithProviders } from "@/test/render";
 import { makeCardType, makeField, makeSection } from "@/test/fixtures/metamodel";
 import type { CardType, FieldDef, SectionConfig, SectionDef } from "@/types";
 import CardLayoutEditor from "./CardLayoutEditor";
+import { createTheme, hexToRgb } from "@mui/material/styles";
+import { brand } from "@/theme";
+import { FIELD_TYPE_COLORS } from "@/theme/tokens";
 
 /* ------------------------------------------------------------------------- */
 /*  Fixture                                                                   */
@@ -291,7 +294,8 @@ describe("CardLayoutEditor — rendering", () => {
       } as unknown as Record<string, SectionConfig>,
     });
     setup({ cardType: stale });
-    expect(sectionHeaders()).toEqual(["Lifecycle", "Only", "Description", "Tags", "Relations"]);
+    // End of Life, absent from the stored order, is spliced in before Lifecycle.
+    expect(sectionHeaders()).toEqual(["End of Life", "Lifecycle", "Only", "Description", "Tags", "Relations"]);
   });
 
   it("appends lineage and tags when a saved order has no relations entry to anchor them on", () => {
@@ -302,7 +306,7 @@ describe("CardLayoutEditor — rendering", () => {
       section_config: { __order: ["custom:0", "description"] } as unknown as Record<string, SectionConfig>,
     });
     setup({ cardType: anchorless });
-    expect(sectionHeaders()).toEqual(["Only", "Description", "Lineage", "Tags"]);
+    expect(sectionHeaders()).toEqual(["Only", "Description", "End of Life", "Lineage", "Tags"]);
   });
 
   it("renders the Description section's protected built-ins plus its own fields", () => {
@@ -342,6 +346,35 @@ describe("CardLayoutEditor — rendering", () => {
     expect(badges).toHaveLength(2);
     expect(fieldRoot("Alpha")).toContainElement(badges.find((b) => fieldRoot("Alpha").contains(b)) ?? null);
     expect(fieldRoot("Alias")).toContainElement(badges.find((b) => fieldRoot("Alias").contains(b)) ?? null);
+  });
+
+  it("colours each field's type chip by its field type, and a type without a hue grey", () => {
+    const remarks = makeSection({
+      section: "Remarks",
+      fields: [makeField({ key: "memo", label: "Memo", type: "multiline_text" })],
+    });
+    setup({ cardType: { ...TYPE, fields_schema: [...TYPE.fields_schema, remarks] } });
+    const chipBg = (label: string, type: string) =>
+      getComputedStyle(within(fieldRoot(label)).getByText(type).closest(".MuiChip-root") as HTMLElement)
+        .backgroundColor;
+    expect(chipBg("Alpha", "text")).toBe(hexToRgb(FIELD_TYPE_COLORS.text));
+    expect(chipBg("Delta", "cost")).toBe(hexToRgb(FIELD_TYPE_COLORS.cost));
+    expect(chipBg("Gamma", "single select")).toBe(hexToRgb(FIELD_TYPE_COLORS.single_select));
+    expect(chipBg("Memo", "multiline text")).toBe(hexToRgb(FIELD_TYPE_COLORS.other));
+  });
+
+  it("marks a required field with a brand dot and prints its weight and type in white", () => {
+    setup();
+    const label = within(fieldRoot("Alpha")).getByText("Alpha", { selector: "p" });
+    const dot = label.previousElementSibling; // only a required field has one
+    expect(dot).toHaveStyle({ backgroundColor: brand.primary, borderRadius: "50%" });
+    expect(within(fieldRoot("Delta")).getByText("Delta", { selector: "p" }).previousElementSibling).toBeNull();
+    const white = createTheme().palette.common.white;
+    expect(label.nextElementSibling).toHaveStyle({ color: white }); // the weight badge
+    expect(within(fieldRoot("Alpha")).getByText("text").closest(".MuiChip-root")).toHaveStyle({
+      color: white,
+      fontSize: "0.6rem",
+    });
   });
 
   it("offers an Ungrouped fields zone only in a column that holds a group (#1286)", () => {
@@ -471,6 +504,50 @@ describe("CardLayoutEditor — section switches", () => {
     await user.click(hidden);
     await waitFor(() => expect(onRefresh).toHaveBeenCalled());
     expect(lastPatch().section_config?.eol).toEqual({ hidden: false });
+  });
+});
+
+describe("CardLayoutEditor — End of Life follows the type's real state", () => {
+  const typeWith = (key: string, section_config: Record<string, unknown> = {}) =>
+    makeCardType({
+      key,
+      label: key,
+      fields_schema: [DESCRIPTION_SECTION],
+      section_config: section_config as Record<string, SectionConfig>,
+    });
+
+  it("reads hidden on a custom type that never stored a value, and shows it on request", async () => {
+    const custom = typeWith("Gadget");
+    mockApi.on("patch", "/metamodel/types/Gadget", (_p, body) => ({ ...custom, ...(body as object) }));
+    const { user, onRefresh } = setup({ cardType: custom });
+    const eol = sectionRoot("End of Life");
+    const hidden = within(eol).getByRole("checkbox", { name: "Hidden from card detail" });
+    expect(hidden).toBeChecked();
+    expect(within(eol).getByText(/also brings the type into End of Life reporting/)).toBeInTheDocument();
+    await user.click(hidden);
+    await waitFor(() => expect(onRefresh).toHaveBeenCalled());
+    expect(lastPatch().section_config?.eol).toEqual({ hidden: false });
+  });
+
+  it("reads visible on IT Component by default, and hides it explicitly", async () => {
+    const itc = typeWith("ITComponent", { eol: { defaultExpanded: false } });
+    mockApi.on("patch", "/metamodel/types/ITComponent", (_p, body) => ({ ...itc, ...(body as object) }));
+    const { user, onRefresh } = setup({ cardType: itc });
+    const hidden = within(sectionRoot("End of Life")).getByRole("checkbox", {
+      name: "Hidden from card detail",
+    });
+    expect(hidden).not.toBeChecked();
+    await user.click(hidden);
+    await waitFor(() => expect(onRefresh).toHaveBeenCalled());
+    expect(lastPatch().section_config?.eol).toEqual({ defaultExpanded: false, hidden: true });
+  });
+
+  it("puts the reporting note on the End of Life row only", () => {
+    setup({ cardType: typeWith("Gadget") });
+    expect(screen.getAllByText(/also brings the type into End of Life reporting/)).toHaveLength(1);
+    expect(
+      within(sectionRoot("Lifecycle")).queryByText(/End of Life reporting/),
+    ).not.toBeInTheDocument();
   });
 });
 

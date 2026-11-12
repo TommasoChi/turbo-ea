@@ -44,14 +44,10 @@ def _parse(s: str) -> dict | list:
 
 class TestConfirmationGate:
     @pytest.mark.asyncio
-    async def test_commit_above_threshold_without_token_rejected(
-        self, fake_token, monkeypatch
-    ):
+    async def test_commit_above_threshold_without_token_rejected(self, fake_token, monkeypatch):
         monkeypatch.setattr(server, "MCP_BATCH_CONFIRMATION_THRESHOLD", 2)
         monkeypatch.setattr(server, "MCP_REQUIRE_DRYRUN_FIRST", True)
-        rows = [
-            {"row_index": i, "type": "Application", "name": f"A{i}"} for i in range(3)
-        ]
+        rows = [{"row_index": i, "type": "Application", "name": f"A{i}"} for i in range(3)]
         post_mock = AsyncMock()  # must not be called
         with patch.object(server.TurboEAClient, "post", post_mock):
             out = await server.create_cards_bulk(cards=rows, dry_run=False)
@@ -67,9 +63,7 @@ class TestConfirmationGate:
         # Dry-run is *exactly* how the agent obtains the token, so it
         # must never be rejected by the gate.
         monkeypatch.setattr(server, "MCP_BATCH_CONFIRMATION_THRESHOLD", 2)
-        rows = [
-            {"row_index": i, "type": "Application", "name": f"A{i}"} for i in range(5)
-        ]
+        rows = [{"row_index": i, "type": "Application", "name": f"A{i}"} for i in range(5)]
         write_calls: list = []
 
         async def router(path, json=None):
@@ -90,13 +84,9 @@ class TestConfirmationGate:
         assert len(write_calls) == 1
 
     @pytest.mark.asyncio
-    async def test_commit_above_threshold_with_token_passes(
-        self, fake_token, monkeypatch
-    ):
+    async def test_commit_above_threshold_with_token_passes(self, fake_token, monkeypatch):
         monkeypatch.setattr(server, "MCP_BATCH_CONFIRMATION_THRESHOLD", 2)
-        rows = [
-            {"row_index": i, "type": "Application", "name": f"A{i}"} for i in range(3)
-        ]
+        rows = [{"row_index": i, "type": "Application", "name": f"A{i}"} for i in range(3)]
         write_calls: list = []
         open_calls: list = []
         commit_calls: list = []
@@ -203,9 +193,7 @@ class TestMutationBatchWrapper:
             patch.object(server.TurboEAClient, "post", AsyncMock(side_effect=router)),
             pytest.raises(RuntimeError, match="boom"),
         ):
-            async with mutation_batch(
-                "t", tool_name="create_risks", row_count=30, dry_run=True
-            ):
+            async with mutation_batch("t", tool_name="create_risks", row_count=30, dry_run=True):
                 raise RuntimeError("boom")
         assert calls[1] == (
             "/mutation-batches/b1/commit",
@@ -263,8 +251,7 @@ def _tool_call(tool: str, n: int, **kw):
         return server.update_risks(updates=rows, **kw)
     if tool == "set_card_logos":
         rows = [
-            {"card_id": f"c{i}", "image_base64": _PNG_B64, "mime": "image/png"}
-            for i in range(n)
+            {"card_id": f"c{i}", "image_base64": _PNG_B64, "mime": "image/png"} for i in range(n)
         ]
         return server.set_card_logos(items=rows, **kw)
     assert tool == "clear_card_logos"
@@ -323,9 +310,14 @@ class _Backend:
         }
 
     async def get(self, path, params=None):
+        if path == "/cards" and "query" in (params or {}):
+            # save_inventory_view's preview runs the query.
+            return {"items": [], "total": 0}
         if path == "/cards":
             ids = (params or {}).get("ids", "").split(",")
-            return {"items": [{"id": i, "type": "Application", "logo_updated_at": "x"} for i in ids]}
+            return {
+                "items": [{"id": i, "type": "Application", "logo_updated_at": "x"} for i in ids]
+            }
         if path == "/metamodel/types":
             return [{"key": "Application", "allow_card_logo": True}]
         return {}
@@ -333,6 +325,10 @@ class _Backend:
     async def patch(self, path, json=None):
         self.writes.append(("patch", path))
         return {"id": path}
+
+    async def put(self, path, json=None):
+        self.writes.append(("put", path))
+        return {"status": "updated"}
 
     async def delete(self, path):
         self.writes.append(("delete", path))
@@ -351,9 +347,7 @@ class _Backend:
             patch.object(server.TurboEAClient, "get", AsyncMock(side_effect=self.get)),
             patch.object(server.TurboEAClient, "patch", AsyncMock(side_effect=self.patch)),
             patch.object(server.TurboEAClient, "delete", AsyncMock(side_effect=self.delete)),
-            patch.object(
-                server.TurboEAClient, "post_file", AsyncMock(side_effect=self.post_file)
-            ),
+            patch.object(server.TurboEAClient, "post_file", AsyncMock(side_effect=self.post_file)),
         )
 
 
@@ -500,9 +494,7 @@ class TestEveryBulkToolFollowsTheCycle:
         assert backend.posts[-1][1]["summary"] == {"rows": 3, "would_clear": 3}
 
     @pytest.mark.asyncio
-    async def test_set_logos_preview_counts_every_row_asked_for(
-        self, fake_token, threshold_two
-    ):
+    async def test_set_logos_preview_counts_every_row_asked_for(self, fake_token, threshold_two):
         # Two rows are dropped by the preview's type check; the batch still
         # opens with all three so the commit (which skips that check) is not
         # left without a token.
@@ -611,6 +603,21 @@ class TestToolAnnotations:
         assert tool.annotations is not None
         assert tool.annotations.readOnlyHint is True
 
+    @pytest.mark.parametrize(
+        "name",
+        ["list_process_flow_versions", "get_process_flow_version", "get_process_flow_elements"],
+    )
+    def test_process_flow_reads_are_read_only(self, name):
+        assert server.mcp._tool_manager._tools[name].annotations == server._READ_ANNOT
+
+    @pytest.mark.parametrize(
+        "name", ["submit_process_flow", "approve_process_flow", "link_process_flow_elements"]
+    )
+    def test_process_flow_steps_are_additive_writes(self, name):
+        """Additive, not destructive: a step moves a version forward and the
+        previous published revision is archived, never deleted."""
+        assert server.mcp._tool_manager._tools[name].annotations == server._WRITE_ADDITIVE_ANNOT
+
     def test_create_cards_bulk_is_not_read_only(self):
         tool = server.mcp._tool_manager._tools["create_cards_bulk"]
         assert tool.annotations is not None
@@ -661,7 +668,6 @@ class TestDocumentedToolCounts:
         assert not missing, f"tools missing from docs/admin/mcp.md: {missing}"
 
 
-
 # ── The batch rule, on every write tool ─────────────────────────────────────
 #
 # Every write tool opens a mutation batch before its first backend write — on
@@ -674,6 +680,8 @@ _NOT_A_BATCH = {"rollback_batch": "the backend records a rollback as its own bat
 
 _BATCH_TOOLS_EXPECTED = [
     "add_card_comment",
+    "add_document_comment",
+    "approve_process_flow",
     "archive_cards",
     "assign_stakeholders",
     "clear_card_logos",
@@ -684,8 +692,12 @@ _BATCH_TOOLS_EXPECTED = [
     "create_risks",
     "create_soaw",
     "import_bpmn",
+    "link_process_flow_elements",
+    "revise_adr",
+    "save_inventory_view",
     "set_card_logos",
     "sign_adr",
+    "submit_process_flow",
     "transition_card_lifecycle",
     "update_adr",
     "update_archimate_diagram",
@@ -704,6 +716,13 @@ def _batch_write_tools() -> list[str]:
         if tool.annotations in write_annots and name not in _NOT_A_BATCH
     )
 
+
+# The flow-step tools take UUIDs; the version's id decides the status its
+# preview reads, so submit sees a draft and approve a pending revision.
+_FLOW_PROCESS = "00000000-0000-4000-8000-0000000000b1"
+_FLOW_DRAFT = "00000000-0000-4000-8000-0000000000d1"
+_FLOW_PENDING = "00000000-0000-4000-8000-0000000000e1"
+_FLOW_STATUS = {_FLOW_DRAFT: "draft", _FLOW_PENDING: "pending"}
 
 # One minimal, valid call per write tool, as ``(dry_run) -> coroutine``.
 _BATCH_TOOL_CALLS = {
@@ -733,17 +752,41 @@ _BATCH_TOOL_CALLS = {
     "import_bpmn": lambda dry_run: server.import_bpmn(
         business_process_name="P", bpmn_xml="<bpmn:definitions/>", dry_run=dry_run
     ),
+    "submit_process_flow": lambda dry_run: server.submit_process_flow(
+        business_process_id=_FLOW_PROCESS, version_id=_FLOW_DRAFT, dry_run=dry_run
+    ),
+    "approve_process_flow": lambda dry_run: server.approve_process_flow(
+        business_process_id=_FLOW_PROCESS, version_id=_FLOW_PENDING, dry_run=dry_run
+    ),
+    "link_process_flow_elements": lambda dry_run: server.link_process_flow_elements(
+        business_process_id=_FLOW_PROCESS,
+        version_id=_FLOW_DRAFT,
+        links=[{"bpmn_element_id": "Activity_1", "application_id": _FLOW_PROCESS}],
+        dry_run=dry_run,
+    ),
     "transition_card_lifecycle": lambda dry_run: server.transition_card_lifecycle(
         card_id="c1", target="approve", dry_run=dry_run
     ),
     "add_card_comment": lambda dry_run: server.add_card_comment(
         card_id="c1", body="hi", dry_run=dry_run
     ),
+    "add_document_comment": lambda dry_run: server.add_document_comment(
+        document_type="adr",
+        document_id="00000000-0000-0000-0000-0000000000a1",
+        body="hi",
+        dry_run=dry_run,
+    ),
     "sign_adr": lambda dry_run: server.sign_adr(adr_id="a1", dry_run=dry_run),
+    "save_inventory_view": lambda dry_run: server.save_inventory_view(
+        name="V", query={"type": "Application"}, dry_run=dry_run
+    ),
     "create_adr": lambda dry_run: server.create_adr(
         title="t", sections=[{"heading": "Context", "body": "b"}], dry_run=dry_run
     ),
     "update_adr": lambda dry_run: server.update_adr(adr_id="a1", title="t", dry_run=dry_run),
+    "revise_adr": lambda dry_run: server.revise_adr(
+        adr_id="00000000-0000-0000-0000-0000000000a1", dry_run=dry_run
+    ),
     "create_soaw": lambda dry_run: server.create_soaw(
         initiative_id="i1",
         title="t",
@@ -765,6 +808,13 @@ class _BatchRecorder(_Backend):
         if path == "/cards" and "search" in (params or {}):
             # import_bpmn's lookup of the BusinessProcess card by name.
             return {"items": [{"id": "bp-1", "name": params["search"], "parent_id": None}]}
+        if path.endswith("/draft-elements"):
+            # link_process_flow_elements reads the version's steps.
+            return [{"bpmn_element_id": "Activity_1"}]
+        if path.startswith(f"/bpm/processes/{_FLOW_PROCESS}/flow/versions/"):
+            # The flow-step previews read the version first.
+            vid = path.rsplit("/", 1)[1]
+            return {"id": vid, "status": _FLOW_STATUS[vid]}
         return await super().get(path, params)
 
     async def post_multipart(self, path, data=None, **kwargs):
@@ -779,13 +829,10 @@ class _BatchRecorder(_Backend):
                 self.calls.append((method, path, client._batch_id))
                 return await inner(path, *args, **kwargs)
 
-            return patch.object(
-                server.TurboEAClient, method, autospec=True, side_effect=recorded
-            )
+            return patch.object(server.TurboEAClient, method, autospec=True, side_effect=recorded)
 
-        return [
-            wrap(m) for m in ("post", "get", "patch", "delete", "post_file", "post_multipart")
-        ]
+        methods = ("post", "get", "patch", "put", "delete", "post_file", "post_multipart")
+        return [wrap(m) for m in methods]
 
 
 class TestEveryWriteToolIsABatch:
@@ -804,9 +851,7 @@ class TestEveryWriteToolIsABatch:
     @pytest.mark.asyncio
     @pytest.mark.parametrize("dry_run", [True, False], ids=["preview", "commit"])
     @pytest.mark.parametrize("tool", _batch_write_tools())
-    async def test_the_call_opens_writes_in_and_closes_one_batch(
-        self, fake_token, tool, dry_run
-    ):
+    async def test_the_call_opens_writes_in_and_closes_one_batch(self, fake_token, tool, dry_run):
         if tool not in _BATCH_TOOL_CALLS:
             pytest.fail(f"{tool} has no argument set in _BATCH_TOOL_CALLS")
         rec = _BatchRecorder()
@@ -832,3 +877,105 @@ class TestEveryWriteToolIsABatch:
             assert inner, f"{tool} committed without writing anything"
         # 4. The caller is handed the batch id.
         assert data["batch_id"] == "B-1", data
+
+
+# ── Unknown arguments are refused, on every tool ────────────────────────────
+#
+# The SDK's argument models ignore keys they do not declare, so a call that
+# passed step links to ``import_bpmn`` "succeeded" and the links were lost.
+# ``_StrictFastMCP`` makes every registered tool refuse such a call instead.
+
+_UNKNOWN_TAIL = ". Nothing was done; call again with valid arguments only."
+
+
+def _registered_tools() -> list[str]:
+    return sorted(server.mcp._tool_manager._tools)
+
+
+class TestUnknownArgumentsAreRefused:
+    @pytest.mark.parametrize("name", _registered_tools())
+    def test_every_tool_refuses_an_unknown_argument(self, name):
+        tool = server.mcp._tool_manager._tools[name]
+        declared = list(tool.fn_metadata.arg_model.model_fields)
+        with pytest.raises(server.UnknownArgumentsError) as exc:
+            tool.fn_metadata.arg_model.model_validate({"zz_not_an_argument": 1})
+        message = str(exc.value)
+        assert message.startswith("Unknown argument(s): zz_not_an_argument. Valid arguments: ")
+        assert all(arg in message for arg in declared)
+        assert message.endswith(_UNKNOWN_TAIL)
+
+    @pytest.mark.parametrize("name", _registered_tools())
+    def test_every_published_schema_forbids_extra_properties(self, name):
+        tool = server.mcp._tool_manager._tools[name]
+        assert tool.parameters["additionalProperties"] is False
+        # Same title and properties as the SDK would publish.
+        assert tool.parameters["title"] == f"{name}Arguments"
+        assert set(tool.parameters.get("properties", {})) == set(
+            tool.fn_metadata.arg_model.model_fields
+        )
+
+    def test_the_refusal_names_every_unknown_argument_and_every_valid_one(self):
+        model = server.mcp._tool_manager._tools["get_process_flow_version"].fn_metadata.arg_model
+        with pytest.raises(server.UnknownArgumentsError) as exc:
+            model.model_validate({"version_id": "v", "links": [], "dry_run": True})
+        assert str(exc.value) == (
+            "Unknown argument(s): dry_run, links. Valid arguments: "
+            "business_process_id, version_id" + _UNKNOWN_TAIL
+        )
+
+    def test_a_tool_with_no_arguments_says_so(self):
+        model = server.mcp._tool_manager._tools["list_card_types"].fn_metadata.arg_model
+        with pytest.raises(server.UnknownArgumentsError) as exc:
+            model.model_validate({"type_key": "Application"})
+        assert str(exc.value) == (
+            "Unknown argument(s): type_key. Valid arguments: none" + _UNKNOWN_TAIL
+        )
+
+    def test_known_arguments_still_validate(self):
+        model = server.mcp._tool_manager._tools["get_process_flow_version"].fn_metadata.arg_model
+        parsed = model.model_validate({"business_process_id": "p", "version_id": "v"})
+        assert parsed.model_dump() == {"business_process_id": "p", "version_id": "v"}
+        # The SDK's own config (arbitrary types) is kept beside the new rule.
+        assert model.model_config["arbitrary_types_allowed"] is True
+        assert model.model_config["extra"] == "forbid"
+
+    def test_input_that_is_not_an_object_is_left_to_pydantic(self):
+        from pydantic import ValidationError
+
+        model = server.mcp._tool_manager._tools["get_card"].fn_metadata.arg_model
+        with pytest.raises(ValidationError):
+            model.model_validate(["card_id"])
+
+    @pytest.mark.asyncio
+    async def test_a_call_through_the_server_is_refused_before_the_tool_runs(self, fake_token):
+        from mcp.server.fastmcp.exceptions import ToolError
+
+        get = AsyncMock(return_value={"id": "c1"})
+        with patch.object(server.TurboEAClient, "get", get), pytest.raises(ToolError) as exc:
+            await server.mcp.call_tool("get_card", {"card_id": "c1", "links": [1]})
+        get.assert_not_called()
+        assert str(exc.value) == (
+            "Error executing tool get_card: Unknown argument(s): links. "
+            "Valid arguments: card_id" + _UNKNOWN_TAIL
+        )
+
+    @pytest.mark.asyncio
+    async def test_a_valid_call_through_the_server_still_runs(self, fake_token):
+        get = AsyncMock(return_value={"id": "c1", "name": "CRM"})
+        with patch.object(server.TurboEAClient, "get", get):
+            await server.mcp.call_tool("get_card", {"card_id": "c1"})
+        get.assert_awaited_once_with("/cards/c1")
+
+    def test_a_tool_registered_under_its_own_name_is_made_strict(self):
+        app = server._StrictFastMCP("probe")
+
+        def probe(a: int) -> str:
+            return str(a)
+
+        app.add_tool(probe, name="renamed")
+        app.add_tool(probe)
+        for name in ("renamed", "probe"):
+            tool = app._tool_manager.get_tool(name)
+            assert tool.parameters["additionalProperties"] is False
+            with pytest.raises(server.UnknownArgumentsError):
+                tool.fn_metadata.arg_model.model_validate({"a": 1, "b": 2})

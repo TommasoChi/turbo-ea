@@ -11,6 +11,8 @@ import { useTheme } from "@mui/material/styles";
 import { useTranslation } from "react-i18next";
 import { DateField } from "@/components/DateField";
 import MaterialSymbol from "@/components/MaterialSymbol";
+import HelpTip from "@/components/HelpTip";
+import { useLifecyclePhaseHelp } from "@/hooks/useLifecyclePhaseHelp";
 import { PHASE_ICONS } from "@/components/LifecycleBadge";
 import { PHASES, getPhaseLabels, lifecycleOrderIssues } from "@/lib/lifecyclePhases";
 import { useDateFormat } from "@/hooks/useDateFormat";
@@ -23,14 +25,7 @@ import {
   type SectionEditRequest,
 } from "@/features/cards/dataQualityJump";
 import type { Card } from "@/types";
-
-const PHASE_PALETTE: Record<string, string> = {
-  plan: "#9e9e9e",
-  phaseIn: "#1976d2",
-  active: "#2e7d32",
-  phaseOut: "#ed6c02",
-  endOfLife: "#c62828",
-};
+import { LIFECYCLE_PHASE_COLORS } from "@/theme/tokens";
 
 /** What a caller wants said about one phase, beyond its date. */
 export type PhaseAnnotation = {
@@ -72,6 +67,7 @@ function LifecycleSection({
   const theme = useTheme();
   const { formatDate } = useDateFormat();
   const phaseLabels = getPhaseLabels(t);
+  const { phaseHelp } = useLifecyclePhaseHelp();
   const [expanded, setExpanded] = useSyncedExpanded(initialExpanded, expandOn);
   const [editing, setEditing] = useState(false);
   const [lifecycle, setLifecycle] = useState<Record<string, string>>(
@@ -211,12 +207,12 @@ function LifecycleSection({
             let gradient: string;
             if (currentIdx === 0) {
               // Single phase reached — fill is zero-width, just render the colour.
-              gradient = PHASE_PALETTE[PHASES[0]];
+              gradient = LIFECYCLE_PHASE_COLORS[PHASES[0]];
             } else {
               const stops = PHASES.slice(0, currentIdx + 1)
                 .map((phase, i) => {
                   const pct = (i / currentIdx) * 100;
-                  return `${PHASE_PALETTE[phase]} ${pct.toFixed(2)}%`;
+                  return `${LIFECYCLE_PHASE_COLORS[phase]} ${pct.toFixed(2)}%`;
                 })
                 .join(", ");
               gradient = `linear-gradient(90deg, ${stops})`;
@@ -255,13 +251,13 @@ function LifecycleSection({
                 );
               const isCurrent = !!date && date <= now && !isPast;
               const isReached = isCurrent || isPast;
-              const phaseColor = PHASE_PALETTE[phase];
+              const phaseColor = LIFECYCLE_PHASE_COLORS[phase];
               const dotBg = isReached ? phaseColor : theme.palette.background.paper;
               const dotBorder = isReached
                 ? phaseColor
                 : theme.palette.action.disabled;
               const iconColor = isReached
-                ? "#fff"
+                ? theme.palette.common.white
                 : theme.palette.text.disabled;
               const annotation = phaseAnnotation?.(phase);
               const warning = orderWarning(phase);
@@ -308,6 +304,7 @@ function LifecycleSection({
                     }}
                   >
                     {phaseLabels[phase]}
+                    <HelpTip text={phaseHelp(phase)} size={12} />
                   </Typography>
                   <Typography
                     variant="caption"

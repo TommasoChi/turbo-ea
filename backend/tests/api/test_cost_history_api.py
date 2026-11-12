@@ -160,3 +160,93 @@ async def test_a_cost_of_zero_is_accepted(client, db, env):
     admin = env["admin"]
     card = await create_card(db, card_type="Provider", name="ERP", user_id=admin.id)
     assert (await _put(client, card, admin, value=0)).status_code == 200
+
+
+async def _editor_without_costs(db, *, view=False):
+    """A role that edits inventory but holds no cost permission (optionally only `costs.view`)."""
+    perms = {"inventory.view": True, "inventory.edit": True}
+    if view:
+        perms["costs.view"] = True
+    await create_role(db, key="inv-editor", permissions=perms)
+    return await create_user(db, email="editor@cost-history.com", role="inv-editor")
+
+
+@pytest.mark.parametrize("view", [False, True])
+async def test_inventory_edit_alone_cannot_write_or_delete_a_cost(client, db, env, view):
+    admin = env["admin"]
+    editor = await _editor_without_costs(db, view=view)
+    card = await create_card(db, card_type="Provider", name="ERP", user_id=admin.id)
+    url = f"/api/v1/cards/{card.id}/cost-history"
+    body = {"fiscal_year": YEAR, "field_key": "costTotalAnnual", "value": 100}
+    assert (await client.put(url, json=body, headers=auth_headers(admin))).status_code == 200
+
+    resp = await client.put(url, json={**body, "value": 0}, headers=auth_headers(editor))
+    assert resp.status_code == 403
+    resp = await client.delete(f"{url}/{YEAR}/costTotalAnnual", headers=auth_headers(editor))
+    assert resp.status_code == 403
+
+    rows = (await client.get(url, headers=auth_headers(admin))).json()["rows"]
+    assert rows == [{"fiscal_year": YEAR, "field_key": "costTotalAnnual", "value": 100}]
+
+
+async def test_a_card_edit_stakeholder_may_still_write_the_history(client, db, env):
+    from app.models.stakeholder import Stakeholder
+    from tests.conftest import create_stakeholder_role_def
+
+    admin = env["admin"]
+    editor = await _editor_without_costs(db)
+    card = await create_card(db, card_type="Provider", name="ERP", user_id=admin.id)
+    await create_stakeholder_role_def(
+        db, card_type_key="Provider", key="owner", label="Owner", permissions={"card.edit": True}
+    )
+    db.add(Stakeholder(card_id=card.id, user_id=editor.id, role="owner"))
+    await db.flush()
+    resp = await client.put(
+        f"/api/v1/cards/{card.id}/cost-history",
+        json={"fiscal_year": YEAR, "field_key": "costTotalAnnual", "value": 5},
+        headers=auth_headers(editor),
+    )
+    assert resp.status_code == 200
+
+
+async def _cost_events(db, card):
+    from sqlalchemy import select
+
+    from app.models.event import Event
+
+    rows = await db.execute(
+        select(Event).where(Event.card_id == card.id, Event.event_type == "card.costs_updated")
+    )
+    return [e.data for e in rows.scalars().all()]
+
+
+async def test_a_history_write_and_delete_publish_an_event_with_keys_only(client, db, env):
+    admin = env["admin"]
+    card = await create_card(db, card_type="Provider", name="ERP", user_id=admin.id)
+    url = f"/api/v1/cards/{card.id}/cost-history"
+    for value in (123456, 654321):
+        body = {"fiscal_year": YEAR, "field_key": "costTotalAnnual", "value": value}
+        assert (await client.put(url, json=body, headers=auth_headers(admin))).status_code == 200
+    resp = await client.delete(f"{url}/{YEAR}/costTotalAnnual", headers=auth_headers(admin))
+    assert resp.status_code == 204
+
+    events = await _cost_events(db, card)
+    assert [e["changes"]["cost_items"] for e in events] == [
+        {"old": [], "new": ["costTotalAnnual"]},
+        {"old": ["costTotalAnnual"], "new": ["costTotalAnnual"]},
+        {"old": ["costTotalAnnual"], "new": []},
+    ]
+    assert {e["source"] for e in events} == {"cost_history"}
+    assert {e["fiscal_year"] for e in events} == {YEAR}
+    dumped = str(events)
+    assert "123456" not in dumped and "654321" not in dumped
+
+
+async def test_deleting_a_year_that_has_no_row_publishes_nothing(client, db, env):
+    admin = env["admin"]
+    card = await create_card(db, card_type="Provider", name="ERP", user_id=admin.id)
+    resp = await client.delete(
+        f"/api/v1/cards/{card.id}/cost-history/{YEAR}/costTotalAnnual", headers=auth_headers(admin)
+    )
+    assert resp.status_code == 204
+    assert await _cost_events(db, card) == []

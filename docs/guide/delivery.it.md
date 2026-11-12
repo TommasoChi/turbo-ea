@@ -49,18 +49,39 @@ L'editor fornisce:
 - **Link** — Un URL digitato o incollato diventa un link mentre scrivi, e ogni link di un documento si apre in una nuova scheda. Gli indirizzi nei documenti scritti prima del supporto ai link vengono collegati al momento della visualizzazione
 - **Template di sezioni** — Sezioni predefinite seguendo gli standard TOGAF (es. Descrizione del problema, Obiettivi, Approccio, Stakeholder, Vincoli, Piano di lavoro)
 - **Tabelle modificabili in linea** — Aggiungete e modificate tabelle all'interno di qualsiasi sezione
+- **Menzioni** — digitate **@** nel testo di una sezione per menzionare una card o una decisione (vedere [Discussione, menzioni e cronologia](#soaw-collaboration))
+- **Cronologia versioni del documento** — una tabella che gli autori compilano a mano (versione, data, revisionato da, descrizione). Fa parte del documento e non è la vista [Cronologia](#soaw-collaboration)
 - **Workflow degli stati** — I documenti progrediscono attraverso fasi definite:
 
 | Stato | Significato |
 |-------|-------------|
 | **Draft** | In fase di scrittura, non ancora pronto per la revisione |
-| **In Review** | Inviato per la revisione degli stakeholder |
+| **In Review** | Inviato per la firma — bloccato finché le firme non vengono ritirate |
 | **Approved** | Revisionato e accettato |
 | **Signed** | Formalmente firmato |
 
 ### Workflow di firma
 
-Una volta approvato un SoAW, potete richiedere le firme dagli stakeholder. Cliccate su **Richiedi firme** e utilizzate il campo di ricerca per trovare e aggiungere firmatari per nome o e-mail. Il sistema traccia chi ha firmato e invia notifiche ai firmatari in attesa.
+Da un SoAW in bozza o approvato, potete richiedere le firme dagli stakeholder. Cliccate su **Richiedi firme** e utilizzate il campo di ricerca per trovare e aggiungere firmatari per nome o e-mail. Il sistema traccia chi ha firmato e invia notifiche ai firmatari in attesa.
+
+Un SoAW in revisione è **bloccato**, così i firmatari firmano esattamente ciò che è stato loro inviato: solo la sua iniziativa può ancora cambiare. Per modificarne il contenuto, cliccate su **Ritirare le firme**, che lo riporta in bozza. Anche un firmatario che clicca su **Rifiutare** lo riporta in bozza, con lo stesso numero di revisione. Solo un SoAW in bozza può essere eliminato.
+
+### Revisioni
+
+Un SoAW firmato è in sola lettura. Cliccate su **Nuova revisione** per avviare una nuova bozza a partire da esso, con lo stesso nome e il numero di revisione successivo. Esiste una sola revisione aperta alla volta: mentre una revisione è in fase di redazione, il SoAW firmato lo segnala e offre **Apri la revisione** invece di avviarne un'altra. Solo l'ultima revisione può essere revisionata, e un rifiuto non cambia il numero di revisione.
+
+Una revisione precedente mostra un banner con un collegamento a quella corrente, e la striscia **Revisioni** su ogni revisione le elenca tutte. Gli elenchi di SoAW — i deliverable dell'iniziativa, la scheda SoAW, il report EA Delivery — mostrano la revisione corrente di ogni documento e l'eventuale revisione in fase di redazione.
+
+### Discussione, menzioni e cronologia {: #soaw-collaboration }
+
+Un SoAW ha la stessa discussione, le stesse menzioni e la stessa cronologia di una decisione: la discussione in un pannello accanto al suo editor e alla sua anteprima, la cronologia dietro il pulsante **Cronologia** in cima alla pagina. Il comportamento comune è descritto una sola volta, nella guida GRC: [Discussione](grc.md#decision-discussion), [Menzioni](grc.md#decision-mentions), [Cronologia](grc.md#decision-history) e [Limiti noti](grc.md#collaboration-limits). Ciò che cambia per un SoAW:
+
+- **Chi può pubblicare.** Pubblicare, rispondere, risolvere e riaprire richiedono il permesso `soaw.comment`, che membri e amministratori hanno per impostazione predefinita e i visualizzatori no; la lettura della discussione segue `soaw.view`. I firmatari del SoAW possono sempre commentarlo. Chiunque possa modificare i SoAW (`soaw.manage`) può eliminare qualsiasi commento.
+- **Sezioni.** Un thread è associato con un chip di sezione a una delle sezioni proprie del SoAW, oppure a nessuna (un thread generale). Un SoAW ha molte sezioni, quindi il riquadro di scrittura mostra un chip per ogni sezione già discussa e per quella scelta; **Altre…** apre un elenco ricercabile delle altre. I chip in cima alla discussione la filtrano per sezione, come per una decisione. Un thread associato a una sezione personalizzata poi rimossa mostra *Sezione rimossa*. Ogni sezione porta accanto alla sua intestazione la stessa icona di chat di una decisione, nell'editor e nell'anteprima, con il numero di thread aperti quando c'è una discussione; fate clic su di essa per aprire la discussione su quella sezione con la sezione già selezionata per un nuovo commento.
+- **Rifiuto.** Qualsiasi firmatario che abbia il permesso di firma (`soaw.sign`) — o il permesso di modifica — può rifiutare un SoAW, come per le decisioni; finora il rifiuto richiedeva il permesso di modifica. Il motivo apre nella discussione un thread **Motivo del rifiuto**.
+- **Menzioni.** Un SoAW non ha card collegate, quindi quando dopo **@** non è stato digitato nulla le card sono elencate in ordine alfabetico; in un commento, tra le persone vengono prima i firmatari del SoAW. **Sfoglia…** funziona come per una decisione.
+- **Nota di firma.** **Firma** apre ora una finestra di dialogo in cui il firmatario può aggiungere una nota facoltativa; compare nella discussione come **Nota di firma** e nella Cronologia.
+- **Cronologia.** Una versione contiene il nome del SoAW, le sue informazioni sul documento, la sua tabella Cronologia versioni del documento e ogni sezione; l'iniziativa non fa parte di una versione. La Cronologia registra ciò che accade al documento; la tabella Cronologia versioni del documento contiene solo ciò che gli autori vi scrivono. Un SoAW nello stato **Approvato** può ancora essere modificato, quindi, come per una bozza, i suoi salvataggi sono conservati come versioni e una versione precedente può esservi ripristinata.
 
 ### Anteprima ed esportazione
 
@@ -72,7 +93,7 @@ Una volta approvato un SoAW, potete richiedere le firme dagli stakeholder. Clicc
 
 ![Card iniziativa — scheda SoAW](../assets/img/it/55_iniziativa_soaw_tab.png)
 
-Le iniziative espongono inoltre una scheda **SoAW** dedicata direttamente nella loro pagina di dettaglio. La scheda elenca ogni SoAW collegato a quell'iniziativa (titolo, chip di stato, numero di revisione, data dell'ultima modifica) con un pulsante **+ Nuovo SoAW** che preseleziona l'iniziativa corrente — così è possibile redigere o saltare a un SoAW senza lasciare la card su cui si sta lavorando. La creazione riutilizza lo stesso dialogo della pagina EA Delivery, e il nuovo documento compare in entrambi i posti. La visibilità della scheda segue le regole standard di permesso sulle card.
+Le iniziative espongono inoltre una scheda **SoAW** dedicata direttamente nella loro pagina di dettaglio. La scheda elenca la revisione corrente di ogni SoAW collegato a quell'iniziativa, più l'eventuale revisione in fase di redazione (titolo, chip di stato, numero di revisione, data dell'ultima modifica) con un pulsante **+ Nuovo SoAW** che preseleziona l'iniziativa corrente — così è possibile redigere o saltare a un SoAW senza lasciare la card su cui si sta lavorando. La creazione riutilizza lo stesso dialogo della pagina EA Delivery, e il nuovo documento compare in entrambi i posti. La visibilità della scheda segue le regole standard di permesso sulle card.
 
 ## Architecture Decision Records (ADR)
 

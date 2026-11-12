@@ -226,6 +226,7 @@ def test_sdk_compatibility_is_major_only():
     assert sdk.sdk_compatible("1.14")
     assert sdk.sdk_compatible("1.15")
     assert sdk.sdk_compatible("1.16")
+    assert sdk.sdk_compatible("1.17")
     assert not sdk.sdk_compatible("2.0")
 
 
@@ -377,6 +378,15 @@ def test_ext_decision_is_frozen_and_wire_shaped():
         created_at=None,
     )
     assert decision.linked_card_ids == ("c1",)
+    # SDK 1.17 trailing fields default so the eight-argument call above holds.
+    assert (
+        decision.standing,
+        decision.is_current,
+        decision.decided_on,
+        decision.effective_from,
+        decision.valid_until,
+        decision.recorded,
+    ) == (None, True, None, None, None, False)
     try:
         decision.status = "signed"  # type: ignore[misc]
         raise AssertionError("ExtDecision must be frozen")

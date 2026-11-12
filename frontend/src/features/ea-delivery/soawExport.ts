@@ -22,6 +22,8 @@ import {
 } from "./soawTemplate";
 import type { SoAWDocumentInfo, SoAWVersionEntry, SoAWSectionData, SoAWSignatory } from "@/types";
 import { escapeHtml, printDocument } from "@/lib/printDocument";
+import { PRINT_COLORS, brand } from "@/theme/tokens";
+import { fillMentionLabelsI18n } from "./mentions/mentionLabels";
 
 // ─── constants (matching PDF styles) ─────────────────────────────────────────
 
@@ -64,8 +66,10 @@ const CELL_BORDER = {
 // ─── helpers ────────────────────────────────────────────────────────────────
 
 /** Parse simple HTML into an array of docx Paragraphs. */
-function htmlToParagraphs(html: string): Paragraph[] {
-  if (!html || html === "<p></p>") return [];
+function htmlToParagraphs(stored: string): Paragraph[] {
+  if (!stored || stored === "<p></p>") return [];
+  // Restricted / deleted mentions arrive empty: the reader's words go in first.
+  const html = fillMentionLabelsI18n(stored);
   const doc = new DOMParser().parseFromString(html, "text/html");
   const paragraphs: Paragraph[] = [];
 
@@ -550,45 +554,47 @@ function exportTimestamp(now: Date = new Date()): string {
 // ─── Preview / PDF shared HTML ──────────────────────────────────────────────
 
 export const PREVIEW_CSS = `
-  body, .soaw-preview { font-family: 'Segoe UI', Arial, sans-serif; max-width: 800px; margin: 40px auto; color: #222; line-height: 1.6; font-size: 11pt; }
-  .soaw-preview h1 { font-size: 22pt; color: #1a1a2e; border-bottom: 2px solid #1976d2; padding-bottom: 8px; }
-  .soaw-preview h2 { font-size: 16pt; color: #333; margin-top: 28px; }
-  .soaw-preview h3 { font-size: 13pt; color: #444; margin-top: 20px; }
+  body, .soaw-preview { font-family: 'Segoe UI', Arial, sans-serif; max-width: 800px; margin: 40px auto; color: ${PRINT_COLORS.ink}; line-height: 1.6; font-size: 11pt; }
+  .soaw-preview h1 { font-size: 22pt; color: ${PRINT_COLORS.heading}; border-bottom: 2px solid ${brand.primary}; padding-bottom: 8px; }
+  .soaw-preview h2 { font-size: 16pt; color: ${PRINT_COLORS.text}; margin-top: 28px; }
+  .soaw-preview h3 { font-size: 13pt; color: ${PRINT_COLORS.subheading}; margin-top: 20px; }
   .soaw-preview table { width: 100%; border-collapse: collapse; margin: 12px 0; }
-  .soaw-preview th, .soaw-preview td { border: 1px solid #ccc; padding: 6px 10px; text-align: left; font-size: 10pt; }
-  .soaw-preview th { background: #f5f5f5; font-weight: 600; }
+  .soaw-preview th, .soaw-preview td { border: 1px solid ${PRINT_COLORS.control}; padding: 6px 10px; text-align: left; font-size: 10pt; }
+  .soaw-preview th { background: ${PRINT_COLORS.panel}; font-weight: 600; }
   .soaw-preview .meta-label { font-weight: 600; width: 140px; }
-  .soaw-preview .part-header { font-size: 18pt; color: #1976d2; margin-top: 36px; border-bottom: 2px solid #e0e0e0; padding-bottom: 6px; }
-  .soaw-preview .preamble { color: #666; font-style: italic; margin-bottom: 8px; }
-  .soaw-preview .custom-badge { display: inline-block; background: #1976d2; color: #fff; font-size: 9pt; padding: 1px 8px; border-radius: 3px; margin-right: 8px; }
-  .soaw-signatures { margin-top: 36px; border-top: 2px solid #e0e0e0; padding-top: 16px; }
+  .soaw-preview .part-header { font-size: 18pt; color: ${brand.primary}; margin-top: 36px; border-bottom: 2px solid ${PRINT_COLORS.ruleLight}; padding-bottom: 6px; }
+  .soaw-preview .preamble { color: ${PRINT_COLORS.inkSecondary}; font-style: italic; margin-bottom: 8px; }
+  .soaw-preview .custom-badge { display: inline-block; background: ${brand.primary}; color: ${PRINT_COLORS.paper}; font-size: 9pt; padding: 1px 8px; border-radius: 3px; margin-right: 8px; }
+  .soaw-signatures { margin-top: 36px; border-top: 2px solid ${PRINT_COLORS.ruleLight}; padding-top: 16px; }
   .soaw-signatures h2 { display: flex; align-items: center; gap: 8px; }
   .soaw-signatures .sig-badge { display: inline-block; font-size: 9pt; padding: 2px 10px; border-radius: 3px; font-weight: 600; }
-  .soaw-signatures .sig-badge.signed { background: #e8f5e9; color: #2e7d32; }
-  .soaw-signatures .sig-badge.fully-signed { background: #2e7d32; color: #fff; }
+  .soaw-signatures .sig-badge.signed { background: ${PRINT_COLORS.successTint}; color: ${PRINT_COLORS.success}; }
+  .soaw-signatures .sig-badge.fully-signed { background: ${PRINT_COLORS.success}; color: ${PRINT_COLORS.paper}; }
   .soaw-signatures .sig-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-  .soaw-signatures .sig-card { padding: 12px; border: 1px solid #ccc; border-radius: 4px; }
-  .soaw-signatures .sig-card.approved { border-color: #66bb6a; background: #f1f8e9; }
-  .soaw-signatures .sig-card.pending { border-color: #ccc; background: #fafafa; }
+  .soaw-signatures .sig-card { padding: 12px; border: 1px solid ${PRINT_COLORS.control}; border-radius: 4px; }
+  .soaw-signatures .sig-card.approved { border-color: ${PRINT_COLORS.successLight}; background: ${PRINT_COLORS.successPale}; }
+  .soaw-signatures .sig-card.pending { border-color: ${PRINT_COLORS.control}; background: ${PRINT_COLORS.panelLight}; }
   .soaw-signatures .sig-card .sig-status { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; font-weight: 700; font-size: 10pt; }
-  .soaw-signatures .sig-card .sig-status.approved { color: #2e7d32; }
-  .soaw-signatures .sig-card .sig-status.pending { color: #ed6c02; }
+  .soaw-signatures .sig-card .sig-status.approved { color: ${PRINT_COLORS.success}; }
+  .soaw-signatures .sig-card .sig-status.pending { color: ${PRINT_COLORS.warning}; }
   .soaw-signatures .sig-card .sig-name { font-weight: 600; font-size: 10pt; }
-  .soaw-signatures .sig-card .sig-detail { font-size: 9pt; color: #666; }
+  .soaw-signatures .sig-card .sig-detail { font-size: 9pt; color: ${PRINT_COLORS.inkSecondary}; }
   @media print {
     body { margin: 20px; }
     .no-print { display: none !important; }
     .soaw-signatures .sig-grid { grid-template-columns: 1fr 1fr; }
-    .soaw-signatures .sig-card.approved { border-color: #66bb6a; background: #f1f8e9 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .soaw-signatures .sig-card.approved { border-color: ${PRINT_COLORS.successLight}; background: ${PRINT_COLORS.successPale} !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     @page { @bottom-center { content: element(soaw-footer); } margin-bottom: 60px; }
-    .soaw-print-footer, .doc-print-footer { position: fixed; bottom: 0; left: 0; right: 0; text-align: center; font-size: 8pt; color: #888; border-top: 1px solid #ccc; padding-top: 4px; }
+    .soaw-print-footer, .doc-print-footer { position: fixed; bottom: 0; left: 0; right: 0; text-align: center; font-size: 8pt; color: ${PRINT_COLORS.muted}; border-top: 1px solid ${PRINT_COLORS.control}; padding-top: 4px; }
   }
 `;
 
 /** Check if a section has meaningful content worth rendering. */
 function isSectionEmpty(def: TemplateSectionDef, data: SoAWSectionData): boolean {
   if (def.type === "rich_text") {
-    const c = (new DOMParser().parseFromString(data.content ?? "", "text/html").body.textContent ?? "").trim();
+    // A section holding only a restricted / deleted mention still has something to say.
+    const html = fillMentionLabelsI18n(data.content ?? "");
+    const c = (new DOMParser().parseFromString(html, "text/html").body.textContent ?? "").trim();
     return !c;
   }
   if (def.type === "table") {
@@ -602,7 +608,12 @@ function isSectionEmpty(def: TemplateSectionDef, data: SoAWSectionData): boolean
   return false;
 }
 
-/** Build the inner HTML body content for preview and PDF export. */
+/**
+ * Build the inner HTML body content for preview and PDF export. With
+ * `sectionAnchors` (the on-screen preview only) each section heading carries
+ * `data-section="<key>"` so the page can place its discussion marker there;
+ * the export never asks for it, so its HTML is unchanged.
+ */
 export function buildPreviewBody(
   name: string,
   docInfo: SoAWDocumentInfo,
@@ -612,15 +623,17 @@ export function buildPreviewBody(
   revisionNumber?: number,
   signatories?: SoAWSignatory[],
   signedAt?: string | null,
+  { sectionAnchors = false }: { sectionAnchors?: boolean } = {},
 ): string {
   const t = (key: string, opts?: Record<string, unknown>) => String(i18n.t(`delivery:${key}`, opts as never));
+  const anchor = (key: string) => (sectionAnchors ? ` data-section="${escapeHtml(key)}"` : "");
   let html = "";
 
   // Title
   const soawTitle = t("export.soawTitle");
   html += `<h1 style="text-align:center;border:none;">${soawTitle}</h1>`;
   const revLabel = revisionNumber && revisionNumber > 1 ? t("export.revision", { number: revisionNumber }) : "";
-  html += `<p style="text-align:center;font-size:14pt;color:#555;">${escapeHtml(name)}${revLabel}</p>`;
+  html += `<p style="text-align:center;font-size:14pt;color:${PRINT_COLORS.inkSecondary};">${escapeHtml(name)}${revLabel}</p>`;
 
   // Doc info (hide empty fields, hide entire section if all empty)
   const docInfoRows: [string, string][] = [
@@ -670,14 +683,14 @@ export function buildPreviewBody(
     }
 
     const tag = def.level === 2 ? "h2" : "h3";
-    html += `<${tag}>${def.title}</${tag}>`;
+    html += `<${tag}${anchor(def.id)}>${def.title}</${tag}>`;
 
     if (def.preamble) {
       html += `<p class="preamble">${def.preamble}</p>`;
     }
 
     if (def.type === "rich_text" && data.content) {
-      html += data.content;
+      html += fillMentionLabelsI18n(data.content);
     }
 
     if (def.type === "table" && data.table_data) {
@@ -703,8 +716,8 @@ export function buildPreviewBody(
     const customBadge = t("export.custom");
     for (const cs of customSections) {
       if (cs.insertAfter === def.id) {
-        html += `<h3><span class="custom-badge">${customBadge}</span>${escapeHtml(cs.title)}</h3>`;
-        html += cs.content || "";
+        html += `<h3${anchor(cs.id)}><span class="custom-badge">${customBadge}</span>${escapeHtml(cs.title)}</h3>`;
+        html += fillMentionLabelsI18n(cs.content || "");
       }
     }
   };
@@ -717,8 +730,8 @@ export function buildPreviewBody(
   const trailingCustomBadge = t("export.custom");
   for (const cs of customSections) {
     if (!cs.insertAfter || !getTemplateSections().some((d) => d.id === cs.insertAfter)) {
-      html += `<h3><span class="custom-badge">${trailingCustomBadge}</span>${escapeHtml(cs.title)}</h3>`;
-      html += cs.content || "";
+      html += `<h3${anchor(cs.id)}><span class="custom-badge">${trailingCustomBadge}</span>${escapeHtml(cs.title)}</h3>`;
+      html += fillMentionLabelsI18n(cs.content || "");
     }
   }
 

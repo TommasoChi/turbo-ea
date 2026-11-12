@@ -5,6 +5,7 @@ import { saveAs } from "file-saver";
 import i18n from "@/i18n";
 import { printDocument } from "@/lib/printDocument";
 import type { SoAWDocumentInfo, SoAWSectionData, SoAWSignatory, SoAWVersionEntry } from "@/types";
+import { PRINT_COLORS } from "@/theme/tokens";
 import { getTemplateSections, getTogafPhases } from "./soawTemplate";
 import { buildPreviewBody, exportToDocx, exportToPdf, PREVIEW_CSS } from "./soawExport";
 
@@ -191,7 +192,7 @@ describe("buildPreviewBody — title block", () => {
   it("opens with the document-type heading and the escaped name as subtitle", () => {
     const html = body({}, [], { name: `Cloud <Migration> & "Co"` });
     expect(html.startsWith(`<h1 style="text-align:center;border:none;">${t("soawTitle")}</h1>`)).toBe(true);
-    expect(html).toContain(`<p style="text-align:center;font-size:14pt;color:#555;">Cloud &lt;Migration&gt; &amp; &quot;Co&quot;</p>`);
+    expect(html).toContain(`<p style="text-align:center;font-size:14pt;color:${PRINT_COLORS.inkSecondary};">Cloud &lt;Migration&gt; &amp; &quot;Co&quot;</p>`);
     expect(html).not.toContain("<Migration>");
   });
 
@@ -410,6 +411,37 @@ describe("buildPreviewBody — signatures", () => {
   });
 });
 
+describe("buildPreviewBody — section anchors", () => {
+  const sections = { "1.1": rich("<p>Background</p>"), "4.1": rich("<p>Baseline</p>") };
+  const custom: CustomSection[] = [
+    { id: "custom_a", title: "Appendix A", content: "<p>A</p>", insertAfter: "1.1" },
+    { id: "custom_b", title: "Appendix B", content: "<p>B</p>", insertAfter: "" },
+  ];
+  const build = (anchors?: { sectionAnchors?: boolean }) =>
+    buildPreviewBody("Cloud Migration", EMPTY_INFO, [], sections, custom, 1, [], null, anchors);
+
+  it("keys each section heading by its section on screen", () => {
+    const html = build({ sectionAnchors: true });
+    expect(html).toContain(`<h3 data-section="1.1">${def("1.1").title}</h3>`);
+    expect(html).toContain(`<h3 data-section="4.1">${def("4.1").title}</h3>`);
+    expect(html).toContain('<h3 data-section="custom_a"><span class="custom-badge">');
+    expect(html).toContain('<h3 data-section="custom_b"><span class="custom-badge">');
+    expect(count(html, "data-section=")).toBe(4);
+  });
+
+  it("leaves the export's HTML exactly as before: no anchor unless asked", () => {
+    expect(build()).not.toContain("data-section");
+    expect(build({ sectionAnchors: false })).toBe(build());
+    expect(build({})).toBe(build());
+    expect(build({ sectionAnchors: true }).replace(/ data-section="[^"]*"/g, "")).toBe(build());
+  });
+
+  it("never lets an anchor reach the PDF export", () => {
+    exportToPdf("Cloud Migration", EMPTY_INFO, [], sections, custom, 1, [], null);
+    expect(mockPrintDocument.mock.calls.at(-1)?.[0].bodyHtml).not.toContain("data-section");
+  });
+});
+
 // ─── exportToPdf ─────────────────────────────────────────────────────────────
 
 describe("exportToPdf", () => {
@@ -432,7 +464,7 @@ describe("exportToPdf", () => {
   it("falls back to 'SoAW' as the window title when the document has no name", () => {
     exportToPdf("", EMPTY_INFO, [], sections, [], undefined, undefined, undefined);
     expect(mockPrintDocument.mock.calls[0][0].title).toBe("SoAW");
-    expect(mockPrintDocument.mock.calls[0][0].bodyHtml).toContain(`color:#555;"></p>`);
+    expect(mockPrintDocument.mock.calls[0][0].bodyHtml).toContain(`color:${PRINT_COLORS.inkSecondary};"></p>`);
   });
 
   it("a signed document's footer names the first approver, the approval date and the print date", () => {
@@ -667,5 +699,48 @@ describe("exportToDocx — document content", () => {
     const xml = await docx({ "1.1": rich("<p>x</p>") });
     expect(texts(xml)).not.toContain(t("signatures"));
     expect(exportToDocx.length).toBe(5);
+  });
+});
+
+// ─── mentions ────────────────────────────────────────────────────────────────
+
+describe("restricted and deleted mentions", () => {
+  const RESTRICTED =
+    '<span data-type="mention" data-kind="card" data-restricted="true" data-token="ab12cd34"></span>';
+  const MISSING =
+    '<span data-type="mention" data-kind="decision" data-id="1c1f6c2f-7b1f-4d54-8c9f-3e2d5b6a8f02" data-missing="true"></span>';
+  const RESOLVED =
+    '<span data-type="mention" data-kind="card" data-id="0b0e5b1e-6a0e-4c43-9b8e-2d1c4a5f7e01">@SAP ERP</span>';
+
+  it("the preview body fills them in template, anchored and trailing custom sections", () => {
+    const html = body({ "1.1": rich(`<p>a ${RESTRICTED} b ${RESOLVED}</p>`) }, [
+      { id: "custom_1", title: "Anchored", content: `<p>${MISSING}</p>`, insertAfter: "1.1" },
+      { id: "custom_2", title: "Trailing", content: `<p>${RESTRICTED}</p>`, insertAfter: "" },
+    ]);
+    expect(html).toContain(
+      '<p>a <span data-type="mention" data-kind="card" data-restricted="true" data-token="ab12cd34">Restricted card</span> b ' +
+        `${RESOLVED}</p>`,
+    );
+    expect(html).toContain(
+      '<p><span data-type="mention" data-kind="decision" data-id="1c1f6c2f-7b1f-4d54-8c9f-3e2d5b6a8f02" data-missing="true">Deleted decision</span></p>',
+    );
+    expect(count(html, ">Restricted card</span>")).toBe(2);
+  });
+
+  it("keeps a section that holds nothing but a restricted mention", async () => {
+    const html = body({ "1.1": rich(`<p>${RESTRICTED}</p>`) });
+    expect(html).toContain(`<h3>${def("1.1").title}</h3>`);
+    expect(html).toContain(">Restricted card</span></p>");
+    expect(texts(await docx({ "1.1": rich(`<p>${RESTRICTED}</p>`) }))).toContain("Restricted card");
+  });
+
+  it("the Word export writes the labels into the text", async () => {
+    const xml = await docx({ "1.1": rich(`<p>a ${RESTRICTED} b ${RESOLVED}</p>`) }, [
+      { id: "custom_1", title: "Anchored", content: `<p>${MISSING}</p>`, insertAfter: "1.1" },
+    ]);
+    const all = texts(xml);
+    expect(all).toContain("Restricted card");
+    expect(all).toContain("@SAP ERP");
+    expect(all).toContain("Deleted decision");
   });
 });

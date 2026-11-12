@@ -22,7 +22,8 @@ Inverse operations (the ``_INVERSES`` table is the single list):
 - ``stakeholder.added`` / ``stakeholder.removed`` / ``stakeholder.role_changed``
   → remove / re-assign / restore the role, then rescore the card.
 - ``tag.added`` / ``tag.removed`` → remove / re-add the tag, then rescore.
-- ``adr.created`` → delete the decision while it is still a draft.
+- ``adr.created`` → delete the decision while it is still a draft (a created
+  revision included: it is a draft carrying ``revision_of``).
 - ``todo.created`` **by an extension** (``data["ext"]`` set — a rule or a
   sync wrote it) → delete the todo while it is still open. A person's own
   todo is a request to a person and stays; so does one already completed,
@@ -78,6 +79,7 @@ from app.models.stakeholder import Stakeholder
 from app.models.survey import Survey, SurveyResponse
 from app.models.tag import CardTag, Tag
 from app.models.todo import Todo
+from app.services import adr_service
 from app.services.event_bus import event_bus
 from app.services.mutation_batch_service import batch_to_dict, create_batch
 
@@ -220,7 +222,11 @@ def _plan_adr_created(event: Event, data: dict) -> dict[str, Any]:
     adr_id = data.get("adr_id") or data.get("id")
     if not adr_id:
         return _unsupported(event, "adr.created carries no decision id")
-    return {"op": "delete_adr", "adr_id": adr_id, "detail": data.get("reference_number") or ""}
+    reference = data.get("reference_number") or ""
+    revision = data.get("revision_number")
+    # A revision shares its decision's reference: name the revision too.
+    detail = adr_service.reference_label(reference, revision) if reference else ""
+    return {"op": "delete_adr", "adr_id": adr_id, "detail": detail}
 
 
 def _plan_diagram_created(event: Event, data: dict) -> dict[str, Any]:
@@ -292,6 +298,8 @@ _INVERSES: dict[str, Callable[[Event, dict], dict[str, Any]]] = {
 }
 
 # Event families that are never reversed, with the reason the plan reports.
+# ``adr.comment_`` / ``soaw.comment_`` cover the discussion events
+# (``adr.comment_added`` …): a comment others have read cannot be unsaid.
 _DECLINED: dict[str, str] = {
     "todo.": "Todos are requests to people; reopening or deleting one is not an undo.",
     "notification.": "A notification has already been delivered.",
@@ -300,7 +308,13 @@ _DECLINED: dict[str, str] = {
     "card.licenses_updated": "Licensing changes cannot be rolled back; edit the licenses instead.",
     "diagram.updated": "The previous canvas is not snapshotted.",
     "diagram.deleted": "A deleted diagram cannot be rebuilt — no snapshot is recorded.",
+    "adr.comment_": "A posted comment has been read; delete it from the discussion.",
+    "soaw.comment_": "A posted comment has been read; delete it from the discussion.",
 }
+
+# A ``_DECLINED`` key ending in one of these is a family prefix; any other key
+# names one event type.
+_FAMILY_PREFIX_ENDINGS = (".", "_")
 
 # Ops whose events repeat per linked card or per relation end: one reversal.
 _DEDUPE_KEYS: dict[str, tuple[str, ...]] = {
@@ -324,7 +338,7 @@ def _plan_inverse(event: Event) -> dict[str, Any]:
     # decides per event (extension-written or not), so the decline never runs.
     if planner is None or not et.startswith("todo."):
         for prefix, reason in _DECLINED.items():
-            if et == prefix or (prefix.endswith(".") and et.startswith(prefix)):
+            if et == prefix or (prefix.endswith(_FAMILY_PREFIX_ENDINGS) and et.startswith(prefix)):
                 return _unsupported(event, f"{et} is not reversed: {reason}")
     if planner is None:
         return _unsupported(event)
@@ -785,7 +799,7 @@ async def _apply_delete_adr(db: AsyncSession, op: dict[str, Any]) -> dict[str, A
         # Signing is a human act on top of the draft; the draft is no
         # longer only what the batch created.
         return _skip(op, "adr_not_draft")
-    await db.delete(adr)
+    await adr_service.delete_draft(db, adr)
     return _ok(op)
 
 

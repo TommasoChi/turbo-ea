@@ -10,11 +10,23 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router";
 import type { ArchitectureDecision, SoAWSignatory } from "@/types";
 
+// The discussion and history side panel has its own tests: here the page
+// renders alone, and the props it hands the panel are recorded.
+const sidePanel = vi.hoisted(() => ({ props: [] as Record<string, unknown>[] }));
+vi.mock("./collab/DocumentSidePanel", () => ({
+  default: (props: { children: unknown }) => {
+    sidePanel.props.push(props);
+    return props.children;
+  },
+}));
 vi.mock("@/api/client", () => ({
   api: { get: vi.fn(), post: vi.fn(), patch: vi.fn(), delete: vi.fn() },
   ApiError: class ApiError extends Error {},
+  isAbortError: () => false,
 }));
-vi.mock("@/hooks/useAuth", () => ({ useAuth: () => ({ user: { id: "u1", permissions: {} } }) }));
+vi.mock("@/hooks/useAuth", () => ({
+  useAuth: () => ({ user: { id: "u1", permissions: { "adr.manage": true } } }),
+}));
 vi.mock("@/hooks/AuthContext", () => ({
   useOptionalAuthUser: () => null,
   useAuthContext: () => ({ user: { id: "u1", permissions: {} }, refreshUser: async () => {} }),
@@ -82,7 +94,8 @@ function serve(adr: ArchitectureDecision, post: (path: string) => unknown) {
       await new Promise((r) => setTimeout(r, 0));
       return adr as never;
     }
-    if (path.startsWith("/cards?search=")) return { items: [KAFKA] } as never;
+    if (path.startsWith("/metamodel/")) return [] as never;
+    if (path.startsWith("/cards?")) return { items: [KAFKA], total: 1 } as never;
     return {} as never;
   });
   vi.mocked(api.post).mockImplementation((async (path: string) => {
@@ -129,14 +142,17 @@ describe("ADREditor — one request per workflow action, however often it is cli
       return calls === 1 ? first.promise : { ...IN_REVIEW, signatories: [{ ...ME_PENDING, status: "signed" }] };
     });
     const user = userEvent.setup();
-    const sign = screen.getByRole("button", { name: /^draw Sign$/ });
+    await user.click(screen.getByRole("button", { name: /^draw Sign$/ }));
+    const sign = within(await screen.findByRole("dialog")).getByRole("button", { name: "Sign" });
 
     await user.dblClick(sign);
     expect(postsTo("/adr/adr-1/sign")).toHaveLength(1);
+    expect(postsTo("/adr/adr-1/sign")[0][1]).toEqual({});
 
     first.reject(new Error("down"));
     expect(await screen.findByText("Failed to sign")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: /^draw Sign$/ }));
+    // The dialog stays open on a failure: sign again from it.
+    await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Sign" }));
     expect(await screen.findByText("Signature recorded")).toBeInTheDocument();
     expect(postsTo("/adr/adr-1/sign")).toHaveLength(2);
   });
@@ -190,7 +206,7 @@ describe("ADREditor — one request per workflow action, however often it is cli
     expect(postsTo("/adr/adr-1/duplicate")).toHaveLength(2);
   });
 
-  it("creates one revision on a double click, and can retry once the first attempt failed", async () => {
+  it("creates one revision while the menu is busy, and can retry once the first attempt failed", async () => {
     const first = deferred();
     let calls = 0;
     await renderLoaded(SIGNED, () => {
@@ -198,14 +214,20 @@ describe("ADREditor — one request per workflow action, however often it is cli
       return calls === 1 ? first.promise : { ...SIGNED, id: "adr-rev" };
     });
     const user = userEvent.setup();
+    const reviseButton = () => screen.getByRole("button", { name: /Revise/ });
 
-    await user.dblClick(screen.getByRole("button", { name: /New Revision/ }));
+    await user.click(reviseButton());
+    await user.dblClick(screen.getByRole("menuitem", { name: /Revise this decision/ }));
     expect(postsTo("/adr/adr-1/revise")).toHaveLength(1);
+    // The menu cannot be reopened while the revise is in flight.
+    expect(reviseButton()).toBeDisabled();
 
     first.reject(new Error("down"));
     expect(await screen.findByText("Failed to create revision")).toBeInTheDocument();
     expect(location()).toBe("/ea-delivery/adr/adr-1");
-    await user.click(screen.getByRole("button", { name: /New Revision/ }));
+    expect(reviseButton()).toBeEnabled();
+    await user.click(reviseButton());
+    await user.click(screen.getByRole("menuitem", { name: /Revise this decision/ }));
     await waitFor(() => expect(location()).toBe("/ea-delivery/adr/adr-rev"));
     expect(postsTo("/adr/adr-1/revise")).toHaveLength(2);
   });
@@ -215,9 +237,8 @@ describe("ADREditor — one request per workflow action, however often it is cli
     await renderLoaded(base, () => link.promise);
     const user = userEvent.setup();
     await user.click(screen.getByRole("button", { name: /Add Card/ }));
-    const dialog = within(await screen.findByRole("dialog"));
-    await user.type(dialog.getByPlaceholderText("Search cards..."), "ka");
-    const row = (await dialog.findByText("Kafka")).closest("[role='button']") as HTMLElement;
+    await screen.findByRole("dialog");
+    const row = await screen.findByRole("option", { name: "Kafka" });
 
     await user.dblClick(row);
     expect(postsTo("/adr/adr-1/cards")).toHaveLength(1);
@@ -237,11 +258,11 @@ describe("ADREditor — one request per workflow action, however often it is cli
     const user = userEvent.setup();
     await user.click(screen.getByRole("button", { name: /Add Card/ }));
     const dialog = within(await screen.findByRole("dialog"));
-    await user.type(dialog.getByPlaceholderText("Search cards..."), "ka");
-    await user.click(await dialog.findByText("Kafka"));
+    await user.click(await screen.findByRole("option", { name: "Kafka" }));
     expect(await screen.findByText("Failed to link")).toBeInTheDocument();
 
-    await user.click(dialog.getByText("Kafka"));
+    await user.click(dialog.getByPlaceholderText("Search cards..."));
+    await user.click(await screen.findByRole("option", { name: "Kafka" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     expect(postsTo("/adr/adr-1/cards")).toHaveLength(2);
   });

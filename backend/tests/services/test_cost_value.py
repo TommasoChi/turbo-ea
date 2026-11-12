@@ -95,6 +95,9 @@ class TestLinearTime:
             "1e" + "1" * 50_000 + "x",
             " " * 50_000 + "x",
         ],
+        # Short ids: the default id is the 50 000-character value itself, which pytest puts
+        # in PYTEST_CURRENT_TEST and Windows refuses as an environment variable.
+        ids=["digits", "digits-then-spaces", "fraction", "exponent", "spaces"],
     )
     def test_a_long_near_miss_is_rejected_quickly(self, value):
         start = time.perf_counter()

@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from unittest.mock import AsyncMock, patch
 
+import httpx
 import pytest
 from starlette.testclient import TestClient
 
@@ -183,9 +184,7 @@ class TestUnauthenticatedTools:
 class TestGrcTools:
     @pytest.mark.asyncio
     async def test_list_risks_strips_empty_filters(self, fake_token):
-        patcher, mock = _patched_get(
-            {"items": [], "total": 0, "page": 1, "page_size": 50}
-        )
+        patcher, mock = _patched_get({"items": [], "total": 0, "page": 1, "page_size": 50})
         with patcher:
             out = await server.list_risks(status="identified", page=1, page_size=10)
         _assert_called_with(
@@ -238,9 +237,7 @@ class TestGrcTools:
 
     @pytest.mark.asyncio
     async def test_get_risk_metrics(self, fake_token):
-        patcher, mock = _patched_get(
-            {"by_status": {}, "matrix_initial": [], "matrix_residual": []}
-        )
+        patcher, mock = _patched_get({"by_status": {}, "matrix_initial": [], "matrix_residual": []})
         with patcher:
             out = await server.get_risk_metrics()
         _assert_called_with(mock, "/risks/metrics")
@@ -257,9 +254,7 @@ class TestGrcTools:
     async def test_list_compliance_findings(self, fake_token):
         patcher, mock = _patched_get([])
         with patcher:
-            await server.list_compliance_findings(
-                regulation="gdpr", include_auto_resolved=True
-            )
+            await server.list_compliance_findings(regulation="gdpr", include_auto_resolved=True)
         _assert_called_with(
             mock,
             "/compliance/compliance",
@@ -290,7 +285,7 @@ class TestGovernanceTools:
         _assert_called_with(
             mock,
             "/adr",
-            params={"initiative_id": "i-1", "status": "signed"},
+            params={"initiative_id": "i-1", "status": "signed", "include_earlier": "false"},
         )
 
     @pytest.mark.asyncio
@@ -306,7 +301,9 @@ class TestGovernanceTools:
         patcher, mock = _patched_get([])
         with patcher:
             await server.list_soaws(initiative_id="i-1")
-        _assert_called_with(mock, "/soaw", params={"initiative_id": "i-1"})
+        _assert_called_with(
+            mock, "/soaw", params={"initiative_id": "i-1", "include_earlier": "false"}
+        )
 
 
 class TestReportTools:
@@ -343,14 +340,35 @@ class TestReportTools:
         )
 
     @pytest.mark.asyncio
-    async def test_get_capability_heatmap(self, fake_token):
+    async def test_cost_tools_default_attribution_sends_no_key(self, fake_token):
+        patcher, mock = _patched_get({"items": []})
+        with patcher:
+            await server.get_cost_treemap()
+            await server.get_capability_heatmap(metric="total_cost")
+        assert mock.await_count == 2
+        for call in mock.await_args_list:
+            assert "attribution" not in call.kwargs["params"]
+
+    @pytest.mark.asyncio
+    async def test_get_capability_heatmap_split_attribution(self, fake_token):
         patcher, mock = _patched_get({"tree": []})
         with patcher:
-            await server.get_capability_heatmap(metric="cost")
+            await server.get_capability_heatmap(metric="total_cost", attribution="split")
         _assert_called_with(
             mock,
             "/reports/capability-heatmap",
-            params={"metric": "cost"},
+            params={"metric": "total_cost", "attribution": "split"},
+        )
+
+    @pytest.mark.asyncio
+    async def test_get_capability_heatmap(self, fake_token):
+        patcher, mock = _patched_get({"tree": []})
+        with patcher:
+            await server.get_capability_heatmap(metric="total_cost")
+        _assert_called_with(
+            mock,
+            "/reports/capability-heatmap",
+            params={"metric": "total_cost"},
         )
 
     @pytest.mark.asyncio
@@ -382,3 +400,360 @@ class TestCardContextTools:
         with patcher:
             await server.get_card_documents("c-1")
         _assert_called_with(mock, "/cards/c-1/documents")
+
+
+def _status_error(code: int, body: dict) -> httpx.HTTPStatusError:
+    """What ``TurboEAClient`` raises for a non-2xx backend answer."""
+    request = httpx.Request("GET", "http://backend/api/v1/cards")
+    response = httpx.Response(code, json=body, request=request)
+    return httpx.HTTPStatusError(f"{code} Bad Request", request=request, response=response)
+
+
+_CHAIN = {
+    "type": "Organization",
+    "related": [
+        {
+            "relation": "relOrgToApp",
+            "type": "Application",
+            "where": {"lifecycle_phase": ["active"]},
+        }
+    ],
+}
+
+
+class TestQueryCards:
+    @pytest.mark.asyncio
+    async def test_sends_the_query_as_compact_json(self, fake_token):
+        patcher, mock = _patched_get({"items": [], "total": 0, "page": 2, "page_size": 7})
+        with patcher:
+            await server.query_cards(query=_CHAIN, page=2, page_size=7)
+        _assert_called_with(
+            mock,
+            "/cards",
+            params={
+                "query": json.dumps(_CHAIN, separators=(",", ":")),
+                "page": 2,
+                "page_size": 7,
+            },
+        )
+        assert " " not in mock.call_args.kwargs["params"]["query"]
+
+    @pytest.mark.asyncio
+    async def test_page_size_is_capped_at_100(self, fake_token):
+        patcher, mock = _patched_get({"items": []})
+        with patcher:
+            await server.query_cards(query={"type": "Application"}, page_size=500)
+        assert mock.call_args.kwargs["params"]["page_size"] == 100
+
+    @pytest.mark.asyncio
+    async def test_page_size_at_100_is_kept(self, fake_token):
+        patcher, mock = _patched_get({"items": []})
+        with patcher:
+            await server.query_cards(query={"type": "Application"}, page_size=100)
+        assert mock.call_args.kwargs["params"]["page_size"] == 100
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(("page_size", "sent"), [(0, 1), (-5, 1), (1, 1)])
+    async def test_page_size_is_at_least_1(self, fake_token, page_size, sent):
+        patcher, mock = _patched_get({"items": []})
+        with patcher:
+            await server.query_cards(query={"type": "Application"}, page_size=page_size)
+        assert mock.call_args.kwargs["params"]["page_size"] == sent
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(("page", "sent"), [(0, 1), (-3, 1), (1, 1), (2, 2)])
+    async def test_page_is_at_least_1(self, fake_token, page, sent):
+        patcher, mock = _patched_get({"items": []})
+        with patcher:
+            await server.query_cards(query={"type": "Application"}, page=page)
+        assert mock.call_args.kwargs["params"]["page"] == sent
+
+    @pytest.mark.asyncio
+    async def test_a_validation_error_is_an_invalid_query(self, fake_token):
+        body = {"detail": [{"loc": ["query", "query"], "msg": "too long", "type": "x"}]}
+        mock = AsyncMock(side_effect=_status_error(422, body))
+        with patch.object(server.TurboEAClient, "get", mock):
+            out = _parse(await server.query_cards(query=_CHAIN))
+        assert out == {
+            "error": "invalid_query",
+            "hint": "Check the keys with list_card_types and get_relation_types.",
+        }
+
+    @pytest.mark.asyncio
+    async def test_items_are_trimmed_to_the_listed_keys(self, fake_token):
+        card = {
+            "id": "c1",
+            "name": "Sales",
+            "type": "Organization",
+            "subtype": "BusinessUnit",
+            "approval_status": "APPROVED",
+            "lifecycle": {"active": "2024-01-01"},
+            "data_quality": 79.9,
+            "description": "long text",
+            "attributes": {"x": 1},
+        }
+        patcher, _ = _patched_get({"items": [card], "total": 1, "page": 1, "page_size": 20})
+        with patcher:
+            out = _parse(await server.query_cards(query=_CHAIN))
+        assert out == {
+            "total": 1,
+            "page": 1,
+            "page_size": 20,
+            "items": [
+                {
+                    "id": "c1",
+                    "name": "Sales",
+                    "type": "Organization",
+                    "subtype": "BusinessUnit",
+                    "approval_status": "APPROVED",
+                    "lifecycle": {"active": "2024-01-01"},
+                    "data_quality": 79.9,
+                }
+            ],
+        }
+
+    @pytest.mark.asyncio
+    async def test_a_rejected_query_returns_the_code_and_a_hint(self, fake_token):
+        mock = AsyncMock(side_effect=_status_error(400, {"detail": "unknown_relation_type"}))
+        with patch.object(server.TurboEAClient, "get", mock):
+            out = _parse(await server.query_cards(query=_CHAIN))
+        assert out == {
+            "error": "unknown_relation_type",
+            "hint": "Check the keys with list_card_types and get_relation_types.",
+        }
+
+    @pytest.mark.asyncio
+    async def test_a_stack_is_sent_as_compact_json(self, fake_token):
+        stack = {"any_of": [{"type": "Application"}, {"all_of": [_CHAIN, _CHAIN]}]}
+        patcher, mock = _patched_get({"items": [], "total": 0, "page": 1, "page_size": 20})
+        with patcher:
+            out = _parse(await server.query_cards(query=stack))
+        _assert_called_with(
+            mock,
+            "/cards",
+            params={
+                "query": json.dumps(stack, separators=(",", ":")),
+                "page": 1,
+                "page_size": 20,
+            },
+        )
+        assert out == {"total": 0, "page": 1, "page_size": 20, "items": []}
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "code", ["all_of_needs_two", "all_of_type_mismatch", "any_of_needs_two", "too_many_lines"]
+    )
+    async def test_a_rejected_stack_returns_its_code(self, fake_token, code):
+        mock = AsyncMock(side_effect=_status_error(400, {"detail": code}))
+        with patch.object(server.TurboEAClient, "get", mock):
+            out = _parse(await server.query_cards(query={"any_of": [_CHAIN]}))
+        assert out == {
+            "error": code,
+            "hint": "Check the keys with list_card_types and get_relation_types.",
+        }
+
+    @pytest.mark.asyncio
+    async def test_a_detail_object_yields_its_code(self, fake_token):
+        body = {"detail": {"code": "too_deep", "message": "x"}}
+        mock = AsyncMock(side_effect=_status_error(400, body))
+        with patch.object(server.TurboEAClient, "get", mock):
+            out = _parse(await server.query_cards(query=_CHAIN))
+        assert out["error"] == "too_deep"
+
+    @pytest.mark.asyncio
+    async def test_a_400_without_detail_is_an_invalid_query(self, fake_token):
+        mock = AsyncMock(side_effect=_status_error(400, {}))
+        with patch.object(server.TurboEAClient, "get", mock):
+            out = _parse(await server.query_cards(query=_CHAIN))
+        assert out["error"] == "invalid_query"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "response",
+        [
+            httpx.Response(400, text="Bad Request"),
+            httpx.Response(400, json=["not", "an", "object"]),
+        ],
+        ids=["not-json", "json-list"],
+    )
+    async def test_a_400_without_a_readable_body_is_an_invalid_query(self, fake_token, response):
+        request = httpx.Request("GET", "http://backend/api/v1/cards")
+        response.request = request
+        error = httpx.HTTPStatusError("400 Bad Request", request=request, response=response)
+        mock = AsyncMock(side_effect=error)
+        with patch.object(server.TurboEAClient, "get", mock):
+            out = _parse(await server.query_cards(query=_CHAIN))
+        assert out == {"error": "invalid_query", "hint": server._QUERY_HINT}
+
+    @pytest.mark.asyncio
+    async def test_other_errors_are_raised(self, fake_token):
+        mock = AsyncMock(side_effect=_status_error(403, {"detail": "Forbidden"}))
+        with patch.object(server.TurboEAClient, "get", mock):
+            with pytest.raises(httpx.HTTPStatusError):
+                await server.query_cards(query=_CHAIN)
+
+    @pytest.mark.asyncio
+    async def test_an_eol_condition_without_the_permission_is_explained(self, fake_token):
+        mock = AsyncMock(side_effect=_status_error(403, {"detail": "eol_view_required"}))
+        with patch.object(server.TurboEAClient, "get", mock):
+            out = _parse(await server.query_cards(query=_CHAIN))
+        assert out == {
+            "error": "eol_view_required",
+            "hint": (
+                "This query filters on end-of-life status (where.eol_status), which needs "
+                "the EOL view permission (eol.view). Remove the eol_status condition, or "
+                "ask an administrator for that permission."
+            ),
+        }
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "response",
+        [
+            httpx.Response(403, text="Forbidden"),
+            httpx.Response(403, json=["eol_view_required"]),
+            httpx.Response(403, json={"detail": "Not enough permissions"}),
+        ],
+        ids=["not-json", "json-list", "other-detail"],
+    )
+    async def test_any_other_403_is_raised(self, fake_token, response):
+        request = httpx.Request("GET", "http://backend/api/v1/cards")
+        response.request = request
+        error = httpx.HTTPStatusError("403 Forbidden", request=request, response=response)
+        mock = AsyncMock(side_effect=error)
+        with patch.object(server.TurboEAClient, "get", mock):
+            with pytest.raises(httpx.HTTPStatusError):
+                await server.query_cards(query=_CHAIN)
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("code", ["unknown_eol_status", "eol_not_tracked"])
+    async def test_a_rejected_eol_condition_returns_its_code(self, fake_token, code):
+        mock = AsyncMock(side_effect=_status_error(400, {"detail": code}))
+        with patch.object(server.TurboEAClient, "get", mock):
+            out = _parse(await server.query_cards(query=_CHAIN))
+        assert out == {"error": code, "hint": server._QUERY_HINT}
+
+    def test_the_grammar_documents_eol_status(self):
+        doc = server.query_cards.__doc__ or ""
+        assert "eol_status?: [eol|approaching|supported|unknown|__empty__]" in doc
+        for code in ("unknown_eol_status", "eol_not_tracked", "eol_view_required"):
+            assert code in doc
+
+    def test_requires_auth(self, monkeypatch):
+        import asyncio
+
+        monkeypatch.setattr(server, "_stdio_token", None)
+        assert "Not authenticated" in asyncio.run(server.query_cards(query=_CHAIN))
+
+
+class TestListInventoryViews:
+    @pytest.mark.asyncio
+    async def test_passes_the_query_and_origin_through(self, fake_token):
+        view = {
+            "id": "v1",
+            "name": "Orgs on active apps",
+            "card_type": "Organization",
+            "visibility": "public",
+            "is_owner": False,
+            "can_edit": True,
+            "owner_name": "Ada",
+            "query": _CHAIN,
+            "created_via": "mcp",
+            "filters": {"types": ["Organization"]},
+            "column_state": [{"colId": "name"}],
+            "shared_with": [{"user_id": "u2", "email": "b@example.com"}],
+        }
+        patcher, mock = _patched_get([view])
+        with patcher:
+            out = _parse(await server.list_inventory_views())
+        _assert_called_with(mock, "/bookmarks")
+        assert out == [
+            {
+                "id": "v1",
+                "name": "Orgs on active apps",
+                "card_type": "Organization",
+                "visibility": "public",
+                "is_owner": False,
+                "can_edit": True,
+                "owner_name": "Ada",
+                "query": _CHAIN,
+                "created_via": "mcp",
+            }
+        ]
+
+    @pytest.mark.asyncio
+    async def test_a_non_list_answer_is_an_empty_list(self, fake_token):
+        patcher, _ = _patched_get({})
+        with patcher:
+            assert _parse(await server.list_inventory_views()) == []
+
+    def test_requires_auth(self, monkeypatch):
+        import asyncio
+
+        monkeypatch.setattr(server, "_stdio_token", None)
+        assert "Not authenticated" in asyncio.run(server.list_inventory_views())
+
+
+class TestListTagGroups:
+    @pytest.mark.asyncio
+    async def test_trims_groups_and_tags_to_the_listed_keys(self, fake_token):
+        group = {
+            "id": "g1",
+            "name": "Domain",
+            "description": "Business domain",
+            "mode": "multi",
+            "mandatory": True,
+            "restrict_to_types": ["Application", "Organization"],
+            "tags": [
+                {
+                    "id": "t1",
+                    "name": "Finance",
+                    "description": "Money",
+                    "color": "#123456",
+                    "tag_group_id": "g1",
+                },
+                {"id": "t2", "name": "Sales", "color": None, "tag_group_id": "g1"},
+            ],
+        }
+        patcher, mock = _patched_get([group])
+        with patcher:
+            out = _parse(await server.list_tag_groups())
+        _assert_called_with(mock, "/tag-groups")
+        assert out == [
+            {
+                "id": "g1",
+                "name": "Domain",
+                "mode": "multi",
+                "restrict_to_types": ["Application", "Organization"],
+                "tags": [
+                    {"id": "t1", "name": "Finance", "color": "#123456"},
+                    {"id": "t2", "name": "Sales", "color": None},
+                ],
+            }
+        ]
+
+    @pytest.mark.asyncio
+    async def test_an_unrestricted_group_and_a_tagless_group_pass_through(self, fake_token):
+        groups = [
+            {"id": "g1", "name": "Tier", "mode": "single", "restrict_to_types": None, "tags": []},
+            {"id": "g2", "name": "Empty", "mode": "multi", "restrict_to_types": []},
+        ]
+        patcher, _ = _patched_get(groups)
+        with patcher:
+            out = _parse(await server.list_tag_groups())
+        assert out == [
+            {"id": "g1", "name": "Tier", "mode": "single", "restrict_to_types": None, "tags": []},
+            {"id": "g2", "name": "Empty", "mode": "multi", "restrict_to_types": [], "tags": []},
+        ]
+
+    @pytest.mark.asyncio
+    async def test_a_non_list_answer_is_an_empty_list(self, fake_token):
+        patcher, _ = _patched_get({"detail": "odd"})
+        with patcher:
+            assert _parse(await server.list_tag_groups()) == []
+
+    def test_requires_auth(self, monkeypatch):
+        import asyncio
+
+        monkeypatch.setattr(server, "_stdio_token", None)
+        assert "Not authenticated" in asyncio.run(server.list_tag_groups())

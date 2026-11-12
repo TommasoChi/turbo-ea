@@ -160,6 +160,42 @@ describe("AiAdmin with Amazon Bedrock selected", () => {
   });
 });
 
+describe("AiAdmin connection test", () => {
+  async function runTest(result: Record<string, unknown>) {
+    const user = userEvent.setup();
+    await renderLoaded({ provider_type: "openai", provider_url: "https://bionic.test" });
+    vi.mocked(api.post).mockResolvedValue(result);
+    await user.click(screen.getByRole("button", { name: /test connection/i }));
+    expect(api.post).toHaveBeenCalledWith("/settings/ai/test");
+  }
+
+  it("names what the provider refused when the test had to leave it out", async () => {
+    await runTest({
+      ok: true,
+      available_models: ["google/gemma-4-e4b"],
+      model_found: true,
+      adjusted: ["response_format", "temperature"],
+    });
+
+    expect(
+      await screen.findByText(
+        "Connection successful. This provider does not accept response_format, temperature, " +
+          "so Turbo EA leaves it out of every request.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it.each([
+    ["nothing was refused", { adjusted: [] }],
+    ["the provider reports no adjustments", {}],
+  ])("reports a plain success when %s", async (_case, extra) => {
+    await runTest({ ok: true, available_models: ["m"], model_found: true, ...extra });
+
+    expect(await screen.findByText("Connection successful!")).toBeInTheDocument();
+    expect(screen.queryByText(/does not accept/)).not.toBeInTheDocument();
+  });
+});
+
 describe("AiAdmin keeps the other providers working", () => {
   it("hides the credentials field for Ollama", async () => {
     await renderLoaded();
@@ -179,5 +215,49 @@ describe("AiAdmin keeps the other providers working", () => {
     await selectProvider("Azure Hosted OpenAI");
 
     expect(screen.getByLabelText("API Version")).toBeInTheDocument();
+  });
+
+  it("asks for an API version with the Azure resource endpoint", async () => {
+    await renderLoaded({
+      provider_type: "azure_openai",
+      provider_url: "https://my-resource.openai.azure.com",
+    });
+
+    expect(screen.getByLabelText("API Version")).toBeEnabled();
+    expect(
+      screen.getByText(
+        "Azure OpenAI API version (e.g. 2025-01-01). This is the version of the API, " +
+          "not of the model. If your Azure portal shows only an endpoint ending in " +
+          "/openai/v1/, enter that as the Provider URL instead: it needs no API version.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/takes no API version/)).not.toBeInTheDocument();
+  });
+
+  it("switches the API version off for the Azure v1 endpoint", async () => {
+    await renderLoaded({
+      provider_type: "azure_openai",
+      provider_url: "https://my-resource.openai.azure.com/openai/v1/",
+      api_version: "2025-08-07",
+    });
+
+    expect(screen.getByLabelText("API Version")).toBeDisabled();
+    expect(
+      screen.getByText("Not used: an endpoint ending in /openai/v1/ takes no API version."),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/This is the version of the API/)).not.toBeInTheDocument();
+  });
+
+  it("follows the Provider URL as it is typed", async () => {
+    const user = userEvent.setup();
+    await renderLoaded({
+      provider_type: "azure_openai",
+      provider_url: "https://my-resource.openai.azure.com",
+    });
+    expect(screen.getByLabelText("API Version")).toBeEnabled();
+
+    await user.type(screen.getByLabelText("Provider URL"), "/openai/v1/");
+
+    expect(screen.getByLabelText("API Version")).toBeDisabled();
   });
 });

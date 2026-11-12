@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
@@ -19,15 +19,24 @@ import DialogActions from "@mui/material/DialogActions";
 import CircularProgress from "@mui/material/CircularProgress";
 import IconButton from "@mui/material/IconButton";
 import Tooltip from "@mui/material/Tooltip";
+import Tab from "@mui/material/Tab";
+import Tabs from "@mui/material/Tabs";
 import MaterialSymbol from "@/components/MaterialSymbol";
+import { eolProductLabel, isCustomEolProduct } from "@/lib/eolCustom";
+import { DEFAULT_EOL_TYPES, eolTypeKeys } from "@/lib/eol";
+import { useMetamodel } from "@/hooks/useMetamodel";
+import { useTypeLabel } from "@/hooks/useResolveLabel";
+import CustomEolProductsGrid from "./CustomEolProductsGrid";
 import { api } from "@/api/client";
 import { useAbortableEffect } from "@/hooks/useLatestRequest";
 import { toLocalDate } from "@/lib/dates";
 import type { MassEolResult, EolCycle } from "@/types";
+import { useTheme, alpha } from "@mui/material/styles";
+import { brand, CARD_TYPE_COLORS, STATUS_COLORS } from "@/theme/tokens";
 
 type LinkSelection = Record<
   string,
-  { product: string; cycle: string } | null
+  { product: string; cycle: string; title?: string | null } | null
 >;
 
 function computeEolStatus(cycle: EolCycle, t: (key: string) => string): {
@@ -35,20 +44,20 @@ function computeEolStatus(cycle: EolCycle, t: (key: string) => string): {
   color: string;
 } {
   const eol = cycle.eol;
-  if (eol === true) return { label: t("eol.status.endOfLife"), color: "#f44336" };
+  if (eol === true) return { label: t("eol.status.endOfLife"), color: STATUS_COLORS.error };
   const eolDate = typeof eol === "string" ? toLocalDate(eol) : null;
   if (eolDate) {
     // Parsed locally: `new Date("2026-08-27")` is UTC midnight, which is
     // 17:00 the previous day in the Americas, so the chip flipped to
     // "End of life" a day early there (#1016).
     const now = new Date();
-    if (eolDate <= now) return { label: t("eol.status.endOfLife"), color: "#f44336" };
+    if (eolDate <= now) return { label: t("eol.status.endOfLife"), color: STATUS_COLORS.error };
     const sixMonths = new Date();
     sixMonths.setMonth(sixMonths.getMonth() + 6);
     if (eolDate <= sixMonths)
-      return { label: t("eol.status.approachingEol"), color: "#ff9800" };
+      return { label: t("eol.status.approachingEol"), color: STATUS_COLORS.warning };
   }
-  return { label: t("eol.status.supported"), color: "#4caf50" };
+  return { label: t("eol.status.supported"), color: STATUS_COLORS.success };
 }
 
 // ── Cycle Picker Dialog ──────────────────────────────────────────
@@ -59,6 +68,8 @@ interface CyclePickerProps {
   cardId: string;
   cardName: string;
   product: string;
+  /** Display name for a custom product. */
+  productTitle?: string | null;
   onSelect: (fsId: string, product: string, cycle: string) => void;
 }
 
@@ -68,6 +79,7 @@ function CyclePickerDialog({
   cardId,
   cardName,
   product,
+  productTitle,
   onSelect,
 }: CyclePickerProps) {
   const { t } = useTranslation(["admin", "common"]);
@@ -158,7 +170,7 @@ function CyclePickerDialog({
                           label={status.label}
                           sx={{
                             bgcolor: status.color,
-                            color: "#fff",
+                            color: "common.white",
                             height: 20,
                             fontSize: "0.65rem",
                           }}
@@ -173,7 +185,7 @@ function CyclePickerDialog({
         )}
         {!loading && cycles.length === 0 && !error && (
           <Typography variant="body2" color="text.secondary">
-            {t("eol.noCycles", { product })}
+            {t("eol.noCycles", { product: eolProductLabel(product, productTitle) })}
           </Typography>
         )}
       </DialogContent>
@@ -196,9 +208,72 @@ function CyclePickerDialog({
 
 // ── Main Admin Page ──────────────────────────────────────────────
 
+/** The sub-tab named in the page's URL, if any. */
+function eolTabFromLocation(): string | null {
+  return new URLSearchParams(window.location.search).get("eolTab");
+}
+
+/** Write the sub-tab into the URL without a navigation (no Router needed). */
+function rememberEolTab(value: string | null) {
+  const url = new URL(window.location.href);
+  if (value) url.searchParams.set("eolTab", value);
+  else url.searchParams.delete("eolTab");
+  window.history.replaceState(window.history.state, "", url);
+}
+
+/**
+ * Settings → EOL: link cards to endoflife.date in bulk, and keep the
+ * organisation's own custom EOL products for what endoflife.date lacks.
+ */
 export default function EolAdmin() {
+  const { t } = useTranslation("admin");
+  // `?eolTab=custom` opens the custom products: a card's End of Life section
+  // links here, and a refresh stays on the tab.
+  const [tab, setTab] = useState(() => (eolTabFromLocation() === "custom" ? 1 : 0));
+  const changeTab = (v: number) => {
+    setTab(v);
+    rememberEolTab(v === 1 ? "custom" : null);
+  };
+  return (
+    <Box>
+      <Tabs
+        value={tab}
+        onChange={(_, v) => changeTab(v)}
+        sx={{ mb: 2, borderBottom: 1, borderColor: "divider" }}
+      >
+        <Tab
+          icon={<MaterialSymbol icon="link" size={18} />}
+          iconPosition="start"
+          label={t("eol.tabs.massLink")}
+          sx={{ textTransform: "none", minHeight: 44 }}
+        />
+        <Tab
+          icon={<MaterialSymbol icon="edit_note" size={18} />}
+          iconPosition="start"
+          label={t("eol.tabs.customProducts")}
+          sx={{ textTransform: "none", minHeight: 44 }}
+        />
+      </Tabs>
+      {tab === 0 ? <EolMassLink /> : <CustomEolProductsGrid />}
+    </Box>
+  );
+}
+
+function EolMassLink() {
+  const theme = useTheme();
   const { t } = useTranslation(["admin", "common"]);
-  const [typeKey, setTypeKey] = useState<"Application" | "ITComponent">("ITComponent");
+  const { types } = useMetamodel();
+  const typeLabel = useTypeLabel();
+  // The types bulk linking offers: those whose End of Life section is shown
+  // (the type's Card Layout toggle). The shipped two until the metamodel
+  // arrives, so the page never opens on an empty picker.
+  const eolTypes = useMemo(() => {
+    const keys = eolTypeKeys(types);
+    return keys.length > 0 || types.length > 0 ? keys : [...DEFAULT_EOL_TYPES];
+  }, [types]);
+  const [pickedType, setTypeKey] = useState<string>("ITComponent");
+  // A type that stopped tracking End of Life falls back to the first that does.
+  const typeKey = eolTypes.includes(pickedType) ? pickedType : (eolTypes[0] ?? "");
   const [results, setResults] = useState<MassEolResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -212,6 +287,7 @@ export default function EolAdmin() {
   const [cyclePickerFsId, setCyclePickerFsId] = useState("");
   const [cyclePickerFsName, setCyclePickerFsName] = useState("");
   const [cyclePickerProduct, setCyclePickerProduct] = useState("");
+  const [cyclePickerTitle, setCyclePickerTitle] = useState<string | null>(null);
 
   const handleSearch = useCallback(async () => {
     setLoading(true);
@@ -230,17 +306,23 @@ export default function EolAdmin() {
     }
   }, [typeKey]);
 
-  const openCyclePicker = (fsId: string, fsName: string, product: string) => {
+  const openCyclePicker = (
+    fsId: string,
+    fsName: string,
+    product: string,
+    title?: string | null,
+  ) => {
     setCyclePickerFsId(fsId);
     setCyclePickerFsName(fsName);
     setCyclePickerProduct(product);
+    setCyclePickerTitle(title ?? null);
     setCyclePickerOpen(true);
   };
 
   const handleCycleSelected = (fsId: string, product: string, cycle: string) => {
     setSelections((prev) => ({
       ...prev,
-      [fsId]: { product, cycle },
+      [fsId]: { product, cycle, title: product === cyclePickerProduct ? cyclePickerTitle : null },
     }));
   };
 
@@ -308,22 +390,28 @@ export default function EolAdmin() {
               <Select
                 value={typeKey}
                 label={t("common:labels.type")}
-                onChange={(e) =>
-                  setTypeKey(e.target.value as "Application" | "ITComponent")
-                }
+                onChange={(e) => setTypeKey(e.target.value)}
               >
-                <MenuItem value="ITComponent">
-                  <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                    <MaterialSymbol icon="memory" size={18} color="#d29270" />
-                    {t("eol.itComponent")}
-                  </Box>
-                </MenuItem>
-                <MenuItem value="Application">
-                  <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                    <MaterialSymbol icon="apps" size={18} color="#0f7eb5" />
-                    {t("eol.application")}
-                  </Box>
-                </MenuItem>
+                {eolTypes.map((key) => {
+                  const type = types.find((ct) => ct.key === key);
+                  const fallback = key === "ITComponent" ? "memory" : "apps";
+                  return (
+                    <MenuItem key={key} value={key}>
+                      <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                        <MaterialSymbol
+                          icon={type?.icon || fallback}
+                          size={18}
+                          color={type?.color || CARD_TYPE_COLORS[key as keyof typeof CARD_TYPE_COLORS]}
+                        />
+                        {type
+                          ? typeLabel(type)
+                          : key === "ITComponent"
+                            ? t("eol.itComponent")
+                            : t("eol.application")}
+                      </Box>
+                    </MenuItem>
+                  );
+                })}
               </Select>
             </FormControl>
             <Button
@@ -461,9 +549,10 @@ export default function EolAdmin() {
                   </Typography>
                   {isAlreadyLinked && (
                     <Box sx={{ mt: 0.5, display: "flex", alignItems: "center", gap: 0.5 }}>
-                      <MaterialSymbol icon="check_circle" size={14} color="#4caf50" />
+                      <MaterialSymbol icon="check_circle" size={14} color={STATUS_COLORS.success} />
                       <Typography variant="caption" color="success.main">
-                        {r.current_eol_product} {r.current_eol_cycle}
+                        {eolProductLabel(r.current_eol_product ?? "", r.current_title)}{" "}
+                        {r.current_eol_cycle}
                       </Typography>
                     </Box>
                   )}
@@ -478,12 +567,12 @@ export default function EolAdmin() {
                         alignItems: "center",
                         gap: 1,
                         p: 1,
-                        bgcolor: "rgba(76, 175, 80, 0.06)",
+                        bgcolor: alpha(STATUS_COLORS.success, 0.06),
                         borderRadius: 1,
                       }}
                     >
-                      <MaterialSymbol icon="check_circle" size={18} color="#4caf50" />
-                      <Typography variant="body2">{t("eol.willLinkTo")} <strong>{selection.product}</strong> {selection.cycle}</Typography>
+                      <MaterialSymbol icon="check_circle" size={18} color={STATUS_COLORS.success} />
+                      <Typography variant="body2">{t("eol.willLinkTo")} <strong>{eolProductLabel(selection.product, selection.title)}</strong> {selection.cycle}</Typography>
                       <IconButton
                         size="small"
                         onClick={() => handleRemoveSelection(r.card_id)}
@@ -508,7 +597,7 @@ export default function EolAdmin() {
                             title={t("eol.matchScore", { score: Math.round(c.score * 100) })}
                           >
                             <Chip
-                              label={c.eol_product}
+                              label={eolProductLabel(c.eol_product, c.title)}
                               size="small"
                               variant="outlined"
                               clickable
@@ -516,10 +605,16 @@ export default function EolAdmin() {
                                 openCyclePicker(
                                   r.card_id,
                                   r.card_name,
-                                  c.eol_product
+                                  c.eol_product,
+                                  c.title
                                 )
                               }
-                              icon={<MaterialSymbol icon="link" size={14} />}
+                              icon={
+                                <MaterialSymbol
+                                  icon={isCustomEolProduct(c.eol_product) ? "edit_note" : "link"}
+                                  size={14}
+                                />
+                              }
                               sx={{
                                 borderColor:
                                   c.score >= 0.7 ? "success.main" : "divider",
@@ -546,9 +641,14 @@ export default function EolAdmin() {
       {!loading && results.length === 0 && (
         <Card>
           <CardContent sx={{ textAlign: "center", py: 6 }}>
-            <MaterialSymbol icon="search" size={48} color="#ccc" />
+            <MaterialSymbol icon="search" size={48} color={theme.palette.action.disabled} />
             <Typography variant="body1" color="text.secondary" sx={{ mt: 1 }}>
-              {t("eol.emptyState", { type: typeKey === "ITComponent" ? t("eol.emptyStateType.ITComponent") : t("eol.emptyStateType.Application") })}
+              {t("eol.emptyState", {
+                type:
+                  typeKey === "ITComponent" || typeKey === "Application"
+                    ? t(`eol.emptyStateType.${typeKey}`)
+                    : typeLabel(types.find((ct) => ct.key === typeKey)) || typeKey,
+              })}
             </Typography>
           </CardContent>
         </Card>
@@ -572,7 +672,7 @@ export default function EolAdmin() {
             borderColor: "divider",
           }}
         >
-          <MaterialSymbol icon="link" size={20} color="#1976d2" />
+          <MaterialSymbol icon="link" size={20} color={brand.primary} />
           <Typography variant="body2" fontWeight={600}>
             {t("eol.selectedCount", { count: selectedCount })}
           </Typography>
@@ -609,6 +709,7 @@ export default function EolAdmin() {
         cardId={cyclePickerFsId}
         cardName={cyclePickerFsName}
         product={cyclePickerProduct}
+        productTitle={cyclePickerTitle}
         onSelect={handleCycleSelected}
       />
     </Box>

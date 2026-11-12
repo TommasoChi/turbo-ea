@@ -65,7 +65,7 @@ Los campos definen los atributos personalizados disponibles en fichas de este ti
 | **Etiqueta** | Nombre para mostrar |
 | **Tipo** | texto, texto_multilínea, número, costo, porcentaje, booleano, fecha, url, selección_única o selección_múltiple. Un porcentaje es un número de 0 a 100, mostrado como una barra de progreso y editado con un control deslizante o escrito con exactitud. Un booleano se elige en una lista Sí / No, con **Ninguno** para borrarlo, y se muestra como una etiqueta verde *Sí* o azul *No*, o como — si no está definido, lo que encuentra el filtro **(vacío)** del inventario |
 | **Opciones** | Para campos de selección: las opciones disponibles con etiquetas y colores opcionales. Reordénelas con las flechas arriba y abajo junto a cada opción: los menús y los filtros muestran las opciones en ese orden, y los chips de un valor de selección múltiple lo siguen en cada ficha. |
-| **Texto de ayuda** | Orientación opcional que se muestra como una nota plegable bajo el campo mientras se edita una ficha. Se redacta por idioma y cualquier administrador del metamodelo puede definirla; en un campo aportado por una extensión es de solo lectura |
+| **Texto de ayuda** | Orientación opcional para el campo. Mientras se lee una ficha, aparece como un icono de información junto a la etiqueta del campo (pase el cursor o enfoque el icono para leer el texto) y como información emergente en el encabezado de columna del campo en el Inventario; mientras se edita una ficha, el mismo icono está junto al campo. Se redacta por idioma y cualquier administrador del metamodelo puede definirla; en un campo aportado por una extensión es de solo lectura |
 | **Requerido** | Si el campo es obligatorio — consulta las reglas de aplicación más abajo |
 | **Calidad de datos** | La contribución de cada campo a la puntuación se gestiona en el panel **Calidad de datos** (ver más abajo) |
 | **Solo lectura** | Impide la edición manual (útil para campos calculados) |
@@ -147,6 +147,8 @@ Defina roles personalizados para este tipo (ej., «Propietario de Aplicación»,
 
 Cada rol tiene una **clave** (el identificador almacenado en las tarjetas, utilizado por las columnas de importación/exportación `stakeholder:<clave_del_rol>`) y una **etiqueta** (lo que ven los usuarios). La clave sigue la misma convención que cualquier otra clave del metamodelo: solo letras y dígitos, empezando por una letra, de 3 a 50 caracteres, por convención en camelCase como `businessArchitect`. Se rellena automáticamente a partir de la etiqueta, por lo que rara vez tendrá que escribirla.
 
+Asigne una **descripción** a un rol para explicar qué significa en su organización: qué firma un *Responsable del contrato*, de qué responde un *Responsable técnico*. Los usuarios la ven como un icono de información junto al rol en la pestaña **Partes interesadas** de una ficha, bajo el nombre del rol en el selector de roles, como información emergente en el encabezado de columna del rol en el Inventario, en **Mis roles** en el panel y en el directorio de partes interesadas. La descripción se traduce por idioma igual que la etiqueta: cada idioma habilitado tiene su propio campo de descripción en **Traducciones** dentro del editor de roles, y el **diálogo de traducción** del tipo también la lista. Un idioma que se deja vacío recurre a la descripción en inglés. Los roles integrados (**Responsable**, **Observador**, los dos responsables de aplicación, **Jefe de proyecto de TI** y **Responsable del proceso**) incluyen una descripción en todos los idiomas que puede editar o borrar como cualquier otra, y el botón **Guardar** del encabezado del panel también guarda un rol que esté editando en esta pestaña.
+
 Cada rol lleva además un interruptor **Cuenta para la calidad de datos**. La puntuación de calidad tiene una única casilla de partes interesadas, que se cumple en cuanto se asigna a alguien a la tarjeta en un rol con este interruptor activo. Desactívelo para roles puramente pasivos: el **Observador** integrado se entrega desactivado, de modo que observar una tarjeta nunca equivalga a ser responsable de ella. Un tipo cuyos roles estén todos desactivados no aporta casilla alguna. Cambiar el interruptor vuelve a puntuar de inmediato todas las tarjetas del tipo.
 
 Los roles pueden retirarse de dos formas:
@@ -210,7 +212,7 @@ Haga clic en el botón **Traducir** en la barra de herramientas del cajón de ti
 - **Secciones** — Encabezados de sección en la página de detalle de la ficha
 - **Campos** — Etiquetas de campos y etiquetas de opciones de selección
 - **Texto de ayuda** — El texto de ayuda de un campo, que aparece bajo el campo una vez introducido en el editor de campos. Editarlo en inglés también actualiza el texto de ayuda predeterminado del campo
-- **Roles de Parte Interesada** — Nombres de roles mostrados en la interfaz de asignación de stakeholders
+- **Roles de Parte Interesada** — Nombres y descripciones de los roles. La descripción de un rol aparece bajo su nombre en cuanto el rol tiene una descripción en algún idioma; editarla en inglés también actualiza la descripción predeterminada del rol
 
 Las traducciones se almacenan junto con cada tipo de ficha y se resuelven en tiempo de renderizado según el idioma seleccionado por el usuario. Las etiquetas sin traducir recurren al valor predeterminado en inglés.
 
@@ -256,7 +258,7 @@ Eliminar un tipo de vínculo **no** reescribe las fichas que ya lo usan: conserv
 
 Algunas relaciones incluyen atributos adicionales que se establecen en cada enlace individual en lugar de en el tipo de relación. Por ejemplo, la relación integrada **Organización → Aplicación** («utiliza») tiene un atributo **Tipo de uso**: establézcalo en **Propietario**, **Usuario** o **Parte interesada** en cada enlace. Así puede modelar una aplicación *propiedad de* una organización y *utilizada por* otras mediante un único tipo de relación. El valor elegido aparece como una etiqueta de color en la sección **Relaciones** de la tarjeta; establézcalo al añadir la relación o más tarde mediante el icono de edición en la fila de la relación.
 
-También puede crear **varios tipos de relación entre el mismo par de tipos de tarjeta** — por ejemplo, una organización que *posee* una aplicación junto a otra que la *utiliza*. Prefiera un atributo cuando describa variantes de una misma relación (mantiene una sola columna en el inventario y una sola línea en un diagrama); cree un segundo tipo de relación cuando las relaciones sean realmente distintas y merezcan sus propios verbos, atributos o filtros. Cuando un par tiene más de un tipo de relación, el inventario sigue mostrando una única columna para el tipo de tarjeta relacionado, y al abrir esa celda obtiene una sección por tipo de relación. En una tarjeta, cada tipo de relación conserva su propia sección: las secciones que apuntan al mismo tipo de tarjeta se muestran juntas, y una tarjeta que haya vinculado mediante más de una de ellas aparece marcada con *También …* en cada una de sus secciones. Un tipo de relación cuyos dos extremos son el mismo tipo de tarjeta — una organización que *tiene como sede* a otra organización — muestra *ambos* verbos en una tarjeta, como dos secciones, y en el inventario como dos filas de filtro y dos secciones de edición; asigne a ese tipo una etiqueta inversa o ambas secciones se leerán igual.
+También puede crear **varios tipos de relación entre el mismo par de tipos de tarjeta** — por ejemplo, una organización que *posee* una aplicación junto a otra que la *utiliza*. Prefiera un atributo cuando describa variantes de una misma relación (mantiene una sola columna en el inventario y una sola línea en un diagrama); cree un segundo tipo de relación cuando las relaciones sean realmente distintas y merezcan sus propios verbos, atributos o filtros. Cuando un par tiene más de un tipo de relación, el inventario muestra una columna por tipo de relación, encabezada por su verbo y el tipo de tarjeta relacionado (*posee Aplicación*, *utiliza Aplicación*). En una tarjeta, cada tipo de relación conserva su propia sección: las secciones que apuntan al mismo tipo de tarjeta se muestran juntas, y una tarjeta que haya vinculado mediante más de una de ellas aparece marcada con *También …* en cada una de sus secciones. Un tipo de relación cuyos dos extremos son el mismo tipo de tarjeta — una organización que *tiene como sede* a otra organización — muestra *ambos* verbos en una tarjeta, como dos secciones, y en el inventario como dos columnas y dos filas de filtro; asigne a ese tipo una etiqueta inversa o ambas secciones se leerán igual.
 
 Cuando un par tiene más de un tipo de relación, los informes, portales y encuestas pueden apuntar a uno concreto: el informe de Cartera ofrece un eje de agrupación y un filtro por relación, el Mapa de capacidades añade un filtro por relación, los filtros y secciones de relación del portal se etiquetan con su verbo, y el filtro **relacionado con** de una encuesta incorpora un selector **A través de la relación**. No elegir nada sigue significando «relacionado por cualquiera de ellas».
 
@@ -326,6 +328,23 @@ Cada principio tiene cuatro campos:
 
 Los principios se pueden **activar** o **desactivar** individualmente mediante el interruptor en cada tarjeta.
 
+Cada principio tiene un **número de referencia** (`P-001`, `P-002`, …), asignado al crearlo y mostrado junto a su título. Las referencias se numeran por instancia: un principio incorporado mediante la [transferencia del espacio de trabajo](workspace-transfer.md) recibe el siguiente número libre en el destino.
+
+### Exportar e importar principios {: #principles-import }
+
+**Exportar** (junto a **Nuevo principio**) descarga todos los principios como un archivo `.xlsx` con las columnas `reference_number`, `title`, `description`, `rationale`, `implications`, `is_active` y `sort_order`. La exportación es un archivo de importación válido, por lo que puede editar los principios en Excel y volver a cargarlos.
+
+**Importar** carga principios de forma masiva desde un archivo `.xlsx`. Haga clic en **Descargar plantilla** para obtener un libro de partida, rellene un principio por fila y súbalo. Cada fila se asocia a un principio existente primero por su `reference_number` y después por su título (sin distinguir mayúsculas de minúsculas):
+
+- Un principio asociado se **actualiza** con los valores que difieren; si nada difiere, la fila se **omite**. La vista previa lista cada fila actualizada con los campos que modifica.
+- Cualquier otra fila **crea** un principio nuevo con la siguiente referencia libre. Una referencia que no existe en esta instancia no se reutiliza; la vista previa lo advierte.
+- Una fila sin referencia cuyo título corresponde a dos principios se rechaza por ambigua: añada la referencia para indicar cuál se quiere decir.
+- Una columna ausente de la hoja deja el campo sin cambios. Una celda vacía en `description`, `rationale` o `implications` borra ese texto; una celda vacía en `is_active` o `sort_order` deja el valor como está. `title` es la única columna obligatoria.
+- `is_active` acepta `true` / `false` (también `yes` / `no`, `1` / `0`); `sort_order` debe ser un número entero. Los principios nuevos sin `sort_order` se añaden al final de la lista.
+- Un título o una referencia que aparece dos veces en el archivo, o un cambio de nombre al título de otro principio, hace fallar esa fila.
+
+Antes de escribir nada, obtiene una vista previa de cuántas filas se crearán, actualizarán, omitirán y fallarán, con cada error y advertencia listados por fila; nada cambia hasta que confirme. La importación requiere el permiso `admin.metamodel` y se registra en el [registro de seguridad y administración](audit-log.md).
+
 ### Importar desde el Catálogo de principios
 
 Turbo EA incluye un **catálogo de referencia comisariado con 10 principios EA estándar del sector** para que no tenga que empezar desde una página en blanco. Abra el menú de avatar en la esquina superior derecha y seleccione **Catálogos de referencia → Catálogo de principios**. Desde ahí puede:
@@ -374,12 +393,20 @@ Para cada fila puede:
 
 El escáner de cumplimiento y el flujo de promoción a Riesgo funcionan **incluso sin un proveedor de IA configurado** — la entrada manual de hallazgos, las transiciones de estado y la ruta de promoción a Riesgo siguen disponibles. La IA solo es necesaria cuando realmente dispara un nuevo análisis.
 
+## Fases del ciclo de vida {: #lifecycle-phases }
+
+La sección **Ciclo de vida** de cada ficha recorre cinco fases fijas: Planificación, Introducción, Activo, Retiro y Fin de vida. Lo que significa cada fase difiere entre organizaciones: por ejemplo, si *Retiro* todavía admite nuevos usuarios, o cuándo se considera que un componente está en *Fin de vida*. La pestaña **Fases del ciclo de vida** le permite dejarlo escrito una sola vez para todo el espacio de trabajo.
+
+La pestaña muestra un campo de texto por fase y una fila de pestañas de idioma (primero el inglés y después cada idioma habilitado). En un espacio de trabajo nuevo, los campos vienen rellenados con una explicación predeterminada de cada fase en todos los idiomas, de modo que la ayuda está disponible desde el principio; edite cualquier texto para que refleje cómo trabaja su organización. Un idioma que se deja vacío muestra el texto en inglés. Deje una fase vacía para no mostrar ayuda en ella: vaciar las cinco fases y guardar elimina la ayuda por completo. Haga clic en **Guardar** para aplicar los textos.
+
+Los usuarios ven la ayuda de una fase como un icono de información junto a la fase en la línea de tiempo del ciclo de vida de cada ficha, que sigue visible mientras se edita el ciclo de vida. Los textos se aplican a todos los tipos de ficha. Al guardar se deja constancia en el **Registro de seguridad y administración**.
+
 ## Editor de Disposición de Fichas
 
 Para cada tipo de ficha, la sección **Diseño** en el panel del tipo controla cómo se estructura la página de detalle:
 
 - **Orden de secciones** — Arrastre secciones (Descripción, EOL, Ciclo de Vida, Jerarquía, Etiquetas, Relaciones y secciones personalizadas) para reordenarlas
-- **Visibilidad** — Oculte secciones que no sean relevantes para un tipo
+- **Visibilidad** — Oculte secciones que no sean relevantes para un tipo. La sección **Fin de vida** es la excepción a «se muestra salvo que se oculte»: por defecto se muestra solo en Aplicaciones y Componentes TI, y está oculta en todos los demás tipos, incluidos los personalizados, hasta que la active. Su interruptor decide también si el tipo participa en los informes de fin de vida — véase [Fin de vida en otros tipos de ficha](eol.md#fin-de-vida-en-otros-tipos-de-ficha)
 - **Expansión predeterminada** — Elija si cada sección comienza expandida o colapsada
 - **Diseño de columnas** — Configure 1 o 2 columnas por sección personalizada
 - **Mover campos entre secciones** — Usar la acción **mover** de un campo (junto a sus botones de editar y eliminar) para reubicarlo en otra sección, conservando su configuración

@@ -71,6 +71,13 @@ _EMPTY: frozenset = frozenset()
 _CANONICAL_UUID = r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
 
 
+class _SubtypeUnknown:
+    """The caller has the card's type but did not look its subtype up."""
+
+
+_SUBTYPE_UNKNOWN = _SubtypeUnknown()
+
+
 @dataclass(frozen=True, slots=True)
 class CardReadScope:
     """A user's card read rights, resolved once per request."""
@@ -107,7 +114,7 @@ class CardReadScope:
         db: AsyncSession,
         user: User,
         *,
-        include_subtype_denials: bool = False,
+        include_subtype_denials: bool = True,
         include_stakeholders: bool = True,
     ) -> CardReadScope:
         """Resolve the user's scope.
@@ -190,12 +197,20 @@ class CardReadScope:
         type_key: str | None,
         *,
         mode: ReadMode,
-        subtype: str | None = None,
+        subtype: str | None | _SubtypeUnknown = _SUBTYPE_UNKNOWN,
     ) -> bool:
-        """Python twin of ``clause`` for rows that are already loaded."""
-        subtype_denied = any(
-            type_key == key and subtype in subtypes for key, subtypes in self.subtype_denials
-        )
+        """Python twin of ``clause`` for rows that are already loaded.
+
+        Pass the card's ``subtype`` whenever the row has it. Without it a type that has a
+        subtype View deny cannot be answered, so it reads as denied (fail closed) unless the
+        user is a stakeholder of the card.
+        """
+        if isinstance(subtype, _SubtypeUnknown):
+            subtype_denied = any(type_key == key for key, _ in self.subtype_denials)
+        else:
+            subtype_denied = any(
+                type_key == key and subtype in subtypes for key, subtypes in self.subtype_denials
+            )
         if self.type_readable(type_key, mode=mode) and not subtype_denied:
             return True
         if isinstance(card_id, str):
@@ -484,6 +499,7 @@ async def is_card_readable(
     *,
     mode: ReadMode,
     type_key: str | None = None,
+    subtype: str | None | _SubtypeUnknown = _SUBTYPE_UNKNOWN,
 ) -> bool:
     """Single-card twin of the bulk scope, answered without loading it.
 
@@ -493,14 +509,24 @@ async def is_card_readable(
     unknown card is not readable.
     """
     if type_key is None:
-        type_key = await PermissionService._card_type_key(db, card_id)
+        type_key, subtype = await PermissionService._card_type_and_subtype(db, card_id)
+    elif isinstance(subtype, _SubtypeUnknown):
+        _, subtype = await PermissionService._card_type_and_subtype(db, card_id)
     if type_key is None:
         return False
     if mode == "inventory":
         return await PermissionService.check_permission(
-            db, user, VIEW_PERMISSION, card_id, "card.view", card_type_key=type_key
+            db,
+            user,
+            VIEW_PERMISSION,
+            card_id,
+            "card.view",
+            card_type_key=type_key,
+            subtype=subtype,
         )
-    if not await PermissionService.is_type_denied(db, user, VIEW_PERMISSION, type_key):
+    if not await PermissionService.is_type_denied(
+        db, user, VIEW_PERMISSION, type_key, subtype=subtype
+    ):
         return True
     return await PermissionService.has_card_permission(
         db, user, card_id, "card.view", type_key=type_key
@@ -520,10 +546,11 @@ async def require_card_readable(
     404 rather than 403 on purpose: a card hidden by a type deny does not exist
     for the user, and "forbidden" would confirm that it does.
     """
+    subtype: str | None | _SubtypeUnknown = _SUBTYPE_UNKNOWN
     if type_key is None:
-        type_key = await PermissionService._card_type_key(db, card_id)
+        type_key, subtype = await PermissionService._card_type_and_subtype(db, card_id)
     if type_key is None or not await is_card_readable(
-        db, user, card_id, mode=mode, type_key=type_key
+        db, user, card_id, mode=mode, type_key=type_key, subtype=subtype
     ):
         raise HTTPException(404, "Card not found")
     return type_key

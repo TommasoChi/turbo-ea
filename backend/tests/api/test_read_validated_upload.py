@@ -6,7 +6,7 @@ from __future__ import annotations
 import pytest
 from fastapi import HTTPException
 
-from app.api.v1 import file_attachments as fa
+from app.services import attachment_upload as fa
 from app.services.attachment_validation import MAX_ATTACHMENT_BYTES, MAX_ATTACHMENT_MB
 
 PDF = b"%PDF-1.7\n" + b"x" * 64

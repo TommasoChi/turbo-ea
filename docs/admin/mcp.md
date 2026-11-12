@@ -65,7 +65,7 @@ MCP_PUBLIC_URL=https://your-domain.example.com/mcp
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `TURBO_EA_PUBLIC_URL` | `http://localhost:8920` | The public URL of your Turbo EA instance |
+| `TURBO_EA_PUBLIC_URL` | the origin of `MCP_PUBLIC_URL`, else `http://localhost:8920` | The public URL of your Turbo EA instance. Every link an MCP tool returns (a draft in the editor, a saved inventory view) is built on it. Left unset, or set to a local address (`localhost`, `127.0.0.1` or `[::1]`, any port — `.env.example` ships `http://localhost`) while `MCP_PUBLIC_URL` names a real host, the MCP server uses the scheme and host of `MCP_PUBLIC_URL` instead (`https://ea.example.com/mcp` gives `https://ea.example.com`), which is right whenever MCP is served under `/mcp` on the app's own host. A value on a real host is always used; set one when the app lives elsewhere |
 | `MCP_PUBLIC_URL` | `http://localhost:8920/mcp` (docker compose) | The public URL of the MCP server (used in OAuth redirect URIs). When running the container standalone, the code default is `http://localhost:8001` |
 | `MCP_PORT` | `8001` | Internal port for the MCP container (rarely needs changing) |
 | `SECRET_KEY` | *(none)* | Set it to the backend's value. Signs the OAuth client ids the MCP server hands out, so a client that registered once keeps working after a restart; without it the server signs with a key that dies with the process and logs a warning. Docker compose, the Helm chart and the cloud templates pass it in automatically |
@@ -183,31 +183,34 @@ In this mode, the server authenticates with email/password and refreshes the tok
 
 ## Available Capabilities
 
-The MCP server exposes **56 tools** across two groups: **35 read tools** that query EA data and **21 write tools** (15 additive, 6 destructive) that create and maintain cards, relations, diagrams, risks, ADRs and more — including turning artifacts an AI tool has in its own context (spreadsheets, BPMN XML, DrawIO XML, documents, images) into structured EA data. Every tool carries MCP `ToolAnnotations` (read-only / destructive / idempotent hints) so connectors can surface destructiveness in their UI.
+The MCP server exposes **70 tools** across two groups: **43 read tools** that query EA data and **27 write tools** (21 additive, 6 destructive) that create and maintain cards, relations, diagrams, risks, ADRs, saved inventory views and more — including turning artifacts an AI tool has in its own context (spreadsheets, BPMN XML, DrawIO XML, documents, images) into structured EA data. Every tool carries MCP `ToolAnnotations` (read-only / destructive / idempotent hints) so connectors can surface destructiveness in their UI. Every tool also refuses an argument it does not declare: the call fails with an error that names the unknown argument and lists the valid ones, and nothing is done. (Before 2.203.0 such an argument was silently ignored, so a call could report success while part of what was asked was lost.)
 
 ### Dry-run safety on writes
 
 Every write tool defaults to **`dry_run=true`**, and nothing is persisted until the AI tool calls it again with `dry_run=false` — which it should only do after the user has seen the preview and confirmed. This prevents an enthusiastic agent from quietly seeding hundreds of cards on a misinterpreted spreadsheet. The preview comes in one of two kinds:
 
 - **Verified by the backend.** Where the underlying endpoint supports a dry run, the backend runs every validator and resolver — permissions, card ids, what the user may read — builds the complete result, then **rolls the transaction back**. This covers cards (`create_cards_bulk`, `update_cards_bulk`), relations (`upsert_relations_bulk`) and diagrams (`create_diagram`, `update_diagram`). A diagram preview returns the card links the backend accepted, and for an update the exact change: renamed fields, card links added and removed, and whether the canvas changed.
-- **Built by the MCP server.** Where the endpoint has no dry run, the tool validates and translates its input and shows the exact payload a commit would send, without calling the write endpoint: `import_bpmn` (the draft → submit → approve walk; its flow-node counts are an estimate and the preview says `verified: false`), `create_adr`, `update_adr`, `sign_adr`, `create_soaw`, `add_card_comment`, `transition_card_lifecycle`, `assign_stakeholders`, `create_risks`, `update_risks`, `archive_cards` (which shows each card's archive impact), and `set_card_logos` / `clear_card_logos` (which look up each card's type and current logo, and fetch every `image_url`).
+- **Built by the MCP server.** Where the endpoint has no dry run, the tool validates and translates its input and shows the exact payload a commit would send, without calling the write endpoint: `import_bpmn` (which finds the draft a commit would save to, and its flow-node counts are an estimate, so the preview says `verified: false`), `submit_process_flow` and `approve_process_flow` (which read the version and report the status change, or why it is not possible), `link_process_flow_elements` (which reads the version and its steps and reports each link's current and new value, or the steps it does not know), `create_adr`, `update_adr`, `sign_adr`, `revise_adr` (which reads the decision and reports the revision number it would create, or why the backend would refuse), `create_soaw`, `add_card_comment`, `add_document_comment` (which reads the discussion and reports whether you may comment and whether the thread you answer belongs to that document), `transition_card_lifecycle`, `save_inventory_view` (which runs the query and reports how many cards match, with a few sample names), `assign_stakeholders`, `create_risks`, `update_risks`, `archive_cards` (which shows each card's archive impact), and `set_card_logos` / `clear_card_logos` (which look up each card's type and current logo, and fetch every `image_url`).
 
 Either way, the preview is recorded in the audit log as a dry-run batch, so an administrator can see what an agent proposed as well as what it committed.
 
 ### Read tools
 
-The server exposes 35 read tools grouped into eight clusters.
+The server exposes 43 read tools grouped into ten clusters.
 
 **Cards & metamodel**
 
 | Tool | Description |
 |------|-------------|
 | `search_cards` | Search and filter cards by type, status, or free text |
+| `query_cards` | Find cards through a chain of relations with a condition at each hop — see [Multi-hop card queries](#multi-hop-card-queries) |
+| `list_inventory_views` | List the saved inventory views you can see, with each view's query and the channel that created it |
 | `get_card` | Get full details of a card by UUID |
 | `get_card_relations` | Get all relations connected to a card |
 | `get_card_hierarchy` | Get ancestors and children of a card |
 | `list_card_types` | List all card types in the metamodel; each type's `category` is the key of its category (architecture layer) |
 | `get_relation_types` | List relation types, optionally filtered by card type |
+| `list_tag_groups` | List the tag groups (with the card types each applies to) and their tags; the tag ids are what `query_cards` and `save_inventory_view` take under `where.tags` |
 | `resolve_card_refs` | Pre-validate name-based card references (name → UUID) before a bulk import — resolves only, never writes |
 | `analyze_impact` | Dependency blast-radius analysis for a proposed change to a card |
 
@@ -239,9 +242,11 @@ The server exposes 35 read tools grouped into eight clusters.
 | Tool | Description |
 |------|-------------|
 | `list_principles` | Published EA principles (statement, rationale, implications) |
-| `list_adrs` | Architecture Decision Records, filterable by initiative / status |
-| `get_adr` | Single ADR with sections, linked cards, signature trail |
-| `list_soaws` | Statements of Architecture Work for an initiative |
+| `list_adrs` | Architecture Decision Records, filterable by initiative, status and standing (`standing="in_force,amended"` lists the decisions in force). Shows the current revision of each decision; `include_earlier` adds the earlier revisions |
+| `get_adr` | Single ADR revision with sections, linked cards, signature trail, standing, typed links to other decisions, decision makers and participants, dates, revisions and file names |
+| `list_soaws` | Statements of Architecture Work for an initiative (current revisions; `include_earlier` adds the earlier ones) |
+| `get_document_discussion` | The discussion of a decision or a SoAW: threads with their replies, section, author and resolved state, rejection reasons and signing notes included. Each comment comes as HTML and as plain text, with mentions written as `@Name`, or `[restricted]` for a card you may not see; `include_earlier_revisions` adds the threads of earlier revisions |
+| `get_document_history` | The timeline of a decision or a SoAW (created, saved, sent for review, signed, rejected, restored, …), page by page. Opening, comparing and restoring saved versions stays in the web UI |
 
 **Reports**
 
@@ -272,6 +277,14 @@ The server exposes 35 read tools grouped into eight clusters.
 | `get_archimate_mapping` | How Turbo EA card and relation types map to ArchiMate 3.x element and relationship types (read before drawing an ArchiMate diagram) |
 | `list_viewpoints` | The ArchiMate Viewpoint catalog: each viewpoint's key, layer and allowed objects (pick the `viewpoint_key` for `create_archimate_diagram`) |
 
+**Process flows**
+
+| Tool | Description |
+|------|-------------|
+| `list_process_flow_versions` | List a Business Process's flow versions — the published one, and the drafts and pending ones for a user who may see them — with each one's id, revision, status, the version it was based on, and a link that opens a draft in the editor. No BPMN XML. |
+| `get_process_flow_version` | Read one flow version, including its BPMN XML, so an agent can revise a draft and save it back with `import_bpmn`. |
+| `get_process_flow_elements` | List the steps of a flow version — each one's element id, type, name, lane and order — and the cards each step is linked to: Application, Data Object, IT Component, the Business Process it hands over to, and Organizations. A linked card the user may not see reads as no link. Says whether the version's step links can be set (a draft or pending revision). |
+
 **Audit & change history**
 
 | Tool | Description |
@@ -282,9 +295,9 @@ All tools are bound by the authenticated user's RBAC — a viewer will simply ge
 
 ### Write tools
 
-The server exposes 21 write tools, each annotated as **additive** (creates or extends data) or **destructive** (modifies or removes existing data) so connectors can warn accordingly.
+The server exposes 27 write tools, each annotated as **additive** (creates or extends data) or **destructive** (modifies or removes existing data) so connectors can warn accordingly.
 
-**Additive (15)**
+**Additive (21)**
 
 | Tool | Description |
 |------|-------------|
@@ -293,15 +306,21 @@ The server exposes 21 write tools, each annotated as **additive** (creates or ex
 | `create_risks` | Create entries in the EA Risk Register. |
 | `update_risks` | Update Risk Register entries (fields, linked cards). |
 | `add_card_comment` | Post a comment on a card — a non-destructive, reviewable note instead of mutating fields. |
+| `add_document_comment` | Post a comment on a decision or a SoAW: a new thread, optionally tagged to a section, or a reply to a thread. The comment is plain text; mentions are made in the web UI only. Takes the `adr.comment` / `soaw.comment` permission, or being a signatory of the document. A posted comment cannot be undone with `rollback_batch`; delete it from the discussion in the web UI. |
 | `create_soaw` | Create a Statement of Architecture Work for an initiative. |
 | `assign_stakeholders` | Assign or remove stakeholder roles on cards. |
 | `update_cards_bulk` | Field-level patches on many cards in one call. |
-| `create_adr` | Create an Architecture Decision Record. |
-| `update_adr` | Update an ADR (title, sections, status, linked cards). |
+| `create_adr` | Create an Architecture Decision Record, with typed links to other decisions (`replaces`, `amends`, `revokes`, `relates`), decision makers, participants and dates. Replacing or revoking a decision is done this way: a new decision with a `replaces` / `revokes` link, which takes effect once it is signed. |
+| `update_adr` | Update a draft ADR (title, sections, linked cards, typed links, people, dates, change summary). A decision in review only accepts linked-card changes, and a signed one is never edited. |
 | `sign_adr` | Sign an ADR (requires the `adr.sign` permission; otherwise returns a UI deep-link to sign in the browser). |
+| `revise_adr` | Start the next revision of a signed ADR: a draft with the same reference and the next revision number, optionally consolidating amending decisions. Refused when a revision is already being drafted, a later revision is signed, or the decision was revoked or replaced. Recording a past decision as decided stays in the web UI. |
 | `create_diagram` | Create a free-form DrawIO diagram with optional links to existing cards. |
 | `create_archimate_diagram` | Create an ArchiMate diagram from Open Group Exchange Format XML in a given Viewpoint (`viewpoint_key`, from `list_viewpoints`), with optional links to existing cards. The dry run validates the model on the server and reports `valid` and `issues` without creating anything. |
-| `import_bpmn` | Save a BPMN 2.0 XML diagram against an **existing** Business Process card. If no card matches the given name, the tool returns a `card_not_found` error pointing the agent at `create_cards_bulk` — this forces the agent to create the card explicitly with description, subtype and attributes first, instead of taking a shortcut that lands a sparse card. |
+| `save_inventory_view` | Save a multi-hop card query as an inventory view (new, or replacing the query of one given by `view_id`). The inventory re-runs the query every time the view is opened; the response carries a link that opens it. An update changes only the name and the query, plus the visibility and columns when they are passed; the view's grouping and layout are kept. |
+| `import_bpmn` | Save a BPMN 2.0 XML diagram as a **draft** process flow of an **existing** Business Process card. It never submits or publishes the draft. By default it starts a new draft based on the published flow, so the element links already made carry over; `based_on_version_id` starts it from another version instead, and `draft_version_id` replaces the diagram of an existing draft (same revision, no new draft). The response carries the draft's id, revision and status and a link that opens it in the editor. If no card matches the given name, the tool returns a `card_not_found` error pointing the agent at `create_cards_bulk` — this forces the agent to create the card explicitly with description, subtype and attributes first, instead of taking a shortcut that lands a sparse card. A saved draft cannot be undone with `rollback_batch`; delete it from the card's Process Flow → Drafts sub-tab. |
+| `link_process_flow_elements` | Link the steps of a draft or pending process flow to cards: Application, Data Object, IT Component, the Business Process a step hands over to, and Organizations. One entry per step, by its element id from `get_process_flow_elements`; a link left out stays as it is, and an empty value clears it. Card ids only (look them up with `search_cards` or `resolve_card_refs`). A step id the saved diagram does not have is refused before anything is written. Each link takes an active card of its own type (Application, Data Object, IT Component, Business Process, Organization). If the backend refuses one step (a card of another type, a card that is archived or that the user may not see, a process link on a data object), the run stops there and the answer lists which steps were linked and which were not. The links take effect on the published steps when the revision is approved. They record no event, so `rollback_batch` cannot undo them: call the tool again with the old value. Takes `bpm.edit`. |
+| `submit_process_flow` | Submit a draft process flow for approval (draft → pending), as the **Submit** button in the web UI does. The process owners are notified and get an approval to-do. Takes `bpm.edit`. Not reversible with `rollback_batch`: an approver rejects the revision in the web UI to send it back to draft. |
+| `approve_process_flow` | Approve a pending process flow, which publishes it and archives the previously published revision. Takes approval authority (`bpm.approve_flows`, or the process owner's stakeholder role), and honours the setting that requires a separate approver. A refusal returns the reason the backend gave. Not reversible with `rollback_batch`: a revision published by mistake is withdrawn in the web UI, which keeps it on record and opens a new draft. |
 | `set_card_logos` | Set the custom logo on many cards at once — the bulk way to put product marks on an Application inventory. Three ways to supply the image, one per row: a built-in `icon_slug` (resolved server-side, nothing transferred), an `image_url` the MCP server downloads for you from an allowlisted icon host, or `image_base64` from the agent's own context. The packs are a shortcut, not the source of truth — a dry run lists the slugs they do not carry under `unknown_icon_slugs` **and** fetches every `image_url`, so a missing brand or a dead link is reported before anything is written rather than left as a logo nobody could set. `mime` is optional and sniffed from the bytes. PNG/JPEG/WebP/GIF only, 1 MB each. Each row echoes a sha256 so the caller can prove what landed. Use `clear_card_logos` to remove one. |
 
 **Destructive (6)**
@@ -324,6 +343,113 @@ Call `get_archimate_mapping` first so the model knows which ArchiMate element a 
 > Draw an ArchiMate Application Cooperation view of the CRM and everything it connects to.
 
 See the [ArchiMate guide](../guide/archimate.md) for the editor side.
+### Multi-hop card queries
+
+`query_cards` answers a question that chains relations — "Organizations that use an Application whose lifecycle is Active, which is affected by an Initiative with status On Track" — in one call, and `save_inventory_view` keeps the same query as a saved inventory view. The view stores the query, not its results: the inventory runs it again every time someone opens the view, so the list stays current.
+
+A query is a small JSON object made of **keys only** — card type, relation type, field and option keys as `list_card_types` and `get_relation_types` return them; card ids only under `where.cards` and tag ids only under `where.tags`; never labels:
+
+```text
+CardQuery = { type, where?, related?: [Hop] }
+Hop       = { relation: "<relation type key>" | "<key>__out" | "<key>__in",
+              type, where?, negate?: true|false, related?: [Hop] }
+Where     = { lifecycle_phase?: [plan | phaseIn | active | phaseOut | endOfLife | none],
+              subtype?: [subtype key],
+              approval_status?: [status],
+              data_quality_band?: [complete | partial | minimal],
+              eol_status?: [eol | approaching | supported | unknown | __empty__],
+              attributes?: { field key: [option key | "true" | "false" | text | "__empty__"] },
+              tags?: [tag id],
+              cards?: [card id],
+              include_descendants?: true|false }
+```
+
+Queries can also be **stacked**, so one view combines several complete queries:
+
+```text
+Query = CardQuery | { all_of: [CardQuery, …] } | { any_of: [Group, …] }
+Group = CardQuery | { all_of: [CardQuery, …] }
+```
+
+- `all_of` (**AND**): a card is listed only when it matches every query in the list. Its queries all start from the same card type (`all_of_type_mismatch` otherwise), and it needs at least two (`all_of_needs_two`).
+- `any_of` (**OR**): a card is listed when it matches any of the groups, each a plain query or an `all_of`. It needs at least two groups (`any_of_needs_two`). The groups may start from different card types, so **one view can list several card types**; such a view opens on all of them, and the grid shows the columns they have in common.
+- An `any_of` cannot sit inside another `any_of` or an `all_of`, and an `all_of` holds plain queries only (`invalid_query`).
+- The queries of an `all_of` meet on the start card only: "uses an IT Component that is phasing out" AND "is affected by an Initiative" may be two different related cards. To require two things of the **same** related card, put both hops on one line, side by side under it.
+
+- A hop matches when **any** related card of that type meets its `where` (and its own nested hops). `negate: true` turns it into "has **no** such card".
+- Hops side by side at one level must all match (AND); the values inside one list are alternatives (OR).
+- `<key>__out` and `<key>__in` pick a side of a relation type that links a card type to itself (the card is the source, or the target). Otherwise the plain key is enough.
+- `data_quality_band` matches a card's data quality score by band, as the inventory's Data Quality filter does: `complete` (80 and above), `partial` (40 up to, but excluding, 80) or `minimal` (below 40). Any other value is refused with `unknown_band`.
+- `eol_status` matches a card's end-of-life status as the inventory's End of life column shows it, computed from endoflife.date or a custom EOL product: `eol`, `approaching`, `supported`, `unknown`, or `__empty__` for a card with no EOL link and no manual end of life. Any other value is refused with `unknown_eol_status`, and a card type that does not track End of Life with `eol_not_tracked`. Such a condition needs the EOL view permission: saving, previewing and opening a view that holds one are refused without it (`eol_view_required`), as is running the query.
+- `tags` takes tag ids from `list_tag_groups`, grouped by tag group: a card must carry at least one of the listed tags from **every** group named (alternatives within a group, AND across groups). A tag whose group does not apply to that hop's card type is refused with `tag_not_for_type`; an unknown id with `unknown_tag`.
+- `cards` pins that node to the listed cards (alternatives): take their ids from `search_cards` or `resolve_card_refs`. Each should be a card of the node's own type. Running a query does not check the picks: an id that names no card, a card of another type or a card the user cannot read simply matches nothing. Saving a view does check them, and refuses such a pick with `unknown_card`. An archived card matches nothing at a hop. `include_descendants: true` widens each pick to every card beneath it through the parent link (sub-capabilities, child organizations); set without `cards` it is refused with `descendants_without_cards`, and on a card type that has no hierarchy with `descendants_without_hierarchy`. A card or tag id anywhere else in the query is refused with `query_holds_an_id`.
+- Related cards count only when they are active and the user may read them: a card the user cannot see breaks the chain, exactly as it does in the web UI. When a view is saved, a writer cannot pin a card hidden from them (`unknown_card`); a collaborator editing a view shared with them keeps the picks it already holds, even ones they cannot read. A reader opening a view whose picks include a card hidden from them is not refused — the hidden picks simply match nothing.
+
+Example — Organizations using an active Application that an Initiative with status *On Track* affects:
+
+```json
+{
+  "type": "Organization",
+  "related": [
+    {
+      "relation": "relOrgToApp",
+      "type": "Application",
+      "where": { "lifecycle_phase": ["active"] },
+      "related": [
+        {
+          "relation": "relInitiativeToApp",
+          "type": "Initiative",
+          "where": { "attributes": { "initiativeStatus": ["onTrack"] } }
+        }
+      ]
+    }
+  ]
+}
+```
+
+Example — active Applications on aging technology that an Initiative affects, **or** the Organizations using an Application (a view listing two card types):
+
+```json
+{
+  "any_of": [
+    {
+      "all_of": [
+        {
+          "type": "Application",
+          "where": { "lifecycle_phase": ["active"] },
+          "related": [
+            {
+              "relation": "relAppToITC",
+              "type": "ITComponent",
+              "where": { "lifecycle_phase": ["phaseOut", "endOfLife"] }
+            }
+          ]
+        },
+        {
+          "type": "Application",
+          "related": [{ "relation": "relInitiativeToApp", "type": "Initiative" }]
+        }
+      ]
+    },
+    {
+      "type": "Organization",
+      "related": [{ "relation": "relOrgToApp", "type": "Application" }]
+    }
+  ]
+}
+```
+
+In the inventory, a view saved this way shows its chain as a readable path above the grid, with a note that it was created via MCP. Its query can be changed in the inventory (the pencil on the path strip) or through `save_inventory_view` (pass the view's id from `list_inventory_views` as `view_id`; the update replaces the name and the query, changes visibility and columns only when they are passed, and keeps the grouping and layout set in the web UI — unless the new query starts from other card types, which resets the view's filters and grouping, since they belonged to the old ones; a view you cannot edit is refused with `view_not_found` or `view_not_editable`; a visibility change you may not make (only the owner can change it, and public or shared needs `bookmarks.share`) is refused with `visibility_not_allowed`); in the web UI its owner can also rename it, change its sharing and OData setting, adjust the column layout, or delete it.
+
+A view's `columns` may also carry **matched columns**, `via:<line>:<hop path>`: a column showing, per row, the cards at one step of the query that made the row match (for "Organizations that use an Application that uses an end-of-life IT Component", which Applications and which IT Components). `line` is the zero-based position of the line among all the query's lines in order (a plain query is line 0; the lines of an `all_of`, and of every `any_of` group in turn, are numbered one after another), and `hop path` is the dot-joined zero-based indices into `related` from the line's first card down to the step: `via:0:0` is the first hop of the first line, `via:0:0.1` the second hop below it, `via:2:0` the first hop of the third line. The first card of a line and a step behind "has no" (`negate`) have none. The matches are shown in the web UI only: no MCP tool reads them yet. Updating a view's `query` without sending `columns` keeps its stored `via:` keys as they are, so send `columns` when the steps change.
+
+Limitations:
+
+- At most **6 queries** in a stack (`too_many_lines`); the queries of an `all_of` share one start card type, while the groups of an `any_of` may list several.
+- At most **3 levels** of `related` in each query, at most 10 hops side by side at one level, and at most **12 hops in the whole query** (side by side, nested and over every query of a stack together). A longer query is refused with `too_many_hops`.
+- At most **50** picked cards per condition.
+- A text attribute matches its value **exactly** — there is no partial or case-insensitive match.
+- **`rollback_batch` cannot undo a saved view.** Saving a view records a mutation batch but publishes no event for the rollback to reverse; delete an unwanted view from the inventory's Saved Views instead.
 
 ### Artifact upload
 
@@ -337,16 +463,24 @@ Typical workflow when a user shares a spreadsheet with the AI agent:
 4. The user confirms; the agent calls again with `dry_run=False` to commit.
 5. If relation columns are present, the agent then calls `upsert_relations_bulk` with the same dry-run / confirm cycle.
 
+A BPMN diagram goes through the same approval workflow as one drawn in the web UI, one explicit step at a time:
+
+1. `import_bpmn` saves the diagram as a **draft** and returns a link to it. Nothing is published.
+2. To link the steps to cards, the agent reads the step ids with `get_process_flow_elements` and sets the links with `link_process_flow_elements` (dry run first, as always). `import_bpmn` itself takes no links.
+3. The user reviews the draft. To change it, the agent reads it with `get_process_flow_version`, edits the XML and calls `import_bpmn` again with `draft_version_id`, which updates the same draft instead of starting another one. The links of every step whose element id the new XML keeps stay in place.
+4. When the user asks, `submit_process_flow` sends the draft for approval.
+5. `approve_process_flow` publishes it — only for a user allowed to approve process flows. Anyone else approves it in the web UI, from the card's **Process Flow → Drafts** sub-tab.
+
 ### Write-tool guardrails
 
 Defense in depth on top of dry-run, so an LLM mishap can't cause mass damage:
 
 - **Per-call size caps.** The MCP write tools enforce a much smaller cap than the underlying Excel-importer endpoints: 200 rows for `create_cards_bulk`, 500 ops for `upsert_relations_bulk`. Big enough for any realistic single artifact upload, small enough that a dry-run preview is still scannable.
 - **No relation deletion by default.** `upsert_relations_bulk` refuses `action: "delete"` ops — to remove relations, use the web UI where the action is captured under the user's identity. Operators can opt in by setting `MCP_ALLOW_RELATION_DELETE=true`.
-- **Kill switch.** `MCP_WRITES_ENABLED=false` turns off all 21 write tools without redeploying code. The 35 read tools keep working.
+- **Kill switch.** `MCP_WRITES_ENABLED=false` turns off all 27 write tools without redeploying code. The 43 read tools keep working.
 - **Logo fetching is allowlisted.** The built-in icon packs cannot cover every product a customer runs, and an assistant is often sandboxed with no route to the web, so `set_card_logos` accepts an `image_url` and the MCP server fetches it. Only `https`, only the hosts in `MCP_LOGO_FETCH_HOSTS`, only a public address, at most two redirects (each re-checked), at most 1 MB read as a stream, and the bytes must carry a real PNG/JPEG/WebP/GIF signature. The fetch happens at the MCP edge, never in the backend, and the image is then uploaded through the ordinary route — so a URL chosen by an LLM never reaches the process holding the database. `MCP_LOGO_FETCH_ENABLED=false` switches it off.
 - **Audit origin tag.** Every backend request from the MCP server carries an `X-Turbo-EA-Origin: mcp` header. Events emitted from those requests are tagged `origin: "mcp"` in the audit-log payload, so admins can filter MCP-driven writes out of the timeline distinct from web-UI actions.
-- **Mutation batches.** Every MCP write call — the preview as well as the commit — is one mutation batch in the audit log, opened before anything is written; every event emitted during the call is stamped with the batch id, and every write tool returns that `batch_id`. Admins (or the `get_change_history` tool) can reconstruct the full per-event diff of a commit from one id, and `rollback_batch` can reverse it — including deleting a diagram that `create_diagram` made, unless someone has published it since. A diagram update is reported as not reversible, because the previous canvas is not kept. Commits above `MCP_BATCH_CONFIRMATION_THRESHOLD` rows must pass back the one-shot `confirm_token` the prior dry-run returned. The backend checks it when the commit's batch opens, before anything is written: it must come from a dry-run of the same tool by the same user less than 15 minutes earlier, and it authorises a single commit. Every bulk write tool follows this preview → confirm cycle: `create_cards_bulk`, `update_cards_bulk`, `archive_cards`, `upsert_relations_bulk`, `assign_stakeholders`, `create_risks`, `update_risks`, `set_card_logos`, `clear_card_logos`.
+- **Mutation batches.** Every MCP write call — the preview as well as the commit — is one mutation batch in the audit log, opened before anything is written; every event emitted during the call is stamped with the batch id, and every write tool returns that `batch_id`. Admins (or the `get_change_history` tool) can reconstruct the full per-event diff of a commit from one id, and `rollback_batch` can reverse it — including deleting a diagram that `create_diagram` made, unless someone has published it since. A diagram update is reported as not reversible, because the previous canvas is not kept. A comment posted on a decision or a SoAW is not reversible either: it may already have been read, so it is deleted from the discussion instead. Nor are the process-flow steps: `rollback_batch` reports a submission or an approval as not reversible and changes nothing — an approver rejects a pending revision, and a published one is withdrawn, both in the web UI. A draft saved by `import_bpmn` is not reversible because it records no event; it is deleted from the Drafts sub-tab. Step links set by `link_process_flow_elements` record no event either; set them again to change them. Commits above `MCP_BATCH_CONFIRMATION_THRESHOLD` rows must pass back the one-shot `confirm_token` the prior dry-run returned. The backend checks it when the commit's batch opens, before anything is written: it must come from a dry-run of the same tool by the same user less than 15 minutes earlier, and it authorises a single commit. Every bulk write tool follows this preview → confirm cycle: `create_cards_bulk`, `update_cards_bulk`, `archive_cards`, `upsert_relations_bulk`, `assign_stakeholders`, `create_risks`, `update_risks`, `set_card_logos`, `clear_card_logos`, `link_process_flow_elements`.
 - **No hard delete.** The toolset deliberately omits permanent card deletion. `archive_cards` and `update_cards_bulk` *are* exposed, but archiving is a recoverable soft-delete (30-day restore window) and both are destructiveness-annotated and dry-run-gated. Adding any tool that performs an irreversible mutation (hard delete, force-purge) would require an explicit design review.
 
 The six guardrail environment variables on the MCP container:
@@ -386,7 +520,7 @@ The six guardrail environment variables on the MCP container:
 | Role | Access |
 |------|--------|
 | **Admin** | Configure MCP settings (`admin.mcp` permission). Full read + write through MCP. |
-| **All authenticated users** | Read access governed by their existing RBAC. Write tools require the matching backend permissions — `inventory.create` / `inventory.edit` / `inventory.archive` (cards), `relations.manage` (relations), `diagrams.manage` (diagrams), `bpm.edit` (BPMN), `risks.manage` (Risk Register), `comments.create` (comments), `stakeholders.manage` (stakeholders), `soaw.create` (SoAW), `adr.create` / `adr.sign` (ADRs). |
+| **All authenticated users** | Read access governed by their existing RBAC. Write tools require the matching backend permissions — `inventory.create` / `inventory.edit` / `inventory.archive` (cards), `relations.manage` (relations), `diagrams.manage` (diagrams), `bpm.edit` (BPMN drafts, their step links and submitting them), `bpm.approve_flows` (approving a process flow), `risks.manage` (Risk Register), `comments.create` (comments), `stakeholders.manage` (stakeholders), `soaw.create` (SoAW), `adr.manage` / `adr.sign` (ADRs), `adr.comment` / `soaw.comment` (discussion of decisions and SoAWs), `bookmarks.manage` / `bookmarks.share` (saved inventory views). |
 
 The `admin.mcp` permission controls who can manage MCP settings. It is only available to the Admin role by default. Custom roles can be granted this permission through the Roles administration page.
 
@@ -415,6 +549,8 @@ Data access through MCP — read or write — follows the same RBAC model as the
 | "host not found" in Nginx logs | The MCP service is not running. Start it with `docker compose --profile mcp up -d`. The Nginx config handles this gracefully (502 response, no crash). |
 | OAuth callback fails | Verify you added `https://your-domain.example.com/mcp/oauth/callback` as a redirect URI in your SSO app registration. |
 | AI tool cannot connect | Check that `MCP_PUBLIC_URL` matches the URL accessible from the user's machine. Ensure HTTPS is working. |
+| Links an AI tool returns open `http://localhost:8920` | The MCP container does not know the address users reach the app at. Set `TURBO_EA_PUBLIC_URL` (or `MCP_PUBLIC_URL`, whose host it falls back to) to the public URL and restart the MCP container. |
+| A tool call fails with `Unknown argument(s): …` | The AI tool passed a parameter the tool does not take; the error lists the valid ones and nothing was done. For step links on a process flow, use `link_process_flow_elements` rather than `import_bpmn`. |
 | User gets empty results | MCP respects RBAC permissions. If a user has restricted access, they will only see the cards their role allows. |
 | Connection drops after 1 hour | The AI tool should handle token refresh automatically. If not, reconnect. |
 | Copilot Studio reports "Connection creation failed" | Copilot Studio calls from Microsoft's cloud. Check that `https://your-domain.example.com/mcp` is reachable from the internet with a publicly trusted certificate, and that `MCP_PUBLIC_URL` is that public address. The Nginx log during an attempt shows the last request that arrived; no request at all means the instance is not reachable. |

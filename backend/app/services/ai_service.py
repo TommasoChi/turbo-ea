@@ -7,7 +7,7 @@ Two-step pipeline:
 Supports multiple LLM providers:
   - Ollama (self-hosted, /api/chat)
   - OpenAI-compatible (OpenAI, Gemini, OpenRouter, LM Studio, vLLM)
-  - Azure Hosted OpenAI (/openai/deployments/{deployment}/chat/completions)
+  - Azure Hosted OpenAI (deployment API or v1 API — see services/azure_openai.py)
   - Anthropic Claude (/v1/messages)
   - Amazon Bedrock (Converse API via boto3 — see services/bedrock.py)
 """
@@ -22,7 +22,7 @@ from typing import Any
 
 import httpx
 
-from app.services import bedrock, openai_chat
+from app.services import azure_openai, bedrock, openai_chat
 
 logger = logging.getLogger("turboea.ai")
 
@@ -207,7 +207,18 @@ async def web_search(
 
 # Maps card type keys to search keywords and LLM context descriptions.
 # Types not listed here fall back to the generic type label.
+#: The search context of a custom EOL product (``POST /ai/suggest-eol-product``):
+#: not a card type, so the key can never collide with one.
+EOL_PRODUCT_CONTEXT_KEY = "__eol_product__"
+
 _TYPE_SEARCH_CONTEXT: dict[str, dict[str, Any]] = {
+    EOL_PRODUCT_CONTEXT_KEY: {
+        "search_suffix": "software product end of life support lifecycle",
+        "llm_context": (
+            "a software or hardware product whose vendor support lifecycle "
+            "(release cycles, end of support, end of life) an organisation tracks"
+        ),
+    },
     "Application": {
         "search_suffix": "software application",
         "llm_context": "a software application or digital product",
@@ -434,18 +445,40 @@ def build_llm_prompt(
 # ---------------------------------------------------------------------------
 
 
-def _parse_llm_content(content: str) -> dict[str, Any]:
-    """Parse JSON from LLM response content, with markdown code-block fallback."""
-    try:
-        result: dict[str, Any] = json.loads(content)
-        return result
-    except json.JSONDecodeError:
-        json_match = re.search(r"```(?:json)?\s*([\s\S]*?)```", content)
-        if json_match:
-            result = json.loads(json_match.group(1))
-            return result
-        logger.warning("LLM returned non-JSON content: %.200s", content)
+# What a reasoning model writes before its answer when the server does not
+# keep the two apart (LM Studio, Ollama's OpenAI endpoint).
+_THINK_BLOCK = re.compile(r"<think>[\s\S]*?</think>", re.IGNORECASE)
+_FENCED_BLOCK = re.compile(r"```(?:json)?\s*([\s\S]*?)```")
+_OUTERMOST_OBJECT = re.compile(r"\{[\s\S]*\}")
+
+
+def _parse_llm_content(content: Any) -> dict[str, Any]:
+    """The JSON object in an LLM answer, or ``{}`` when it holds none.
+
+    JSON mode is a request, not a guarantee: a provider that refuses it is
+    asked again without it (``openai_chat.post_chat``, #1372), and Anthropic
+    and Bedrock have no such mode at all — only the prompt asks for JSON. So
+    the object is looked for as the whole answer, then inside a markdown
+    fence, then as the outermost braces of an answer with prose around it.
+    """
+    if not isinstance(content, str):
+        logger.warning("LLM returned no text content")
         return {}
+    text = _THINK_BLOCK.sub("", content)
+    candidates = [text]
+    for pattern in (_FENCED_BLOCK, _OUTERMOST_OBJECT):
+        match = pattern.search(text)
+        if match:
+            candidates.append(match.group(match.lastindex or 0))
+    for candidate in candidates:
+        try:
+            result = json.loads(candidate)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(result, dict):
+            return result
+    logger.warning("LLM returned non-JSON content: %.200s", content)
+    return {}
 
 
 async def _call_ollama(
@@ -484,12 +517,13 @@ async def _call_azure_openai(
     messages: list[dict[str, str]],
     api_version: str = DEFAULT_AZURE_API_VERSION,
 ) -> dict[str, Any]:
-    """Call an Azure Hosted OpenAI deployment endpoint.
+    """Call an Azure Hosted OpenAI deployment.
 
-    Azure uses a different URL structure, authentication header (api-key instead
-    of Authorization: Bearer), requires an api-version query parameter, and the
-    model/deployment name is embedded in the URL rather than the request body.
-    URL format: {endpoint}/openai/deployments/{deployment}/chat/completions
+    Azure authenticates with an ``api-key`` header instead of
+    ``Authorization: Bearer``. Which URL is called, whether an ``api-version``
+    goes with it and whether the deployment is named in the URL or as the
+    body's ``model`` depend on the endpoint that was entered
+    (``azure_openai.chat_target``, #1386).
 
     Payload mirrors `_call_openai_compatible` — and is posted through the same
     `openai_chat.post_chat`, so a reasoning deployment that refuses the
@@ -500,21 +534,23 @@ async def _call_azure_openai(
     which is Azure's hard requirement for the `json_object` response format.
     """
     client = await _get_llm_client()
-    url = f"{provider_url.rstrip('/')}/openai/deployments/{model}/chat/completions"
+    target = azure_openai.chat_target(provider_url, model, api_version)
 
     headers = {
         "api-key": api_key,
         "Content-Type": "application/json",
     }
-    payload = openai_chat.build_chat_payload(None, messages, temperature=0.1, json_mode=True)
+    payload = openai_chat.build_chat_payload(
+        target.model, messages, temperature=0.1, json_mode=True
+    )
 
     try:
         resp = await openai_chat.post_chat(
             client,
-            url,
+            target.url,
             headers=headers,
             payload=payload,
-            params={"api-version": api_version},
+            params=target.params,
         )
         resp.raise_for_status()
     except httpx.HTTPStatusError as exc:
@@ -574,6 +610,45 @@ async def _call_openai_compatible(
     return _parse_llm_content(content)
 
 
+def _anthropic_refused_temperature(resp: httpx.Response) -> bool:
+    """Whether ``resp`` is Anthropic refusing the ``temperature`` parameter.
+
+    Newer Claude models answer a custom temperature with a 400
+    ``invalid_request_error`` ("`temperature` is deprecated for this model.",
+    #1358). Unlike OpenAI, the error names no ``param``, so the message is
+    what identifies it.
+    """
+    if resp.status_code != 400:
+        return False
+    return "temperature" in openai_chat.error_detail(resp).lower()
+
+
+async def _post_anthropic(
+    client: httpx.AsyncClient,
+    url: str,
+    *,
+    headers: dict[str, str],
+    payload: dict[str, Any],
+    timeout: float | None = None,
+) -> httpx.Response:
+    """POST a Messages request, once more without ``temperature`` if refused.
+
+    The low temperature is a request, not a requirement — the same rule
+    ``openai_chat.post_chat`` applies (#1319): a model that still accepts it
+    keeps it, one that refuses it is asked again without it. Returns the last
+    response whatever its status.
+    """
+    kwargs: dict[str, Any] = {"json": payload, "headers": headers}
+    if timeout is not None:
+        kwargs["timeout"] = timeout
+    resp = await client.post(url, **kwargs)
+    if "temperature" in payload and _anthropic_refused_temperature(resp):
+        logger.info("Anthropic refused 'temperature' for model %s; retrying", payload.get("model"))
+        kwargs["json"] = {k: v for k, v in payload.items() if k != "temperature"}
+        resp = await client.post(url, **kwargs)
+    return resp
+
+
 async def _call_anthropic(
     provider_url: str,
     api_key: str,
@@ -583,6 +658,7 @@ async def _call_anthropic(
     """Call the Anthropic /v1/messages endpoint.
 
     Anthropic requires system messages as a top-level parameter, not in the messages array.
+    The low temperature is dropped for a model that refuses it (``_post_anthropic``).
     """
     client = await _get_llm_client()
     url = f"{provider_url.rstrip('/')}/v1/messages"
@@ -611,8 +687,16 @@ async def _call_anthropic(
         payload["system"] = system_text
 
     try:
-        resp = await client.post(url, json=payload, headers=headers)
+        resp = await _post_anthropic(client, url, headers=headers, payload=payload)
         resp.raise_for_status()
+    except httpx.HTTPStatusError as exc:
+        logger.warning(
+            "Anthropic API call failed: %s %s — %s",
+            type(exc).__name__,
+            exc.response.status_code,
+            openai_chat.error_detail(exc.response),
+        )
+        raise
     except httpx.HTTPError as exc:
         logger.warning("Anthropic API call failed: %s", type(exc).__name__)
         raise
@@ -688,27 +772,41 @@ async def call_llm(
 # ---------------------------------------------------------------------------
 
 
+# The word "json" is what OpenAI and Azure require of a request in JSON mode.
+_PROBE_MESSAGES = [{"role": "user", "content": 'Reply with this JSON object: {"ok": true}'}]
+
+
+def _probe_chat_payload(model: str | None) -> dict[str, Any]:
+    """The smallest completion that asks for what a card suggestion asks for.
+
+    The same low temperature and JSON mode as ``_call_openai_compatible``: a
+    probe without them passed against a server that refused JSON mode on every
+    real call (#1372), the mistake #1358 fixed for Anthropic. 16 output tokens
+    rather than 1: a reasoning model spends tokens before it writes any, and a
+    cut-off answer still proves the model can be called.
+    """
+    return openai_chat.build_chat_payload(
+        model, _PROBE_MESSAGES, max_tokens=16, temperature=0.1, json_mode=True
+    )
+
+
 async def _probe_openai_model(
     client: httpx.AsyncClient,
     base_url: str,
     headers: dict[str, str],
     model: str,
-) -> None:
-    """Make the smallest completion the configured model accepts.
+) -> tuple[str, ...]:
+    """Call the configured model the way a suggestion does.
 
-    16 output tokens rather than 1: a reasoning model spends tokens before it
-    writes any, and a cut-off answer still proves the model can be called.
+    Returns the parameters the provider refused and the request went without.
     Raises ``httpx.HTTPError`` carrying the provider's own reason.
     """
-    payload = openai_chat.build_chat_payload(
-        model, [{"role": "user", "content": "Hi"}], max_tokens=16
-    )
     try:
-        resp = await openai_chat.post_chat(
+        resp, dropped = await openai_chat.post_chat_traced(
             client,
             f"{base_url}/v1/chat/completions",
             headers={**headers, "Content-Type": "application/json"},
-            payload=payload,
+            payload=_probe_chat_payload(model),
             timeout=30.0,
         )
     except httpx.HTTPError as exc:
@@ -718,6 +816,7 @@ async def _probe_openai_model(
             f"Model '{model}' refused the test request "
             f"({resp.status_code}): {openai_chat.error_detail(resp)}"
         )
+    return dropped
 
 
 async def check_provider_connection(
@@ -727,7 +826,11 @@ async def check_provider_connection(
     model: str = "",
     api_version: str = DEFAULT_AZURE_API_VERSION,
 ) -> dict[str, Any]:
-    """Test connectivity to an LLM provider. Returns available models and status."""
+    """Test connectivity to an LLM provider. Returns available models and status.
+
+    The two Chat Completions providers also return ``adjusted``: the optional
+    parameters the provider refused, which every call will go without.
+    """
     client = await _get_llm_client()
 
     if provider_type == "bedrock":
@@ -749,29 +852,34 @@ async def check_provider_connection(
         # against the configured deployment.
         if not model:
             raise httpx.HTTPError("Deployment name (model) is required for Azure OpenAI")
-        url = f"{provider_url.rstrip('/')}/openai/deployments/{model}/chat/completions"
+        target = azure_openai.chat_target(provider_url, model, api_version)
         headers = {"api-key": api_key, "Content-Type": "application/json"}
-        payload: dict[str, Any] = {
-            "messages": [{"role": "user", "content": "Hi"}],
-        }
         try:
-            resp = await client.post(
-                url,
-                json=payload,
+            resp, dropped = await openai_chat.post_chat_traced(
+                client,
+                target.url,
                 headers=headers,
-                params={"api-version": api_version},
-                timeout=10.0,
+                payload=_probe_chat_payload(target.model),
+                params=target.params,
+                timeout=30.0,
             )
-            resp.raise_for_status()
-            return {"ok": True, "available_models": [], "model_found": True}
-        except httpx.HTTPStatusError as exc:
-            if exc.response.status_code == 401:
-                raise httpx.HTTPError("Invalid Azure OpenAI API key") from exc
-            if exc.response.status_code == 404:
-                raise httpx.HTTPError(f"Azure OpenAI deployment '{model}' not found") from exc
-            raise httpx.HTTPError(f"Cannot reach Azure OpenAI: {type(exc).__name__}") from exc
         except httpx.HTTPError as exc:
             raise httpx.HTTPError(f"Cannot reach Azure OpenAI: {type(exc).__name__}") from exc
+        if resp.status_code == 401:
+            raise httpx.HTTPError("Invalid Azure OpenAI API key")
+        if resp.status_code == 404:
+            raise httpx.HTTPError(azure_openai.not_found_detail(resp, target, model))
+        if not resp.is_success:
+            raise httpx.HTTPError(
+                f"Deployment '{model}' refused the test request "
+                f"({resp.status_code}): {openai_chat.error_detail(resp)}"
+            )
+        return {
+            "ok": True,
+            "available_models": [],
+            "model_found": True,
+            "adjusted": list(dropped),
+        }
 
     if provider_type == "openai":
         base = provider_url.rstrip("/")
@@ -784,12 +892,18 @@ async def check_provider_connection(
             model_found = any(model in m for m in available) if model else False
         except httpx.HTTPError as exc:
             raise httpx.HTTPError(f"Cannot reach provider: {type(exc).__name__}") from exc
+        adjusted: tuple[str, ...] = ()
         if model_found:
             # Listing a model is not permission to call it: a project without
             # access to it is refused with a 403 only at completion time, which
             # is how a passing test used to sit beside failing calls (#1319).
-            await _probe_openai_model(client, base, headers, model)
-        return {"ok": True, "available_models": available[:20], "model_found": model_found}
+            adjusted = await _probe_openai_model(client, base, headers, model)
+        return {
+            "ok": True,
+            "available_models": available[:20],
+            "model_found": model_found,
+            "adjusted": list(adjusted),
+        }
 
     if provider_type == "anthropic":
         # Anthropic has no model-list endpoint; make a minimal test call
@@ -799,25 +913,29 @@ async def check_provider_connection(
             "anthropic-version": "2023-06-01",
             "content-type": "application/json",
         }
-        # Reuses the ``dict[str, Any]`` `payload` annotation from the Azure
-        # block above — mypy treats the two assignments as the same name in
-        # the enclosing function scope, so heterogeneous values type-check.
-        payload = {
-            "model": model or "claude-haiku-4-5-20251001",
+        # Carries the same temperature as a real call, so a model that refuses
+        # it fails (or recovers) here exactly as it would there (#1358).
+        test_model = model or "claude-haiku-4-5-20251001"
+        payload: dict[str, Any] = {
+            "model": test_model,
             "max_tokens": 1,
             "messages": [{"role": "user", "content": "Hi"}],
+            "temperature": 0.1,
         }
         try:
-            resp = await client.post(url, json=payload, headers=headers, timeout=10.0)
-            resp.raise_for_status()
-            return {"ok": True, "available_models": [], "model_found": True}
-        except httpx.HTTPStatusError as exc:
-            if exc.response.status_code == 401:
-                raise httpx.HTTPError("Invalid API key") from exc
-            # Other errors (e.g. invalid model) still mean connectivity works
-            raise httpx.HTTPError(f"Cannot reach Anthropic: {type(exc).__name__}") from exc
+            resp = await _post_anthropic(
+                client, url, headers=headers, payload=payload, timeout=10.0
+            )
         except httpx.HTTPError as exc:
             raise httpx.HTTPError(f"Cannot reach Anthropic: {type(exc).__name__}") from exc
+        if resp.status_code == 401:
+            raise httpx.HTTPError("Invalid API key")
+        if not resp.is_success:
+            raise httpx.HTTPError(
+                f"Model '{test_model}' refused the test request "
+                f"({resp.status_code}): {openai_chat.error_detail(resp)}"
+            )
+        return {"ok": True, "available_models": [], "model_found": True}
 
     # Default: Ollama
     url = f"{provider_url.rstrip('/')}/api/tags"
@@ -1133,8 +1251,6 @@ async def suggest_metadata(
     subtype: str | None,
     provider_url: str,
     model: str,
-    search_provider: str = "duckduckgo",
-    search_url: str = "",
     context: str | None = None,
     *,
     provider_type: str = "ollama",

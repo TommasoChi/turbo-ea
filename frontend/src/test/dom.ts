@@ -119,12 +119,6 @@ function toDomRect(r: RectLike): DOMRect {
   } as DOMRect;
 }
 
-/** Pin one element's `getBoundingClientRect`. */
-export function stubRects(el: Element, rect: RectLike): Restore {
-  const spy = vi.spyOn(el, "getBoundingClientRect").mockReturnValue(toDomRect(rect));
-  return () => spy.mockRestore();
-}
-
 /**
  * Pin `getBoundingClientRect` for every element matching a selector, the n-th
  * match taking the n-th rect (the last rect repeats). Elements matching no

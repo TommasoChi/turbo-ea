@@ -33,6 +33,7 @@ import type { CardType as FSType, RelationType as RType } from "@/types";
 import { TypeDetailDrawer, MetamodelGraph } from "./metamodel";
 import RelationsTabContent from "./metamodel/RelationsTabContent";
 import ArchitectureStudioTab from "./metamodel/ArchitectureStudioTab";
+import LifecyclePhaseHelpPanel from "./metamodel/LifecyclePhaseHelpPanel";
 import CategoryCombobox from "./metamodel/CategoryCombobox";
 import ManageCategoriesDialog from "./metamodel/ManageCategoriesDialog";
 import ManageCostItemsDialog from "./metamodel/ManageCostItemsDialog";
@@ -40,6 +41,8 @@ import { categoryErrorMessage } from "./metamodel/categoryErrors";
 import { useCardTypeCategories } from "@/hooks/useCardTypeCategories";
 import { categoryDisplayName, defaultNewTypeCategory } from "@/lib/cardTypeOrder";
 import { successorRelationKeys } from "@/lib/successorRelation";
+import { useTheme } from "@mui/material/styles";
+import { brand, RAG_COLORS } from "@/theme/tokens";
 
 /* ================================================================== */
 /*  Main Component                                                     */
@@ -62,7 +65,7 @@ function emptyNewType(category: string | null): NewTypeDraft {
     key: "",
     label: "",
     icon: "category",
-    color: "#1976d2",
+    color: brand.primary,
     category,
     has_hierarchy: false,
     has_successors: false,
@@ -71,6 +74,7 @@ function emptyNewType(category: string | null): NewTypeDraft {
 }
 
 export default function MetamodelAdmin() {
+  const theme = useTheme();
   const { t, i18n } = useTranslation(["admin", "common"]);
   const { invalidateCache } = useMetamodel();
   const { categories } = useCardTypeCategories();
@@ -180,6 +184,8 @@ export default function MetamodelAdmin() {
         <Tab label={t("metamodel.tabs.architectureStudio")} />
         <Tab label={t("metamodel.tabs.calculations")} />
         <Tab label={t("metamodel.tabs.tags")} />
+        {/* The tab order is the display order: nothing deep-links by index. */}
+        <Tab label={t("metamodel.tabs.lifecycle")} />
         <Tab label={t("metamodel.tabs.graph")} />
         <Tab label={t("metamodel.tabs.principles")} />
         <Tab label={t("metamodel.tabs.regulations")} />
@@ -298,7 +304,7 @@ export default function MetamodelAdmin() {
                         <MaterialSymbol
                           icon={ct.icon}
                           size={22}
-                          color="#fff"
+                          color={theme.palette.common.white}
                         />
                       </Box>
                       <Box sx={{ minWidth: 0, flex: 1 }}>
@@ -327,7 +333,7 @@ export default function MetamodelAdmin() {
                           <MaterialSymbol
                             icon={ct.is_hidden ? "visibility_off" : "visibility"}
                             size={18}
-                            color={ct.is_hidden ? "#f57c00" : "#bbb"}
+                            color={ct.is_hidden ? RAG_COLORS.amber : theme.palette.action.disabled}
                           />
                         </IconButton>
                       </Tooltip>
@@ -433,9 +439,14 @@ export default function MetamodelAdmin() {
       {tab === 4 && <TagsAdmin />}
 
       {/* ============================================================ */}
-      {/*  TAB 5 -- Metamodel Graph                                    */}
+      {/*  TAB 5 -- Lifecycle phase help                               */}
       {/* ============================================================ */}
-      {tab === 5 && (
+      {tab === 5 && <LifecyclePhaseHelpPanel />}
+
+      {/* ============================================================ */}
+      {/*  TAB 6 -- Metamodel Graph                                    */}
+      {/* ============================================================ */}
+      {tab === 6 && (
         <MetamodelGraph
           types={types}
           relationTypes={relationTypes}
@@ -444,19 +455,19 @@ export default function MetamodelAdmin() {
       )}
 
       {/* ============================================================ */}
-      {/*  TAB 6 -- EA Principles                                      */}
+      {/*  TAB 7 -- EA Principles                                      */}
       {/* ============================================================ */}
-      {tab === 6 && <PrinciplesAdmin />}
+      {tab === 7 && <PrinciplesAdmin />}
 
       {/* ============================================================ */}
-      {/*  TAB 7 -- Compliance Regulations                             */}
+      {/*  TAB 8 -- Compliance Regulations                             */}
       {/* ============================================================ */}
-      {tab === 7 && <RegulationsAdmin />}
+      {tab === 8 && <RegulationsAdmin />}
 
       {/* ============================================================ */}
-      {/*  TAB 8 -- Resource Types (link types & file categories)      */}
+      {/*  TAB 9 -- Resource Types (link types & file categories)      */}
       {/* ============================================================ */}
-      {tab === 8 && <ResourceTypesAdmin />}
+      {tab === 9 && <ResourceTypesAdmin />}
 
       {/* ============================================================ */}
       {/*  Type Detail Dialog                                          */}

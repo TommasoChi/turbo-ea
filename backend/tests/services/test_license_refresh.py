@@ -195,7 +195,10 @@ from app.config import settings  # noqa: E402
 from app.models.extension import ExtensionLicense  # noqa: E402
 from app.services.extensions import license_refresh as lr  # noqa: E402
 from app.services.extensions.instance_id import set_instance_id  # noqa: E402
-from app.services.extensions.license import LicenseError  # noqa: E402
+from app.services.extensions.license import (  # noqa: E402
+    LicenseError,
+    open_stored_license_text,
+)
 from app.services.extensions.license_refresh import (  # noqa: E402
     _earliest_expiry,
     _renewal_metadata_changed,
@@ -457,7 +460,9 @@ class TestPersistLicense:
         row = await persist_license(db, doc, created_by=None)
 
         assert row.is_active is True
-        assert row.raw_text == "the-raw-text"
+        # Stored encrypted at rest: the envelope carries the renewal key.
+        assert row.raw_text != "the-raw-text"
+        assert open_stored_license_text(row.raw_text) == "the-raw-text"
         assert row.key_id == "vendor-1"
         assert row.licensee == "ACME Corp"
         assert row.customer_id == "cus_1"
@@ -697,7 +702,7 @@ class TestRefreshOutcome:
             .scalars()
             .all()
         )
-        return [r.raw_text for r in rows]
+        return [open_stored_license_text(r.raw_text) for r in rows]
 
     async def test_extension_is_applied_and_persisted(self, db, renew_env, monkeypatch, caplog):
         with caplog.at_level(logging.INFO, logger=LOGGER):

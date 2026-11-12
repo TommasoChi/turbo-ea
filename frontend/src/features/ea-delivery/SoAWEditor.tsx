@@ -39,15 +39,46 @@ import {
   type TemplateSectionDef,
 } from "./soawTemplate";
 import { exportToDocx, exportToPdf } from "./soawExport";
+import { SoawBanners, soawHref } from "./DecisionBanners";
+import RevisionStrip, { showsRevisionStrip, soawRevisionItems } from "./RevisionStrip";
+import { isLocked } from "./decisionStanding";
+import {
+  EMPTY_DOC_INFO,
+  EMPTY_VERSION_ROW,
+  canRequestSoawSignatures,
+  canReviseSoaw,
+  canSaveSoaw,
+  reviseRefusal,
+  soawCurrentRevisionId,
+  soawEditorFields,
+  soawSavePayload,
+  soawStateFromLoaded,
+  type SoawCustomSection,
+  type SoawEditorFields,
+} from "./soawEditorState";
+import { hasUnsavedEdits } from "./editorDirty";
+import DocumentHistoryButton from "./collab/DocumentHistoryButton";
+import DocumentSidePanel from "./collab/DocumentSidePanel";
+import SectionDiscussionMarker from "./collab/SectionDiscussionMarker";
+import { documentPeopleIds } from "./mentions/mentionModel";
+import { RejectDocumentDialog, SignDocumentDialog } from "./collab/ReviewDialogs";
+import { deepLinkDialog } from "./collab/reviewDeepLink";
+import { sectionOptions, signBody, soawSectionOptions } from "./collab/discussionModel";
+import type { MentionKind } from "@/lib/mentionHtml";
 import { api } from "@/api/client";
 import { useSubmitOnce } from "@/hooks/useSubmitOnce";
+import { useAbortableEffect } from "@/hooks/useLatestRequest";
 import { useDateFormat } from "@/hooks/useDateFormat";
 import { usePageSubject } from "@/hooks/usePageTitle";
 import type { Card, SoAW, SoAWSectionData, SoAWSignatory } from "@/types";
+import { DELIVERABLE_COLORS, RAG_COLORS, WARNING_STRONG_COLOR, brand } from "@/theme/tokens";
 
 // ─── constants ──────────────────────────────────────────────────────────────
 
 // ─── component ──────────────────────────────────────────────────────────────
+
+/** What "@" offers in a SoAW's text. */
+const DOCUMENT_MENTIONS: MentionKind[] = ["card", "decision"];
 
 export default function SoAWEditor() {
   const { t } = useTranslation(["delivery", "common"]);
@@ -59,6 +90,7 @@ export default function SoAWEditor() {
   const STATUS_CHIP: Record<string, { label: string; color: "default" | "warning" | "success" | "info" }> = {
     draft: { label: t("status.draft"), color: "default" },
     in_review: { label: t("status.inReview"), color: "warning" },
+    approved: { label: t("status.approved"), color: "info" },
     signed: { label: t("status.signed"), color: "success" },
   };
   const theme = useTheme();
@@ -70,25 +102,14 @@ export default function SoAWEditor() {
   usePageSubject(name);
   const [initiativeId, setInitiativeId] = useState("");
   const [status, setStatus] = useState("draft");
-  const [docInfo, setDocInfo] = useState({
-    prepared_by: "",
-    reviewed_by: "",
-    review_date: "",
-  });
-  const [versionHistory, setVersionHistory] = useState<
-    { version: string; date: string; revised_by: string; description: string }[]
-  >([{ version: "", date: "", revised_by: "", description: "" }]);
+  const [docInfo, setDocInfo] = useState<SoAW["document_info"]>(EMPTY_DOC_INFO);
+  const [versionHistory, setVersionHistory] = useState<SoAW["version_history"]>([
+    EMPTY_VERSION_ROW,
+  ]);
   const [sections, setSections] = useState<Record<string, SoAWSectionData>>(
     buildDefaultSections,
   );
-  const [customSections, setCustomSections] = useState<
-    {
-      id: string;
-      title: string;
-      content: string;
-      insertAfter: string;
-    }[]
-  >([]);
+  const [customSections, setCustomSections] = useState<SoawCustomSection[]>([]);
 
   // UI state
   const [initiatives, setInitiatives] = useState<Card[]>([]);
@@ -100,7 +121,14 @@ export default function SoAWEditor() {
   const [addSectionOpen, setAddSectionOpen] = useState(false);
   const [newSectionTitle, setNewSectionTitle] = useState("");
   const [newSectionAfter, setNewSectionAfter] = useState("");
+  // The loaded document's chain facts (revision pointers, the strip).
+  const [detail, setDetail] = useState<SoAW | null>(null);
+  // A revise refused because a revision is already being drafted.
+  const [existingRevisionId, setExistingRevisionId] = useState<string | null>(null);
   const soawIdRef = useRef<string | null>(id ?? null);
+  // What the server holds, as the fields a save would send for it: compared
+  // with the live fields to know whether there are edits to save first.
+  const storedRef = useRef<SoawEditorFields | null>(null);
 
   // Keep ref in sync when route param changes (e.g. after revision navigation)
   useEffect(() => {
@@ -116,20 +144,40 @@ export default function SoAWEditor() {
   const [createdVia, setCreatedVia] = useState<string | null>(null);
   const [signDialogOpen, setSignDialogOpen] = useState(false);
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
-  const [rejectComment, setRejectComment] = useState("");
+  // Sign, with an optional note. A refused sign or reject is shown in its
+  // dialog, which stays open.
+  const [signOpen, setSignOpen] = useState(false);
+  const [signError, setSignError] = useState("");
+  const [rejectError, setRejectError] = useState("");
+  const openSign = () => {
+    setSignError("");
+    setSignOpen(true);
+  };
+  const openReject = () => {
+    setRejectError("");
+    setRejectDialogOpen(true);
+  };
+  // Open discussion threads on this revision: the detail's count, then the
+  // side panel's live one. Shown as a warning by the review dialogs.
+  const [openThreads, setOpenThreads] = useState<number | undefined>(undefined);
   const [currentUserId, setCurrentUserId] = useState<string>("");
+  // The answer (or failure) of `/auth/me` is in.
+  const [meLoaded, setMeLoaded] = useState(false);
 
   // Deep-link from the MCP `pending` workflow: /ea-delivery/soaw/:id?action=sign|reject
-  // opens the matching dialog so the human can finish in one click.
+  // opens the matching dialog so the human can finish in one click, once the
+  // document and the reader are known (`deepLinkDialog`).
+  const [deepLink, setDeepLink] = useState<string | null>(null);
   useEffect(() => {
     if (!id) return;
     const action = searchParams.get("action");
     if (!action) return;
-    if (action === "sign") setSignDialogOpen(true);
-    else if (action === "reject") setRejectDialogOpen(true);
+    setDeepLink(action);
     setSearchParams({}, { replace: true });
   }, [id, searchParams, setSearchParams]);
   const isSigned = status === "signed";
+  // Sent for review or signed: the content is locked (recall to edit).
+  const locked = isLocked(status);
 
   // ── load data ──────────────────────────────────────────────────────────
 
@@ -150,65 +198,60 @@ export default function SoAWEditor() {
         setCurrentUserId(res.id);
       } catch {
         /* non-critical */
+      } finally {
+        setMeLoaded(true);
       }
     };
     loadInitiatives();
     loadCurrentUser();
   }, []);
 
-  useEffect(() => {
-    if (!id) return;
-    const load = async () => {
+  // Every field from a document as the server returned it. The ONE path for
+  // the detail: the load and every action whose reply is the document (save,
+  // request signatures, sign, recall, reject) go through it.
+  const applyLoaded = useCallback((data: SoAW) => {
+    const state = soawStateFromLoaded(data);
+    storedRef.current = soawEditorFields(state);
+    setDetail(data);
+    setName(state.name);
+    setInitiativeId(state.initiativeId);
+    setStatus(data.status);
+    setDocInfo(state.docInfo);
+    setVersionHistory(state.versionHistory);
+    setSections(state.sections);
+    setCustomSections(state.customSections);
+    setSignatories(data.signatories ?? []);
+    setSignedAt(data.signed_at);
+    setRevisionNumber(data.revision_number ?? 1);
+    setCreatedVia(data.created_via ?? null);
+    setOpenThreads(data.open_thread_count);
+  }, []);
+
+  // An action's reply, applied only while the page still shows that document.
+  const applyReply = (data: SoAW | null | undefined) => {
+    if (data && data.id === soawIdRef.current) applyLoaded(data);
+  };
+
+  // Re-keyed on in-page revision navigation: only the latest load may fill
+  // the page (a late reply for the revision just left would otherwise show,
+  // and be saved over, the one now open).
+  useAbortableEffect(
+    async ({ signal, isCurrent }) => {
+      if (!id) return;
       setLoading(true);
       try {
-        const data = await api.get<SoAW>(`/soaw/${id}`);
-        setName(data.name);
-        setInitiativeId(data.initiative_id ?? "");
-        setStatus(data.status);
-        if (data.document_info) setDocInfo(data.document_info);
-        if (data.version_history?.length) setVersionHistory(data.version_history);
-        setSignatories(data.signatories ?? []);
-        setSignedAt(data.signed_at);
-        setRevisionNumber(data.revision_number ?? 1);
-        setCreatedVia(data.created_via ?? null);
-
-        // Merge persisted sections with template defaults so new template
-        // sections added later still appear.
-        const defaults = buildDefaultSections();
-        const merged = { ...defaults };
-        const persistedSections = data.sections ?? {};
-
-        // Separate template sections from custom sections
-        for (const [key, val] of Object.entries(persistedSections)) {
-          if (key.startsWith("custom_")) {
-            // Re-hydrate custom sections
-            setCustomSections((prev) => {
-              const exists = prev.some((c) => c.id === key);
-              if (exists) return prev;
-              return [
-                ...prev,
-                {
-                  id: key,
-                  title: (val as SoAWSectionData & { title?: string }).title ?? key,
-                  content: val.content,
-                  insertAfter:
-                    (val as SoAWSectionData & { insertAfter?: string }).insertAfter ?? "",
-                },
-              ];
-            });
-          } else {
-            merged[key] = { ...merged[key], ...val };
-          }
-        }
-        setSections(merged);
+        const data = await api.get<SoAW>(`/soaw/${id}`, { signal });
+        if (!isCurrent()) return;
+        applyLoaded(data);
+        setExistingRevisionId(null);
       } catch (e) {
-        setError(e instanceof Error ? e.message : t("editor.error.loadFailed"));
+        if (isCurrent()) setError(e instanceof Error ? e.message : t("editor.error.loadFailed"));
       } finally {
-        setLoading(false);
+        if (isCurrent()) setLoading(false);
       }
-    };
-    load();
-  }, [id]);
+    },
+    [id],
+  );
 
   // ── section update helpers ─────────────────────────────────────────────
 
@@ -277,52 +320,67 @@ export default function SoAWEditor() {
   // One save at a time: a second click before the first answered would
   // create the document twice.
   const save = useSubmitOnce();
-  const handleSave = async () => {
+
+  const editorFields = () =>
+    soawEditorFields({ name, initiativeId, docInfo, versionHistory, sections, customSections });
+
+  // Edits the server does not hold yet (always true on a new document).
+  const hasEdits = () => hasUnsavedEdits(editorFields(), storedRef.current);
+
+  // In review only the initiative link can change, and Save is offered only
+  // when it did.
+  const initiativeChanged = (initiativeId || null) !== (detail?.initiative_id ?? null);
+  const showSave = canSaveSoaw(status, initiativeChanged);
+
+  // Saves the editor; true when it saved. Errors are shown here.
+  const saveEdits = async (): Promise<boolean> => {
     if (!name.trim()) {
       setError(t("editor.documentNameRequired"));
-      return;
+      return false;
     }
-    await save.run(async () => {
-    setSaving(true);
-    setError("");
-    try {
-      // Merge custom sections into the sections record for persistence
-      const allSections: Record<string, unknown> = { ...sections };
-      for (const cs of customSections) {
-        allSections[cs.id] = {
-          content: cs.content,
-          hidden: false,
-          title: cs.title,
-          insertAfter: cs.insertAfter,
-        };
+    const saved = await save.run(async () => {
+      setSaving(true);
+      setError("");
+      try {
+        // In review only the initiative link is sent: the content is locked.
+        const payload = soawSavePayload(status, editorFields());
+        if (soawIdRef.current) {
+          applyReply(await api.patch<SoAW>(`/soaw/${soawIdRef.current}`, payload));
+        } else {
+          const created = await api.post<SoAW>("/soaw", payload);
+          soawIdRef.current = created.id;
+          // Route to the saved record so `id` resolves: the header, the
+          // Preview and Request-signatures buttons and the `?action=` deep
+          // links all key off it. A bare `history.replaceState` left the
+          // editor in its "new document" shape until a reload.
+          navigate(`/ea-delivery/soaw/${created.id}`, { replace: true });
+        }
+        return true;
+      } catch (e) {
+        setError(e instanceof Error ? e.message : t("editor.error.saveFailed"));
+        return false;
+      } finally {
+        setSaving(false);
       }
-
-      const payload = {
-        name: name.trim(),
-        initiative_id: initiativeId || null,
-        document_info: docInfo,
-        version_history: versionHistory,
-        sections: allSections,
-      };
-
-      if (soawIdRef.current) {
-        await api.patch(`/soaw/${soawIdRef.current}`, payload);
-      } else {
-        const created = await api.post<SoAW>("/soaw", payload);
-        soawIdRef.current = created.id;
-        // Route to the saved record so `id` resolves: the header, the
-        // Preview and Request-signatures buttons and the `?action=` deep
-        // links all key off it. A bare `history.replaceState` left the
-        // editor in its "new document" shape until a reload.
-        navigate(`/ea-delivery/soaw/${created.id}`, { replace: true });
-      }
-      setSnack(t("editor.savedSuccessfully"));
-    } catch (e) {
-      setError(e instanceof Error ? e.message : t("editor.error.saveFailed"));
-    } finally {
-      setSaving(false);
-    }
     });
+    return saved === true;
+  };
+
+  const handleSave = async () => {
+    const savedStatus = status;
+    if (!(await saveEdits())) return;
+    // In review the save sent the initiative link alone: say so.
+    setSnack(
+      savedStatus === "in_review" ? t("editor.initiativeLinkSaved") : t("editor.savedSuccessfully"),
+    );
+  };
+
+  // Requesting signatures locks the document and the server sends what it
+  // holds for review: pending edits are saved first, and the dialog opens
+  // only once they are (a failed save shows its error and opens nothing).
+  const openRequestSignatures = async () => {
+    if (hasEdits() && !(await saveEdits())) return;
+    setSignDialogOpen(true);
   };
 
   // ── signing helpers ────────────────────────────────────────────────────
@@ -336,8 +394,7 @@ export default function SoAWEditor() {
         `/soaw/${soawIdRef.current}/request-signatures`,
         { user_ids: userIds },
       );
-      setSignatories(data.signatories ?? []);
-      setStatus(data.status);
+      applyReply(data);
       setSignDialogOpen(false);
       setSnack(t("editor.signatureRequestsSent"));
     } catch (e) {
@@ -347,18 +404,17 @@ export default function SoAWEditor() {
     }
   };
 
-  const handleSign = async () => {
+  const handleSign = async (note: string) => {
     if (!soawIdRef.current) return;
     setSaving(true);
     setError("");
     try {
-      const data = await api.post<SoAW>(`/soaw/${soawIdRef.current}/sign`);
-      setSignatories(data.signatories ?? []);
-      setStatus(data.status);
-      setSignedAt(data.signed_at);
+      const data = await api.post<SoAW>(`/soaw/${soawIdRef.current}/sign`, signBody("soaw", note));
+      applyReply(data);
+      setSignOpen(false);
       setSnack(data.status === "signed" ? t("editor.documentFullySigned") : t("editor.signatureRecorded"));
     } catch (e) {
-      setError(e instanceof Error ? e.message : t("editor.error.signFailed"));
+      setSignError(e instanceof Error && e.message ? e.message : t("editor.error.signFailed"));
     } finally {
       setSaving(false);
     }
@@ -372,8 +428,7 @@ export default function SoAWEditor() {
       const data = await api.post<SoAW>(
         `/soaw/${soawIdRef.current}/recall-signatures`,
       );
-      setStatus(data.status);
-      setSignatories(data.signatories ?? []);
+      applyReply(data);
       setSnack(t("editor.signaturesRecalled"));
     } catch (e) {
       setError(
@@ -384,25 +439,20 @@ export default function SoAWEditor() {
     }
   };
 
-  const handleReject = async () => {
-    if (!soawIdRef.current || !rejectComment.trim()) return;
+  const handleReject = async (reason: string) => {
+    if (!soawIdRef.current || !reason) return;
     setSaving(true);
     setError("");
     try {
       const data = await api.post<SoAW>(
         `/soaw/${soawIdRef.current}/reject`,
-        { comment: rejectComment.trim() },
+        { comment: reason },
       );
-      setStatus(data.status);
-      setSignatories(data.signatories ?? []);
-      setRevisionNumber(data.revision_number ?? revisionNumber);
+      applyReply(data);
       setRejectDialogOpen(false);
-      setRejectComment("");
       setSnack(t("editor.documentRejected"));
     } catch (e) {
-      setError(
-        e instanceof Error ? e.message : t("editor.error.rejectFailed"),
-      );
+      setRejectError(e instanceof Error && e.message ? e.message : t("editor.error.rejectFailed"));
     } finally {
       setSaving(false);
     }
@@ -412,19 +462,45 @@ export default function SoAWEditor() {
     if (!soawIdRef.current) return;
     setSaving(true);
     setError("");
+    setExistingRevisionId(null);
     try {
       const data = await api.post<SoAW>(`/soaw/${soawIdRef.current}/revise`);
       navigate(`/ea-delivery/soaw/${data.id}`);
     } catch (e) {
-      setError(e instanceof Error ? e.message : t("editor.error.reviseFailed"));
+      const refusal = reviseRefusal(e);
+      if (refusal?.kind === "open_revision_exists") {
+        setExistingRevisionId(refusal.revisionId);
+      } else if (refusal?.kind === "not_revisable") {
+        setError(t("editor.error.notRevisable"));
+      } else {
+        setError(e instanceof Error ? e.message : t("editor.error.reviseFailed"));
+      }
     } finally {
       setSaving(false);
     }
   };
 
+  const canRevise = canReviseSoaw(status, detail);
+
   const currentUserIsSignatory = signatories.some(
     (s) => s.user_id === currentUserId && s.status === "pending"
   );
+
+  // A deep link's dialog, once this document and the reader are known.
+  const deepLinkReady = deepLink !== null && meLoaded && detail !== null && detail.id === id;
+  useEffect(() => {
+    if (!deepLinkReady || deepLink === null) return;
+    setDeepLink(null);
+    const dialog = deepLinkDialog(deepLink, currentUserIsSignatory);
+    if (dialog === "sign") {
+      setSignError("");
+      setSignOpen(true);
+    } else if (dialog === "request-signatures") setSignDialogOpen(true);
+    else if (dialog === "reject") {
+      setRejectError("");
+      setRejectDialogOpen(true);
+    }
+  }, [deepLinkReady, deepLink, currentUserIsSignatory]);
 
   // ── version history helpers ────────────────────────────────────────────
 
@@ -509,7 +585,37 @@ export default function SoAWEditor() {
     );
   }
 
+  const stripItems = detail ? soawRevisionItems(detail.revisions ?? [], t) : [];
+  const stripShown = showsRevisionStrip(stripItems);
+  const historyButton = (placeCompact: boolean) =>
+    !isNew && id ? (
+      <DocumentHistoryButton<SoAW>
+        owner={{ kind: "soaw", id }}
+        label={name || t("editor.untitled")}
+        status={status}
+        refreshKey={detail?.updated_at}
+        isDirty={hasEdits}
+        onRestored={(data) => applyReply(data)}
+        compact={placeCompact}
+      />
+    ) : null;
+
   return (
+    <DocumentSidePanel
+      owner={!isNew && id ? { kind: "soaw", id } : null}
+      sections={sectionOptions(
+        "soaw",
+        t,
+        soawSectionOptions(
+          getTemplateSections(),
+          Object.fromEntries(customSections.map((cs) => [cs.id, { title: cs.title }])),
+        ),
+      )}
+      openThreadCount={detail?.open_thread_count}
+      onOpenCountChange={setOpenThreads}
+      refreshKey={detail?.updated_at}
+      mentionContext={{ priorityUserIds: documentPeopleIds({ signatories }) }}
+    >
     <Box sx={{ maxWidth: 960, mx: "auto" }}>
       {/* Top bar */}
       <Box sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", mb: 3, gap: 1 }}>
@@ -518,7 +624,7 @@ export default function SoAWEditor() {
             <MaterialSymbol icon="arrow_back" size={22} />
           </IconButton>
         </Tooltip>
-        {!compact && <MaterialSymbol icon="description" size={26} color="#e65100" />}
+        {!compact && <MaterialSymbol icon="description" size={26} color={DELIVERABLE_COLORS.soaw} />}
         <Typography
           variant={compact ? "subtitle1" : "h5"}
           sx={{ fontWeight: 700, flex: 1, minWidth: 0 }}
@@ -526,6 +632,7 @@ export default function SoAWEditor() {
         >
           {isNew ? t("editor.newTitle") : name || t("editor.untitled")}
         </Typography>
+        {!stripShown && historyButton(compact)}
         {!isNew && (
           compact ? (
             <Tooltip title={t("editor.preview")}>
@@ -580,7 +687,7 @@ export default function SoAWEditor() {
             {t("editor.word")}
           </Button>
         ))}
-        {!isSigned && (
+        {showSave && (
           <Button
             variant="contained"
             size="small"
@@ -592,14 +699,15 @@ export default function SoAWEditor() {
             {saving ? t("editor.saving") : t("editor.save")}
           </Button>
         )}
-        {/* Signing actions */}
-        {!isNew && !isSigned && status === "draft" && soawIdRef.current && (
+        {/* Signing actions: a draft or an approved document only. */}
+        {!isNew && canRequestSoawSignatures(status) && soawIdRef.current && (
           <Button
             size="small"
             variant="outlined"
             startIcon={<MaterialSymbol icon="draw" size={18} />}
             sx={{ textTransform: "none" }}
-            onClick={() => setSignDialogOpen(true)}
+            disabled={saving}
+            onClick={openRequestSignatures}
           >
             {t("editor.requestSignatures")}
           </Button>
@@ -613,7 +721,7 @@ export default function SoAWEditor() {
               startIcon={<MaterialSymbol icon="task_alt" size={18} />}
               sx={{ textTransform: "none" }}
               disabled={saving}
-              onClick={handleSign}
+              onClick={openSign}
             >
               {t("editor.sign")}
             </Button>
@@ -624,13 +732,13 @@ export default function SoAWEditor() {
               startIcon={<MaterialSymbol icon="block" size={18} />}
               sx={{ textTransform: "none" }}
               disabled={saving}
-              onClick={() => setRejectDialogOpen(true)}
+              onClick={openReject}
             >
               {t("editor.reject")}
             </Button>
           </>
         )}
-        {isSigned && (
+        {canRevise && (
           <Button
             size="small"
             variant="contained"
@@ -648,6 +756,45 @@ export default function SoAWEditor() {
         <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError("")}>
           {error}
         </Alert>
+      )}
+
+      {existingRevisionId && (
+        <Alert
+          severity="info"
+          sx={{ mb: 2 }}
+          data-testid="soaw-open-revision-exists"
+          onClose={() => setExistingRevisionId(null)}
+          action={
+            <Button
+              color="inherit"
+              size="small"
+              onClick={() => navigate(soawHref(existingRevisionId))}
+            >
+              {t("editor.revise.openExisting")}
+            </Button>
+          }
+        >
+          {t("editor.revise.openRevisionExists")}
+        </Alert>
+      )}
+
+      {/* Chain pointers (earlier revision, revision being drafted, review
+          lock) and the revision strip. */}
+      {detail && !isNew && (
+        <Box sx={{ mb: 2, display: "flex", flexDirection: "column", gap: 1 }}>
+          <SoawBanners soaw={{ ...detail, status: status as SoAW["status"] }} mode="editor" />
+          {stripShown && (
+            <Box sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 1 }}>
+              <RevisionStrip
+                items={stripItems}
+                activeId={detail.id}
+                currentId={soawCurrentRevisionId(detail)}
+                hrefFor={soawHref}
+              />
+              {historyButton(false)}
+            </Box>
+          )}
+        </Box>
       )}
 
       {/* Signed banner */}
@@ -682,7 +829,7 @@ export default function SoAWEditor() {
             value={name}
             onChange={(e) => setName(e.target.value)}
             required
-            disabled={isSigned}
+            disabled={locked}
           />
           <TextField
             select
@@ -711,7 +858,7 @@ export default function SoAWEditor() {
             onChange={(e) =>
               setDocInfo((p) => ({ ...p, prepared_by: e.target.value }))
             }
-            disabled={isSigned}
+            disabled={locked}
           />
           <TextField
             label={t("editor.reviewedBy")}
@@ -720,7 +867,7 @@ export default function SoAWEditor() {
             onChange={(e) =>
               setDocInfo((p) => ({ ...p, reviewed_by: e.target.value }))
             }
-            disabled={isSigned}
+            disabled={locked}
           />
           <DateField
             label={t("editor.reviewDate")}
@@ -729,7 +876,7 @@ export default function SoAWEditor() {
             onChange={(v) =>
               setDocInfo((p) => ({ ...p, review_date: v }))
             }
-            disabled={isSigned}
+            disabled={locked}
           />
         </Box>
 
@@ -770,7 +917,7 @@ export default function SoAWEditor() {
           <Typography variant="h6" sx={{ fontWeight: 600, flex: 1 }}>
             {t("editor.versionHistory")}
           </Typography>
-          {!isSigned && (
+          {!locked && (
             <Tooltip title={t("editor.addVersionEntry")}>
               <IconButton size="small" onClick={addVersionRow}>
                 <MaterialSymbol icon="add" size={18} />
@@ -795,7 +942,7 @@ export default function SoAWEditor() {
                   <TextField
                     size="small"
                     fullWidth
-                    disabled={isSigned}
+                    disabled={locked}
                     value={row.version}
                     onChange={(e) =>
                       updateVersionRow(idx, "version", e.target.value)
@@ -809,7 +956,7 @@ export default function SoAWEditor() {
                   <DateField
                     size="small"
                     fullWidth
-                    disabled={isSigned}
+                    disabled={locked}
                     value={row.date}
                     onChange={(v) => updateVersionRow(idx, "date", v)}
                     variant="standard"
@@ -821,7 +968,7 @@ export default function SoAWEditor() {
                   <TextField
                     size="small"
                     fullWidth
-                    disabled={isSigned}
+                    disabled={locked}
                     value={row.revised_by}
                     onChange={(e) =>
                       updateVersionRow(idx, "revised_by", e.target.value)
@@ -835,7 +982,7 @@ export default function SoAWEditor() {
                   <TextField
                     size="small"
                     fullWidth
-                    disabled={isSigned}
+                    disabled={locked}
                     value={row.description}
                     onChange={(e) =>
                       updateVersionRow(idx, "description", e.target.value)
@@ -846,7 +993,7 @@ export default function SoAWEditor() {
                   />
                 </TableCell>
                 <TableCell sx={{ p: 0.5 }}>
-                  {!isSigned && versionHistory.length > 1 && (
+                  {!locked && versionHistory.length > 1 && (
                     <IconButton size="small" onClick={() => removeVersionRow(idx)}>
                       <MaterialSymbol icon="close" size={16} />
                     </IconButton>
@@ -879,13 +1026,14 @@ export default function SoAWEditor() {
         if (entry.kind === "custom") {
           const { cs } = entry;
           return (
-            <Paper key={cs.id} sx={{ p: 3, mb: 2, borderLeft: "4px solid #1976d2" }}>
+            <Paper key={cs.id} sx={{ p: 3, mb: 2, borderLeft: `4px solid ${brand.primary}` }}>
               <Box sx={{ display: "flex", alignItems: "center", mb: 1.5 }}>
                 <Chip label={t("editor.customLabel")} size="small" color="primary" sx={{ mr: 1 }} />
-                <Typography sx={{ fontWeight: 600, flex: 1 }}>
-                  {cs.title}
-                </Typography>
-                {!isSigned && (
+                <Box sx={{ flex: 1, display: "flex", alignItems: "center", minWidth: 0 }}>
+                  <Typography sx={{ fontWeight: 600 }}>{cs.title}</Typography>
+                  <SectionDiscussionMarker section={cs.id} />
+                </Box>
+                {!locked && (
                   <Tooltip title={t("editor.removeCustomSection")}>
                     <IconButton
                       size="small"
@@ -897,10 +1045,11 @@ export default function SoAWEditor() {
                 )}
               </Box>
               <RichTextEditor
+                mentions={DOCUMENT_MENTIONS}
                 content={cs.content}
                 onChange={(html) => updateCustomContent(cs.id, html)}
                 placeholder={t("editor.enterContent")}
-                readOnly={isSigned}
+                readOnly={locked}
               />
             </Paper>
           );
@@ -934,17 +1083,19 @@ export default function SoAWEditor() {
                   size={20}
                 />
               </IconButton>
-              <Typography
-                sx={{
-                  fontWeight: 600,
-                  flex: 1,
-                  fontSize: def.level === 2 ? "1.1rem" : "0.95rem",
-                  textDecoration: isHidden ? "line-through" : "none",
-                }}
-              >
-                {def.title}
-              </Typography>
-              {!isSigned && (
+              <Box sx={{ flex: 1, display: "flex", alignItems: "center", minWidth: 0 }}>
+                <Typography
+                  sx={{
+                    fontWeight: 600,
+                    fontSize: def.level === 2 ? "1.1rem" : "0.95rem",
+                    textDecoration: isHidden ? "line-through" : "none",
+                  }}
+                >
+                  {def.title}
+                </Typography>
+                <SectionDiscussionMarker section={def.id} />
+              </Box>
+              {!locked && (
                 <Tooltip title={isHidden ? t("editor.showSection") : t("editor.hideSection")}>
                   <IconButton
                     size="small"
@@ -973,12 +1124,13 @@ export default function SoAWEditor() {
 
               {def.type === "rich_text" && (
                 <RichTextEditor
+                  mentions={DOCUMENT_MENTIONS}
                   content={data.content}
                   onChange={(html) =>
                     updateSection(def.id, { content: html })
                   }
                   placeholder={def.hint}
-                  readOnly={isSigned}
+                  readOnly={locked}
                 />
               )}
 
@@ -994,7 +1146,7 @@ export default function SoAWEditor() {
                       },
                     })
                   }
-                  readOnly={isSigned}
+                  readOnly={locked}
                 />
               )}
 
@@ -1017,7 +1169,7 @@ export default function SoAWEditor() {
                             size="small"
                             fullWidth
                             multiline
-                            disabled={isSigned}
+                            disabled={locked}
                             placeholder={t("editor.togafPlaceholder")}
                             value={data.togaf_data?.[phase.key] ?? ""}
                             onChange={(e) => {
@@ -1050,7 +1202,7 @@ export default function SoAWEditor() {
       })}
 
       {/* ── Add custom section ─────────────────────────────────────────── */}
-      {!isSigned && (
+      {!locked && (
         <Box sx={{ display: "flex", justifyContent: "center", my: 3 }}>
           <Button
             variant="outlined"
@@ -1117,7 +1269,7 @@ export default function SoAWEditor() {
             <MaterialSymbol
               icon={isSigned ? "verified" : "draw"}
               size={24}
-              color={isSigned ? "#2e7d32" : "#ed6c02"}
+              color={isSigned ? RAG_COLORS.green : WARNING_STRONG_COLOR}
             />
             <Typography variant="h6" sx={{ fontWeight: 700 }}>
               {t("editor.signatures")}
@@ -1145,7 +1297,7 @@ export default function SoAWEditor() {
                 {sig.status === "signed" ? (
                   <>
                     <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
-                      <MaterialSymbol icon="verified" size={20} color="#2e7d32" />
+                      <MaterialSymbol icon="verified" size={20} color={RAG_COLORS.green} />
                       <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "success.dark" }}>
                         {t("editor.sigApproved")}
                       </Typography>
@@ -1165,7 +1317,7 @@ export default function SoAWEditor() {
                 ) : (
                   <>
                     <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
-                      <MaterialSymbol icon="pending" size={20} color="#ed6c02" />
+                      <MaterialSymbol icon="pending" size={20} color={WARNING_STRONG_COLOR} />
                       <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "warning.dark" }}>
                         {t("editor.sigPending")}
                       </Typography>
@@ -1202,7 +1354,7 @@ export default function SoAWEditor() {
         >
           {t("common:actions.back")}
         </Button>
-        {!isSigned && (
+        {showSave && (
           <Button
             variant="contained"
             startIcon={<MaterialSymbol icon="save" size={18} />}
@@ -1213,7 +1365,7 @@ export default function SoAWEditor() {
             {saving ? t("editor.saving") : t("editor.save")}
           </Button>
         )}
-        {isSigned && (
+        {canRevise && (
           <Button
             variant="contained"
             startIcon={<MaterialSymbol icon="content_copy" size={18} />}
@@ -1234,45 +1386,34 @@ export default function SoAWEditor() {
         title={t("editor.signDialog.title")}
         description={t("editor.signDialog.description")}
         requesting={saving}
+        openThreadCount={openThreads}
       />
 
-      {/* Reject dialog */}
-      <Dialog
+      {/* Sign and reject dialogs */}
+      <SignDocumentDialog
+        open={signOpen}
+        onClose={() => setSignOpen(false)}
+        onSign={handleSign}
+        title={t("collab.sign.soawTitle")}
+        description={t("collab.sign.soawDescription")}
+        openThreadCount={openThreads}
+        busy={saving}
+        error={signError}
+        onDismissError={() => setSignError("")}
+      />
+      <RejectDocumentDialog
         open={rejectDialogOpen}
         onClose={() => setRejectDialogOpen(false)}
-        maxWidth="sm"
-        fullWidth
-      >
-        <DialogTitle>{t("editor.rejectDialog.title")}</DialogTitle>
-        <DialogContent>
-          <Typography variant="body2" sx={{ mb: 2 }}>
-            {t("editor.rejectDialog.description")}
-          </Typography>
-          <TextField
-            autoFocus
-            label={t("editor.rejectDialog.commentLabel")}
-            fullWidth
-            multiline
-            minRows={3}
-            value={rejectComment}
-            onChange={(e) => setRejectComment(e.target.value)}
-            sx={{ mt: 1 }}
-          />
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setRejectDialogOpen(false)}>
-            {t("common:actions.cancel")}
-          </Button>
-          <Button
-            variant="contained"
-            color="error"
-            disabled={!rejectComment.trim() || saving}
-            onClick={handleReject}
-          >
-            {t("editor.reject")}
-          </Button>
-        </DialogActions>
-      </Dialog>
+        onReject={handleReject}
+        title={t("editor.rejectDialog.title")}
+        description={t("editor.rejectDialog.description")}
+        label={t("editor.rejectDialog.commentLabel")}
+        submitLabel={t("editor.reject")}
+        openThreadCount={openThreads}
+        busy={saving}
+        error={rejectError}
+        onDismissError={() => setRejectError("")}
+      />
 
       {/* Snackbar */}
       <Snackbar
@@ -1283,5 +1424,6 @@ export default function SoAWEditor() {
         anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
       />
     </Box>
+    </DocumentSidePanel>
   );
 }

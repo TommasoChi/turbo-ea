@@ -19,7 +19,7 @@ Il pannello laterale sinistro consente di **filtrare** le card secondo diversi c
 - **Qualità dei dati** — Filtro per fascia (selezione multipla): Completo (≥80%), Parziale (40-79%), Minimo (sotto il 40%). Sono le fasce del [report Qualità dei dati](reports.md#data-quality-report): un clic su un segmento di barra porta qui.
 - **Orfane** — Solo schede senza alcuna relazione, in entrambe le direzioni. Valutato lato server, quindi funziona anche senza un tipo selezionato.
 - **Obsolete** — Solo schede non aggiornate negli ultimi 90 giorni. Entrambe rispecchiano i riquadri del [report Qualità dei dati](reports.md#data-quality-report): un clic su un riquadro porta qui.
-- **Fine vita** — Per applicazioni e componenti IT, filtra in base allo stato di supporto che Turbo EA ricava dal [collegamento EOL](../admin/eol.md) di ogni scheda: Fine vita, In avvicinamento, Supportato o Sconosciuto. **(vuoto)** elenca le schede per cui non è stato registrato nulla. La colonna **Fine vita** corrispondente mostra la data accanto a un pallino di stato e viene ordinata ed esportata come data.
+- **Fine vita** — Per i tipi di card che tracciano il fine vita (Applicazioni e componenti IT per impostazione predefinita, vedere [Fine vita su altri tipi di card](../admin/eol.md#fine-vita-su-altri-tipi-di-card)), filtra in base allo stato di supporto che Turbo EA ricava dal [collegamento EOL](../admin/eol.md) di ogni scheda: Fine vita, In avvicinamento, Supportato o Sconosciuto. **(vuoto)** elenca le schede per cui non è stato registrato nulla. La colonna **Fine vita** corrispondente mostra la data accanto a un pallino di stato e viene ordinata ed esportata come data.
 - **Tipo di collegamento** — Quando è selezionato un solo tipo di scheda gerarchico e un amministratore ha definito dei [tipi di collegamento](../admin/metamodel.md) per esso, filtra in base al tipo del collegamento di ogni scheda verso la scheda superiore — per esempio le filiali *commerciali* anziché *vendite*. **(vuoto)** elenca le schede il cui collegamento non porta alcun tipo, e le schede di primo livello, poiché per nessuna delle due è registrato qualcosa. La colonna **Tipo di collegamento** corrispondente mostra il valore come chip colorato ed è modificabile in modalità di modifica della griglia.
 - **Tag** — Filtra per tag di qualsiasi gruppo di tag
 - **Relazioni** — Filtra per card correlate attraverso i tipi di relazione
@@ -60,7 +60,7 @@ Le colonne sono raggruppate in cinque categorie:
 | **Colonne predefinite** | Colonne sempre attive: Tipo, Nome, Percorso, Descrizione, Sottotipo, Ciclo di vita, Stato di approvazione, Qualità dei dati. Toglile dalla selezione per nasconderle dalla griglia — utile per restringere una vista salvata alle sole colonne che usi davvero. |
 | **Metadati** | Creato, Modificato, Creato da, Modificato da, Creato tramite, Modificato tramite. **Modificato** indica quando è cambiato l'ultima volta il contenuto della card — per mano di una persona o di un'integrazione, mai per un ricalcolo di sistema — così puoi filtrare su quella data per trovare le card da far rivedere al responsabile. **Creato tramite** e **Modificato tramite** mostrano il canale dietro la creazione e l'ultima modifica sotto forma di chip (MCP, API, Estensione, Sistema); la cella resta vuota per l'interfaccia web. |
 | **Attributi** | Campi personalizzati definiti nel metamodello (testo, numero, costo, data, selezione, ecc.) |
-| **Relazioni** | Tipi di schede correlati (ad es., Applicazioni collegate a una Capacità Aziendale) |
+| **Relazioni** | Una colonna per ogni relazione, intitolata con il suo verbo e il tipo di scheda collegato — ad esempio *utilizza Componente IT* o *è supportato da Applicazione*. Quando due tipi di relazione collegano gli stessi tipi di scheda, ciascuno ha la propria colonna, e un tipo di relazione tra schede dello stesso tipo (un'Applicazione che *invia dati a* un'altra) ha una colonna per ciascuna direzione. Cerca nell'elenco per verbo o per tipo di scheda. |
 | **Stakeholder** | Una colonna per ogni ruolo stakeholder definito per il tipo selezionato (ad es. *Stakeholder: Responsible*), che mostra gli utenti assegnati come chip. In modalità modifica griglia, fai doppio clic su una cella per assegnare o rimuovere utenti per quel ruolo direttamente dalla griglia (richiede il permesso di gestione degli stakeholder). |
 
 La colonna **Padre** mostra solo la scheda immediatamente superiore, mentre **Percorso** mostra l'intera catena. In modalità di modifica della griglia, fate doppio clic su una cella Padre per spostare la scheda, oppure svuotate il campo per portarla al livello principale. La colonna è modificabile solo quando la griglia è filtrata su un unico tipo di scheda che supporta la gerarchia. Se uno spostamento viene rifiutato — perché creerebbe un ciclo, entrerebbe in conflitto con una scheda omonima sotto la destinazione o supererebbe la profondità massima —, il motivo compare in fondo allo schermo e la cella torna allo stato precedente.
@@ -93,7 +93,7 @@ L'inventario utilizza una tabella dati **AG Grid** con funzionalità avanzate:
 | **Ciclo di vita** | Stato attuale del ciclo di vita |
 | **Stato di approvazione** | Badge dello stato di revisione |
 | **Qualità dei dati** | Percentuale di completezza con anello visivo |
-| **Relazioni** | Nomi delle carte correlate, in ordine alfabetico, con un popover cliccabile per aggiungere o rimuovere relazioni: le carte già collegate sono nascoste dal suo selettore, tranne per un tipo gerarchico, dove il selettore mostra l'intera gerarchia come albero indentato e lascia quelle carte in grigio al loro posto |
+| **Relazioni** | Una colonna per ogni relazione, intitolata con il suo verbo e il tipo di scheda collegato (ad es. *utilizza Componente IT*): i nomi delle carte collegate tramite quella relazione, in ordine alfabetico, con un popover cliccabile per aggiungere o rimuovere relazioni di quel tipo; le carte già collegate sono nascoste dal suo selettore, tranne per un tipo gerarchico, dove il selettore mostra l'intera gerarchia come albero indentato e lascia quelle carte in grigio al loro posto. Le viste salvate e i layout delle colonne precedenti alla suddivisione delle colonne di relazione per relazione si aprono con le nuove colonne al posto della vecchia |
 
 **Funzionalità della tabella:**
 
@@ -170,6 +170,19 @@ Fai clic su **Raggruppa per** nella barra degli strumenti (accanto al conteggio 
 - La casella di controllo nell'intestazione seleziona tutte le schede del gruppo: per riclassificare un lotto, espandi **Non impostato**, spunta l'intestazione e imposta il valore con la [Modifica di massa](#mass-edit). Non c'è volutamente alcun drag and drop: selezionare e impostare funziona allo stesso modo su desktop, tablet e telefono.
 - L'ordinamento si applica all'interno di ogni gruppo; il raggruppamento viene ricordato dopo un ricaricamento, salvato nelle viste salvate e condivisibile tramite il parametro URL `group_by`.
 
+### Rientrare i figli sotto i genitori { #group-by-parents }
+
+Spunta **Genitore** in cima al menu **Raggruppa per** per mostrare le schede come un albero: prima ogni genitore, con i suoi figli rientrati sotto di esso. Funziona da sola (l'intera griglia diventa un unico albero) o sopra qualsiasi raggruppamento (ogni gruppo diventa un albero a sé). Il menu resta aperto quando la spunti, così puoi scegliere un raggruppamento subito dopo.
+
+![Inventario con i figli rientrati sotto i genitori](../assets/img/it/98c_inventario_raggruppamento_genitori.png)
+
+- Una scheda non lascia mai il proprio gruppo. Un figlio il cui genitore si trova in un altro gruppo, è nascosto da un filtro di colonna o non è caricato inizia un proprio ramo, con gli antenati mancanti mostrati in grigio prima del suo nome (ad esempio *SAP S/4HANA / SAP FI /* prima del nome del modulo). I conteggi dei gruppi, la casella dell'intestazione e la modifica di massa corrispondono quindi sempre al contenuto del gruppo.
+- Fai clic sul chevron prima del nome di un genitore per nascondere o mostrare il suo ramo. Un genitore compresso continua a contare le schede nascoste nel numero di elementi e nell'intestazione del gruppo. I rami che comprimi con il chevron non vengono ricordati, e modificare un filtro di colonna li riapre tutti; cancellando l'ultimo filtro di colonna si torna al livello scelto con il selettore.
+- Mentre il livello dei genitori è attivo, una coppia **−** / **+** accanto al pulsante Raggruppa per chiude o apre l'intero albero un livello alla volta. Il livello scelto viene ricordato tra i ricaricamenti, salvato nelle viste salvate e condivisibile con `group_tree_level=<n>`; il livello mostrato segue anche ciò che apri e chiudi a mano.
+- L'ordinamento si applica tra fratelli: i genitori sono ordinati e, sotto ciascuno, i suoi figli.
+- L'opzione è offerta solo quando un tipo di scheda in vista ha una gerarchia. Viene ricordata tra i ricaricamenti, salvata nelle viste salvate e condivisibile con il parametro URL `group_tree=1`.
+- L'**esportazione** segue l'ordine dell'albero e omette le schede nei rami compressi, come fa per i gruppi compressi.
+
 ## Suggerimenti di descrizione AI { #ai-description-suggestions }
 
 Turbo EA può utilizzare l'**AI per generare una descrizione** per qualsiasi card. Questo funziona sia nella finestra di creazione card che nelle pagine di dettaglio delle card esistenti.
@@ -214,6 +227,70 @@ Le viste salvate appaiono nel pannello laterale dei filtri. Cliccate su qualsias
 - **Le mie viste** — Viste da voi create
 - **Condivise con me** — Viste condivise da altri con voi
 - **Viste pubbliche** — Viste disponibili per tutti
+
+### Viste di query { #query-views }
+<a id="mcp-views"></a>
+
+Una **vista di query** è una vista salvata i cui filtri sono una **query a più salti** — una catena di relazioni con condizioni a ogni passaggio, come *Organizzazioni che usano un'Applicazione attiva interessata da un'Iniziativa con stato On Track*. Più query di questo tipo possono essere impilate in una vista e combinate con **E** e **O** (vedi sotto). La vista memorizza la query, non i suoi risultati: viene rieseguita ogni volta che la vista viene aperta, così l'elenco riflette sempre il panorama attuale.
+
+![Una vista di query nell'inventario](../assets/img/it/98d_inventario_vista_mcp.png)
+
+**Creare una vista di query.** Nella scheda **Viste** della barra laterale dei filtri, fai clic su **Nuova vista di query** accanto a *Salva corrente* (mostrato a chiunque possa gestire le viste). Se è attivo un filtro, compreso il tipo di card selezionato, una conferma chiede prima di cancellarli; **Annulla** sulla bozza li ripristina. La striscia sopra la griglia si apre come generatore di query:
+
+1. Fai clic sul chip iniziale (*Scegli un tipo*) e scegli il tipo di card da cui parte la query, cioè quello che elenca.
+2. Fai clic su **+ relazione** dopo l'ultima card per aggiungere un salto. Il menu elenca ogni verbo di relazione con il tipo di card a cui porta; una relazione tra card dello stesso tipo viene offerta in entrambe le direzioni. Ogni riga di query è una singola catena di al massimo tre salti.
+3. Fai clic su **+ condizione** sotto una card per restringerla: **Ciclo di vita**, **Sottotipi**, **Stato di approvazione**, **Qualità dei dati** (*Completo*, *Parziale* o *Minimo*, le stesse fasce del filtro della barra laterale), **Fine vita** (vedi sotto), **Tag**, **Card specifiche**, oppure un campo di selezione o sì/no di quel tipo di card. Per i tag, una card corrisponde se ha uno qualsiasi dei tag scelti di un gruppo e deve corrispondere a ogni gruppo aggiunto; vengono offerti solo i gruppi di tag che si applicano a quel tipo di card. **Card specifiche** apre il selettore di card di quel tipo, e il passo corrisponde allora solo alle card scelte; per un tipo di card gerarchico, un interruttore **Includi le sotto-card** fa corrispondere anche le card sottostanti a ogni scelta. Una card scelta che non puoi vedere appare come *(card nascosta)*.
+4. Fai clic su **Salva**. Si apre la consueta finestra di salvataggio della vista per nome, visibilità, condivisione e impostazione OData. **Annulla** scarta la query.
+
+![Creazione di una vista di query](../assets/img/it/98e_inventario_editor_query.png)
+
+Mentre costruisci, la griglia si filtra in tempo reale e il contatore della barra degli strumenti mostra quante card corrispondono, così vedi l'effetto di ogni salto e condizione prima di salvare.
+
+**Filtrare per fine vita.** La condizione **Fine vita** è offerta per un tipo di card che tiene traccia della fine vita — per impostazione predefinita Applicazione e Componente IT; segue la sezione Fine vita del tipo nel metamodello. I suoi valori sono **Fine vita**, **Fine vita imminente**, **Supportato**, **Sconosciuto** e *(vuoto)* per le card senza dati di fine vita. Lo stato è quello mostrato dalla colonna **Fine vita** dell'inventario: proviene dal prodotto endoflife.date collegato o da un prodotto EOL personalizzato, oppure da una data di fine vita inserita a mano, ed è indipendente dalla fase del ciclo di vita della card. La condizione funziona sulla card di partenza e in qualsiasi passaggio di relazione, sia nelle righe E sia in quelle O — per esempio *Applicazioni che usano un Componente IT a fine vita*. Finché una query filtra per essa sulla card di partenza, la griglia mostra la colonna Fine vita così da vedere perché ogni card corrisponde; le colonne scelte non cambiano. Se endoflife.date non è raggiungibile e nulla è in cache, le card collegate risultano *Sconosciuto*, come nella colonna Fine vita.
+
+La condizione richiede il permesso di visualizzare i dati di fine vita (**Visualizza dati EOL**, `eol.view`). Senza di esso la condizione non viene offerta e l'apertura, l'anteprima o il salvataggio di una vista che la usa vengono rifiutati con *Questa vista filtra per stato di fine vita, che il tuo ruolo non può vedere.*
+
+**Modificare salti e condizioni.** Fai clic sul chip del verbo di un salto per aprirne il menu: **non ha** trasforma il salto nel requisito che la card **non** abbia alcuna relazione di quel tipo, e **Rimuovi questo passaggio** lo rimuove insieme a tutti i salti successivi. Fai clic su un chip di condizione per modificarne i valori, o sulla sua **×** per rimuoverlo.
+
+**Combinare query con E e O.** Una vista può contenere più righe di query impilate. Ogni riga è una query completa — card iniziale, relazioni e condizioni — costruita esattamente come la query singola descritta sopra. Le righe sono raggruppate:
+
+- **E** aggiunge una riga allo stesso gruppo: una card viene elencata solo se corrisponde a **ogni** riga del gruppo. Una riga E parte dallo stesso tipo di card del suo gruppo, mostrato come chip fisso, e la prima riga del gruppo non può cambiare il proprio tipo di card finché ha righe E.
+- **O** avvia un nuovo gruppo sotto un divisore **O**: i suoi risultati vengono **aggiunti** all'elenco. Un nuovo gruppo può partire da un altro tipo di card, quindi una vista può elencare, per esempio, Applicazioni e Organizzazioni insieme. Quando una vista elenca più tipi di card, la griglia mostra le colonne che questi tipi hanno in comune.
+
+In modalità di modifica un **più** cerchiato sotto ogni gruppo chiede **E** oppure **O**: E aggiunge una riga a quel gruppo, O apre un nuovo gruppo dopo di esso. La **×** alla fine di una riga la rimuove; è mostrata quando la vista ha più di una riga.
+
+Per esempio, la vista demo *Active apps on aging tech, and the organizations using apps* ha un gruppo Applicazione di due righe — un'Applicazione attiva che usa un Componente IT in fase di dismissione o a fine vita, **E** un'Applicazione interessata da un'Iniziativa — **O** un'Organizzazione che usa un'Applicazione. L'elenco mostra le Applicazioni che soddisfano entrambe le righe, insieme a ogni Organizzazione che usa un'Applicazione.
+
+![Combinare query con E e O](../assets/img/it/98f_inventario_query_combinate.png)
+
+Una vista contiene al massimo **sei** righe di query, **dodici** relazioni su tutte le sue righe e **tre** relazioni in profondità su ogni riga. Le righe di un gruppo E si incontrano solo sulla card iniziale: il Componente IT di una riga e l'Iniziativa dell'altra possono essere card diverse. Due requisiti sulla **stessa** card a metà di una riga — per esempio, che lo stesso Componente IT sia offerto da un Fornitore **e** appartenga a una Categoria tecnologica — non si possono costruire nel generatore di query; un assistente IA può scrivere una query simile tramite il [server MCP](../admin/mcp.md#multi-hop-card-queries), e la striscia la mostra poi.
+
+**Modificare una vista di query salvata.** Quando una vista di query è aperta, la striscia ne mostra il percorso: i tipi di card come chip, uniti dal verbo di relazione che collega ogni passaggio (ad esempio *Organizzazione → usa Applicazione → è interessata da Iniziativa*), con le condizioni di ciascuna card sotto. Una vista con più righe mostra la stessa pila, con i suoi indicatori E e i divisori O, senza i controlli di modifica. Se sei il proprietario della vista o hai diritti di modifica su di essa, una **matita** nella striscia la porta nello stesso generatore; **Salva** aggiorna la vista. Il pulsante **×** (*Esci da questa vista*) riporta all'inventario normale. **Salva vista corrente** mentre è aperta una vista di query salva una nuova vista di query con la stessa query.
+
+#### Vedere le card dietro una corrispondenza { #query-view-matches }
+
+Una vista di query elenca solo la prima card della sua query. Per vedere quali card più avanti nella catena hanno fatto corrispondere una riga, fai clic sul loro tipo di card nel percorso della query. In *Organizzazioni che usano un'Applicazione che usa un Componente IT a fine vita o prossimo alla fine*, fai clic su **Applicazione** e una colonna elenca, per ogni Organizzazione, le Applicazioni attraverso cui corrisponde; fai clic su **Componente IT** e un'altra colonna elenca i Componenti IT che soddisfano la condizione. Fai di nuovo clic sul tipo di card per rimuoverne la colonna.
+
+![Una vista di query con le sue colonne di corrispondenze](../assets/img/it/98g_inventario_corrispondenze_query.png)
+
+- **Com'è fatto un interruttore.** Un tipo di card cliccabile mostra un puntatore e il suggerimento *Mostrale in una colonna*. Una volta attivata la sua colonna, il chip è riempito con il colore del tipo di card e porta una piccola icona di colonna; il suo suggerimento dice *Nascondi la colonna*.
+- **Quali tipi di card sono interruttori.** Ogni tipo di card dopo il primo della sua riga di query. Il primo tipo di card di una riga di query non lo è, perché le sue card sono le righe della tabella, né lo è un tipo di card dietro **non ha**, che rappresenta una relazione mancante. In una vista con più righe di query, i tipi di card di ogni riga sono interruttori; con **O**, una riga della tabella mostra card solo per le righe di query che soddisfa. Gli interruttori non sono disponibili mentre modifichi la query, e le colonne restano nascoste finché non salvi o annulli.
+- **Dove compare la colonna.** Subito dopo **Nome**, intitolata con il tipo di card e *corrispondenti* — per esempio *Applicazione · corrispondenti* — perché non venga confusa con una colonna di relazione come *utilizza Applicazione*, che elenca tutte le Applicazioni collegate in quel modo. Quando due passaggi hanno lo stesso tipo di card, i titoli vengono numerati. Passa il mouse sul titolo per vedere il percorso seguito dalla colonna.
+- **Cosa mostra una cella.** I nomi delle card corrispondenti, separati da punto e virgola; passa il mouse sulla cella per vedere l'elenco completo. Una cella elenca al massimo **100** nomi; un elenco più lungo termina con *…* e il suo suggerimento indica che sono mostrate le prime 100. Puoi ordinare e filtrare la colonna come una colonna di testo, ed **Esporta vista corrente** la include.
+- **Ogni card lungo la catena, non chi porta a chi.** Una riga elenca ogni card corrispondente in quel passaggio: tutte le Applicazioni dell'Organizzazione che soddisfano la condizione e tutti i Componenti IT di quelle Applicazioni che la soddisfano. Non mostra quale Componente IT appartiene a quale Applicazione. Per elencare i Componenti IT stessi, uno per riga, scrivi invece la query partendo da Componente IT.
+- **Salvate con la vista.** Le colonne che attivi vengono salvate con la vista (la **matita** nell'elenco delle viste, poi **Aggiorna**), così ritornano quando la riapri. Modificare la query mantiene una colonna finché il suo passaggio esiste ancora, e la rimuove quando elimini quel passaggio o ne cambi il tipo di card.
+
+Vedi solo le card che hai il permesso di vedere: una card nascosta per te non viene mai nominata in una cella, e una riga che corrisponde solo tramite card nascoste non viene elencata.
+
+La vista demo *Organizations on applications with components at or near end of life* si apre con entrambe le colonne attive.
+
+**Viste create da un assistente IA.** Un assistente connesso tramite il [server MCP](../admin/mcp.md) può creare anch'esso viste di query. Una tale vista mostra nella sua striscia un chip **MCP** e la nota *Creata tramite MCP*, e un badge robot nell'elenco delle viste; si modifica come qualsiasi altra vista di query. Nell'elenco delle viste ogni vista di query porta un piccolo badge di vista di query (un cubo; il badge robot quando l'ha creata un assistente) e il suo percorso compatto (*Organizzazione › usa Applicazione › è interessata da Iniziativa*) come seconda riga; una vista impilata si legge *… E … O …*. Quando la vista ha condizioni, il loro numero segue il percorso (*… › è interessata da Iniziativa · 2 condizioni*).
+
+**Aprire una vista tramite link.** Quando un assistente salva una vista, restituisce un link della forma `/inventory?view=<view id>`; aprendolo si applica direttamente la vista salvata. Lo stesso link funziona per qualsiasi vista salvata che puoi vedere.
+
+**OData.** Il feed OData di una vista di query restituisce le stesse card dell'inventario: la query viene applicata anche al feed.
+
+Per la grammatica delle query, i suoi limiti e gli strumenti MCP (`query_cards`, `list_inventory_views`, `save_inventory_view`, `list_tag_groups`), vedi [Query di card a più salti](../admin/mcp.md#multi-hop-card-queries).
 
 ## Importazione / Esportazione Excel { #excel-import }
 

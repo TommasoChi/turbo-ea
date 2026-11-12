@@ -64,7 +64,7 @@ Felder definieren die benutzerdefinierten Attribute, die auf Karten dieses Typs 
 | **Bezeichnung** | Anzeigename |
 | **Typ** | text, multiline_text, number, cost, percentage, boolean, date, url, single_select oder multiple_select. Ein Prozentsatz ist eine Zahl von 0 bis 100, die als Fortschrittsbalken dargestellt und mit einem Schieberegler oder durch exakte Eingabe bearbeitet wird. Ein Boolean wird aus einer Ja/Nein-Liste gewählt, **Keine** leert ihn; er erscheint als grüne *Ja*- oder blaue *Nein*-Marke bzw. als —, wenn nicht gesetzt, was der Inventarfilter **(leer)** erfasst |
 | **Optionen** | Für Auswahlfelder: die verfügbaren Auswahlmöglichkeiten mit Bezeichnungen und optionalen Farben. Ordnen Sie sie mit den Pfeilen nach oben und unten neben jeder Option um: Menüs und Filter listen die Optionen in dieser Reihenfolge, und die Chips eines Mehrfachauswahlwerts folgen ihr auf jeder Karte. |
-| **Hilfetext** | Optionale Hinweise, die beim Bearbeiten einer Karte als einklappbare Notiz unter dem Feld erscheinen. Er wird pro Sprache verfasst und kann von jedem Metamodell-Administrator gesetzt werden; bei einem von einer Erweiterung beigesteuerten Feld ist er schreibgeschützt |
+| **Hilfetext** | Optionale Hinweise zum Feld. Beim Lesen einer Karte erscheint er als Info-Symbol neben der Feldbezeichnung (zum Lesen des Texts darüberfahren oder fokussieren) und als Tooltip an der Spaltenüberschrift des Felds im Inventar; beim Bearbeiten einer Karte steht dasselbe Symbol neben dem Feld. Er wird pro Sprache verfasst und kann von jedem Metamodell-Administrator gesetzt werden; bei einem von einer Erweiterung beigesteuerten Feld ist er schreibgeschützt |
 | **Pflichtfeld** | Ob das Feld verpflichtend ist — siehe die Durchsetzungsregeln unten |
 | **Datenqualität** | Der Beitrag jedes Felds zum Wert wird im Bereich **Datenqualität** verwaltet (siehe unten) |
 | **Nur lesen** | Verhindert manuelle Bearbeitung (nützlich für berechnete Felder) |
@@ -146,6 +146,8 @@ Definieren Sie benutzerdefinierte Rollen für diesen Typ (z.B. «Anwendungseigne
 
 Jede Rolle hat einen **Schlüssel** (die auf Karten gespeicherte Kennung, die auch von den `stakeholder:<Rollenschlüssel>`-Import-/Exportspalten verwendet wird) und eine **Bezeichnung** (was Benutzer sehen). Der Schlüssel folgt derselben Konvention wie jeder andere Metamodell-Schlüssel — nur Buchstaben und Ziffern, beginnend mit einem Buchstaben, 3–50 Zeichen, üblicherweise camelCase wie `businessArchitect`. Er wird automatisch aus der Bezeichnung abgeleitet, sodass Sie ihn selten selbst eingeben müssen.
 
+Geben Sie einer Rolle eine **Beschreibung**, um festzuhalten, was sie in Ihrer Organisation bedeutet – was ein *Vertragsverantwortlicher* unterzeichnet, wofür ein *Technischer Verantwortlicher* einsteht. Benutzer sehen sie als Info-Symbol neben der Rolle auf dem Tab **Stakeholder** einer Karte, unter dem Rollennamen in der Rollenauswahl, als Tooltip an der Spaltenüberschrift der Rolle im Inventar, unter **Meine Rollen** im Dashboard und im Stakeholder-Verzeichnis. Die Beschreibung wird wie die Bezeichnung pro Sprache übersetzt: Jede aktivierte Sprache hat im Rolleneditor unter **Übersetzungen** ein eigenes Beschreibungsfeld, und auch der **Übersetzungsdialog** des Typs listet sie auf. Eine leer gelassene Sprache greift auf die englische Beschreibung zurück. Die integrierten Rollen (**Verantwortlicher**, **Beobachter**, die beiden Anwendungsverantwortlichen, **IT-Projektleiter** und **Prozessverantwortlicher**) werden in jeder Sprache mit einer Beschreibung geliefert, die Sie wie jede andere bearbeiten oder löschen können; außerdem speichert die Schaltfläche **Speichern** in der Kopfzeile des Drawers auch eine Rolle, die Sie auf diesem Tab bearbeiten.
+
 Jede Rolle trägt außerdem einen Schalter **Zählt für die Datenqualität**. Die Datenqualität hat genau einen Stakeholder-Slot, und dieser gilt als erfüllt, sobald der Karte jemand in einer Rolle zugewiesen ist, bei der dieser Schalter aktiv ist. Deaktivieren Sie ihn für rein passive Rollen — der integrierte **Beobachter** wird bereits deaktiviert ausgeliefert, damit das Beobachten einer Karte nicht als Verantwortung zählt. Ein Typ, bei dem alle Rollen deaktiviert sind, trägt gar keinen Stakeholder-Slot bei. Das Umschalten bewertet sofort alle Karten dieses Typs neu.
 
 Rollen lassen sich auf zwei Arten entfernen:
@@ -209,7 +211,7 @@ Klicken Sie auf die Schaltfläche **Übersetzen** in der Symbolleiste des Typ-Dr
 - **Sektionen** — Abschnittsüberschriften auf der Kartendetailseite
 - **Felder** — Feldbezeichnungen und Auswahloptionsbezeichnungen
 - **Hilfetext** — Der Hilfetext eines Felds, unter dem Feld aufgeführt, sobald er im Feldeditor eingegeben wurde. Eine Änderung auf Englisch aktualisiert auch den Standard-Hilfetext des Felds
-- **Stakeholder-Rollen** — Rollennamen, die in der Stakeholder-Zuweisungs-UI angezeigt werden
+- **Stakeholder-Rollen** — Rollennamen und -beschreibungen. Die Beschreibung einer Rolle wird unter ihrem Namen aufgeführt, sobald die Rolle in irgendeiner Sprache eine Beschreibung hat; eine Änderung auf Englisch aktualisiert auch die Standardbeschreibung der Rolle
 
 Übersetzungen werden zusammen mit jedem Kartentyp gespeichert und beim Rendern entsprechend der vom Benutzer ausgewählten Sprache aufgelöst. Nicht übersetzte Bezeichnungen fallen auf den englischen Standard zurück.
 
@@ -255,7 +257,7 @@ Das Entfernen eines Verbindungstyps überschreibt **nicht** die Karten, die ihn 
 
 Manche Beziehungen tragen zusätzliche Attribute, die Sie an jeder einzelnen Verknüpfung statt am Beziehungstyp festlegen. Beispielsweise hat die integrierte Beziehung **Organisation → Anwendung** („nutzt") ein Attribut **Nutzungstyp** — setzen Sie es je Verknüpfung auf **Eigentümer**, **Benutzer** oder **Stakeholder**. So können Sie eine Anwendung, die einer Organisation *gehört* und von anderen *genutzt* wird, über einen einzigen Beziehungstyp abbilden. Der gewählte Wert erscheint als farbiger Chip im Abschnitt **Beziehungen** der Karte; legen Sie ihn beim Hinzufügen der Beziehung fest oder später über das Bearbeiten-Symbol in der Beziehungszeile.
 
-Sie können auch **mehrere Beziehungstypen zwischen demselben Paar von Kartentypen** anlegen — etwa eine Organisation, die eine Anwendung *besitzt*, neben einer, die sie *nutzt*. Bevorzugen Sie ein Attribut, wenn Sie Varianten einer einzigen Beziehung beschreiben (das behält eine Spalte im Inventar und eine Linie im Diagramm); legen Sie einen zweiten Beziehungstyp an, wenn die Beziehungen wirklich verschieden sind und eigene Verben, eigene Attribute oder eigene Filter verdienen. Trägt ein Paar mehrere Beziehungstypen, zeigt das Inventar weiterhin eine einzige Spalte für den verbundenen Kartentyp; beim Öffnen dieser Zelle erhalten Sie je Beziehungstyp einen eigenen Abschnitt. Auf einer Karte behält jeder Beziehungstyp seinen eigenen Abschnitt: Abschnitte, die auf denselben Kartentyp zeigen, stehen beieinander, und eine Karte, die Sie über mehr als einen davon verknüpft haben, wird in jedem ihrer Abschnitte mit *Auch …* gekennzeichnet. Ein Beziehungstyp, dessen beide Enden derselbe Kartentyp sind — eine Organisation, die *Standort hat* einer anderen Organisation —, zeigt auf einer Karte *beide* Verben als zwei Abschnitte und im Inventar als zwei Filterzeilen und zwei Editor-Abschnitte; geben Sie einem solchen Typ eine umgekehrte Beschriftung, sonst lesen sich beide Abschnitte gleich.
+Sie können auch **mehrere Beziehungstypen zwischen demselben Paar von Kartentypen** anlegen — etwa eine Organisation, die eine Anwendung *besitzt*, neben einer, die sie *nutzt*. Bevorzugen Sie ein Attribut, wenn Sie Varianten einer einzigen Beziehung beschreiben (das behält eine Spalte im Inventar und eine Linie im Diagramm); legen Sie einen zweiten Beziehungstyp an, wenn die Beziehungen wirklich verschieden sind und eigene Verben, eigene Attribute oder eigene Filter verdienen. Trägt ein Paar mehrere Beziehungstypen, zeigt das Inventar je Beziehungstyp eine eigene Spalte, überschrieben mit seinem Verb und dem verknüpften Kartentyp (*besitzt Anwendung*, *nutzt Anwendung*). Auf einer Karte behält jeder Beziehungstyp seinen eigenen Abschnitt: Abschnitte, die auf denselben Kartentyp zeigen, stehen beieinander, und eine Karte, die Sie über mehr als einen davon verknüpft haben, wird in jedem ihrer Abschnitte mit *Auch …* gekennzeichnet. Ein Beziehungstyp, dessen beide Enden derselbe Kartentyp sind — eine Organisation, die *Standort hat* einer anderen Organisation —, zeigt auf einer Karte *beide* Verben als zwei Abschnitte und im Inventar als zwei Spalten und zwei Filterzeilen; geben Sie einem solchen Typ eine umgekehrte Beschriftung, sonst lesen sich beide Abschnitte gleich.
 
 Trägt ein Paar mehrere Beziehungstypen, können Berichte, Portale und Umfragen einen bestimmten auswählen: Der Portfolio-Bericht bietet eine Gruppierungsachse und einen Filter je Beziehung, die Capability Map einen Filter je Beziehung, Portalfilter und Beziehungsabschnitte werden mit ihrem Verb beschriftet, und der Filter **bezogen auf** einer Umfrage erhält eine Auswahl **Über Beziehung**. Keine Auswahl bedeutet weiterhin „über eine beliebige davon verbunden“.
 
@@ -325,6 +327,23 @@ Jedes Prinzip hat vier Felder:
 
 Prinzipien können über den Umschalter auf jeder Karte einzeln **aktiviert** oder **deaktiviert** werden.
 
+Jedes Prinzip hat eine **Referenznummer** (`P-001`, `P-002`, …), die bei der Erstellung vergeben und neben dem Titel angezeigt wird. Referenzen werden pro Instanz nummeriert: Ein Prinzip, das über den [Workspace-Transfer](workspace-transfer.md) übernommen wird, erhält auf dem Ziel die nächste freie Nummer.
+
+### Prinzipien exportieren und importieren {: #principles-import }
+
+**Exportieren** (neben **Neues Prinzip**) lädt alle Prinzipien als `.xlsx`-Datei mit den Spalten `reference_number`, `title`, `description`, `rationale`, `implications`, `is_active` und `sort_order` herunter. Der Export ist zugleich eine gültige Importdatei, sodass Sie Prinzipien in Excel bearbeiten und wieder laden können.
+
+**Importieren** lädt Prinzipien gesammelt aus einer `.xlsx`-Datei. Klicken Sie auf **Vorlage herunterladen**, um eine Beispielarbeitsmappe zu erhalten, füllen Sie pro Zeile ein Prinzip aus und laden Sie die Datei hoch. Jede Zeile wird zuerst über ihre `reference_number`, dann über ihren Titel (ohne Beachtung der Groß-/Kleinschreibung) einem vorhandenen Prinzip zugeordnet:
+
+- Ein zugeordnetes Prinzip wird mit den abweichenden Werten **aktualisiert**; weicht nichts ab, wird die Zeile **übersprungen**. Die Vorschau listet jede aktualisierte Zeile mit den Feldern auf, die sie ändert.
+- Jede andere Zeile **legt** ein neues Prinzip mit der nächsten freien Referenz **an**. Eine Referenz, die es auf dieser Instanz nicht gibt, wird nicht wiederverwendet; die Vorschau warnt davor.
+- Eine Zeile ohne Referenz, deren Titel zu zwei Prinzipien gehört, wird als mehrdeutig abgelehnt: Ergänzen Sie die Referenz, um anzugeben, welches gemeint ist.
+- Eine in der Tabelle fehlende Spalte lässt das Feld unverändert. Eine leere Zelle in `description`, `rationale` oder `implications` leert diesen Text; eine leere Zelle in `is_active` oder `sort_order` lässt den Wert unverändert. `title` ist die einzige Pflichtspalte.
+- `is_active` akzeptiert `true` / `false` (auch `yes` / `no`, `1` / `0`); `sort_order` muss eine ganze Zahl sein. Neue Prinzipien ohne `sort_order` werden am Ende der Liste hinzugefügt.
+- Ein Titel oder eine Referenz, die in der Datei doppelt vorkommt, oder eine Umbenennung auf den Titel eines anderen Prinzips lässt diese Zeile fehlschlagen.
+
+Bevor etwas geschrieben wird, erhalten Sie eine Vorschau, wie viele Zeilen erstellt, aktualisiert, übersprungen werden und fehlschlagen, mit jedem Fehler und jeder Warnung pro Zeile; nichts ändert sich, bis Sie bestätigen. Der Import erfordert die Berechtigung `admin.metamodel` und wird im [Sicherheits- und Admin-Log](audit-log.md) erfasst.
+
 ### Aus dem Prinzipienkatalog importieren
 
 Turbo EA liefert einen **kuratierten Referenzkatalog mit 10 branchenüblichen EA-Prinzipien**, damit Sie nicht bei null anfangen müssen. Öffnen Sie das Avatar-Menü oben rechts und wählen Sie **Referenzkataloge → Prinzipienkatalog**. Dort können Sie:
@@ -373,12 +392,20 @@ Pro Zeile können Sie:
 
 Der Compliance-Scanner und der Risk-Promotion-Flow funktionieren **auch ohne konfigurierten KI-Anbieter** — die manuelle Befundeingabe, Statusübergänge und der Weg in das Risikoregister bleiben verfügbar. KI ist nur notwendig, wenn Sie tatsächlich einen neuen Scan auslösen.
 
+## Lebenszyklusphasen {: #lifecycle-phases }
+
+Der Abschnitt **Lebenszyklus** jeder Karte durchläuft fünf feste Phasen: Planung, Einführung, Aktiv, Auslauf und End of Life. Was jede Phase bedeutet, unterscheidet sich je nach Organisation – etwa ob *Auslauf* noch neue Benutzer zulässt oder wann eine Komponente als *End of Life* gilt. Auf dem Tab **Lebenszyklusphasen** halten Sie das einmal für den gesamten Arbeitsbereich fest.
+
+Der Tab zeigt ein Textfeld pro Phase und eine Reihe von Sprach-Tabs (zuerst Englisch, dann jede aktivierte Sprache). In einem neuen Arbeitsbereich sind die Felder in jeder Sprache mit einer Standarderklärung jeder Phase vorbefüllt, sodass die Hilfe von Anfang an vorhanden ist; passen Sie jeden Text an die Arbeitsweise Ihrer Organisation an. Eine leer gelassene Sprache zeigt den englischen Text. Lassen Sie eine Phase leer, um dafür keine Hilfe anzuzeigen – wenn Sie alle fünf Phasen leeren und speichern, wird die Hilfe ganz entfernt. Klicken Sie auf **Speichern**, um die Texte zu übernehmen.
+
+Benutzer sehen die Hilfe zu einer Phase als Info-Symbol neben der Phase in der Lebenszyklus-Zeitleiste jeder Karte; es bleibt auch beim Bearbeiten des Lebenszyklus sichtbar. Die Texte gelten für alle Kartentypen. Das Speichern wird im **Sicherheits- und Verwaltungsprotokoll** festgehalten.
+
 ## Karten-Layout-Editor
 
 Für jeden Kartentyp steuert der **Layout**-Bereich in der Typ-Schublade, wie die Kartendetailseite aufgebaut ist:
 
 - **Abschnittsreihenfolge** — Abschnitte (Beschreibung, EOL, Lebenszyklus, Hierarchie, Tags, Beziehungen und benutzerdefinierte Abschnitte) per Drag & Drop neu anordnen
-- **Sichtbarkeit** — Abschnitte ausblenden, die für einen Typ nicht relevant sind
+- **Sichtbarkeit** — Abschnitte ausblenden, die für einen Typ nicht relevant sind. Der Abschnitt **Lebensende** ist die Ausnahme von „angezeigt, solange nicht ausgeblendet“: Er wird standardmäßig nur bei Anwendungen und IT-Komponenten angezeigt und bei jedem anderen Typ, auch bei benutzerdefinierten, ausgeblendet, bis Sie ihn aktivieren. Sein Schalter entscheidet auch, ob der Typ an der Lebensende-Berichterstattung teilnimmt – siehe [Lebensende bei anderen Kartentypen](eol.md#lebensende-bei-anderen-kartentypen)
 - **Standarderweiterung** — Wählen, ob jeder Abschnitt standardmäßig erweitert oder eingeklappt startet
 - **Spaltenlayout** — 1 oder 2 Spalten pro benutzerdefiniertem Abschnitt festlegen
 - **Felder zwischen Abschnitten verschieben** – Über die **Verschieben**-Aktion eines Feldes (neben den Schaltflächen Bearbeiten und Löschen) es in einen anderen Abschnitt verschieben, wobei seine Konfiguration erhalten bleibt

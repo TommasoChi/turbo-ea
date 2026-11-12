@@ -253,3 +253,57 @@ class TestAdminDocuments:
         a = env["admin"]
         assert (await _patch_doc(client, a, doc.id)).status_code == 200
         assert (await _delete_doc(client, a, doc.id)).status_code == 204
+
+
+class TestExtensionOwnedEntityResources:
+    """``ext.<key>.*`` rows are reachable only through the extension bridge."""
+
+    async def _ext_rows(self, db):
+        att = FileAttachment(
+            card_id=None,
+            entity_type="ext.demo.thing",
+            entity_id=uuid.uuid4(),
+            name="x.pdf",
+            mime_type="application/pdf",
+            size=len(PDF),
+            data=PDF,
+        )
+        doc = Document(
+            card_id=None,
+            entity_type="ext.demo.thing",
+            entity_id=uuid.uuid4(),
+            name="X",
+            url="https://example.com",
+            type="link",
+        )
+        db.add_all([att, doc])
+        await db.flush()
+        return att, doc
+
+    async def test_core_routes_404_even_for_a_full_admin(self, client, db, env):
+        att, doc = await self._ext_rows(db)
+        a = env["admin"]
+        h = auth_headers(a)
+        assert (
+            await client.get(f"/api/v1/file-attachments/{att.id}/download", headers=h)
+        ).status_code == 404
+        assert (await _replace(client, a, att.id)).status_code == 404
+        assert (await _patch_att(client, a, att.id)).status_code == 404
+        assert (await _delete_att(client, a, att.id)).status_code == 404
+        assert (await _patch_doc(client, a, doc.id)).status_code == 404
+        assert (await _delete_doc(client, a, doc.id)).status_code == 404
+
+    async def test_bulk_delete_skips_them_as_not_found(self, client, db, env):
+        att, doc = await self._ext_rows(db)
+        r = await client.post(
+            "/api/v1/resources/bulk-delete",
+            json={
+                "refs": [{"kind": "file", "id": str(att.id)}, {"kind": "link", "id": str(doc.id)}]
+            },
+            headers=auth_headers(env["admin"]),
+        )
+        assert r.status_code == 200
+        assert r.json()["deleted"] == 0
+        assert {s["reason"] for s in r.json()["skipped"]} == {"Not found"}
+        assert await db.get(FileAttachment, att.id) is not None
+        assert await db.get(Document, doc.id) is not None

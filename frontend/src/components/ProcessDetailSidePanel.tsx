@@ -67,6 +67,8 @@ import type {
   ProcessNavigatorSource,
 } from "@/features/bpm/ProcessNavigatorContext";
 import type { ProcessElement, ProcessFlowVersion } from "@/types";
+import { alpha, useTheme } from "@mui/material/styles";
+import { PROCESS_FALLBACK_COLOR } from "@/theme/tokens";
 
 export interface ProcessDetailSidePanelProps {
   processId: string | null;
@@ -83,6 +85,7 @@ const OVERLAY = "processType" as const;
 
 export default function ProcessDetailSidePanel({ processId, open, onClose }: ProcessDetailSidePanelProps) {
   const { t } = useTranslation(["bpm", "common"]);
+  const theme = useTheme();
   const navigate = useNavigate();
   const { getType } = useMetamodel();
   const processTypes = useProcessTypeOptions();
@@ -154,7 +157,7 @@ export default function ProcessDetailSidePanel({ processId, open, onClose }: Pro
   const meta = useMemo<NavigatorMeta>(
     () => ({
       typeIcon: bpType?.icon ?? "route",
-      typeColor: bpType?.color ?? "#028f00",
+      typeColor: bpType?.color ?? PROCESS_FALLBACK_COLOR,
       subtypes: bpType?.subtypes ?? [],
       processTypes,
     }),
@@ -198,28 +201,28 @@ export default function ProcessDetailSidePanel({ processId, open, onClose }: Pro
 
   if (!processId) return null;
 
-  const typeColor = bpType?.color || "#028f00";
+  const typeColor = bpType?.color || PROCESS_FALLBACK_COLOR;
   const typeIcon = bpType?.icon || "route";
 
   return (
     <ProcessNavigatorProvider value={{ source, capabilities, meta }}>
     <Drawer anchor="right" open={open} onClose={onClose} PaperProps={{ sx: { width: { xs: "100%", sm: 520 } } }}>
       <Box sx={{ height: "100%", display: "flex", flexDirection: "column" }}>
-        <Box sx={{ px: 2.5, pt: 2, pb: 1, bgcolor: typeColor, color: "#fff" }}>
+        <Box sx={{ px: 2.5, pt: 2, pb: 1, bgcolor: typeColor, color: "common.white" }}>
           <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
             <Box
               sx={{
                 width: 36,
                 height: 36,
                 borderRadius: 1.5,
-                bgcolor: "rgba(255,255,255,0.2)",
+                bgcolor: alpha(theme.palette.common.white, 0.2),
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
                 flexShrink: 0,
               }}
             >
-              <MaterialSymbol icon={typeIcon} size={22} color="#fff" />
+              <MaterialSymbol icon={typeIcon} size={22} color={theme.palette.common.white} />
             </Box>
             <Typography variant="h6" sx={{ fontWeight: 700, flex: 1, fontSize: "1.1rem" }} noWrap>
               {node?.name || ""}
@@ -228,13 +231,13 @@ export default function ProcessDetailSidePanel({ processId, open, onClose }: Pro
               <IconButton
                 onClick={() => currentId && onNavigate(currentId)}
                 size="small"
-                sx={{ color: "#fff" }}
+                sx={{ color: "common.white" }}
                 aria-label={t("navigator.openCard")}
               >
                 <MaterialSymbol icon="open_in_new" size={20} />
               </IconButton>
             </Tooltip>
-            <IconButton onClick={onClose} size="small" sx={{ color: "#fff" }} aria-label={t("common:actions.close")}>
+            <IconButton onClick={onClose} size="small" sx={{ color: "common.white" }} aria-label={t("common:actions.close")}>
               <MaterialSymbol icon="close" size={20} />
             </IconButton>
           </Box>

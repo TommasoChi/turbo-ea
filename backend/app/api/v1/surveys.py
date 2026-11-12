@@ -873,7 +873,13 @@ async def get_response_form(
             # the server because a stakeholder role's per-card view grant is
             # invisible to the client's route table.
             "can_view": await PermissionService.check_permission(
-                db, user, "inventory.view", card.id, "card.view", card_type_key=card.type
+                db,
+                user,
+                "inventory.view",
+                card.id,
+                "card.view",
+                card_type_key=card.type,
+                subtype=card.subtype,
             ),
             "type": card.type,
             "subtype": card.subtype,

@@ -65,7 +65,7 @@ Les champs définissent les attributs personnalisés disponibles sur les fiches 
 | **Libellé** | Nom d'affichage |
 | **Type** | text, multiline_text, number, cost, percentage, boolean, date, url, single_select ou multiple_select. Un pourcentage est un nombre de 0 à 100, affiché sous forme de barre de progression et modifié avec un curseur ou saisi exactement. Un booléen se choisit dans une liste Oui / Non, **Aucun** l'efface ; il s'affiche sous forme de pastille verte *Oui* ou bleue *Non*, ou sous la forme — s'il n'est pas renseigné, ce que le filtre **(vide)** de l'inventaire retrouve |
 | **Options** | Pour les champs de sélection : les choix disponibles avec libellés et couleurs optionnelles. Réordonnez-les avec les flèches haut et bas à côté de chaque option : les menus et les filtres listent les options dans cet ordre, et les puces d'une valeur à choix multiple le suivent sur chaque fiche. |
-| **Texte d'aide** | Conseil facultatif affiché sous forme de note repliable sous le champ pendant l'édition d'une fiche. Il se rédige par langue et peut être défini par tout administrateur du métamodèle ; sur un champ apporté par une extension, il est en lecture seule |
+| **Texte d'aide** | Conseil facultatif pour le champ. Pendant la lecture d'une fiche, il apparaît sous forme d'icône d'information à côté du libellé du champ (survolez-la ou donnez-lui le focus pour lire le texte) et sous forme d'infobulle sur l'en-tête de colonne du champ dans l'Inventaire ; pendant l'édition d'une fiche, la même icône se trouve à côté du champ. Il se rédige par langue et peut être défini par tout administrateur du métamodèle ; sur un champ apporté par une extension, il est en lecture seule |
 | **Obligatoire** | Si le champ est obligatoire — voir les règles d'application ci-dessous |
 | **Qualité des données** | La contribution de chaque champ au score est gérée dans le panneau **Qualité des données** (voir ci-dessous) |
 | **Lecture seule** | Empêche la modification manuelle (utile pour les champs calculés) |
@@ -147,6 +147,8 @@ Définissez des rôles personnalisés pour ce type (par ex. « Responsable Appli
 
 Chaque rôle possède une **clé** (l'identifiant stocké sur les fiches, utilisé par les colonnes d'import/export `stakeholder:<clé_du_rôle>`) et un **libellé** (ce que voient les utilisateurs). La clé suit la même convention que toute autre clé du métamodèle — uniquement des lettres et des chiffres, commençant par une lettre, 3 à 50 caractères, par convention en camelCase comme `businessArchitect`. Elle est renseignée automatiquement à partir du libellé, vous avez donc rarement besoin d'en saisir une.
 
+Donnez à un rôle une **description** pour préciser ce qu'il signifie dans votre organisation – ce que signe un *Responsable du contrat*, de quoi répond un *Responsable technique*. Les utilisateurs la voient sous forme d'icône d'information à côté du rôle dans l'onglet **Parties prenantes** d'une fiche, sous le nom du rôle dans le sélecteur de rôle, sous forme d'infobulle sur l'en-tête de colonne du rôle dans l'Inventaire, dans **Mes rôles** sur le tableau de bord et dans l'annuaire des parties prenantes. La description se traduit par langue comme le libellé : chaque langue activée dispose de son propre champ de description sous **Traductions** dans l'éditeur de rôle, et la **boîte de dialogue de traduction** du type la liste aussi. Une langue laissée vide revient à la description anglaise. Les rôles intégrés (**Responsable**, **Observateur**, les deux responsables d'application, **Chef de projet IT** et **Responsable de processus**) sont fournis avec une description dans chaque langue, que vous pouvez modifier ou effacer comme n'importe quelle autre ; le bouton **Enregistrer** de l'en-tête du tiroir enregistre aussi un rôle que vous modifiez dans cet onglet.
+
 Chaque rôle porte également un interrupteur **Compte pour la qualité des données**. Le score de qualité comporte un seul emplacement « parties prenantes », satisfait dès qu'une personne est affectée à la fiche dans un rôle où cet interrupteur est actif. Désactivez-le pour les rôles purement passifs — l'**Observateur** intégré est livré désactivé, afin qu'observer une fiche ne vaille jamais responsabilité. Un type dont tous les rôles sont désactivés ne contribue à aucun emplacement. Basculer l'interrupteur recalcule immédiatement le score de toutes les fiches du type.
 
 Les rôles peuvent être retirés de deux façons :
@@ -210,7 +212,7 @@ Cliquez sur le bouton **Traduire** dans la barre d'outils du tiroir de type pour
 - **Sections** — En-têtes de section sur la page de détail de la fiche
 - **Champs** — Libellés des champs et des options de sélection
 - **Texte d'aide** — Le texte d'aide d'un champ, listé sous le champ dès qu'il a été saisi dans l'éditeur de champ. Le modifier en anglais met aussi à jour le texte d'aide par défaut du champ
-- **Rôles des parties prenantes** — Noms de rôles affichés dans l'interface d'attribution des parties prenantes
+- **Rôles des parties prenantes** — Noms et descriptions des rôles. La description d'un rôle est listée sous son nom dès que le rôle a une description dans une langue quelconque ; la modifier en anglais met aussi à jour la description par défaut du rôle
 
 Les traductions sont stockées avec chaque type de fiche et sont résolues au moment du rendu en fonction de la langue sélectionnée par l'utilisateur. Les libellés non traduits utilisent la valeur anglaise par défaut.
 
@@ -256,7 +258,7 @@ Supprimer un type de lien ne réécrit **pas** les fiches qui l'utilisent déjà
 
 Certaines relations portent des attributs supplémentaires que vous définissez sur chaque lien plutôt que sur le type de relation. Par exemple, la relation intégrée **Organisation → Application** (« utilise ») possède un attribut **Type d'usage** — définissez-le sur **Propriétaire**, **Utilisateur** ou **Partie prenante** pour chaque lien. Vous pouvez ainsi modéliser une application *détenue par* une organisation et *utilisée par* d'autres au moyen d'un seul type de relation. La valeur choisie apparaît sous forme de puce colorée dans la section **Relations** de la fiche ; définissez-la lors de l'ajout de la relation, ou plus tard via l'icône de modification sur la ligne de la relation.
 
-Vous pouvez aussi créer **plusieurs types de relation entre la même paire de types de fiches** — par exemple une organisation qui *possède* une application et une autre qui l'*utilise*. Préférez un attribut lorsque vous décrivez des variantes d'une même relation (cela conserve une seule colonne dans l'inventaire et une seule ligne sur un diagramme) ; créez un second type de relation lorsque les relations sont réellement différentes et méritent leurs propres verbes, attributs ou filtres. Lorsqu'une paire porte plusieurs types de relation, l'inventaire affiche toujours une seule colonne pour le type de fiche lié, et l'ouverture de cette cellule vous donne une section par type de relation. Sur une fiche, chaque type de relation conserve sa propre section : les sections qui pointent vers le même type de fiche sont regroupées, et une fiche que vous avez reliée par plusieurs d'entre elles porte la mention *Également …* dans chacune de ses sections. Un type de relation dont les deux extrémités sont le même type de fiche — une organisation qui *a pour site* une autre organisation — affiche les *deux* verbes sur une fiche, sous forme de deux sections, et dans l'inventaire sous forme de deux lignes de filtre et de deux sections d'édition ; donnez à ce type un libellé inverse, sinon les deux sections se liront de la même façon.
+Vous pouvez aussi créer **plusieurs types de relation entre la même paire de types de fiches** — par exemple une organisation qui *possède* une application et une autre qui l'*utilise*. Préférez un attribut lorsque vous décrivez des variantes d'une même relation (cela conserve une seule colonne dans l'inventaire et une seule ligne sur un diagramme) ; créez un second type de relation lorsque les relations sont réellement différentes et méritent leurs propres verbes, attributs ou filtres. Lorsqu'une paire porte plusieurs types de relation, l'inventaire affiche une colonne par type de relation, intitulée avec son verbe et le type de fiche lié (*possède Application*, *utilise Application*). Sur une fiche, chaque type de relation conserve sa propre section : les sections qui pointent vers le même type de fiche sont regroupées, et une fiche que vous avez reliée par plusieurs d'entre elles porte la mention *Également …* dans chacune de ses sections. Un type de relation dont les deux extrémités sont le même type de fiche — une organisation qui *a pour site* une autre organisation — affiche les *deux* verbes sur une fiche, sous forme de deux sections, et dans l'inventaire sous forme de deux colonnes et de deux lignes de filtre ; donnez à ce type un libellé inverse, sinon les deux sections se liront de la même façon.
 
 Lorsqu'une paire porte plusieurs types de relation, les rapports, portails et enquêtes peuvent en cibler un en particulier : le rapport Portefeuille propose un axe de regroupement et un filtre par relation, la Carte des capacités ajoute un filtre par relation, les filtres et sections de relation des portails affichent leur verbe, et le filtre **lié à** d'une enquête gagne un sélecteur **Via la relation**. Ne rien choisir signifie toujours « relié par l'une quelconque d'entre elles ».
 
@@ -326,6 +328,23 @@ Chaque principe comporte quatre champs :
 
 Les principes peuvent être **activés** ou **désactivés** individuellement via l'interrupteur sur chaque fiche.
 
+Chaque principe porte un **numéro de référence** (`P-001`, `P-002`, …), attribué à sa création et affiché à côté de son titre. Les références sont numérotées par instance : un principe amené par le [transfert d'espace de travail](workspace-transfer.md) reçoit le prochain numéro libre sur la cible.
+
+### Exporter et importer des principes {: #principles-import }
+
+**Exporter** (à côté de **Nouveau principe**) télécharge tous les principes dans un fichier `.xlsx` avec les colonnes `reference_number`, `title`, `description`, `rationale`, `implications`, `is_active` et `sort_order`. L'export est un fichier d'import valide : vous pouvez donc modifier les principes dans Excel et les recharger.
+
+**Importer** charge des principes en masse depuis un fichier `.xlsx`. Cliquez sur **Télécharger le modèle** pour obtenir un classeur de départ, renseignez un principe par ligne, puis importez-le. Chaque ligne est rapprochée d'un principe existant d'abord par sa `reference_number`, puis par son titre (sans tenir compte de la casse) :
+
+- Un principe rapproché est **mis à jour** avec les valeurs qui diffèrent ; si rien ne diffère, la ligne est **ignorée**. L'aperçu liste chaque ligne mise à jour avec les champs qu'elle modifie.
+- Toute autre ligne **crée** un nouveau principe avec la prochaine référence libre. Une référence qui n'existe pas sur cette instance n'est pas réutilisée ; l'aperçu vous en avertit.
+- Une ligne sans référence dont le titre correspond à deux principes est refusée comme ambiguë : ajoutez la référence pour indiquer lequel vous visez.
+- Une colonne absente de la feuille laisse le champ inchangé. Une cellule vide dans `description`, `rationale` ou `implications` efface ce texte ; une cellule vide dans `is_active` ou `sort_order` laisse la valeur telle quelle. `title` est la seule colonne obligatoire.
+- `is_active` accepte `true` / `false` (ainsi que `yes` / `no`, `1` / `0`) ; `sort_order` doit être un nombre entier. Les nouveaux principes sans `sort_order` sont ajoutés à la fin de la liste.
+- Un titre ou une référence présent deux fois dans le fichier, ou un renommage vers le titre d'un autre principe, fait échouer la ligne.
+
+Avant toute écriture, vous obtenez un aperçu du nombre de lignes qui seront créées, mises à jour, ignorées et en échec, avec chaque erreur et avertissement listés par ligne ; rien ne change tant que vous n'avez pas confirmé. L'import requiert la permission `admin.metamodel` et est consigné dans le [journal de sécurité et d'administration](audit-log.md).
+
 ### Importer depuis le catalogue de principes
 
 Turbo EA est livré avec un **catalogue de référence comprenant 10 principes EA standards de l'industrie** afin que vous n'ayez pas à partir d'une page blanche. Ouvrez le menu avatar en haut à droite et choisissez **Catalogues de référence → Catalogue de principes**. Vous pouvez alors :
@@ -374,12 +393,20 @@ Pour chaque ligne, vous pouvez :
 
 Le scanner de conformité et le flux de promotion en risque fonctionnent **même sans fournisseur IA configuré** — la saisie manuelle de constats, les transitions de statut et le chemin de promotion en risque restent disponibles. L'IA n'est requise que lorsque vous lancez réellement un nouveau scan.
 
+## Phases du cycle de vie {: #lifecycle-phases }
+
+La section **Cycle de vie** de chaque fiche parcourt cinq phases fixes : Planification, Mise en service, Actif, Retrait progressif et Fin de vie. Le sens de chaque phase varie d'une organisation à l'autre – par exemple, si le *Retrait progressif* autorise encore de nouveaux utilisateurs, ou quand un composant est considéré en *Fin de vie*. L'onglet **Phases du cycle de vie** vous permet de le consigner une fois pour tout l'espace de travail.
+
+L'onglet affiche un champ de texte par phase et une rangée d'onglets de langue (l'anglais d'abord, puis chaque langue activée). Dans un nouvel espace de travail, les champs sont préremplis avec une explication par défaut de chaque phase dans toutes les langues, de sorte que l'aide est présente dès le départ ; modifiez chaque texte selon le fonctionnement de votre organisation. Une langue laissée vide affiche le texte anglais. Laissez une phase vide pour n'afficher aucune aide à son sujet – vider les cinq phases et enregistrer supprime entièrement l'aide. Cliquez sur **Enregistrer** pour appliquer les textes.
+
+Les utilisateurs voient l'aide d'une phase sous forme d'icône d'information à côté de la phase dans la chronologie du cycle de vie de chaque fiche, qui reste affichée pendant la modification du cycle de vie. Les textes s'appliquent à tous les types de fiches. L'enregistrement est consigné dans le **Journal de sécurité et d'administration**.
+
 ## Éditeur de mise en page des fiches
 
 Pour chaque type de fiche, la section **Mise en page** dans le tiroir du type contrôle la structure de la page de détail des fiches :
 
 - **Ordre des sections** -- Glissez les sections (Description, EOL, Cycle de vie, Hiérarchie, Étiquettes, Relations et sections personnalisées) pour les réorganiser
-- **Visibilité** -- Masquez les sections non pertinentes pour un type
+- **Visibilité** -- Masquez les sections non pertinentes pour un type. La section **Fin de vie** fait exception à la règle « affichée sauf si masquée » : elle est affichée par défaut uniquement sur les Applications et les Composants IT, et masquée sur tous les autres types, personnalisés compris, tant que vous ne l'activez pas. Son interrupteur décide aussi si le type participe au suivi de la fin de vie -- voir [Fin de vie sur d'autres types de fiches](eol.md#fin-de-vie-sur-dautres-types-de-fiches)
 - **Développement par défaut** -- Choisissez si chaque section commence développée ou repliée
 - **Disposition en colonnes** -- Définissez 1 ou 2 colonnes par section personnalisée
 - **Déplacer des champs entre sections** — Utiliser l'action **déplacer** d'un champ (à côté de ses boutons modifier et supprimer) pour le replacer dans une autre section, en conservant sa configuration

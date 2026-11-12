@@ -181,7 +181,6 @@
     "intro": "Probieren Sie Architecture Studio aus. Hier erstellte Diagramme werden als ArchiMate-Exchange-Dateien gespeichert und erscheinen noch nicht im Menü „Diagramme“.",
     "newDiagram": "Neues ArchiMate-Diagramm",
     "name": "Name",
-    "create": "Erstellen",
     "empty": "Noch keine ArchiMate-Diagramme.",
     "open": "Öffnen",
     "delete": "Löschen",

@@ -8,8 +8,10 @@ import IconButton from "@mui/material/IconButton";
 import Tooltip from "@mui/material/Tooltip";
 import Typography from "@mui/material/Typography";
 import MaterialSymbol from "@/components/MaterialSymbol";
-import { CARD_TYPE_COLORS, STATUS_COLORS } from "@/theme/tokens";
+import { DELIVERABLE_COLORS } from "@/theme/tokens";
 import { SOAW_STATUS_COLORS } from "./constants";
+import { DecisionStateChip } from "../DecisionStandingChip";
+import { decisionRefLabel } from "../decisionStanding";
 import type {
   ArchitectureDecision,
   DiagramSummary,
@@ -47,9 +49,9 @@ const KIND_META: Record<
   DeliverableKind,
   { icon: string; color: string }
 > = {
-  soaw: { icon: "description", color: "#e65100" },
-  diagram: { icon: "schema", color: CARD_TYPE_COLORS.Application },
-  adr: { icon: "gavel", color: STATUS_COLORS.info },
+  soaw: { icon: "description", color: DELIVERABLE_COLORS.soaw },
+  diagram: { icon: "schema", color: DELIVERABLE_COLORS.diagram },
+  adr: { icon: "gavel", color: DELIVERABLE_COLORS.adr },
 };
 
 /**
@@ -299,18 +301,13 @@ export default function DeliverableSection(props: Props) {
   }
 
   function AdrRow({ adr, color }: { adr: ArchitectureDecision; color: string }) {
-    const statusLabels: Record<string, string> = {
-      draft: t("status.draft"),
-      in_review: t("status.inReview"),
-      signed: t("status.signed"),
-    };
     return (
       <CompactRow
         icon={<MaterialSymbol icon="gavel" size={18} color={color} />}
         onClick={() => navigate(`/ea-delivery/adr/${adr.id}`)}
       >
         <Chip
-          label={adr.reference_number}
+          label={decisionRefLabel(adr, t)}
           size="small"
           variant="outlined"
           sx={{ fontFamily: "monospace", fontSize: "0.7rem", height: 22 }}
@@ -318,12 +315,7 @@ export default function DeliverableSection(props: Props) {
         <Typography sx={{ fontSize: "0.9rem", flex: 1, minWidth: 0 }} noWrap>
           {adr.title}
         </Typography>
-        <Chip
-          label={statusLabels[adr.status] ?? adr.status}
-          size="small"
-          color={SOAW_STATUS_COLORS[adr.status] ?? "default"}
-          sx={{ height: 22 }}
-        />
+        <DecisionStateChip adr={adr} sx={{ height: 22, flexShrink: 0 }} />
       </CompactRow>
     );
   }

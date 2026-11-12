@@ -90,9 +90,7 @@ class TestBuildSignature:
 class TestRegisterExtensionTools:
     @pytest.fixture(autouse=True)
     def _fake_discovery(self):
-        with patch.object(
-            mcp_extensions, "fetch_extension_mcp_manifests", return_value=[MANIFEST]
-        ):
+        with patch.object(mcp_extensions, "fetch_extension_mcp_manifests", return_value=[MANIFEST]):
             yield
 
     def test_registers_every_valid_tool(self):
@@ -147,8 +145,9 @@ class TestRegisterExtensionTools:
             mcp_extensions.TurboEAClient, "post", AsyncMock(return_value={"ok": True})
         ) as mock_post:
             await tool.fn(thing_id="abc-123")
-        called_path, called_json = mock_post.call_args.args[0], mock_post.call_args.kwargs.get(
-            "json"
+        called_path, called_json = (
+            mock_post.call_args.args[0],
+            mock_post.call_args.kwargs.get("json"),
         )
         assert called_path == "/ext/sample/thing/abc-123/apply"
         assert called_json["dry_run"] is True

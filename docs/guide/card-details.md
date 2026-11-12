@@ -100,6 +100,8 @@ Each phase has a **date picker** so you can record when the component entered or
 
 If a phase is dated after a phase that should follow it — for example **Phase Out** after **End of Life** — a warning icon appears next to that date, and the same warning shows under the field while editing. It is only a hint: the dates can still be saved as entered.
 
+An info icon beside each phase on the timeline explains what the phase means — hover over it to read the definition. It shows a default explanation unless your administrator changed it to describe how your organisation uses the phase, or removed it. The timeline, with its icons, stays on screen while you edit the dates. The texts are set under **Admin → Metamodel → Lifecycle phases** (see [Lifecycle phases](../admin/metamodel.md#lifecycle-phases)).
+
 ### Custom Attribute Sections
 
 Depending on the card type, you will see additional sections with **custom fields** configured in the metamodel. Field types include:
@@ -113,6 +115,8 @@ Depending on the card type, you will see additional sections with **custom field
 - **URL** — Clickable link (validated for http/https/mailto)
 - **Single select** — Dropdown with predefined options
 - **Multiple select** — Multi-selection with chip display
+
+Where your administrator has written **help text** for a field, an info icon appears beside its label: hover over it (or tab to it with the keyboard) to read what the field means. While you edit the section, the same icon sits beside the field. In the Inventory, hovering the field's column header shows it too.
 
 Fields marked as **calculated** show a badge and cannot be edited manually — their values are computed by [admin-defined formulas](../admin/calculations.md).
 
@@ -192,11 +196,14 @@ The **Resources** tab consolidates all supporting materials for a card:
 
 ### EOL Section
 
-If the card is linked to an [endoflife.date](https://endoflife.date/) product (via [EOL Administration](../admin/eol.md)):
+Shown on Applications and IT Components by default, and on any other card type whose administrator [turned it on](../admin/eol.md#end-of-life-on-other-card-types). If the card is linked to an [endoflife.date](https://endoflife.date/) product (via [EOL Administration](../admin/eol.md)):
 
-- **Product name and version**
-- **Support status** — Color-coded: Supported, Approaching EOL, End of Life
-- **Key dates** — Release date, active support end, security support end, EOL date
+- **Product name and version** — a custom product is named by its title and marked **Custom**
+- **Support status** — Color-coded, by the same rule as the EOL report: Supported, Approaching EOL (within six months of the EOL date, or once active support has ended), End of Life
+- **Key dates** — Release date, active support end, EOL date, the latest version and its release date
+- **Release notes** — the product's page on endoflife.date, or the **Vendor page** of a custom product
+
+**Link**, **Change** and **Unlink** appear only if you may edit the card. Users with the **Manage EOL** permission can define a [custom EOL product](../admin/eol.md#custom-eol-products) right from this section, through the **Define it as a custom product…** link under the product search: the form opens with the card's name (or what you typed) as the product name, and the card is linked to the new product on save. They also get a shortcut to **Manage custom products** in Settings, and can add a missing release cycle from the cycle list. Everyone else sees a hint to ask an EOL manager when endoflife.date has no match. Custom products behave like endoflife.date products everywhere else.
 
 ## Comments Tab
 
@@ -231,13 +238,15 @@ Stakeholder assignments affect **permissions**: a user's effective permissions o
 
 Where a role has a **colour** set in the metamodel, its group is marked with it, so you can pick out an owner from an observer at a glance.
 
+Where a role has a **description**, an info icon appears beside its name: hover over it to read what the role means. The description also shows under the role's name in the role picker when you add a stakeholder.
+
 ### Searching and inviting
 
 Pick a stakeholder via the **searchable autocomplete** — start typing and the dropdown filters on both name and email (email appears as the secondary line so two users with the same name can be told apart at a glance).
 
-If the email you type doesn't match an existing user, an **"Invite «email» as a new user"** option appears at the end of the dropdown. Selecting it expands an inline mini-form right inside the picker — pick a role (Member or Viewer by default), optionally edit the display name, and submit. The new user is invited via the standard invitation email **and** assigned the chosen stakeholder role on the card in a single action, so you never have to leave the card to onboard a contributor.
+If the email you type doesn't match an existing user, an **"Invite «email» as a new user"** option appears at the end of the dropdown. Selecting it expands an inline mini-form right inside the picker — optionally edit the display name, and submit. The new user receives the **default role** set in [Users & Roles](../admin/users.md#roles). The new user is invited via the standard invitation email **and** assigned the chosen stakeholder role on the card in a single action, so you never have to leave the card to onboard a contributor.
 
-The invite path requires the **`users.invite`** permission, a delegated form of `admin.users` that admins can grant to trusted members. A privilege-escalation guard prevents non-admins from inviting users into admin roles — the role dropdown silently filters to roles the inviter is allowed to delegate.
+The invite path requires the **`users.invite`** permission, a delegated form of `admin.users` that admins can grant to trusted members. A privilege-escalation guard prevents non-admins from inviting users into any other role: without `admin.users`, an invited user can only receive the default role, Member or Viewer.
 
 ## History Tab
 
@@ -253,9 +262,11 @@ Everything that moves the card's **Modified** date appears here — an edit by h
 
 ## ADRs Tab
 
-Every card carries an **ADRs** tab listing the [Architecture Decision Records](delivery.md) linked to it, showing each decision's reference, title, status, all of its linked cards, and when it was last modified. Click a row to open the decision.
+Every card carries an **ADRs** tab listing the [Architecture Decision Records](delivery.md) linked to it — the current revision of each decision, plus any revision being drafted — showing each decision's reference, title, standing (or its status while it is not signed yet), all of its linked cards, and when it was last modified. Click a row to open the decision; earlier revisions are reached from it.
 
 If you are allowed to manage ADR links, the tab also offers **Link ADR** to attach an existing decision and **Create ADR** to start a new one that is pre-linked to this card, plus an unlink action on every row. On cards with no linked decisions the tab is hidden unless you hold that permission, so read-only users never see an empty tab.
+
+Below the list, **Mentioned in** lists the decisions and Statements of Architecture Work whose text mentions this card, and those whose discussion mentions it (marked *in the discussion*), with each document's reference or revision and its standing or status. A mention does not link the card to the decision; it only shows here. The list shows only the documents you can open and is left out when there are none. See [Mentions](grc.md#decision-mentions).
 
 ## Risks Tab (GRC enabled, when present)
 

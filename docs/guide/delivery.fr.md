@@ -49,18 +49,39 @@ L'éditeur offre :
 - **Liens** -- Une URL saisie ou collée devient un lien au fil de la frappe, et chaque lien d'un document s'ouvre dans un nouvel onglet. Les adresses des documents rédigés avant la prise en charge des liens sont converties en liens à l'affichage
 - **Modèles de sections** -- Sections prédéfinies suivant les standards TOGAF (par ex. Description du problème, Objectifs, Approche, Parties prenantes, Contraintes, Plan de travail)
 - **Tableaux éditables en ligne** -- Ajoutez et éditez des tableaux dans n'importe quelle section
+- **Mentions** -- tapez **@** dans le texte d'une section pour mentionner une fiche ou une décision (voir [Discussion, mentions et historique](#soaw-collaboration))
+- **Historique des versions du document** -- un tableau que les auteurs remplissent à la main (version, date, révisé par, description). Il fait partie du document et n'est pas la vue [Historique](#soaw-collaboration)
 - **Workflow de statut** -- Les documents progressent à travers des étapes définies :
 
 | Statut | Signification |
 |--------|---------------|
 | **Brouillon** | En cours de rédaction, pas encore prêt pour examen |
-| **En revue** | Soumis pour examen par les parties prenantes |
+| **En revue** | Envoyé pour signature — verrouillé jusqu'au rappel des signatures |
 | **Approuvé** | Examiné et accepté |
 | **Signé** | Formellement validé |
 
 ### Workflow de signature
 
-Une fois qu'un SoAW est approuvé, vous pouvez demander des signatures aux parties prenantes. Cliquez sur **Demander des signatures** puis utilisez le champ de recherche pour trouver et ajouter des signataires par nom ou e-mail. Le système suit qui a signé et envoie des notifications aux signataires en attente.
+À partir d'un SoAW en brouillon ou approuvé, vous pouvez demander des signatures aux parties prenantes. Cliquez sur **Demander des signatures** puis utilisez le champ de recherche pour trouver et ajouter des signataires par nom ou e-mail. Le système suit qui a signé et envoie des notifications aux signataires en attente.
+
+Un SoAW en revue est **verrouillé**, afin que les signataires signent exactement ce qui leur a été envoyé : seule son initiative peut encore changer. Pour modifier le contenu, cliquez sur **Rappeler les signatures**, ce qui le remet en brouillon. Un signataire qui clique sur **Rejeter** le remet également en brouillon, sous le même numéro de révision. Seul un SoAW en brouillon peut être supprimé.
+
+### Révisions
+
+Un SoAW signé est en lecture seule. Cliquez sur **Nouvelle révision** pour démarrer un nouveau brouillon à partir de celui-ci, sous le même nom avec le numéro de révision suivant. Il n'y a qu'une révision ouverte à la fois : tant qu'une révision est en cours de rédaction, le SoAW signé l'indique et propose **Ouvrir la révision** au lieu d'en démarrer une autre. Seule la dernière révision peut être révisée, et un rejet ne change pas le numéro de révision.
+
+Une révision antérieure affiche un bandeau avec un lien vers la révision actuelle, et la barre **Révisions** de chaque révision les liste toutes. Les listes de SoAW — les livrables de l'initiative, l'onglet SoAW, le rapport EA Delivery — affichent la révision actuelle de chaque document et toute révision en cours de rédaction.
+
+### Discussion, mentions et historique {: #soaw-collaboration }
+
+Un SoAW dispose de la même discussion, des mêmes mentions et du même historique qu'une décision : la discussion dans un panneau à côté de son éditeur et de son aperçu, l'historique derrière le bouton **Historique** en haut de la page. Le comportement commun est décrit une seule fois, dans le guide GRC : [Discussion](grc.md#decision-discussion), [Mentions](grc.md#decision-mentions), [Historique](grc.md#decision-history) et [Limites connues](grc.md#collaboration-limits). Ce qui diffère pour un SoAW :
+
+- **Qui peut publier.** Publier, répondre, résoudre et rouvrir requièrent la permission `soaw.comment`, que les membres et les administrateurs détiennent par défaut et les lecteurs non ; la lecture de la discussion suit `soaw.view`. Les signataires du SoAW peuvent toujours le commenter. Toute personne pouvant modifier les SoAW (`soaw.manage`) peut supprimer n'importe quel commentaire.
+- **Sections.** Un fil est rattaché à l'une des sections propres au SoAW par une puce de section, ou à aucune (un fil général). Un SoAW a de nombreuses sections : la zone de saisie affiche donc une puce pour chaque section déjà discutée et pour celle qui est choisie ; **Plus…** ouvre une liste des autres avec recherche. Les puces en haut de la discussion la filtrent par section, comme pour une décision. Un fil rattaché à une section personnalisée supprimée depuis affiche *Section supprimée*. Chaque section porte à côté de son titre la même icône de bulle que celle d'une décision, dans l'éditeur et dans l'aperçu, avec le nombre de fils ouverts lorsqu'il y a une discussion ; cliquez dessus pour ouvrir la discussion sur cette section, avec la section déjà sélectionnée pour un nouveau commentaire.
+- **Rejet.** Tout signataire qui détient la permission de signer (`soaw.sign`) — ou la permission de modification — peut rejeter un SoAW, comme pour les décisions ; jusqu'ici, rejeter nécessitait la permission de modification. Le motif ouvre un fil **Motif du rejet** dans la discussion.
+- **Mentions.** Un SoAW n'a pas de fiches liées : lorsque rien n'est saisi après **@**, les fiches sont donc listées par ordre alphabétique ; dans un commentaire, les signataires du SoAW viennent en premier parmi les personnes. **Parcourir…** fonctionne comme pour une décision.
+- **Note de signature.** **Signer** ouvre désormais une boîte de dialogue où le signataire peut ajouter une note facultative ; elle apparaît dans la discussion comme **Note de signature** et dans l'Historique.
+- **Historique.** Une version contient le nom du SoAW, ses informations de document, son tableau Historique des versions du document et chaque section ; l'initiative ne fait pas partie d'une version. L'Historique consigne ce qui arrive au document ; le tableau Historique des versions du document, dans le document, ne consigne que ce que ses auteurs y écrivent. Un SoAW au statut **Approuvé** peut encore être modifié : comme pour un brouillon, ses enregistrements sont donc conservés comme versions et une version antérieure peut y être restaurée.
 
 ### Aperçu et export
 
@@ -72,7 +93,7 @@ Une fois qu'un SoAW est approuvé, vous pouvez demander des signatures aux parti
 
 ![Fiche d'initiative — onglet SoAW](../assets/img/fr/55_initiative_soaw_tab.png)
 
-Les initiatives exposent également un onglet **SoAW** dédié directement sur leur page de détail. L'onglet liste chaque SoAW lié à cette initiative (titre, puce de statut, numéro de révision, date de dernière modification) avec un bouton **+ Nouveau SoAW** qui pré-sélectionne l'initiative en cours — vous pouvez ainsi rédiger ou ouvrir un SoAW sans quitter la fiche sur laquelle vous travaillez. La création réutilise le même dialogue que la page EA Delivery, et le nouveau document apparaît aux deux endroits. La visibilité de l'onglet suit les règles de permission standard des fiches.
+Les initiatives exposent également un onglet **SoAW** dédié directement sur leur page de détail. L'onglet liste la révision actuelle de chaque SoAW lié à cette initiative, plus toute révision en cours de rédaction (titre, puce de statut, numéro de révision, date de dernière modification) avec un bouton **+ Nouveau SoAW** qui pré-sélectionne l'initiative en cours — vous pouvez ainsi rédiger ou ouvrir un SoAW sans quitter la fiche sur laquelle vous travaillez. La création réutilise le même dialogue que la page EA Delivery, et le nouveau document apparaît aux deux endroits. La visibilité de l'onglet suit les règles de permission standard des fiches.
 
 ## Architecture Decision Records (ADR)
 

@@ -181,7 +181,6 @@
     "intro": "Try Architecture Studio. Diagrams made here are stored as ArchiMate Exchange files and are not yet listed in the Diagrams menu.",
     "newDiagram": "New ArchiMate diagram",
     "name": "Name",
-    "create": "Create",
     "empty": "No ArchiMate diagrams yet.",
     "open": "Open",
     "delete": "Delete",

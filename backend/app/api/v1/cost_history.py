@@ -13,9 +13,10 @@ from app.models.card import Card
 from app.models.card_cost_history import CardCostHistory
 from app.models.card_type import CardType
 from app.models.user import User
-from app.services.card_costs import COST_ITEM_TYPES
+from app.services.card_costs import COST_EVENT, COST_ITEM_TYPES
 from app.services.card_read_scope import require_card_readable
 from app.services.cost_field_filter import cost_field_keys_from_card_schema
+from app.services.event_bus import event_bus
 from app.services.fiscal_year import (
     MAX_FISCAL_YEAR,
     MIN_FISCAL_YEAR,
@@ -29,6 +30,26 @@ router = APIRouter(tags=["cost-history"])
 _SAFE_KEY_RE = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]{0,63}$")
 
 
+async def _publish_history_change(
+    db: AsyncSession, user: User, card: Card, fiscal_year: int, *, old: list[str], new: list[str]
+) -> None:
+    """The write shows in the card's History and the audit trail: field keys only, never the
+    amount. Same event and same ``cost_items`` change key as the cost items, so every feed
+    redacts it for a reader without cost access (``cost_event_redaction``)."""
+    await event_bus.publish(
+        COST_EVENT,
+        {
+            "id": str(card.id),
+            "source": "cost_history",
+            "fiscal_year": fiscal_year,
+            "changes": {"cost_items": {"old": old, "new": new}},
+        },
+        db=db,
+        card_id=card.id,
+        user_id=user.id,
+    )
+
+
 class CostHistoryRow(BaseModel):
     fiscal_year: int = Field(ge=MIN_FISCAL_YEAR, le=MAX_FISCAL_YEAR)
     field_key: str
@@ -39,7 +60,9 @@ class CostHistoryList(BaseModel):
     rows: list[CostHistoryRow]
 
 
-async def _load_card_for_edit(db: AsyncSession, user: User, card_id: str) -> Card:
+async def _load_card_for_edit(
+    db: AsyncSession, user: User, card_id: str, *, write: bool = False
+) -> Card:
     card_uuid = parse_uuid(card_id)
     await require_card_readable(db, user, card_uuid, mode="module")
     if not await PermissionService.check_permission(
@@ -49,6 +72,10 @@ async def _load_card_for_edit(db: AsyncSession, user: User, card_id: str) -> Car
     card = (await db.execute(select(Card).where(Card.id == card_uuid))).scalar_one_or_none()
     if not card:
         raise HTTPException(404, "Card not found")
+    # Past-year costs feed the cost reports: writing them takes the cost permission, as for
+    # the cost items (`costs.edit` or a `card.edit` stakeholder), never `inventory.edit` alone.
+    if write and not await PermissionService.can_edit_costs(db, user, card.id):
+        raise HTTPException(403, "Not enough permissions")
     return card
 
 
@@ -93,7 +120,7 @@ async def upsert_cost_history(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    card = await _load_card_for_edit(db, user, card_id)
+    card = await _load_card_for_edit(db, user, card_id, write=True)
     _reject_cost_item_type(card)
     oldest, newest = fiscal_year_window(await get_fiscal_year_start(db))
     if not oldest <= body.fiscal_year <= newest:
@@ -113,6 +140,15 @@ async def upsert_cost_history(
             )
         )
     ).scalar_one_or_none()
+    existed = row is not None
+    await _publish_history_change(
+        db,
+        user,
+        card,
+        body.fiscal_year,
+        old=[body.field_key] if existed else [],
+        new=[body.field_key],
+    )
     if row is None:
         row = CardCostHistory(
             card_id=card.id,
@@ -135,7 +171,7 @@ async def delete_cost_history(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    card = await _load_card_for_edit(db, user, card_id)
+    card = await _load_card_for_edit(db, user, card_id, write=True)
     _reject_cost_item_type(card)
     row = (
         await db.execute(
@@ -147,5 +183,6 @@ async def delete_cost_history(
         )
     ).scalar_one_or_none()
     if row is not None:
+        await _publish_history_change(db, user, card, fiscal_year, old=[field_key], new=[])
         await db.delete(row)
         await db.commit()

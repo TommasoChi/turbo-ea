@@ -2,8 +2,8 @@
  * ArchimateSandboxPage — admin-only list of the ArchiMate diagrams (create / open / delete).
  * Route: /admin/architectureStudio
  *
- * ArchiMate diagrams are hidden from the Diagrams menu in this release, so this page is the only
- * place they are listed. Every failure is shown, never swallowed.
+ * The Diagrams page lists ArchiMate diagrams too (its filter has a kind for them); this page is
+ * the admin view of the same list. Every failure is shown, never swallowed.
  */
 import { useCallback, useEffect, useState } from "react";
 import { Link as RouterLink, useNavigate } from "react-router";

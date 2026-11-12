@@ -100,6 +100,8 @@ Chaque phase dispose d'un **sélecteur de date** pour enregistrer quand le compo
 
 Si une phase est datée après une phase qui devrait la suivre — par exemple **Retrait progressif** après **Fin de vie** —, une icône d'avertissement apparaît à côté de cette date, et le même avertissement s'affiche sous le champ pendant la modification. Ce n'est qu'une indication : les dates peuvent tout de même être enregistrées telles quelles.
 
+Une icône d'information à côté de chaque phase dans la chronologie explique ce que la phase signifie – survolez-la pour lire la définition. Elle affiche une explication par défaut, sauf si votre administrateur l'a modifiée pour décrire l'usage de la phase dans votre organisation, ou l'a supprimée. La chronologie, avec ses icônes, reste affichée pendant la modification des dates. Les textes se définissent sous **Admin → Métamodèle → Phases du cycle de vie** (voir [Phases du cycle de vie](../admin/metamodel.md#lifecycle-phases)).
+
 ### Sections d'attributs personnalisés
 
 Selon le type de fiche, vous verrez des sections supplémentaires avec des **champs personnalisés** configurés dans le métamodèle. Les types de champs incluent :
@@ -113,6 +115,8 @@ Selon le type de fiche, vous verrez des sections supplémentaires avec des **cha
 - **URL** -- Lien cliquable (validé pour http/https/mailto)
 - **Sélection unique** -- Liste déroulante avec options prédéfinies
 - **Sélection multiple** -- Multi-sélection avec affichage en puces
+
+Lorsque votre administrateur a rédigé un **texte d'aide** pour un champ, une icône d'information apparaît à côté de son libellé : survolez-la (ou atteignez-la au clavier avec la touche Tab) pour lire ce que signifie le champ. Pendant la modification de la section, la même icône se trouve à côté du champ. Dans l'Inventaire, survoler l'en-tête de colonne du champ l'affiche également.
 
 Les champs marqués comme **calculés** affichent un badge et ne peuvent pas être modifiés manuellement -- leurs valeurs sont calculées par des [formules définies par l'administrateur](../admin/calculations.md).
 
@@ -192,11 +196,14 @@ L'onglet **Ressources** regroupe tous les documents de support d'une fiche :
 
 ### Section EOL
 
-Si la fiche est liée à un produit [endoflife.date]( (via [Administration EOL](../admin/eol.md)) :
+Affichée par défaut sur les Applications et les Composants IT, et sur tout autre type de fiche pour lequel l'administrateur l'a [activée](../admin/eol.md#fin-de-vie-sur-dautres-types-de-fiches). Si la fiche est liée à un produit [endoflife.date](https://endoflife.date/) (via [Administration EOL](../admin/eol.md)) :
 
-- **Nom du produit et version**
-- **Statut de support** -- Code couleur : Supporté, Approchant la fin de vie, Fin de vie
-- **Dates clés** -- Date de sortie, fin du support actif, fin du support sécurité, date de fin de vie
+- **Nom du produit et version** -- un produit personnalisé porte son titre comme nom et est marqué **Personnalisé**
+- **Statut de support** -- Code couleur, selon la même règle que le rapport EOL : Supporté, Approchant la fin de vie (à moins de six mois de la date de fin de vie, ou une fois le support actif terminé), Fin de vie
+- **Dates clés** -- Date de sortie, fin du support actif, date de fin de vie, dernière version et sa date de publication
+- **Notes de version** -- un lien vers la page du produit sur endoflife.date, ou la **Page éditeur** d'un produit personnalisé
+
+**Lier**, **Modifier** et **Dissocier** n'apparaissent que si vous pouvez modifier la fiche. Les utilisateurs disposant de la permission **Gérer l'EOL** peuvent définir un [produit EOL personnalisé](../admin/eol.md) directement depuis cette section, via le lien **Le définir comme produit personnalisé…** sous la recherche de produit : le formulaire s'ouvre avec le nom de la fiche (ou ce que vous avez saisi) comme nom de produit, et la fiche est liée au nouveau produit à l'enregistrement. Ils disposent aussi d'un raccourci vers **Gérer les produits personnalisés** dans les paramètres et peuvent ajouter un cycle de version manquant depuis la liste des cycles. Les autres utilisateurs voient une invitation à solliciter un gestionnaire EOL lorsque endoflife.date n'a aucune correspondance. Les produits personnalisés se comportent partout ailleurs comme les produits endoflife.date.
 
 ## Onglet Commentaires
 
@@ -231,13 +238,15 @@ Les affectations de parties prenantes affectent les **permissions** : les permis
 
 Lorsqu'une **couleur** est définie pour un rôle dans le métamodèle, son groupe en est marqué, ce qui permet de distinguer un propriétaire d'un observateur d'un coup d'œil.
 
+Lorsqu'un rôle possède une **description**, une icône d'information apparaît à côté de son nom : survolez-la pour lire ce que signifie le rôle. La description s'affiche aussi sous le nom du rôle dans le sélecteur de rôle lorsque vous ajoutez une partie prenante.
+
 ### Recherche et invitation
 
 Choisissez une partie prenante via l'**autocomplétion recherchable** — commencez à taper et la liste déroulante filtre à la fois sur le nom et sur l'e-mail (l'e-mail apparaît sur une ligne secondaire, pour que deux utilisateurs portant le même nom soient distinguables d'un coup d'œil).
 
-Si l'e-mail que vous tapez ne correspond à aucun utilisateur existant, une option **« Inviter «email» comme nouvel utilisateur »** apparaît à la fin du menu déroulant. La sélectionner développe un mini-formulaire en ligne directement dans le sélecteur — choisissez un rôle (Membre ou Visualiseur par défaut), modifiez éventuellement le nom affiché et soumettez. Le nouvel utilisateur est invité via l'e-mail d'invitation standard **et** assigné au rôle de partie prenante choisi sur la fiche en une seule action, vous n'avez donc jamais besoin de quitter la fiche pour intégrer un contributeur.
+Si l'e-mail que vous tapez ne correspond à aucun utilisateur existant, une option **« Inviter «email» comme nouvel utilisateur »** apparaît à la fin du menu déroulant. La sélectionner développe un mini-formulaire en ligne directement dans le sélecteur — modifiez éventuellement le nom affiché et soumettez. Le nouvel utilisateur reçoit le **rôle par défaut** défini dans [Utilisateurs et rôles](../admin/users.md#roles). Le nouvel utilisateur est invité via l'e-mail d'invitation standard **et** assigné au rôle de partie prenante choisi sur la fiche en une seule action, vous n'avez donc jamais besoin de quitter la fiche pour intégrer un contributeur.
 
-Le chemin d'invitation nécessite la permission **`users.invite`**, une forme déléguée de `admin.users` que les administrateurs peuvent accorder aux membres de confiance. Un garde-fou anti-élévation de privilèges empêche les non-administrateurs d'inviter des utilisateurs dans des rôles d'administrateur — le menu déroulant des rôles filtre silencieusement sur les rôles que l'inviteur est autorisé à déléguer.
+Le chemin d'invitation nécessite la permission **`users.invite`**, une forme déléguée de `admin.users` que les administrateurs peuvent accorder aux membres de confiance. Un garde-fou anti-élévation de privilèges empêche les non-administrateurs d'inviter des utilisateurs dans tout autre rôle : sans `admin.users`, un utilisateur invité ne peut recevoir que le rôle par défaut, Membre ou Lecteur.
 
 ## Onglet Historique
 
@@ -253,9 +262,11 @@ Tout ce qui déplace la date **Modifié** de la fiche apparaît ici — une modi
 
 ## Onglet ADR
 
-Chaque fiche dispose d'un onglet **ADR** qui répertorie les [décisions d'architecture](delivery.md) qui lui sont liées, avec la référence, le titre, le statut, toutes les fiches liées et la date de dernière modification. Cliquez sur une ligne pour ouvrir la décision.
+Chaque fiche dispose d'un onglet **ADR** qui répertorie les [décisions d'architecture](delivery.md) qui lui sont liées — la révision actuelle de chaque décision, plus toute révision en cours de rédaction — avec la référence, le titre, la validité (ou le statut tant que la décision n'est pas encore signée), toutes les fiches liées et la date de dernière modification. Cliquez sur une ligne pour ouvrir la décision ; les révisions antérieures sont accessibles depuis celle-ci.
 
 Si vous êtes autorisé à gérer les liens ADR, l'onglet propose également **Lier une ADR** pour rattacher une décision existante et **Créer une ADR** pour en créer une déjà liée à cette fiche, ainsi qu'une action de dissociation sur chaque ligne. Sur les fiches sans décision liée, l'onglet est masqué sauf si vous disposez de cette permission : les utilisateurs en lecture seule ne voient donc jamais d'onglet vide.
+
+Sous la liste, **Mentionné dans** répertorie les décisions et les Statements of Architecture Work dont le texte mentionne cette fiche, ainsi que ceux dont la discussion la mentionne (signalés *dans la discussion*), avec la référence ou la révision de chaque document et sa validité ou son statut. Une mention ne lie pas la fiche à la décision ; elle s'affiche seulement ici. La liste ne montre que les documents que vous pouvez ouvrir et n'apparaît pas lorsqu'il n'y en a aucun. Voir [Mentions](grc.md#decision-mentions).
 
 ## Onglet Risques (GRC activé, le cas échéant)
 

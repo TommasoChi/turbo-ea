@@ -26,6 +26,7 @@ from app.services.card_read_scope import (
 )
 from app.services.cost_event_redaction import reader_drop_keys, redact_cost_events
 from app.services.cost_field_filter import strip_change_keys
+from app.services.document_event_scope import document_event_read_filters
 from app.services.event_bus import event_bus
 from app.services.permission_service import PermissionService
 
@@ -145,6 +146,9 @@ async def list_my_card_events(
         # Same activity-feed rule as the dashboard's: no event about a card,
         # or naming a peer, hidden from the reader.
         .where(*event_read_filters(read_scope))
+        # A decision linked to the card names the decision: shown only to a
+        # reader who may open it.
+        .where(*await document_event_read_filters(db, user))
         .order_by(Event.created_at.desc())
         .limit(limit)
     )

@@ -7,6 +7,12 @@ from app.models.archimate_viewpoint import (
 )
 from app.models.architecture_decision import ArchitectureDecision
 from app.models.architecture_decision_card import ArchitectureDecisionCard
+from app.models.architecture_decision_file import (
+    ArchitectureDecisionFile,
+    ArchitectureDecisionFileContent,
+)
+from app.models.architecture_decision_link import ArchitectureDecisionLink
+from app.models.architecture_decision_person import ArchitectureDecisionPerson
 from app.models.audit_log import AuditLogEntry
 from app.models.base import Base
 from app.models.bo_operation_receipt import BoOperationReceipt
@@ -28,8 +34,12 @@ from app.models.diagram import Diagram
 from app.models.diagram_favorite import DiagramFavorite
 from app.models.diagram_group import DiagramGroup, diagram_group_members
 from app.models.document import Document
+from app.models.document_comment import DocumentComment
+from app.models.document_history import DocumentHistoryEntry
 from app.models.ea_principle import EAPrinciple
 from app.models.enterprise_object import EnterpriseObject, EnterpriseObjectCardMapping
+from app.models.eol_custom_cycle import EolCustomCycle
+from app.models.eol_custom_product import EolCustomProduct
 from app.models.event import Event
 from app.models.extension import (
     Extension,
@@ -105,6 +115,10 @@ __all__ = [
     "TurboLensVendorHierarchy",
     "ArchitectureDecision",
     "ArchitectureDecisionCard",
+    "ArchitectureDecisionFile",
+    "ArchitectureDecisionFileContent",
+    "ArchitectureDecisionLink",
+    "ArchitectureDecisionPerson",
     "Base",
     "FileAttachment",
     "User",
@@ -130,6 +144,8 @@ __all__ = [
     "ExtensionLicense",
     "ExtensionSchemaVersion",
     "Document",
+    "DocumentComment",
+    "DocumentHistoryEntry",
     "EAPrinciple",
     "EnterpriseObject",
     "EnterpriseObjectCardMapping",
@@ -194,4 +210,6 @@ __all__ = [
     "BoOperationReceipt",
     "OpsRequestNonce",
     "AuditLogEntry",
+    "EolCustomProduct",
+    "EolCustomCycle",
 ]

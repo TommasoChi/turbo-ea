@@ -253,3 +253,80 @@ describe("primeBootstrap — gamified data quality", () => {
     expect(api.get).toHaveBeenCalledTimes(1);
   });
 });
+
+const PHASE_HELP_PATH = "/settings/lifecycle-phase-help";
+
+describe("primeBootstrap — lifecycle phase help", () => {
+  it("primes the phase help so the hook does not fetch", async () => {
+    mockApi.on("get", BOOTSTRAP, {
+      ...BODY,
+      lifecycle_phase_help: { phaseOut: { en: "Being replaced." } },
+    });
+    const { primeBootstrap, resetBootstrap } = await load();
+    resetBootstrap();
+    await primeBootstrap();
+    const { useLifecyclePhaseHelp } = await import("@/hooks/useLifecyclePhaseHelp");
+    const { result } = renderHook(() => useLifecyclePhaseHelp());
+    expect(result.current.help).toEqual({ phaseOut: { en: "Being replaced." } });
+    expect(mockApi.callsOf("get", PHASE_HELP_PATH)).toHaveLength(0);
+  });
+
+  it("leaves the hook to fetch when an older backend sends no phase help", async () => {
+    mockApi.on("get", BOOTSTRAP, BODY);
+    mockApi.on("get", PHASE_HELP_PATH, { phases: { plan: { en: "An idea." } } });
+    const { primeBootstrap, resetBootstrap } = await load();
+    resetBootstrap();
+    await primeBootstrap();
+    const { useLifecyclePhaseHelp } = await import("@/hooks/useLifecyclePhaseHelp");
+    const { result } = renderHook(() => useLifecyclePhaseHelp());
+    await waitFor(() => expect(result.current.help).toEqual({ plan: { en: "An idea." } }));
+    expect(mockApi.callsOf("get", PHASE_HELP_PATH)).toHaveLength(1);
+  });
+
+  it("does not prime from a malformed value", async () => {
+    mockApi.on("get", BOOTSTRAP, { ...BODY, lifecycle_phase_help: ["plan"] });
+    mockApi.on("get", PHASE_HELP_PATH, { phases: {} });
+    const { primeBootstrap, resetBootstrap } = await load();
+    resetBootstrap();
+    await primeBootstrap();
+    const { useLifecyclePhaseHelp } = await import("@/hooks/useLifecyclePhaseHelp");
+    renderHook(() => useLifecyclePhaseHelp());
+    await waitFor(() => expect(mockApi.callsOf("get", PHASE_HELP_PATH)).toHaveLength(1));
+  });
+});
+
+describe("primeBootstrap — lifecycle phase help guard", () => {
+  // The hook normalises whatever it is handed, so these tests mock it and
+  // assert the guard itself: only a plain object reaches the invalidator.
+  async function primeWith(extra: Record<string, unknown>) {
+    vi.resetModules();
+    const invalidate = vi.fn();
+    vi.doMock("@/hooks/useLifecyclePhaseHelp", () => ({
+      invalidateLifecyclePhaseHelp: invalidate,
+    }));
+    mockApi.on("get", BOOTSTRAP, { ...BODY, ...extra });
+    const boot = await import("./bootstrap");
+    boot.resetBootstrap();
+    await boot.primeBootstrap();
+    vi.doUnmock("@/hooks/useLifecyclePhaseHelp");
+    return invalidate;
+  }
+
+  it.each([
+    ["null", { lifecycle_phase_help: null }],
+    ["an array", { lifecycle_phase_help: ["plan"] }],
+    ["absent", {}],
+    ["a string", { lifecycle_phase_help: "plan" }],
+  ])("does not call the invalidator when the value is %s", async (_label, extra) => {
+    const invalidate = await primeWith(extra);
+    expect(mockApi.callsOf("get", BOOTSTRAP)).toHaveLength(1);
+    expect(invalidate).not.toHaveBeenCalled();
+  });
+
+  it("calls the invalidator with a plain object", async () => {
+    const help = { plan: { en: "An idea." } };
+    const invalidate = await primeWith({ lifecycle_phase_help: help });
+    expect(invalidate).toHaveBeenCalledTimes(1);
+    expect(invalidate).toHaveBeenCalledWith(help);
+  });
+});

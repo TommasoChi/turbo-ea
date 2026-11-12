@@ -9,7 +9,15 @@ from __future__ import annotations
 
 import pytest
 
-from app.services.seed import CARD_TYPE_CATEGORIES, DASHBOARD_NAMES, RELATIONS, TYPES
+from app.services.seed import (
+    _APP_ROLES,
+    _DEFAULT_ROLES,
+    CARD_TYPE_CATEGORIES,
+    DASHBOARD_NAMES,
+    LIFECYCLE_PHASE_HELP,
+    RELATIONS,
+    TYPES,
+)
 
 SUPPORTED_LOCALES = ["de", "fr", "es", "it", "pt", "zh", "ru", "da", "ar"]
 
@@ -518,4 +526,56 @@ class TestDashboardNameTranslations:
             value = translations.get(locale)
             assert isinstance(value, str) and value.strip(), (
                 f"Dashboard '{entry['key']}' missing '{locale}' translation"
+            )
+
+
+class TestLifecyclePhaseHelpTranslations:
+    @pytest.mark.parametrize("entry", [pytest.param(p, id=p["key"]) for p in LIFECYCLE_PHASE_HELP])
+    def test_phase_help_translated_to_all_locales(self, entry):
+        """Every lifecycle phase's default explanation exists in every locale."""
+        assert isinstance(entry.get("label"), str) and entry["label"].strip()
+        translations = entry.get("translations", {})
+        for locale in SUPPORTED_LOCALES:
+            value = translations.get(locale)
+            assert isinstance(value, str) and value.strip(), (
+                f"Lifecycle phase help '{entry['key']}' missing '{locale}' translation"
+            )
+
+
+def _seeded_stakeholder_roles():
+    """Every built-in stakeholder role the seed writes, one param per (owner, key)."""
+    owners = [("default", _DEFAULT_ROLES), ("Application", _APP_ROLES)]
+    owners += [(t["key"], t["stakeholder_roles"]) for t in TYPES if "stakeholder_roles" in t]
+    seen: set[int] = set()  # Application's list reuses the default role dicts
+    params = []
+    for owner, roles in owners:
+        for role in roles:
+            if id(role) in seen:
+                continue
+            seen.add(id(role))
+            params.append(pytest.param(role, id=f"{owner}.{role['key']}"))
+    return params
+
+
+class TestStakeholderRoleDescriptionTranslations:
+    def test_the_six_built_in_roles_are_all_walked(self):
+        keys = {p.values[0]["key"] for p in _seeded_stakeholder_roles()}
+        assert keys == {
+            "responsible",
+            "observer",
+            "technicalApplicationOwner",
+            "businessApplicationOwner",
+            "itProjectManager",
+            "processOwner",
+        }
+
+    @pytest.mark.parametrize("role", _seeded_stakeholder_roles())
+    def test_role_description_translated_to_all_locales(self, role):
+        """Every built-in role ships an English description and one per locale."""
+        assert isinstance(role.get("description"), str) and role["description"].strip()
+        translations = role.get("translations", {}).get("description", {})
+        for locale in SUPPORTED_LOCALES:
+            value = translations.get(locale)
+            assert isinstance(value, str) and value.strip(), (
+                f"Stakeholder role '{role['key']}' description missing '{locale}' translation"
             )

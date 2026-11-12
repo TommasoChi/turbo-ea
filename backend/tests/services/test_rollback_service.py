@@ -353,6 +353,31 @@ class TestDecisionRollback:
         remaining = (await db.execute(select(ArchitectureDecision.id))).scalars().all()
         assert remaining == [signed.id]
 
+    async def test_a_created_revision_is_deleted_like_a_draft(self, db, actor):
+        from app.services import decision_standing as ds
+
+        source = await adr_service.create_decision(db, title="Signed", publish=False)
+        source.status = "signed"
+        await db.flush()
+        batch = await _open_batch(db, actor)
+        with _InBatch(batch):
+            revision = await adr_service.create_revision(
+                db, source, created_by=actor.id, register=await ds.load_register(db)
+            )
+        revision_id = revision.id
+        [event] = await _events(db, batch, "adr.created")
+        assert event.data["revision_of"] == str(source.id)
+
+        plan = await plan_rollback(db, batch)
+        assert plan["unsupported_events"] == []
+        assert [(o["op"], o["adr_id"], o["detail"]) for o in plan["operations"]] == [
+            ("delete_adr", str(revision_id), f"{source.reference_number} · Rev 2")
+        ]
+        result = await execute_rollback(db, batch, actor.id)
+        assert _ops(result, "delete_adr")[0]["status"] == "ok"
+        remaining = (await db.execute(select(ArchitectureDecision.id))).scalars().all()
+        assert remaining == [source.id]
+
 
 class TestDiagramRollback:
     async def test_created_diagram_is_deleted_and_a_published_one_is_left(self, db, actor):
@@ -550,6 +575,56 @@ class TestConflicts:
         assert touched == [str(risk.id)]
         forced = await execute_rollback(db, batch, actor.id, force=True)
         assert forced["forced"] is True
+
+    async def test_a_later_review_of_a_batch_created_decision_conflicts(self, client, db, actor):
+        """The review events are stored (2.200.0), each in its request's
+        auto-batch: asking for and giving a signature on a decision an MCP
+        batch created is later work on that decision, so rolling the batch
+        back reports both requests as conflicts instead of silently deleting
+        a decision people have started to sign."""
+        from datetime import timedelta
+
+        from fastapi import HTTPException
+
+        from tests.conftest import auth_headers, create_role
+
+        await create_role(db, key="admin", label="Admin", permissions={"*": True})
+        batch = await _open_batch(db, actor)
+        with _InBatch(batch):
+            adr = await adr_service.create_decision(db, title="Batch ADR", created_by=actor.id)
+        adr_id = str(adr.id)
+
+        asked = await client.post(
+            f"/api/v1/adr/{adr_id}/request-signatures",
+            json={"user_ids": [str(actor.id)]},
+            headers=auth_headers(actor),
+        )
+        assert asked.status_code == 200, asked.text
+        signed = await client.post(f"/api/v1/adr/{adr_id}/sign", headers=auth_headers(actor))
+        assert signed.status_code == 200, signed.text
+
+        later = {}
+        for event_type in ("adr.signatures_requested", "adr.signed"):
+            (event,) = (
+                (await db.execute(select(Event).where(Event.event_type == event_type)))
+                .scalars()
+                .all()
+            )
+            assert event.data["id"] == adr_id
+            later[event_type] = await db.get(MutationBatch, event.batch_id)
+        # ``created_at`` is transaction-constant in a test: order them by hand.
+        for offset, other in enumerate(later.values(), start=1):
+            other.created_at = batch.created_at + timedelta(seconds=offset)
+        await db.flush()
+
+        with pytest.raises(HTTPException) as exc:
+            await execute_rollback(db, batch, actor.id)
+        assert exc.value.status_code == 409
+        conflicts = sorted(exc.value.detail["conflicting_batches"], key=lambda c: c["created_at"])
+        assert [(c["batch_id"], c["touched_entities"]) for c in conflicts] == [
+            (str(later["adr.signatures_requested"].id), [adr_id]),
+            (str(later["adr.signed"].id), [adr_id]),
+        ]
 
 
 class TestSurveyRollback:

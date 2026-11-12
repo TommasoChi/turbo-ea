@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { alpha } from "@mui/material/styles";
+import { RAG_COLORS, brand } from "@/theme/tokens";
 import NotificationBell from "./NotificationBell";
 
 const navigate = vi.fn();
@@ -467,3 +469,121 @@ describe("NotificationBell detail dialog (SDK 1.11)", () => {
   });
 });
 
+
+describe("NotificationBell row colours", () => {
+  it("tints an unread row and edges it in brand blue, leaving a read row clear", async () => {
+    const row = (id: string, is_read: boolean) => ({
+      id,
+      user_id: "u1",
+      type: "card_updated",
+      title: `notification ${id}`,
+      message: "",
+      link: "/cards/x",
+      is_read,
+      created_at: new Date().toISOString(),
+    });
+    vi.mocked(api.get).mockReset();
+    vi.mocked(api.get).mockImplementation(async (path: string) =>
+      path.startsWith("/notifications?")
+        ? { items: [row("read", true), row("unread", false)], total: 2, page: 1, page_size: 20 }
+        : { count: 1 },
+    );
+    render(<NotificationBell userId="u1" />);
+    await userEvent.setup().click(bellButton());
+    const item = async (id: string) =>
+      (await screen.findByText(`notification ${id}`)).closest(".MuiListItemButton-root");
+    // jsdom reports `transparent` as its rgba form.
+    expect(await item("read")).toHaveStyle({
+      backgroundColor: "rgba(0, 0, 0, 0)",
+      borderLeft: "3px solid rgba(0, 0, 0, 0)",
+    });
+    expect(await item("unread")).toHaveStyle({
+      backgroundColor: alpha(brand.primary, 0.04),
+      borderLeft: `3px solid ${brand.primary}`,
+    });
+  });
+});
+
+describe("NotificationBell decision standing", () => {
+  it("shows a changed standing with its own glyph in the amber token", async () => {
+    vi.mocked(api.get).mockReset();
+    vi.mocked(api.get).mockImplementation(async (path: string) =>
+      path.startsWith("/notifications?")
+        ? {
+            items: [
+              {
+                id: "s1",
+                user_id: "u1",
+                type: "adr_standing_changed",
+                title: "ADR-012 · Rev 2 — Use Kafka was revoked",
+                message: "",
+                link: "/ea-delivery/adr/a1",
+                is_read: false,
+                created_at: new Date().toISOString(),
+              },
+            ],
+            total: 1,
+            page: 1,
+            page_size: 20,
+          }
+        : { count: 1 },
+    );
+    render(<NotificationBell userId="u1" />);
+    await userEvent.setup().click(bellButton());
+    const row = (await screen.findByText("ADR-012 · Rev 2 — Use Kafka was revoked")).closest(
+      ".MuiListItemButton-root",
+    ) as HTMLElement;
+    const glyph = [...row.querySelectorAll(".material-symbols-outlined")].find(
+      (el) => el.textContent === "published_with_changes",
+    );
+    expect(glyph).toBeDefined();
+    expect(glyph).toHaveStyle({ color: RAG_COLORS.amber });
+  });
+});
+
+describe("NotificationBell document discussion", () => {
+  const row = (type: string, title: string, link: string) => ({
+    id: `${type}-1`,
+    user_id: "u1",
+    type,
+    title,
+    message: "",
+    link,
+    is_read: true,
+    created_at: new Date().toISOString(),
+  });
+
+  async function openWith(item: ReturnType<typeof row>) {
+    navigate.mockClear();
+    vi.mocked(api.get).mockReset();
+    vi.mocked(api.get).mockImplementation(async (path: string) =>
+      path.startsWith("/notifications?") ? { items: [item], total: 1, page: 1, page_size: 20 } : { count: 0 },
+    );
+    const user = userEvent.setup();
+    render(<NotificationBell userId="u1" />);
+    await user.click(bellButton());
+    const text = await screen.findByText(item.title);
+    return { user, text, li: text.closest(".MuiListItemButton-root") as HTMLElement };
+  }
+
+  const glyphOf = (li: HTMLElement, icon: string) =>
+    [...li.querySelectorAll(".material-symbols-outlined")].find((el) => el.textContent === icon);
+
+  it("shows a comment with the forum glyph in the green token and follows its thread link", async () => {
+    const { user, text, li } = await openWith(
+      row("document_comment", "New comment on ADR-012", "/ea-delivery/adr/a1/preview?thread=c9"),
+    );
+    expect(glyphOf(li, "forum")).toHaveStyle({ color: RAG_COLORS.green });
+    await user.click(text);
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith("/ea-delivery/adr/a1/preview?thread=c9"));
+  });
+
+  it("shows a mention with the @ glyph in the brand token and follows its thread link", async () => {
+    const { user, text, li } = await openWith(
+      row("document_mention", "You were mentioned on a SoAW", "/ea-delivery/soaw/s1/preview?thread=c2"),
+    );
+    expect(glyphOf(li, "alternate_email")).toHaveStyle({ color: brand.primary });
+    await user.click(text);
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith("/ea-delivery/soaw/s1/preview?thread=c2"));
+  });
+});

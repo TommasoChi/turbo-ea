@@ -5,6 +5,7 @@ import CircularProgress from "@mui/material/CircularProgress";
 import MuiCard from "@mui/material/Card";
 import CardContent from "@mui/material/CardContent";
 import Typography from "@mui/material/Typography";
+import { useTheme } from "@mui/material/styles";
 import LinkifiedText from "@/components/LinkifiedText";
 import { api } from "@/api/client";
 import MaterialSymbol from "@/components/MaterialSymbol";
@@ -13,6 +14,7 @@ import type { EAPrinciple } from "@/types";
 
 export default function PrinciplesPanel() {
   const { t } = useTranslation("grc");
+  const theme = useTheme();
   const [loading, setLoading] = useState(true);
   const [principles, setPrinciples] = useState<EAPrinciple[]>([]);
 
@@ -52,7 +54,7 @@ export default function PrinciplesPanel() {
           borderRadius: 2,
         }}
       >
-        <MaterialSymbol icon="bookmark_star" size={40} color="#bbb" />
+        <MaterialSymbol icon="bookmark_star" size={40} color={theme.palette.action.disabled} />
         <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
           {t("governance.principles.empty")}
         </Typography>
@@ -90,6 +92,16 @@ export default function PrinciplesPanel() {
               <Box sx={{ flex: 1, minWidth: 0 }}>
                 <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 0.25 }}>
                   {p.title}
+                  {p.reference_number && (
+                    <Typography
+                      component="span"
+                      variant="caption"
+                      color="text.secondary"
+                      sx={{ ml: 1, fontFamily: "monospace", fontWeight: 400 }}
+                    >
+                      {p.reference_number}
+                    </Typography>
+                  )}
                 </Typography>
                 {p.description && (
                   <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>

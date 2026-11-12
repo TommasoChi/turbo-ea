@@ -99,6 +99,8 @@ Cada fase tem um **seletor de data** para que você possa registrar quando o com
 
 Se uma fase tiver uma data posterior à de uma fase que deveria vir depois dela — por exemplo, **Desativação** após **Fim de Vida** —, um ícone de aviso aparece ao lado dessa data, e o mesmo aviso é exibido abaixo do campo durante a edição. É apenas uma indicação: as datas ainda podem ser salvas como foram inseridas.
 
+Um ícone de informação ao lado de cada fase na linha do tempo explica o que a fase significa – passe o cursor sobre ele para ler a definição. Mostra uma explicação padrão, a menos que o seu administrador a tenha alterado para descrever como a sua organização usa a fase, ou a tenha removido. A linha do tempo, com os seus ícones, continua visível enquanto você edita as datas. Os textos são definidos em **Admin → Metamodelo → Fases do ciclo de vida** (veja [Fases do ciclo de vida](../admin/metamodel.md#lifecycle-phases)).
+
 ### Seções de Atributos Personalizados
 
 Dependendo do tipo de card, você verá seções adicionais com **campos personalizados** configurados no metamodelo. Os tipos de campo incluem:
@@ -112,6 +114,8 @@ Dependendo do tipo de card, você verá seções adicionais com **campos persona
 - **URL** — Link clicável (validado para http/https/mailto)
 - **Seleção única** — Menu suspenso com opções predefinidas
 - **Seleção múltipla** — Multi-seleção com exibição de chips
+
+Onde o seu administrador escreveu um **texto de ajuda** para um campo, um ícone de informação aparece ao lado do seu rótulo: passe o cursor sobre ele (ou chegue até ele com a tecla Tab) para ler o que o campo significa. Enquanto você edita a seção, o mesmo ícone fica ao lado do campo. No Inventário, passar o cursor sobre o cabeçalho da coluna do campo também o mostra.
 
 Campos marcados como **calculados** mostram um badge e não podem ser editados manualmente — seus valores são computados por [fórmulas definidas pelo administrador](../admin/calculations.md).
 
@@ -181,7 +185,7 @@ O ícone **abrir em nova aba** na barra de ferramentas abre o [relatório de dep
 
 Aplique tags dos [grupos de tags](../admin/tags.md) configurados. Dependendo do modo do grupo, você pode selecionar uma tag (seleção única) ou múltiplas tags (seleção múltipla).
 
-### Aba de Recursos
+### Aba de Recursos {: #resources-tab }
 
 A aba de **Recursos** consolida todos os materiais de apoio de um card:
 
@@ -191,11 +195,14 @@ A aba de **Recursos** consolida todos os materiais de apoio de um card:
 
 ### Seção EOL
 
-Se o card estiver vinculado a um produto do [endoflife.date](https://endoflife.date/) (via [Administração de EOL](../admin/eol.md)):
+Exibida por padrão em Aplicações e Componentes de TI, e em qualquer outro tipo de card cujo administrador a tenha [ativado](../admin/eol.md#fim-de-vida-em-outros-tipos-de-card). Se o card estiver vinculado a um produto do [endoflife.date](https://endoflife.date/) (via [Administração de EOL](../admin/eol.md)):
 
-- **Nome do produto e versão**
-- **Status de suporte** — Com código de cores: Suportado, Aproximando-se do EOL, Fim de Vida
-- **Datas importantes** — Data de lançamento, fim do suporte ativo, fim do suporte de segurança, data de EOL
+- **Nome do produto e versão** — um produto personalizado é designado pelo seu título e marcado como **Personalizado**
+- **Status de suporte** — Com código de cores, com a mesma regra do relatório de EOL: Suportado, Aproximando-se do EOL (a menos de seis meses da data de EOL ou depois de terminado o suporte ativo), Fim de Vida
+- **Datas importantes** — Data de lançamento, fim do suporte ativo, data de EOL, a última versão e a sua data de lançamento
+- **Notas de lançamento** — uma ligação para a página do produto no endoflife.date, ou a **Página do fornecedor** de um produto personalizado
+
+**Vincular**, **Alterar** e **Desvincular** só aparecem se puder editar a ficha. Os utilizadores com a permissão **Gerir EOL** podem definir um [produto EOL personalizado](../admin/eol.md) diretamente a partir desta secção, através da ligação **Defini-lo como produto personalizado…** sob a pesquisa de produto: o formulário abre com o nome da ficha (ou o que escreveu) como nome do produto, e a ficha fica vinculada ao novo produto ao guardar. Dispõem também de um atalho para **Gerir produtos personalizados** nas definições e podem adicionar um ciclo de lançamento em falta a partir da lista de ciclos. Os restantes utilizadores veem uma sugestão para pedir a um gestor de EOL quando o endoflife.date não tem correspondência. Os produtos personalizados comportam-se como os produtos do endoflife.date em todos os outros locais.
 
 ## Aba de Comentários
 
@@ -230,13 +237,15 @@ Atribuições de partes interessadas afetam **permissões**: as permissões efet
 
 Quando um papel tem uma **cor** definida no metamodelo, o seu grupo é marcado com ela, permitindo distinguir um proprietário de um observador num relance.
 
+Onde um papel tem uma **descrição**, um ícone de informação aparece ao lado do seu nome: passe o cursor sobre ele para ler o que o papel significa. A descrição também aparece sob o nome do papel no seletor de papéis ao adicionar uma parte interessada.
+
 ### Pesquisar e convidar
 
 Escolha uma parte interessada via o **autocompletar pesquisável** — comece a digitar e o menu suspenso filtra tanto por nome quanto por e-mail (o e-mail aparece como linha secundária, para que dois usuários com o mesmo nome possam ser distinguidos num relance).
 
-Se o e-mail que você digita não corresponder a um usuário existente, uma opção **«Convidar «email» como novo usuário»** aparece no final do menu suspenso. Selecioná-la expande um mini-formulário inline dentro do próprio seletor — escolha um papel (Membro ou Visualizador por padrão), edite opcionalmente o nome exibido e envie. O novo usuário é convidado via o e-mail de convite padrão **e** atribuído ao papel de parte interessada escolhido no card numa única ação, assim você nunca precisa deixar o card para integrar um colaborador.
+Se o e-mail que você digita não corresponder a um usuário existente, uma opção **«Convidar «email» como novo usuário»** aparece no final do menu suspenso. Selecioná-la expande um mini-formulário inline dentro do próprio seletor — edite opcionalmente o nome exibido e envie. O novo usuário recebe o **papel padrão** definido em [Usuários e Papéis](../admin/users.md#papeis). O novo usuário é convidado via o e-mail de convite padrão **e** atribuído ao papel de parte interessada escolhido no card numa única ação, assim você nunca precisa deixar o card para integrar um colaborador.
 
-O caminho de convite requer a permissão **`users.invite`**, uma forma delegada de `admin.users` que administradores podem conceder a membros confiáveis. Uma proteção contra escalada de privilégios impede que não-admins convidem usuários para papéis de admin — o menu suspenso de papéis filtra silenciosamente para os papéis que o convidante tem permissão para delegar.
+O caminho de convite requer a permissão **`users.invite`**, uma forma delegada de `admin.users` que administradores podem conceder a membros confiáveis. Uma proteção contra escalada de privilégios impede que não-admins convidem usuários para qualquer outro papel: sem `admin.users`, um usuário convidado só pode receber o papel padrão, Membro ou Visualizador.
 
 ## Aba de Histórico
 
@@ -252,9 +261,11 @@ Tudo o que move a data **Modificado** do card aparece aqui: uma edição manual,
 
 ## Aba de ADR
 
-Cada card possui uma aba **ADR** que lista as [decisões de arquitetura](delivery.md) vinculadas a ele, exibindo a referência, o título, o status, todos os cards vinculados e a data da última modificação. Clique em uma linha para abrir a decisão.
+Cada card possui uma aba **ADR** que lista as [decisões de arquitetura](delivery.md) vinculadas a ele — a revisão atual de cada decisão, mais qualquer revisão em redação — exibindo a referência, o título, a vigência (ou o status, enquanto ainda não está assinada), todos os cards vinculados e a data da última modificação. Clique em uma linha para abrir a decisão; as revisões anteriores são acessíveis a partir dela.
 
 Se você tiver permissão para gerenciar vínculos de ADR, a aba também oferece **Vincular ADR** para anexar uma decisão existente e **Criar ADR** para criar uma nova já vinculada a este card, além de uma ação de desvinculação em cada linha. Em cards sem decisões vinculadas a aba fica oculta, a menos que você tenha essa permissão, de modo que usuários somente leitura nunca veem uma aba vazia.
+
+Abaixo da lista, **Mencionado em** lista as decisões e os Statements of Architecture Work cujo texto menciona este card, e aqueles cuja discussão o menciona (assinalados *na discussão*), com a referência ou revisão de cada documento e a sua vigência ou status. Uma menção não vincula o card à decisão; apenas aparece aqui. A lista mostra apenas os documentos que você pode abrir e não aparece quando não há nenhum. Ver [Menções](grc.md#decision-mentions).
 
 ## Aba de Riscos (GRC habilitado, quando presente)
 

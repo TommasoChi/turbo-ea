@@ -231,6 +231,7 @@ describe("buildSectionOrder", () => {
       "custom:1",
       "tags",
       "description",
+      "eol",
       "custom:0",
       "custom:2",
     ]);
@@ -243,27 +244,33 @@ describe("buildSectionOrder", () => {
       "successors",
       "tags",
       "relations",
+      "eol",
       "lifecycle",
     ]);
   });
 
   it("appends them when the stored order has no relations", () => {
     const sc = { __order: ["description"] };
-    expect(buildSectionOrder(sc, 0, both)).toEqual(["description", "successors", "tags"]);
+    expect(buildSectionOrder(sc, 0, both)).toEqual(["description", "eol", "successors", "tags"]);
   });
 
   it("never adds successors to a type that has none, and never moves a stored one", () => {
-    expect(buildSectionOrder({ __order: ["relations"] }, 0, none)).toEqual(["tags", "relations"]);
-    const stored = { __order: ["successors", "tags", "relations"] };
-    expect(buildSectionOrder(stored, 0, both)).toEqual(["successors", "tags", "relations"]);
+    expect(buildSectionOrder({ __order: ["relations"] }, 0, none)).toEqual([
+      "eol",
+      "tags",
+      "relations",
+    ]);
+    const stored = { __order: ["successors", "tags", "eol", "relations"] };
+    expect(buildSectionOrder(stored, 0, both)).toEqual(["successors", "tags", "eol", "relations"]);
   });
 
   it("drops a stored hierarchy or successors the type no longer has", () => {
-    const sc = { __order: ["hierarchy", "successors", "tags", "relations"] };
-    expect(buildSectionOrder(sc, 0, none)).toEqual(["tags", "relations"]);
+    const sc = { __order: ["hierarchy", "successors", "tags", "eol", "relations"] };
+    expect(buildSectionOrder(sc, 0, none)).toEqual(["tags", "eol", "relations"]);
     expect(buildSectionOrder(sc, 0, { hierarchy: true, successors: false })).toEqual([
       "hierarchy",
       "tags",
+      "eol",
       "relations",
     ]);
   });
@@ -290,18 +297,31 @@ describe("buildSectionOrder costs", () => {
     const sc = { __order: ["description", "lifecycle", "relations"] };
     expect(buildSectionOrder(sc, 0, cost)).toEqual([
       "description",
+      "eol",
       "lifecycle",
       "costs",
       "tags",
       "relations",
     ]);
-    expect(buildSectionOrder(sc, 0, none)).toEqual(["description", "lifecycle", "tags", "relations"]);
+    expect(buildSectionOrder(sc, 0, none)).toEqual([
+      "description",
+      "eol",
+      "lifecycle",
+      "tags",
+      "relations",
+    ]);
   });
 
   it("keeps a stored costs where the admin put it, and drops it for another type", () => {
     const sc = { __order: ["costs", "description", "tags", "relations"] };
-    expect(buildSectionOrder(sc, 0, cost)).toEqual(["costs", "description", "tags", "relations"]);
-    expect(buildSectionOrder(sc, 0, none)).toEqual(["description", "tags", "relations"]);
+    expect(buildSectionOrder(sc, 0, cost)).toEqual([
+      "costs",
+      "description",
+      "eol",
+      "tags",
+      "relations",
+    ]);
+    expect(buildSectionOrder(sc, 0, none)).toEqual(["description", "eol", "tags", "relations"]);
   });
 });
 
@@ -393,6 +413,7 @@ describe("buildSectionOrder licensing", () => {
     const sc = { __order: ["description", "lifecycle", "relations"] };
     expect(buildSectionOrder(sc, 0, both)).toEqual([
       "description",
+      "eol",
       "lifecycle",
       "costs",
       "licensing",
@@ -404,11 +425,11 @@ describe("buildSectionOrder licensing", () => {
       "description",
       "costs",
       "licensing",
-      "lifecycle",
+      "eol",
     ]);
     expect(
       buildSectionOrder(sc, 0, { hierarchy: false, successors: false, licensing: true }),
-    ).toEqual(["description", "lifecycle", "licensing", "tags", "relations"]);
+    ).toEqual(["description", "eol", "lifecycle", "licensing", "tags", "relations"]);
   });
 
   it("is in the built-in order after costs, and dropped for other types", () => {
@@ -426,7 +447,41 @@ describe("buildSectionOrder licensing", () => {
 
   it("drops licensing for another type even when a stored order names it", () => {
     const sc = { __order: ["licensing", "description", "tags", "relations"] };
-    expect(buildSectionOrder(sc, 0, none)).toEqual(["description", "tags", "relations"]);
+    expect(buildSectionOrder(sc, 0, none)).toEqual(["description", "eol", "tags", "relations"]);
     expect(buildSectionOrder(sc, 0, both)).toContain("licensing");
+  });
+});
+
+describe("buildSectionOrder — End of Life in a stored order", () => {
+  const none = { hierarchy: false, successors: false };
+
+  it("keeps eol where a stored order puts it", () => {
+    const sc = { __order: ["eol", "description", "lifecycle", "tags", "relations"] };
+    expect(buildSectionOrder(sc, 0, none)).toEqual(["eol", "description", "lifecycle", "tags", "relations"]);
+  });
+
+  it("splices a missing eol in before lifecycle", () => {
+    const sc = { __order: ["description", "lifecycle", "tags", "relations"] };
+    expect(buildSectionOrder(sc, 0, none)).toEqual([
+      "description",
+      "eol",
+      "lifecycle",
+      "tags",
+      "relations",
+    ]);
+  });
+
+  it("else after description, else before relations", () => {
+    expect(buildSectionOrder({ __order: ["tags", "description", "relations"] }, 0, none)).toEqual([
+      "tags",
+      "description",
+      "eol",
+      "relations",
+    ]);
+    expect(buildSectionOrder({ __order: ["tags", "relations"] }, 0, none)).toEqual([
+      "tags",
+      "eol",
+      "relations",
+    ]);
   });
 });

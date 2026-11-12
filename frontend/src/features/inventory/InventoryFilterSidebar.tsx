@@ -1,6 +1,7 @@
 import { Fragment, useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import Box from "@mui/material/Box";
+import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
 import Tabs from "@mui/material/Tabs";
 import Tab from "@mui/material/Tab";
@@ -40,12 +41,24 @@ import ColumnOrderSection, {
 import { useTypeLabel, useSubtypeLabel, useFieldLabel, useOptionLabel, useRelationLabel } from "@/hooks/useResolveLabel";
 import { api } from "@/api/client";
 import { readableTextColor } from "@/lib/color";
+import { DATA_QUALITY_BANDS, type DataQualityBand } from "@/lib/dataQualityBands";
 import {
-  DATA_QUALITY_BANDS,
-  normalizeDataQualityFilter,
-  type DataQualityBand,
-} from "@/lib/dataQualityBands";
+  activeQueryFromBookmark,
+  bookmarkFilters,
+  bookmarkGrouping,
+  bookmarkViaColumns,
+  emptyFilters,
+  isQueryView,
+  splitViewColumns,
+  stripViaLayout,
+  viaColumnId,
+} from "./viewApply";
+import { compactPath } from "./queryPath";
+import { relationSideLabel, type RelationColumnSide } from "./relationColumns";
+import { setProblem, startTypes } from "./querySet";
 import type {
+  ActiveQuery,
+  CardQuerySet,
   CardType,
   Bookmark,
   ColumnLayoutItem,
@@ -60,12 +73,17 @@ import type {
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
 import { ORIGIN_META } from "@/components/originMeta";
-import { CATEGORICAL_COLORS } from "@/theme/tokens";
+import {
+  APPROVAL_STATUS_COLORS,
+  CATEGORICAL_COLORS,
+  LIFECYCLE_PHASE_COLORS,
+  brand,
+} from "@/theme/tokens";
 import {
   EOL_STATUSES,
   EOL_STATUS_COLORS,
   EOL_STATUS_LABEL_KEYS,
-  isEolType,
+  typeKeyTracksEol,
 } from "@/lib/eol";
 
 /* ------------------------------------------------------------------ */
@@ -128,12 +146,15 @@ interface Props {
   onToggleCollapse: () => void;
   width: number;
   onWidthChange: (w: number) => void;
-  relevantRelTypes?: RelationType[];
   /**
-   * Every relation type touching the selected type, *without* the per-related-type
-   * dedup `relevantRelTypes` applies for columns. Relation facets are keyed by
-   * relation type, so they must come from this list or cards related only through
-   * a second relation type on the same card-type pair become unfilterable.
+   * The grid's relation columns, one per relation-type side (`rel_<sideKey>`),
+   * in grid order — the Columns tab lists one row per entry.
+   */
+  relationSides?: RelationColumnSide<RelationType>[];
+  /**
+   * Every relation type touching the selected type. Relation facets are keyed by
+   * relation type (and side), so each of several relation types on the same
+   * card-type pair gets its own filter row.
    */
   allRelevantRelTypes?: RelationType[];
   // Stakeholder roles of the single selected type — one togglable
@@ -180,13 +201,68 @@ interface Props {
   // and restored on apply, like the sidebar filters themselves.
   groupBy?: string | null;
   onGroupByChange?: (groupBy: string | null) => void;
+  // "Parent" (the tree layer) — saved into a view beside `groupBy` and
+  // restored on apply (views saved before the option restore it off).
+  groupTree?: boolean;
+  onGroupTreeChange?: (enabled: boolean) => void;
+  // The tree level chosen with the level stepper (null = fully open) — saved
+  // beside `groupTree`; views saved before the stepper restore null.
+  groupTreeLevel?: number | null;
+  onGroupTreeLevelChange?: (level: number | null) => void;
+  /**
+   * Puts a view's MCP query in force (or drops it with null). Called when a
+   * view is applied — with the query of a query view, null for a plain one —
+   * and on "Clear all". The page owns the active query because it sends it.
+   */
+  onApplyQuery?: (query: ActiveQuery | null) => void;
+  /**
+   * The view the page applied on its own (a `?view=` deep link, a persisted
+   * query view). Highlights that view; when it drops back to null the
+   * highlight is cleared only if it still marks that same view.
+   */
+  externalActiveViewId?: string | null;
+  /** Every relation type of the metamodel — names the hops of a query view. */
+  relationTypes?: RelationType[];
+  /** May the user save views (`bookmarks.manage`)? Gates "New query view". */
+  canManageBookmarks?: boolean;
+  /** Starts a new query view in the page's path strip. */
+  onStartQueryDraft?: () => void;
+  /**
+   * A query built in the path strip, waiting to be saved as a new view: the
+   * sidebar opens its save dialog with the query attached, then reports back
+   * through `onPendingSaveHandled`.
+   */
+  pendingSave?: CardQuerySet | null;
+  onPendingSaveHandled?: () => void;
+  /**
+   * The query open in the path strip, if any: "Save current" saves it (a
+   * draft still missing a type or a value disables the save buttons).
+   */
+  draftQuery?: CardQuerySet | null;
+  /**
+   * Locks the Types facet: a query draft is open, and its start type is
+   * changed in the strip, never by the facet (which would drop the draft).
+   */
+  typesLocked?: boolean;
+  /** Every saved-view list the sidebar loads, so the page knows who may edit what. */
+  onBookmarksLoaded?: (bookmarks: Bookmark[]) => void;
+  /** Bumped by the page after it changed a view itself; reloads the list. */
+  bookmarksRevision?: number;
+  /**
+   * The matched-cards columns (`via:<key>` entries) a view saved now with
+   * `query` stores: the page's switched-on steps that name the same step of
+   * that query. They are not part of `selectedColumns`.
+   */
+  viaColumnsFor?: (query: CardQuerySet | null) => string[];
+  /** Applying a view switches its matched-cards columns on (none for a view without). */
+  onApplyViewViaColumns?: (bm: Bookmark) => void;
 }
 
 export const APPROVAL_STATUS_OPTIONS = [
-  { key: "DRAFT", tKey: "common:status.draft" as const, color: "#9e9e9e" },
-  { key: "APPROVED", tKey: "common:status.approved" as const, color: "#4caf50" },
-  { key: "BROKEN", tKey: "common:status.broken" as const, color: "#ff9800" },
-  { key: "REJECTED", tKey: "common:status.rejected" as const, color: "#f44336" },
+  { key: "DRAFT", tKey: "common:status.draft" as const, color: APPROVAL_STATUS_COLORS.DRAFT },
+  { key: "APPROVED", tKey: "common:status.approved" as const, color: APPROVAL_STATUS_COLORS.APPROVED },
+  { key: "BROKEN", tKey: "common:status.broken" as const, color: APPROVAL_STATUS_COLORS.BROKEN },
+  { key: "REJECTED", tKey: "common:status.rejected" as const, color: APPROVAL_STATUS_COLORS.REJECTED },
 ];
 
 /** The Origin facet's options: every channel a card can be created through,
@@ -201,11 +277,11 @@ export const ORIGIN_OPTIONS: { key: string; icon: string; color: string }[] = [
 ];
 
 export const LIFECYCLE_PHASES = [
-  { key: "plan", tKey: "common:lifecycle.plan" as const, color: "#90a4ae" },
-  { key: "phaseIn", tKey: "common:lifecycle.phaseIn" as const, color: "#42a5f5" },
-  { key: "active", tKey: "common:lifecycle.active" as const, color: "#66bb6a" },
-  { key: "phaseOut", tKey: "common:lifecycle.phaseOut" as const, color: "#ffa726" },
-  { key: "endOfLife", tKey: "common:lifecycle.endOfLife" as const, color: "#ef5350" },
+  { key: "plan", tKey: "common:lifecycle.plan" as const, color: LIFECYCLE_PHASE_COLORS.plan },
+  { key: "phaseIn", tKey: "common:lifecycle.phaseIn" as const, color: LIFECYCLE_PHASE_COLORS.phaseIn },
+  { key: "active", tKey: "common:lifecycle.active" as const, color: LIFECYCLE_PHASE_COLORS.active },
+  { key: "phaseOut", tKey: "common:lifecycle.phaseOut" as const, color: LIFECYCLE_PHASE_COLORS.phaseOut },
+  { key: "endOfLife", tKey: "common:lifecycle.endOfLife" as const, color: LIFECYCLE_PHASE_COLORS.endOfLife },
 ];
 
 const MIN_WIDTH = 220;
@@ -402,7 +478,7 @@ export default function InventoryFilterSidebar({
   onToggleCollapse,
   width,
   onWidthChange,
-  relevantRelTypes = [],
+  relationSides = [],
   allRelevantRelTypes = [],
   stakeholderRoles = [],
   relationsMap,
@@ -429,6 +505,23 @@ export default function InventoryFilterSidebar({
   onApplyColumnFilters,
   groupBy = null,
   onGroupByChange,
+  groupTree = false,
+  onGroupTreeChange,
+  groupTreeLevel = null,
+  onGroupTreeLevelChange,
+  onApplyQuery,
+  externalActiveViewId = null,
+  relationTypes = [],
+  canManageBookmarks = false,
+  onStartQueryDraft,
+  pendingSave = null,
+  onPendingSaveHandled,
+  draftQuery = null,
+  typesLocked = false,
+  onBookmarksLoaded,
+  bookmarksRevision = 0,
+  viaColumnsFor,
+  onApplyViewViaColumns,
 }: Props) {
   const { t, i18n } = useTranslation(["inventory", "common"]);
   // EOL status labels live in the reports namespace — the EOL report owns
@@ -451,6 +544,20 @@ export default function InventoryFilterSidebar({
   useEffect(() => {
     saveSidebarPrefs({ tab, activeViewId });
   }, [tab, activeViewId]);
+
+  // A view the page applied on its own wins the highlight. When the page
+  // drops it (leaving a query view), clear the highlight only if it still
+  // marks that view — the user may have applied another one since.
+  const prevExternalViewIdRef = useRef<string | null>(externalActiveViewId);
+  useEffect(() => {
+    const prev = prevExternalViewIdRef.current;
+    prevExternalViewIdRef.current = externalActiveViewId;
+    if (externalActiveViewId) {
+      setActiveViewId(externalActiveViewId);
+    } else if (prev) {
+      setActiveViewId((current) => (current === prev ? null : current));
+    }
+  }, [externalActiveViewId]);
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
     types: true,
     search: true,
@@ -479,11 +586,18 @@ export default function InventoryFilterSidebar({
   const [dialogSharedWith, setDialogSharedWith] = useState<(User & { can_edit?: boolean })[]>([]);
   const [allUsers, setAllUsers] = useState<User[]>([]);
 
-  // Load bookmarks
+  // A query from the path strip that the open save dialog will attach.
+  const [pendingQuery, setPendingQuery] = useState<CardQuerySet | null>(null);
+
+  // Load bookmarks (and hand the list to the page, through a ref so a new
+  // callback identity never refetches).
+  const onBookmarksLoadedRef = useRef(onBookmarksLoaded);
+  onBookmarksLoadedRef.current = onBookmarksLoaded;
   const loadBookmarks = useCallback(async () => {
     try {
       const bms = await api.get<Bookmark[]>("/bookmarks");
       setBookmarks(bms);
+      onBookmarksLoadedRef.current?.(bms);
     } catch {
       // ignore
     }
@@ -491,7 +605,7 @@ export default function InventoryFilterSidebar({
 
   useEffect(() => {
     loadBookmarks();
-  }, [loadBookmarks]);
+  }, [loadBookmarks, bookmarksRevision]);
 
   // Card types bucketed by EA layer — see `lib/cardTypeOrder.ts`. The API
   // orders by `sort_order` alone, which only looks layered because the seed
@@ -604,7 +718,7 @@ export default function InventoryFilterSidebar({
 
   // Relation facets are per relation type (never deduped by related card type), so
   // each of several relation types sharing a card-type pair gets its own filter row.
-  const filterRelTypes = allRelevantRelTypes.length > 0 ? allRelevantRelTypes : relevantRelTypes;
+  const filterRelTypes = allRelevantRelTypes;
   // …and per SIDE: a self-referencing type ("has site" / "is site of") is two
   // facets, each reading its own index (`<key>__out` / `<key>__in`), because
   // "which end am I" is true at both ends when read off the type alone.
@@ -646,8 +760,11 @@ export default function InventoryFilterSidebar({
     return result;
   }, [relationsMap, filterSides]);
 
-  const clearAll = () =>
-    onFiltersChange({ types: [], search: "", subtypes: [], lifecyclePhases: [], dataQualityBands: [], approvalStatuses: [], showArchived: false, attributes: {}, relations: {}, tagIds: [], mineScope: null, orphanedOnly: false, staleOnly: false, eolStatuses: [], linkTypes: [], origins: [] });
+  const clearAll = () => {
+    onFiltersChange(emptyFilters());
+    // Clearing every filter also leaves a query view.
+    onApplyQuery?.(null);
+  };
 
   const activeCount =
     filters.types.length +
@@ -688,9 +805,24 @@ export default function InventoryFilterSidebar({
     [bookmarks],
   );
 
+  // The query view in force, if the page has one: "Save current" then saves
+  // a copy of it, query included.
+  // A draft in the strip that cannot be saved yet (no type, or a condition
+  // without values): "Save current" would save it, so it waits.
+  const draftUnfinished = draftQuery != null && setProblem(draftQuery) != null;
+
+  const activeQueryView = useMemo(
+    () =>
+      externalActiveViewId
+        ? bookmarks.find((b) => b.id === externalActiveViewId && isQueryView(b)) ?? null
+        : null,
+    [bookmarks, externalActiveViewId],
+  );
+
   /* ---- Views actions ---- */
 
-  const openCreateDialog = () => {
+  const openCreateDialog = (query: CardQuerySet | null = null) => {
+    setPendingQuery(query);
     setEditingBookmark(null);
     setViewName("");
     setDialogVisibility("private");
@@ -699,17 +831,96 @@ export default function InventoryFilterSidebar({
     setSaveDialogOpen(true);
   };
 
+  // A query built in the path strip opens the save dialog with it attached.
+  useEffect(() => {
+    if (!pendingSave) return;
+    openCreateDialog(pendingSave);
+    onPendingSaveHandled?.();
+    // Only a new pending query opens the dialog.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingSave]);
+
+  const closeSaveDialog = () => {
+    setSaveDialogOpen(false);
+    setPendingQuery(null);
+  };
+
   const handleSaveView = async () => {
     if (!viewName.trim()) return;
     const sharedWithPayload =
       dialogVisibility === "shared"
         ? dialogSharedWith.map((u) => ({ user_id: u.id, can_edit: u.can_edit ?? false }))
         : null;
+    // A new view keeps the query handed over by the strip's Save, else the
+    // draft open in the strip, else the one in force.
+    const query = editingBookmark
+      ? null
+      : pendingQuery ?? draftQuery ?? activeQueryView?.query ?? null;
+    // The matched-cards columns ride in `columns` as `via:<key>` beside the
+    // picker's keys. The view in force (or a new one from it) takes the ones
+    // switched on; another view being edited keeps its own.
+    let viaColumns: string[];
+    if (!editingBookmark) viaColumns = viaColumnsFor?.(query) ?? [];
+    else if (editingBookmark.id === activeQueryView?.id) {
+      viaColumns = viaColumnsFor?.(editingBookmark.query ?? null) ?? [];
+    } else {
+      viaColumns = editingBookmark.query
+        ? splitViewColumns(editingBookmark.columns).via.map(viaColumnId)
+        : [];
+    }
+    // The grid's layout less every `via:` entry for a step the view does
+    // not keep (a column switched off, or one of another view's steps).
+    const cleaned = stripViaLayout(
+      columnFilterModel,
+      columnState,
+      splitViewColumns(viaColumns).via,
+    );
+    const layout = {
+      columns: [...Array.from(selectedColumns), ...viaColumns],
+      column_state: cleaned.columnState ?? null,
+      column_filter_model:
+        cleaned.filterModel && Object.keys(cleaned.filterModel).length > 0
+          ? cleaned.filterModel
+          : null,
+    };
+    if (editingBookmark && isQueryView(editingBookmark)) {
+      // A query view's query is edited in the path strip (the page saves
+      // it); this metadata dialog changes its name, sharing, OData and
+      // layout only. Its stored facets are sent back as they are, with just
+      // the grouping taken from the grid, and the query is never sent.
+      const updated = await api.patch<Bookmark>(`/bookmarks/${editingBookmark.id}`, {
+        name: viewName.trim(),
+        visibility: dialogVisibility,
+        odata_enabled: dialogOdata,
+        shared_with: sharedWithPayload,
+        ...layout,
+        filters: {
+          ...(editingBookmark.filters ?? {}),
+          groupBy,
+          groupTree: !!groupTree,
+          groupTreeLevel: groupTreeLevel ?? null,
+        },
+      });
+      // The view in force re-anchors its matched-cards columns on what was
+      // just saved (see the page's `saveDraft`).
+      if (editingBookmark.id === activeQueryView?.id) {
+        onApplyViewViaColumns?.(updated ?? { ...editingBookmark, columns: layout.columns });
+      }
+      setSaveDialogOpen(false);
+      setEditingBookmark(null);
+      setViewName("");
+      loadBookmarks();
+      return;
+    }
+    // A query is evaluated against its start types (an OR may hold several);
+    // `card_type` names the one there is, else none.
+    const viewTypes = query ? startTypes(query) : filters.types;
     const payload: Record<string, unknown> = {
       name: viewName.trim(),
-      card_type: filters.types.length === 1 ? filters.types[0] : undefined,
+      card_type: viewTypes.length === 1 ? viewTypes[0] : undefined,
+      ...(query ? { query } : {}),
       filters: {
-        types: filters.types,
+        types: viewTypes,
         search: filters.search,
         subtypes: filters.subtypes,
         lifecyclePhases: filters.lifecyclePhases,
@@ -728,11 +939,10 @@ export default function InventoryFilterSidebar({
         // Not a Filters field — rides inside the free-form JSONB payload so a
         // saved view restores its grouping (older views simply restore null).
         groupBy,
+        groupTree: !!groupTree,
+        groupTreeLevel: groupTreeLevel ?? null,
       },
-      columns: Array.from(selectedColumns),
-      column_state: columnState ?? null,
-      column_filter_model:
-        columnFilterModel && Object.keys(columnFilterModel).length > 0 ? columnFilterModel : null,
+      ...layout,
       visibility: dialogVisibility,
       odata_enabled: dialogOdata,
       shared_with: sharedWithPayload,
@@ -740,58 +950,65 @@ export default function InventoryFilterSidebar({
     if (editingBookmark) {
       await api.patch(`/bookmarks/${editingBookmark.id}`, payload);
     } else {
-      await api.post("/bookmarks", payload);
+      const created = await api.post<Bookmark>("/bookmarks", payload);
+      if (query && created) {
+        // The new query view is the one in force from now on, its
+        // matched-cards columns anchored on the query and keys it was saved
+        // with.
+        const inForce: Bookmark = {
+          ...created,
+          name: created.name ?? viewName.trim(),
+          query: created.query ?? query,
+          columns: created.columns ?? layout.columns,
+        };
+        onApplyQuery?.(activeQueryFromBookmark(inForce));
+        onApplyViewViaColumns?.(inForce);
+        setActiveViewId(created.id);
+      }
     }
     setSaveDialogOpen(false);
+    setPendingQuery(null);
     setEditingBookmark(null);
     setViewName("");
     loadBookmarks();
   };
 
   const handleApplyView = (bm: Bookmark) => {
-    const f = bm.filters as Filters | undefined;
-    if (f) {
-      onFiltersChange({
-        types: f.types || [],
-        search: f.search || "",
-        subtypes: f.subtypes || [],
-        lifecyclePhases: f.lifecyclePhases || [],
-        // Views saved before bands existed carry a `dataQualityMin` threshold.
-        dataQualityBands: normalizeDataQualityFilter(f),
-        approvalStatuses: f.approvalStatuses || [],
-        showArchived: f.showArchived || false,
-        orphanedOnly: f.orphanedOnly || false,
-        staleOnly: f.staleOnly || false,
-        eolStatuses: f.eolStatuses || [],
-        linkTypes: f.linkTypes || [],
-        origins: f.origins || [],
-        attributes: f.attributes || {},
-        relations: f.relations || {},
-        tagIds: f.tagIds || [],
-        mineScope: f.mineScope ?? null,
-      });
-    }
+    const next = bookmarkFilters(bm);
+    if (next) onFiltersChange(next);
+    // A query view puts its MCP query in force; a plain view drops any.
+    onApplyQuery?.(activeQueryFromBookmark(bm));
     // Restore the view's grouping (views saved before the feature carry none).
-    onGroupByChange?.(
-      ((f as { groupBy?: string | null } | undefined)?.groupBy as string | null | undefined) ??
-        null,
-    );
-    // Restore saved columns if present
+    const grouping = bookmarkGrouping(bm);
+    onGroupByChange?.(grouping.groupBy);
+    onGroupTreeChange?.(grouping.groupTree);
+    onGroupTreeLevelChange?.(grouping.groupTreeLevel);
+    // Restore saved columns if present. `via:` entries are the view's
+    // matched-cards columns, which the page holds apart from the picker.
     const bmColumns = (bm as unknown as Record<string, unknown>).columns as string[] | undefined;
     if (bmColumns && Array.isArray(bmColumns)) {
-      onSelectedColumnsChange(new Set(bmColumns));
+      const { columns: pickerColumns, via } = splitViewColumns(bmColumns);
+      if (pickerColumns.length > 0 || via.length === 0) {
+        onSelectedColumnsChange(new Set(pickerColumns));
+      }
     }
+    onApplyViewViaColumns?.(bm);
+    // The view's stored layout less any `via:` entry for a step it does not
+    // switch on, so a stale one never lands on another column.
+    const stored = stripViaLayout(
+      bm.column_filter_model as Record<string, unknown> | undefined,
+      bm.column_state as ColumnLayoutItem[] | undefined,
+      bookmarkViaColumns(bm),
+    );
     // Restore the saved column layout (order/width/pinning). Applied after the
     // visibility set above so the grid's columnDefs have rebuilt first.
     if (onApplyColumnState) {
-      const layout = (bm.column_state as ColumnLayoutItem[] | undefined) ?? null;
+      const layout = stored.columnState ?? null;
       onApplyColumnState(layout && layout.length > 0 ? layout : null);
     }
     // Restore the view's saved AG Grid column filters (null clears them, which
     // also covers pre-feature views that never stored a filter model).
-    onApplyColumnFilters?.(
-      (bm.column_filter_model as Record<string, unknown> | undefined) ?? null,
-    );
+    onApplyColumnFilters?.(stored.filterModel ?? null);
     // Mark this view active so it stays highlighted (and survives a refresh).
     setActiveViewId(bm.id);
     // Stay on the Views tab so the user can switch between views quickly.
@@ -1078,32 +1295,54 @@ export default function InventoryFilterSidebar({
                           {group.label ?? t("filter.typesUncategorized")}
                         </ListSubheader>
                       )}
-                      {group.types.map((t) => (
-                        <ListItemButton
-                          key={t.key}
-                          dense
-                          onClick={() => toggleType(t.key)}
-                          sx={{ py: 0.25, px: 1, borderRadius: 1 }}
-                        >
-                          <ListItemIcon sx={{ minWidth: 32 }}>
-                            <Checkbox
-                              size="small"
-                              checked={filters.types.includes(t.key)}
-                              disableRipple
-                              sx={{ p: 0 }}
-                            />
-                          </ListItemIcon>
-                          <MaterialSymbol icon={t.icon} size={16} color={t.color} />
-                          <ListItemText
-                            primary={typeLabel(t)}
-                            primaryTypographyProps={{
-                              fontSize: 14,
-                              ml: 0.75,
-                              noWrap: true,
+                      {group.types.map((ct) => {
+                        const row = (
+                          <ListItemButton
+                            key={ct.key}
+                            dense
+                            disabled={typesLocked}
+                            onClick={typesLocked ? undefined : () => toggleType(ct.key)}
+                            sx={{
+                              py: 0.25,
+                              px: 1,
+                              borderRadius: 1,
+                              // Locked while a query draft is open: still
+                              // readable, plainly not toggleable.
+                              ...(typesLocked ? { "&.Mui-disabled": { opacity: 0.7 } } : {}),
                             }}
-                          />
-                        </ListItemButton>
-                      ))}
+                          >
+                            <ListItemIcon sx={{ minWidth: 32 }}>
+                              <Checkbox
+                                size="small"
+                                checked={filters.types.includes(ct.key)}
+                                disabled={typesLocked}
+                                disableRipple
+                                sx={{ p: 0 }}
+                              />
+                            </ListItemIcon>
+                            <MaterialSymbol icon={ct.icon} size={16} color={ct.color} />
+                            <ListItemText
+                              primary={typeLabel(ct)}
+                              primaryTypographyProps={{
+                                fontSize: 14,
+                                ml: 0.75,
+                                noWrap: true,
+                              }}
+                            />
+                          </ListItemButton>
+                        );
+                        return typesLocked ? (
+                          <Tooltip
+                            key={ct.key}
+                            title={t("queryView.typesLockedHint")}
+                            placement="right"
+                          >
+                            <span data-testid="type-facet-locked">{row}</span>
+                          </Tooltip>
+                        ) : (
+                          row
+                        );
+                      })}
                     </Fragment>
                   ))}
                 </List>
@@ -1160,7 +1399,7 @@ export default function InventoryFilterSidebar({
                       variant={filters.approvalStatuses.includes(s.key) ? "filled" : "outlined"}
                       sx={
                         filters.approvalStatuses.includes(s.key)
-                          ? { bgcolor: s.color, color: "#fff", borderColor: s.color }
+                          ? { bgcolor: s.color, color: "common.white", borderColor: s.color }
                           : { borderColor: s.color, color: s.color }
                       }
                     />
@@ -1219,7 +1458,7 @@ export default function InventoryFilterSidebar({
                       variant={filters.lifecyclePhases.includes(p.key) ? "filled" : "outlined"}
                       sx={
                         filters.lifecyclePhases.includes(p.key)
-                          ? { bgcolor: p.color, color: "#fff", borderColor: p.color }
+                          ? { bgcolor: p.color, color: "common.white", borderColor: p.color }
                           : { borderColor: p.color, color: p.color }
                       }
                     />
@@ -1260,7 +1499,7 @@ export default function InventoryFilterSidebar({
                             variant={selected ? "filled" : "outlined"}
                             sx={
                               selected
-                                ? { bgcolor: color, color: "#fff", borderColor: color }
+                                ? { bgcolor: color, color: "common.white", borderColor: color }
                                 : { borderColor: color, color }
                             }
                           />
@@ -1304,7 +1543,7 @@ export default function InventoryFilterSidebar({
                             sx={
                               color
                                 ? selected
-                                  ? { bgcolor: color, color: "#fff", borderColor: color }
+                                  ? { bgcolor: color, color: "common.white", borderColor: color }
                                   : { borderColor: color, color }
                                 : undefined
                             }
@@ -1349,7 +1588,7 @@ export default function InventoryFilterSidebar({
                         variant={selected ? "filled" : "outlined"}
                         sx={
                           selected
-                            ? { bgcolor: dq.color, color: "#fff", borderColor: dq.color }
+                            ? { bgcolor: dq.color, color: "common.white", borderColor: dq.color }
                             : { borderColor: dq.color, color: dq.color }
                         }
                       />
@@ -1863,15 +2102,21 @@ export default function InventoryFilterSidebar({
                     {t("filter.clearAll", { count: activeCount })}
                   </Button>
                 )}
-                <Button
-                  size="small"
-                  variant="outlined"
-                  onClick={openCreateDialog}
-                  startIcon={<MaterialSymbol icon="bookmark_add" size={16} />}
-                  sx={{ textTransform: "none", fontSize: 13, ml: "auto" }}
-                >
-                  {t("views.saveView")}
-                </Button>
+                <Tooltip title={draftUnfinished ? t("queryView.finishDraftFirst") : ""}>
+                  <Box component="span" sx={{ ml: "auto" }}>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      data-testid="save-view"
+                      disabled={draftUnfinished}
+                      onClick={() => openCreateDialog()}
+                      startIcon={<MaterialSymbol icon="bookmark_add" size={16} />}
+                      sx={{ textTransform: "none", fontSize: 13 }}
+                    >
+                      {t("views.saveView")}
+                    </Button>
+                  </Box>
+                </Tooltip>
               </Box>
             </>
           ) : tab === 1 ? (
@@ -1881,7 +2126,7 @@ export default function InventoryFilterSidebar({
               filters={filters}
               selectedColumns={selectedColumns}
               onSelectedColumnsChange={onSelectedColumnsChange}
-              relevantRelTypes={relevantRelTypes}
+              relationSides={relationSides}
               stakeholderRoles={stakeholderRoles}
               onResetColumns={onResetColumns}
               frozenColumns={frozenColumns}
@@ -1896,26 +2141,40 @@ export default function InventoryFilterSidebar({
           ) : (
             /* ====================== VIEWS TAB ====================== */
             <>
-              <Box
-                sx={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  mb: 1,
-                }}
+              <Typography variant="body2" fontWeight={600} fontSize={14} noWrap>
+                {t("views.savedViews")}
+              </Typography>
+              <Stack
+                direction="row"
+                data-testid="views-header-actions"
+                sx={{ gap: 0.5, flexWrap: "wrap", alignItems: "center", mt: 0.5, mb: 1 }}
               >
-                <Typography variant="body2" fontWeight={600} fontSize={14}>
-                  {t("views.savedViews")}
-                </Typography>
-                <Button
-                  size="small"
-                  onClick={openCreateDialog}
-                  startIcon={<MaterialSymbol icon="add" size={16} />}
-                  sx={{ textTransform: "none", fontSize: 13 }}
-                >
-                  {t("views.saveCurrent")}
-                </Button>
-              </Box>
+                <Tooltip title={draftUnfinished ? t("queryView.finishDraftFirst") : ""}>
+                  <span>
+                    <Button
+                      size="small"
+                      data-testid="save-current-view"
+                      disabled={draftUnfinished}
+                      onClick={() => openCreateDialog()}
+                      startIcon={<MaterialSymbol icon="add" size={16} />}
+                      sx={{ textTransform: "none", fontSize: 13 }}
+                    >
+                      {t("views.saveCurrent")}
+                    </Button>
+                  </span>
+                </Tooltip>
+                {canManageBookmarks && onStartQueryDraft && (
+                  <Button
+                    size="small"
+                    data-testid="new-query-view"
+                    onClick={onStartQueryDraft}
+                    startIcon={<MaterialSymbol icon="view_in_ar" size={16} />}
+                    sx={{ textTransform: "none", fontSize: 13 }}
+                  >
+                    {t("views.newQueryView")}
+                  </Button>
+                )}
+              </Stack>
 
               {bookmarks.length === 0 ? (
                 <Typography
@@ -1941,6 +2200,7 @@ export default function InventoryFilterSidebar({
                             key={bm.id}
                             bm={bm}
                             types={types}
+                            relationTypes={relationTypes}
                             active={bm.id === activeViewId}
                             onApply={handleApplyView}
                             onEdit={handleEditView}
@@ -1963,6 +2223,7 @@ export default function InventoryFilterSidebar({
                             key={bm.id}
                             bm={bm}
                             types={types}
+                            relationTypes={relationTypes}
                             active={bm.id === activeViewId}
                             onApply={handleApplyView}
                             onEdit={bm.can_edit ? handleEditView : undefined}
@@ -1984,6 +2245,7 @@ export default function InventoryFilterSidebar({
                             key={bm.id}
                             bm={bm}
                             types={types}
+                            relationTypes={relationTypes}
                             active={bm.id === activeViewId}
                             onApply={handleApplyView}
                           />
@@ -2014,12 +2276,12 @@ export default function InventoryFilterSidebar({
       {/* Save / Edit view dialog */}
       <Dialog
         open={saveDialogOpen}
-        onClose={() => setSaveDialogOpen(false)}
+        onClose={closeSaveDialog}
         maxWidth="sm"
         fullWidth
       >
         <DialogTitle sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-          <MaterialSymbol icon={editingBookmark ? "edit" : "bookmark_add"} size={22} color="#1976d2" />
+          <MaterialSymbol icon={editingBookmark ? "edit" : "bookmark_add"} size={22} color={brand.primary} />
           {editingBookmark ? t("views.editView") : t("views.saveCurrentView")}
         </DialogTitle>
         <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 2, pt: "8px !important" }}>
@@ -2180,7 +2442,7 @@ export default function InventoryFilterSidebar({
           )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setSaveDialogOpen(false)}>{t("common:actions.cancel")}</Button>
+          <Button onClick={closeSaveDialog}>{t("common:actions.cancel")}</Button>
           <Button
             variant="contained"
             onClick={handleSaveView}
@@ -2276,6 +2538,7 @@ function SectionHeader({
 function BookmarkListItem({
   bm,
   types,
+  relationTypes,
   onApply,
   onEdit,
   onDelete,
@@ -2283,18 +2546,23 @@ function BookmarkListItem({
 }: {
   bm: Bookmark;
   types: CardType[];
+  relationTypes: RelationType[];
   onApply: (bm: Bookmark) => void;
   onEdit?: (bm: Bookmark) => void;
   onDelete?: (bm: Bookmark) => void;
   active?: boolean;
 }) {
-  const { t } = useTranslation(["inventory", "common"]);
+  const { t, i18n } = useTranslation(["inventory", "common"]);
   const typeLabel = useTypeLabel();
   const bmFilters = bm.filters as Record<string, unknown> | undefined;
-  const bmTypes = (bmFilters?.types as string[]) || [];
+  // A query view is about its start types, whatever its stored facets say.
+  const bmTypes = bm.query ? startTypes(bm.query) : (bmFilters?.types as string[]) || [];
   const matchedType = bmTypes.length === 1 ? types.find((t) => t.key === bmTypes[0]) : null;
 
   const visIcon = bm.visibility === "public" ? "public" : bm.visibility === "shared" ? "group" : null;
+  const byOwner = t("inventory:views.byOwner", {
+    name: bm.owner_name || t("inventory:views.unknown"),
+  });
 
   return (
     <ListItemButton
@@ -2315,13 +2583,43 @@ function BookmarkListItem({
             <Typography variant="body2" fontSize={14} noWrap sx={{ flex: 1 }}>
               {bm.name}
             </Typography>
+            {bm.query && (
+              <Box
+                component="span"
+                role="img"
+                aria-label={t("inventory:queryView.badge")}
+                sx={{ display: "inline-flex" }}
+              >
+                {bm.created_via === "mcp" ? (
+                  <MaterialSymbol icon="smart_toy" size={13} color={ORIGIN_META.mcp.color} />
+                ) : (
+                  <MaterialSymbol icon="view_in_ar" size={13} />
+                )}
+              </Box>
+            )}
             {visIcon && <MaterialSymbol icon={visIcon} size={13} />}
-            {bm.odata_enabled && <MaterialSymbol icon="cloud" size={13} color="#1976d2" />}
+            {bm.odata_enabled && <MaterialSymbol icon="cloud" size={13} color={brand.primary} />}
           </Box>
         }
         secondary={
-          !bm.is_owner
-            ? t("inventory:views.byOwner", { name: bm.owner_name || t("inventory:views.unknown") })
+          bm.query ? (
+            // A query view reads as its path; for someone else's view the
+            // owner moves into a tooltip so the path keeps the line.
+            <Tooltip title={bm.is_owner ? "" : byOwner} describeChild>
+              <span>
+                {compactPath(bm.query, {
+                  types,
+                  relationTypes,
+                  locale: i18n.language,
+                  hasNo: t("inventory:queryView.hasNo"),
+                  and: t("inventory:queryView.connectiveAnd"),
+                  or: t("inventory:queryView.connectiveOr"),
+                  conditions: (count) => t("inventory:queryView.conditionCount", { count }),
+                })}
+              </span>
+            </Tooltip>
+          ) : !bm.is_owner
+            ? byOwner
             : matchedType
             ? typeLabel(matchedType)
             : bmTypes.length > 1
@@ -2436,8 +2734,10 @@ export function hierarchyLabelColumnApplies(
  * to prevent. The whole-inventory question ("what has no EOL at all?") is the
  * Missing EOL scope instead, which is server-evaluated across both types.
  */
-export function eolColumnApplies(selectedTypeKeys: string[]): boolean {
-  return selectedTypeKeys.length === 1 && isEolType(selectedTypeKeys[0]);
+export function eolColumnApplies(types: CardType[], selectedTypeKeys: string[]): boolean {
+  return (
+    selectedTypeKeys.length === 1 && typeKeyTracksEol(selectedTypeKeys[0], types)
+  );
 }
 
 /**
@@ -2456,6 +2756,20 @@ export function logoColumnApplies(types: CardType[], selectedTypeKeys: string[])
   return inView.some((ct) => ct.allow_card_logo);
 }
 
+/**
+ * Whether "Parent" (the tree layer) applies to what is on screen — i.e.
+ * whether any card type in view has a hierarchy at all. Same "applies to what
+ * is in view" shape as `logoColumnApplies`: with no type filter every readable
+ * type qualifies.
+ */
+export function treeGroupingApplies(types: CardType[], selectedTypeKeys: string[]): boolean {
+  const inView =
+    selectedTypeKeys.length > 0
+      ? types.filter((ct) => selectedTypeKeys.includes(ct.key))
+      : types;
+  return inView.some((ct) => ct.has_hierarchy);
+}
+
 // Columns that must always be visible — deselecting them broke the inventory
 // in subtle ways (no way to identify rows, broken keyboard navigation, etc.).
 // These render as checked + disabled in the column picker.
@@ -2469,7 +2783,7 @@ function ColumnsTab({
   filters,
   selectedColumns,
   onSelectedColumnsChange,
-  relevantRelTypes,
+  relationSides,
   stakeholderRoles,
   onResetColumns,
   columnsChanged,
@@ -2485,7 +2799,7 @@ function ColumnsTab({
   filters: Filters;
   selectedColumns: Set<string>;
   onSelectedColumnsChange: (cols: Set<string>) => void;
-  relevantRelTypes: RelationType[];
+  relationSides: RelationColumnSide<RelationType>[];
   stakeholderRoles: StakeholderRoleOption[];
   onResetColumns?: () => void;
   columnsChanged?: boolean;
@@ -2497,6 +2811,7 @@ function ColumnsTab({
   onResetColumnOrder?: () => void;
   t: (key: string, opts?: Record<string, unknown>) => string;
 }) {
+  const { i18n } = useTranslation();
   const typeLabel = useTypeLabel();
   const fieldLabel = useFieldLabel();
   const [searchQuery, setSearchQuery] = useState("");
@@ -2602,7 +2917,7 @@ function ColumnsTab({
     if (c.key === LOGO_COLUMN_KEY && !logoAvailable) return false;
     // Same rule the grid uses to build it — offering a column the grid will
     // not render is a checkbox that does nothing.
-    if (c.key === EOL_COLUMN_KEY && !eolColumnApplies(filters.types)) return false;
+    if (c.key === EOL_COLUMN_KEY && !eolColumnApplies(types, filters.types)) return false;
     if (
       c.key === HIERARCHY_LABEL_COLUMN_KEY &&
       !hierarchyLabelColumnApplies(types, filters.types)
@@ -2618,27 +2933,31 @@ function ColumnsTab({
   const filteredAttrs = attributeFields.filter(
     (f) => !searchQuery || fieldLabel(f).toLowerCase().includes(lowerSearch),
   );
-  const filteredRels = relevantRelTypes.filter((rt) => {
-    if (!searchQuery) return true;
-    const isSource = rt.source_type_key === (filters.types.length === 1 ? filters.types[0] : "");
-    const otherKey = isSource ? rt.target_type_key : rt.source_type_key;
-    const otherType = types.find((ct) => ct.key === otherKey);
-    const label = otherType
-      ? typeLabel(otherType)
-      : otherKey;
-    return label.toLowerCase().includes(lowerSearch);
+  // One row per relation-type side, labelled "<verb> <Card type>" exactly as
+  // the grid heads the column; the search matches that whole label.
+  const relRows = relationSides.map((side) => {
+    const otherType = types.find((ct) => ct.key === side.otherTypeKey);
+    return {
+      side,
+      otherType,
+      label: relationSideLabel(
+        side.rt,
+        side.isSource,
+        otherType ? typeLabel(otherType) : side.otherTypeKey,
+        i18n.language,
+      ),
+    };
   });
+  const filteredRels = relRows.filter(
+    (row) => !searchQuery || row.label.toLowerCase().includes(lowerSearch),
+  );
 
   const coreKeys = filteredCore.map((c) => c.key);
   const allCoreChecked = coreKeys.length > 0 && coreKeys.every((k) => selectedColumns.has(k));
   const someCoreChecked = coreKeys.some((k) => selectedColumns.has(k));
   const metaKeys = filteredMeta.map((m) => m.key);
   const attrKeys = filteredAttrs.map((f) => `attr_${f.key}`);
-  const relKeys = filteredRels.map((rt) => {
-    const selType = filters.types.length === 1 ? filters.types[0] : "";
-    const isSource = rt.source_type_key === selType;
-    return `rel_${isSource ? rt.target_type_key : rt.source_type_key}`;
-  });
+  const relKeys = filteredRels.map((row) => row.side.colId);
 
   const filteredStakeholderRoles = stakeholderRoles.filter(
     (r) => !searchQuery || typeLabel(r).toLowerCase().includes(lowerSearch),
@@ -2965,15 +3284,8 @@ function ColumnsTab({
                   }
                 />
               </ListItemButton>
-              {filteredRels.map((rt) => {
-                const selType = filters.types.length === 1 ? filters.types[0] : "";
-                const isSource = rt.source_type_key === selType;
-                const otherKey = isSource ? rt.target_type_key : rt.source_type_key;
-                const otherType = types.find((ct) => ct.key === otherKey);
-                const label = otherType
-                  ? typeLabel(otherType)
-                  : otherKey;
-                const colKey = `rel_${otherKey}`;
+              {filteredRels.map(({ side, otherType, label }) => {
+                const colKey = side.colId;
 
                 return withPin(
                   colKey,

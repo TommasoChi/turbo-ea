@@ -383,7 +383,9 @@ async def list_elements(
     read_scope = await CardReadScope.load(db, user)
 
     def _ref(card: Card | None) -> tuple[str | None, str | None]:
-        if card is None or not read_scope.readable(card.id, card.type, mode="module"):
+        if card is None or not read_scope.readable(
+            card.id, card.type, mode="module", subtype=card.subtype
+        ):
             return None, None
         return str(card.id), card.name
 
@@ -416,7 +418,7 @@ async def list_elements(
             "organizations": [
                 {"id": str(o.id), "name": o.name}
                 for o in e.organizations
-                if read_scope.readable(o.id, o.type, mode="module")
+                if read_scope.readable(o.id, o.type, mode="module", subtype=o.subtype)
             ],
             "custom_fields": e.custom_fields,
         }
@@ -450,7 +452,7 @@ async def list_processes_by_organization(
     # neither does a process named in the answer.
     read_scope = await CardReadScope.load(db, user)
     org = org_result.scalar_one_or_none()
-    if org is None or not read_scope.readable(org.id, org.type, mode="module"):
+    if org is None or not read_scope.readable(org.id, org.type, mode="module", subtype=org.subtype):
         raise HTTPException(404, "Organization not found")
 
     elements_result = await db.execute(
@@ -637,7 +639,7 @@ async def list_message_flows(
         row = message_flow_to_dict(f)
         # An Interface hidden from the reader is shown as no link.
         if f.interface is not None and not read_scope.readable(
-            f.interface.id, f.interface.type, mode="module"
+            f.interface.id, f.interface.type, mode="module", subtype=f.interface.subtype
         ):
             row["interface_id"] = None
             row["interface_name"] = None

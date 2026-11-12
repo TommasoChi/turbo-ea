@@ -49,18 +49,39 @@ The editor provides:
 - **Links** — A URL you type or paste becomes a link as you type, and every link in a document opens in a new tab. Addresses in documents written before links were supported are linked when the document is displayed
 - **Section templates** — Pre-defined sections following TOGAF standards (e.g., Problem Description, Objectives, Approach, Stakeholders, Constraints, Work Plan)
 - **Inline editable tables** — Add and edit tables within any section
+- **Mentions** — type **@** in a section's text to mention a card or a decision (see [Discussion, mentions and history](#soaw-collaboration))
+- **Document Version History** — a table the authors fill in by hand (version, date, revised by, description). It is part of the document and is not the [History](#soaw-collaboration) view
 - **Status workflow** — Documents progress through defined stages:
 
 | Status | Meaning |
 |--------|---------|
 | **Draft** | Being written, not yet ready for review |
-| **In Review** | Submitted for stakeholder review |
+| **In Review** | Sent for signature — locked until the signatures are recalled |
 | **Approved** | Reviewed and accepted |
 | **Signed** | Formally signed off |
 
 ### Sign-off Workflow
 
-Once a SoAW is approved, you can request sign-offs from stakeholders. Click **Request Signatures**, then use the search field to find and add signatories by name or email. The system tracks who has signed and sends notifications to pending signers.
+From a draft or an approved SoAW, you can request sign-offs from stakeholders. Click **Request Signatures**, then use the search field to find and add signatories by name or email. The system tracks who has signed and sends notifications to pending signers.
+
+A SoAW in review is **locked**, so signatories sign exactly what they were sent: only its initiative can still change. To edit the content, click **Recall Signatures**, which returns it to draft. A signatory who clicks **Reject** also returns it to draft, under the same revision number. Only a draft SoAW can be deleted.
+
+### Revisions
+
+A signed SoAW is read-only. Click **New Revision** to start a new draft from it, under the same name with the next revision number. There is one open revision at a time: while a revision is being drafted, the signed SoAW says so and offers **Open the revision** instead of starting another. Only the latest revision can be revised, and a rejection does not change the revision number.
+
+An earlier revision shows a banner linking to the current one, and the **Revisions** strip on every revision lists them all. Lists of SoAWs — the initiative's deliverables, the SoAW tab, the EA Delivery report — show the current revision of each document and any revision being drafted.
+
+### Discussion, mentions and history {: #soaw-collaboration }
+
+A SoAW has the same discussion, mentions and history as a decision: the discussion in a panel beside its editor and preview, the history behind the **History** button at the top of the page. The behaviour they share is described once, in the GRC guide: [Discussion](grc.md#decision-discussion), [Mentions](grc.md#decision-mentions), [History](grc.md#decision-history) and [Known limits](grc.md#collaboration-limits). What differs for a SoAW:
+
+- **Who can post.** Posting, replying, resolving and reopening need the `soaw.comment` permission, which members and admins hold by default and viewers do not; reading the discussion follows `soaw.view`. The SoAW's signatories can always comment on it. Anyone who can edit SoAWs (`soaw.manage`) can delete any comment.
+- **Sections.** A thread is tagged to one of the SoAW's own sections with a section chip, or to none (a general thread). A SoAW has many sections, so the composer shows a chip for each section already discussed and for the chosen one; **More…** opens a searchable list of the others. The chips at the top of the discussion filter it by section, as for a decision. A thread tagged to a custom section that has since been removed shows *Removed section*. Each section carries the same chat icon beside its heading as a decision's, on the editor and the preview, with the open-thread count when there is discussion; click it to open the discussion on that section with the section already selected for a new comment.
+- **Rejecting.** Any signatory who holds the sign permission (`soaw.sign`) — or the edit permission — may reject a SoAW, as for decisions; until now rejecting needed the edit permission. The reason opens a **Rejection reason** thread in the discussion.
+- **Mentions.** A SoAW has no linked cards, so with nothing typed after **@** the cards are listed alphabetically; in a comment, the SoAW's signatories come first among the people. **Browse…** works as for a decision.
+- **Signing note.** **Sign** now opens a dialog where the signatory can add an optional note; it appears in the discussion as a **Signing note** and in the History.
+- **History.** A version holds the SoAW's name, its document information, its Document Version History table and every section; the initiative is not part of a version. The History records what happens to the document; the Document Version History table in the document records only what its authors write in it. A SoAW in the **Approved** status can still be edited, so, as for a draft, its saves are kept as versions and an earlier version can be restored into it.
 
 ### Preview and Export
 
@@ -72,7 +93,7 @@ Once a SoAW is approved, you can request sign-offs from stakeholders. Click **Re
 
 ![Initiative card — SoAW tab](../assets/img/en/55_initiative_soaw_tab.png)
 
-Initiatives also expose a dedicated **SoAW** tab directly on their card detail page. The tab lists every SoAW linked to that initiative (title, status chip, revision number, last-modified date) with a **+ New SoAW** button that pre-selects the current initiative — so you can author or jump to a SoAW without leaving the card you're working on. Creation reuses the same dialog as the EA Delivery page, and the new document appears in both places. Visibility of the tab follows the standard card permission rules.
+Initiatives also expose a dedicated **SoAW** tab directly on their card detail page. The tab lists the current revision of every SoAW linked to that initiative, plus any revision being drafted (title, status chip, revision number, last-modified date) with a **+ New SoAW** button that pre-selects the current initiative — so you can author or jump to a SoAW without leaving the card you're working on. Creation reuses the same dialog as the EA Delivery page, and the new document appears in both places. Visibility of the tab follows the standard card permission rules.
 
 ## Architecture Decision Records (ADR)
 

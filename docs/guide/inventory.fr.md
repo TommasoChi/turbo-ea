@@ -19,7 +19,7 @@ Le panneau latéral gauche permet de **filtrer** les fiches selon différents cr
 - **Qualité des données** -- Filtrage par plage (sélection multiple) : Complet (≥80 %), Partiel (40-79 %), Minimal (moins de 40 %). Ce sont les plages du [rapport Qualité des données](reports.md#data-quality-report) : un clic sur un segment de barre y mène ici.
 - **Orphelines** -- Uniquement les fiches sans aucune relation, dans un sens comme dans l'autre. Évalué côté serveur, donc utilisable sans type de fiche sélectionné.
 - **Obsolètes** -- Uniquement les fiches non mises à jour depuis 90 jours. Les deux reflètent les tuiles du [rapport Qualité des données](reports.md#data-quality-report) : un clic sur une tuile y mène ici.
-- **Fin de vie** — Pour les applications et les composants informatiques, filtrez par le statut de support que Turbo EA résout à partir du [lien EOL](../admin/eol.md) de chaque fiche : Fin de vie, Proche, Pris en charge ou Inconnu. **(vide)** liste les fiches pour lesquelles rien n'a été renseigné. La colonne **Fin de vie** correspondante affiche la date à côté d'une pastille de statut, et se trie et s'exporte comme une date.
+- **Fin de vie** — Pour les types de fiches qui suivent la fin de vie (applications et composants informatiques par défaut, voir [Fin de vie sur d'autres types de fiches](../admin/eol.md#fin-de-vie-sur-dautres-types-de-fiches)), filtrez par le statut de support que Turbo EA résout à partir du [lien EOL](../admin/eol.md) de chaque fiche : Fin de vie, Proche, Pris en charge ou Inconnu. **(vide)** liste les fiches pour lesquelles rien n'a été renseigné. La colonne **Fin de vie** correspondante affiche la date à côté d'une pastille de statut, et se trie et s'exporte comme une date.
 - **Type de lien** — Lorsqu'un seul type de fiche hiérarchique est sélectionné et qu'un administrateur a défini des [types de liens](../admin/metamodel.md) pour lui, filtrez selon le type du lien de chaque fiche vers sa fiche parente — par exemple les filiales *commerciales* plutôt que *ventes*. **(vide)** liste les fiches dont le lien ne porte aucun type, ainsi que les fiches de premier niveau, puisque rien n'est renseigné pour les unes comme pour les autres. La colonne **Type de lien** correspondante affiche la valeur sous forme de pastille colorée et est modifiable en mode édition de la grille.
 - **Tags** -- Filtrer par tags de n'importe quel groupe de tags
 - **Relations** -- Filtrer par fiches liées à travers les types de relations
@@ -60,7 +60,7 @@ Les colonnes sont regroupées en cinq catégories :
 | **Colonnes par défaut** | Colonnes toujours actives : Type, Nom, Chemin, Description, Sous-type, Cycle de vie, Statut d'approbation, Qualité des données. Décochez-les pour les masquer de la grille — utile pour resserrer une vue enregistrée aux seules colonnes que vous utilisez vraiment. |
 | **Métadonnées** | Créé, Modifié, Créé par, Modifié par, Créé via, Modifié via. **Modifié** correspond à la dernière modification du contenu de la fiche — par une personne ou une intégration, jamais par un recalcul de score effectué par le système — vous pouvez donc filtrer sur cette date pour trouver les fiches à faire revoir par leur responsable. **Créé via** et **Modifié via** affichent le canal à l'origine de la création et de la dernière modification sous forme de pastille (MCP, API, Extension, Système) ; la cellule reste vide pour l'interface web. |
 | **Attributs** | Champs personnalisés définis dans le métamodèle (texte, nombre, coût, date, sélection, etc.) |
-| **Relations** | Types de fiches liés (par ex., Applications liées à une Capacité Métier) |
+| **Relations** | Une colonne par relation, nommée d'après son verbe et le type de fiche lié — par exemple *utilise Composant IT* ou *est pris en charge par Application*. Lorsque deux types de relation relient les mêmes types de fiches, chacun a sa propre colonne, et un type de relation entre fiches du même type (une Application qui *envoie des données à* une autre) a une colonne pour chaque sens. Recherchez dans la liste par le verbe ou par le type de fiche. |
 | **Parties prenantes** | Une colonne par rôle de partie prenante défini pour le type sélectionné (par ex. *Parties prenantes : Responsible*), affichant les utilisateurs assignés sous forme de puces. En mode édition de grille, double-cliquez sur une cellule pour assigner ou retirer des utilisateurs pour ce rôle directement depuis la grille (nécessite la permission de gestion des parties prenantes). |
 
 La colonne **Parent** n'affiche que la fiche située directement au-dessus, alors que **Chemin** affiche toute la chaîne. En mode d'édition de la grille, double-cliquez sur une cellule Parent pour déplacer la fiche, ou videz le champ pour la remonter au niveau supérieur. La colonne n'est modifiable que si la grille est filtrée sur un seul type de fiche prenant en charge la hiérarchie. Si un déplacement est refusé — parce qu'il créerait une boucle, entrerait en conflit avec une fiche du même nom sous la cible, ou dépasserait la profondeur maximale —, le motif s'affiche en bas de l'écran et la cellule revient à son état précédent.
@@ -93,7 +93,7 @@ L'inventaire utilise un tableau de données **AG Grid** avec des fonctionnalité
 | **Cycle de vie** | État actuel du cycle de vie |
 | **Statut d'approbation** | Badge de statut de révision |
 | **Qualité des données** | Pourcentage de complétude avec anneau visuel |
-| **Relations** | Noms des fiches liées, classés par ordre alphabétique, avec un popover cliquable pour ajouter ou retirer des relations — les fiches déjà liées sont masquées dans son sélecteur, sauf pour un type hiérarchique, où le sélecteur affiche toute la hiérarchie sous forme d'arborescence indentée et laisse ces fiches en grisé à leur place |
+| **Relations** | Une colonne par relation, intitulée avec son verbe et le type de fiche lié (par ex. *utilise Composant IT*) : les noms des fiches liées par cette relation, classés par ordre alphabétique, avec un popover cliquable pour ajouter ou retirer des relations de ce type — les fiches déjà liées sont masquées dans son sélecteur, sauf pour un type hiérarchique, où le sélecteur affiche toute la hiérarchie sous forme d'arborescence indentée et laisse ces fiches en grisé à leur place. Les vues enregistrées et les dispositions de colonnes antérieures à la séparation des colonnes de relation par relation s'ouvrent avec les nouvelles colonnes à la place de l'ancienne |
 
 **Fonctionnalités du tableau :**
 
@@ -170,6 +170,19 @@ Cliquez sur **Grouper par** dans la barre d'outils (à côté du nombre d'élém
 - La case à cocher de l'en-tête sélectionne toutes les fiches du groupe : pour reclasser un lot, dépliez **Non défini**, cochez l'en-tête, puis définissez la valeur via la [Modification en masse](#mass-edit). Il n'y a volontairement pas de glisser-déposer : sélectionner puis définir fonctionne de la même façon sur ordinateur, tablette et téléphone.
 - Le tri s'applique à l'intérieur de chaque groupe ; le regroupement est conservé après rechargement, enregistré dans les vues sauvegardées et partageable via le paramètre d'URL `group_by`.
 
+### Indenter les enfants sous leurs parents { #group-by-parents }
+
+Cochez **Parent** en haut du menu **Regrouper par** pour afficher les fiches sous forme d'arbre : chaque parent en premier, ses enfants indentés en dessous. L'option fonctionne seule (toute la grille devient un seul arbre) ou en plus d'un regroupement (chaque groupe devient son propre arbre). Le menu reste ouvert quand vous la cochez, ce qui permet de choisir un regroupement juste après.
+
+![Inventaire avec les enfants indentés sous leurs parents](../assets/img/fr/98c_inventaire_regroupement_parents.png)
+
+- Une fiche ne quitte jamais son groupe. Un enfant dont le parent se trouve dans un autre groupe, est masqué par un filtre de colonne ou n'est pas chargé démarre sa propre branche, avec ses ancêtres manquants affichés en gris avant son nom (par exemple *SAP S/4HANA / SAP FI /* devant le nom du module). Les décomptes des groupes, la case à cocher de l'en-tête et la modification en masse correspondent donc toujours au contenu du groupe.
+- Cliquez sur le chevron avant le nom d'un parent pour masquer ou afficher sa branche. Un parent réduit compte toujours ses fiches masquées dans le nombre d'éléments et dans l'en-tête du groupe. Les branches que vous réduisez avec le chevron ne sont pas mémorisées, et modifier un filtre de colonne les rouvre toutes ; effacer le dernier filtre de colonne ramène au niveau choisi avec le sélecteur.
+- Tant que la couche parent est activée, une paire **−** / **+** à côté du bouton Regrouper par ferme ou ouvre tout l'arbre un niveau à la fois. Le niveau choisi est mémorisé d'un rechargement à l'autre, enregistré dans les vues sauvegardées et partageable via `group_tree_level=<n>` ; le niveau affiché suit aussi ce que vous ouvrez et fermez à la main.
+- Le tri s'applique entre frères et sœurs : les parents sont triés, et les enfants de chaque parent sont triés en dessous de lui.
+- L'option n'est proposée que si un type de fiche affiché possède une hiérarchie. Elle est mémorisée d'un rechargement à l'autre, enregistrée dans les vues sauvegardées et partageable via le paramètre d'URL `group_tree=1`.
+- L'**export** suit l'ordre de l'arbre et omet les fiches situées dans des branches réduites, comme il le fait pour les groupes réduits.
+
 ## Suggestions de description par IA { #ai-description-suggestions }
 
 Turbo EA peut utiliser l'**IA pour générer une description** pour n'importe quelle fiche. Cela fonctionne aussi bien dans la boîte de dialogue de création de fiche que sur les pages de détail des fiches existantes.
@@ -214,6 +227,70 @@ Les vues sauvegardées apparaissent dans la barre latérale du panneau de filtre
 - **Mes vues** -- Vues que vous avez créées
 - **Partagées avec moi** -- Vues que d'autres ont partagées avec vous
 - **Vues publiques** -- Vues disponibles pour tous
+
+### Vues de requête { #query-views }
+<a id="mcp-views"></a>
+
+Une **vue de requête** est une vue enregistrée dont les filtres sont une **requête à plusieurs sauts** — une chaîne de relations avec des conditions à chaque étape, par exemple *Organisations qui utilisent une Application active affectée par une Initiative dont le statut est On Track*. Plusieurs requêtes de ce type peuvent être empilées dans une même vue et combinées avec **ET** et **OU** (voir plus bas). La vue stocke la requête, pas ses résultats : elle est réexécutée à chaque ouverture de la vue, de sorte que la liste reflète toujours le paysage actuel.
+
+![Une vue de requête dans l'inventaire](../assets/img/fr/98d_inventaire_vue_mcp.png)
+
+**Créer une vue de requête.** Dans l'onglet **Vues** du panneau latéral des filtres, cliquez sur **Nouvelle vue de requête** à côté de *Enregistrer la vue actuelle* (affiché à toute personne autorisée à gérer les vues). Si un filtre est actif, y compris le type de fiche sélectionné, une confirmation demande avant de les effacer ; **Annuler** sur le brouillon les rétablit. Le bandeau au-dessus de la grille s'ouvre comme un générateur de requête :
+
+1. Cliquez sur la pastille de départ (*Choisir un type*) et choisissez le type de fiche d'où part la requête — celui qu'elle liste.
+2. Cliquez sur **+ relation** après la dernière fiche pour ajouter un saut. Le menu liste chaque verbe de relation avec le type de fiche vers lequel il mène ; une relation entre fiches du même type est proposée dans les deux sens. Chaque ligne de requête est une chaîne unique de trois sauts au plus.
+3. Cliquez sur **+ condition** sous une fiche pour la restreindre : **Cycle de vie**, **Sous-types**, **Statut d’approbation**, **Qualité des données** (*Complet*, *Partiel* ou *Minimal*, les mêmes tranches que le filtre du panneau latéral), **Fin de vie** (voir ci-dessous), **Étiquettes**, **Fiches spécifiques**, ou un champ de sélection ou oui/non de ce type de fiche. Pour les étiquettes, une fiche correspond si elle porte l'une des étiquettes choisies d'un groupe, et elle doit correspondre à chaque groupe ajouté ; seuls les groupes d'étiquettes qui s'appliquent à ce type de fiche sont proposés. **Fiches spécifiques** ouvre le sélecteur de fiches de ce type, et l'étape ne retient alors que les fiches choisies ; pour un type de fiche hiérarchique, un interrupteur **Inclure les sous-fiches** retient aussi les fiches situées sous chaque choix. Une fiche choisie que vous ne pouvez pas voir apparaît comme *(fiche masquée)*.
+4. Cliquez sur **Enregistrer**. La boîte de dialogue habituelle d'enregistrement de vue s'ouvre pour le nom, la visibilité, le partage et le réglage OData. **Annuler** abandonne la requête.
+
+![Créer une vue de requête](../assets/img/fr/98e_inventaire_editeur_requete.png)
+
+Pendant la construction, la grille se filtre en direct et le compteur de la barre d'outils indique combien de fiches correspondent : vous voyez l'effet de chaque saut et de chaque condition avant d'enregistrer.
+
+**Filtrer sur la fin de vie.** La condition **Fin de vie** est proposée pour un type de fiche qui suit la fin de vie — par défaut Application et Composant IT ; elle suit la section Fin de vie du type dans le métamodèle. Ses valeurs sont **Fin de vie**, **Fin de vie imminente**, **Supporté**, **Inconnu** et *(vide)* pour les fiches sans donnée de fin de vie. Le statut est celui qu’affiche la colonne **Fin de vie** de l’inventaire : il provient du produit endoflife.date lié ou d’un produit de fin de vie personnalisé, ou d’une date de fin de vie saisie à la main, et il est indépendant de la phase de cycle de vie de la fiche. La condition fonctionne sur la fiche de départ et à chaque étape de relation, dans les lignes ET comme dans les lignes OU — par exemple *les Applications qui utilisent un Composant IT en fin de vie*. Tant qu’une requête filtre dessus sur la fiche de départ, la grille affiche la colonne Fin de vie pour que vous voyiez pourquoi chaque fiche correspond ; les colonnes que vous avez choisies ne sont pas modifiées. Si endoflife.date est injoignable et que rien n’est en cache, les fiches liées sont lues comme *Inconnu*, comme dans la colonne Fin de vie.
+
+La condition exige la permission de consulter les données de fin de vie (**Consulter les données de fin de vie**, `eol.view`). Sans elle, la condition n’est pas proposée, et l’ouverture, l’aperçu ou l’enregistrement d’une vue qui l’utilise sont refusés avec le message *Cette vue filtre sur le statut de fin de vie, que votre rôle ne peut pas consulter.*
+
+**Modifier les sauts et les conditions.** Cliquez sur la pastille de verbe d'un saut pour ouvrir son menu : **n'a aucune** transforme le saut en exigence que la fiche n'ait **aucune** relation de ce type, et **Supprimer ce saut** le supprime avec tous les sauts qui le suivent. Cliquez sur une pastille de condition pour modifier ses valeurs, ou sur son **×** pour la supprimer.
+
+**Combiner des requêtes avec ET et OU.** Une vue peut contenir plusieurs lignes de requête empilées. Chaque ligne est une requête complète — fiche de départ, relations et conditions — construite exactement comme la requête unique ci-dessus. Les lignes sont regroupées :
+
+- **ET** ajoute une ligne au même groupe : une fiche n'est listée que si elle correspond à **chaque** ligne du groupe. Une ligne ET part du même type de fiche que son groupe, affiché sous forme de pastille fixe, et la première ligne du groupe ne peut pas changer de type de fiche tant qu'elle a des lignes ET.
+- **OU** démarre un nouveau groupe sous un séparateur **OU** : ses résultats sont **ajoutés** à la liste. Un nouveau groupe peut partir d'un autre type de fiche : une vue peut ainsi lister, par exemple, des Applications et des Organisations ensemble. Lorsqu'une vue liste plusieurs types de fiche, la grille affiche les colonnes que ces types ont en commun.
+
+En mode édition, un **plus** cerclé sous chaque groupe demande **ET** ou **OU** : ET ajoute une ligne à ce groupe, OU ouvre un nouveau groupe après lui. Le **×** à la fin d'une ligne la supprime ; il est affiché lorsque la vue compte plus d'une ligne.
+
+Par exemple, la vue de démonstration *Active apps on aging tech, and the organizations using apps* comporte un groupe Application de deux lignes — une Application active qui utilise un Composant IT en fin de vie ou en phase de retrait, **ET** une Application affectée par une Initiative — **OU** une Organisation qui utilise une Application. La liste montre les Applications qui satisfont les deux lignes, ainsi que chaque Organisation qui utilise une Application.
+
+![Combiner des requêtes avec ET et OU](../assets/img/fr/98f_inventaire_requetes_combinees.png)
+
+Une vue contient au plus **six** lignes de requête, **douze** relations sur l'ensemble de ses lignes et **trois** relations en profondeur sur chaque ligne. Les lignes d'un groupe ET ne se rejoignent que sur leur fiche de départ : le Composant IT d'une ligne et l'Initiative de l'autre peuvent être des fiches différentes. Deux exigences portant sur la **même** fiche au milieu d'une ligne — par exemple, que le même Composant IT soit proposé par un Fournisseur **et** appartienne à une Catégorie technologique — ne peuvent pas être construites dans le générateur de requête ; un assistant IA peut écrire une telle requête via le [serveur MCP](../admin/mcp.md#multi-hop-card-queries), et le bandeau l'affiche alors.
+
+**Modifier une vue de requête enregistrée.** Lorsqu'une vue de requête est ouverte, le bandeau affiche son chemin : les types de fiche sous forme de pastilles, reliés par le verbe de relation qui lie chaque étape (par exemple *Organisation → utilise Application → est affectée par Initiative*), avec les conditions de chaque fiche en dessous. Une vue à plusieurs lignes affiche la même pile, avec ses marqueurs ET et ses séparateurs OU, sans les commandes de modification. Si vous êtes propriétaire de la vue ou disposez de droits de modification sur elle, un **crayon** dans le bandeau la bascule vers le même générateur ; **Enregistrer** met à jour la vue. Le bouton **×** (*Quitter cette vue*) ramène à l'inventaire normal. **Enregistrer la vue actuelle** pendant qu'une vue de requête est ouverte enregistre une nouvelle vue de requête avec la même requête.
+
+#### Voir les fiches derrière une correspondance { #query-view-matches }
+
+Une vue de requête ne liste que la première fiche de sa requête. Pour voir quelles fiches plus loin dans la chaîne ont fait correspondre une ligne, cliquez sur leur type de fiche dans le chemin de la requête. Dans *Organisations qui utilisent une Application qui utilise un Composant IT en fin de vie ou proche de celle-ci*, cliquez sur **Application** et une colonne liste, pour chaque Organisation, les Applications par lesquelles elle correspond ; cliquez sur **Composant IT** et une autre colonne liste les Composants IT retenus. Cliquez de nouveau sur le type de fiche pour retirer sa colonne.
+
+![Une vue de requête avec ses colonnes de correspondances](../assets/img/fr/98g_inventaire_correspondances_requete.png)
+
+- **L'aspect d'un interrupteur.** Un type de fiche cliquable affiche un pointeur et l'info-bulle *Les afficher dans une colonne*. Une fois sa colonne affichée, la pastille est remplie de la couleur du type de fiche et porte une petite icône de colonne ; son info-bulle indique *Masquer la colonne*.
+- **Quels types de fiche sont des interrupteurs.** Chaque type de fiche après le premier de sa ligne. Le premier type de fiche d'une ligne n'en est pas un, car ses fiches sont les lignes du tableau, pas plus qu'un type de fiche placé derrière **n'a aucune**, qui représente une relation absente. Dans une vue à plusieurs lignes, les types de fiche de chaque ligne sont des interrupteurs ; avec **OU**, une ligne du tableau n'affiche des fiches que pour les lignes de requête qu'elle satisfait. Les interrupteurs ne sont pas disponibles pendant que vous modifiez la requête, et les colonnes sont masquées jusqu'à ce que vous enregistriez ou annuliez.
+- **Où la colonne apparaît.** Juste après **Nom**, intitulée avec le type de fiche et *correspondances* — par exemple *Application · correspondances* — pour ne pas être confondue avec une colonne de relation telle que *utilise Application*, qui liste toutes les Applications liées de cette façon. Lorsque deux étapes ont le même type de fiche, les intitulés sont numérotés. Survolez l'intitulé pour voir le chemin que suit la colonne.
+- **Ce qu'affiche une cellule.** Les noms des fiches correspondantes, séparés par des points-virgules ; survolez la cellule pour voir la liste complète. Une cellule liste au plus **100** noms ; une liste plus longue se termine par *…* et son info-bulle indique que les 100 premières sont affichées. Vous pouvez trier et filtrer la colonne comme une colonne de texte, et **Exporter la vue actuelle** l'inclut.
+- **Chaque fiche de la chaîne, pas qui mène à qui.** Une ligne liste chaque fiche correspondante à cette étape : toutes les Applications retenues de l'Organisation et tous les Composants IT retenus de ces Applications. Elle n'indique pas quel Composant IT appartient à quelle Application. Pour lister les Composants IT eux-mêmes, un par ligne, écrivez plutôt la requête en partant de Composant IT.
+- **Enregistrées avec la vue.** Les colonnes que vous affichez sont enregistrées avec la vue (le **crayon** dans la liste des vues, puis **Mettre à jour**), de sorte qu'elles reviennent quand vous la rouvrez. Modifier la requête conserve une colonne tant que son étape existe encore, et la retire lorsque vous supprimez cette étape ou changez son type de fiche.
+
+Vous ne voyez que les fiches que vous êtes autorisé à voir : une fiche qui vous est masquée n'est jamais nommée dans une cellule, et une ligne qui ne correspond que par des fiches masquées n'est pas listée.
+
+La vue de démonstration *Organizations on applications with components at or near end of life* s'ouvre avec les deux colonnes affichées.
+
+**Vues créées par un assistant IA.** Un assistant connecté via le [serveur MCP](../admin/mcp.md) peut aussi créer des vues de requête. Une telle vue affiche une pastille **MCP** et la mention *Créée via MCP* dans son bandeau, ainsi qu'un badge robot dans la liste des vues ; elle se modifie comme n'importe quelle autre vue de requête. Dans la liste des vues, chaque vue de requête porte un petit badge de vue de requête (un cube ; le badge robot lorsqu'un assistant l'a créée) et son chemin compact (*Organisation › utilise Application › est affectée par Initiative*) en seconde ligne; une vue empilée se lit *… ET … OU …*. Lorsque la vue comporte des conditions, leur nombre suit le chemin (*… › est affectée par Initiative · 2 conditions*).
+
+**Ouvrir une vue par lien.** Lorsqu'un assistant enregistre une vue, il renvoie un lien de la forme `/inventory?view=<view id>` ; l'ouvrir applique directement la vue enregistrée. Le même lien fonctionne pour toute vue enregistrée que vous pouvez voir.
+
+**OData.** Le flux OData d'une vue de requête renvoie les mêmes fiches que l'inventaire : la requête est également appliquée au flux.
+
+Pour la grammaire des requêtes, ses limites et les outils MCP (`query_cards`, `list_inventory_views`, `save_inventory_view`, `list_tag_groups`), voir [Requêtes de fiches à plusieurs sauts](../admin/mcp.md#multi-hop-card-queries).
 
 ## Import / Export Excel { #excel-import }
 

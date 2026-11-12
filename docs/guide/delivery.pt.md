@@ -49,18 +49,39 @@ O editor oferece:
 - **Links** — Uma URL digitada ou colada torna-se um link enquanto você escreve, e todo link em um documento abre em uma nova aba. Endereços em documentos escritos antes do suporte a links são convertidos em links ao serem exibidos
 - **Templates de seções** — Seções predefinidas seguindo os padrões TOGAF (ex.: Descrição do Problema, Objetivos, Abordagem, Partes Interessadas, Restrições, Plano de Trabalho)
 - **Tabelas editáveis inline** — Adicione e edite tabelas dentro de qualquer seção
+- **Menções** — escreva **@** no texto de uma seção para mencionar um card ou uma decisão (ver [Discussão, menções e histórico](#soaw-collaboration))
+- **Histórico de versões do documento** — uma tabela que os autores preenchem à mão (versão, data, revisado por, descrição). Faz parte do documento e não é a vista [Histórico](#soaw-collaboration)
 - **Fluxo de status** — Documentos progridem através de estágios definidos:
 
 | Status | Significado |
 |--------|-------------|
 | **Rascunho** | Sendo escrito, ainda não pronto para revisão |
-| **Em Revisão** | Submetido para revisão das partes interessadas |
+| **Em Revisão** | Enviado para assinatura — bloqueado até que as assinaturas sejam recolhidas |
 | **Aprovado** | Revisado e aceito |
 | **Assinado** | Formalmente assinado |
 
 ### Fluxo de Assinatura
 
-Uma vez que um SoAW é aprovado, você pode solicitar assinaturas das partes interessadas. Clique em **Solicitar Assinaturas** e use o campo de pesquisa para encontrar e adicionar signatários por nome ou e-mail. O sistema rastreia quem assinou e envia notificações para os signatários pendentes.
+A partir de um SoAW em rascunho ou aprovado, você pode solicitar assinaturas das partes interessadas. Clique em **Solicitar Assinaturas** e use o campo de pesquisa para encontrar e adicionar signatários por nome ou e-mail. O sistema rastreia quem assinou e envia notificações para os signatários pendentes.
+
+Um SoAW em revisão fica **bloqueado**, para que os signatários assinem exatamente o que lhes foi enviado: apenas a sua iniciativa ainda pode mudar. Para editar o conteúdo, clique em **Recolher assinaturas**, o que o devolve a rascunho. Um signatário que clique em **Rejeitar** também o devolve a rascunho, com o mesmo número de revisão. Só um SoAW em rascunho pode ser eliminado.
+
+### Revisões
+
+Um SoAW assinado é somente leitura. Clique em **Nova revisão** para iniciar um novo rascunho a partir dele, com o mesmo nome e o número de revisão seguinte. Existe uma única revisão aberta de cada vez: enquanto uma revisão está a ser redigida, o SoAW assinado indica-o e oferece **Abrir a revisão** em vez de iniciar outra. Só a revisão mais recente pode ser revisada, e uma rejeição não altera o número de revisão.
+
+Uma revisão anterior mostra um banner com uma ligação para a revisão atual, e a faixa **Revisões** em cada revisão lista-as todas. As listas de SoAW — os entregáveis da iniciativa, a aba SoAW, o relatório de Entregas de EA — mostram a revisão atual de cada documento e qualquer revisão em redação.
+
+### Discussão, menções e histórico {: #soaw-collaboration }
+
+Um SoAW tem a mesma discussão, as mesmas menções e o mesmo histórico que uma decisão: a discussão num painel ao lado do seu editor e da sua pré-visualização, o histórico atrás do botão **Histórico** no topo da página. O comportamento comum é descrito uma única vez, no guia de GRC: [Discussão](grc.md#decision-discussion), [Menções](grc.md#decision-mentions), [Histórico](grc.md#decision-history) e [Limitações conhecidas](grc.md#collaboration-limits). O que muda num SoAW:
+
+- **Quem pode publicar.** Publicar, responder, resolver e reabrir exigem a permissão `soaw.comment`, que os membros e administradores têm por predefinição e os visualizadores não; a leitura da discussão segue `soaw.view`. Os signatários do SoAW podem sempre comentá-lo. Quem pode editar SoAW (`soaw.manage`) pode eliminar qualquer comentário.
+- **Seções.** Um tópico é associado a uma das seções próprias do SoAW com uma etiqueta de seção, ou a nenhuma (um tópico geral). Um SoAW tem muitas seções, por isso a caixa de redação mostra uma etiqueta para cada seção já discutida e para a escolhida; **Mais…** abre uma lista pesquisável das restantes. As etiquetas no topo da discussão filtram-na por seção, tal como numa decisão. Um tópico associado a uma seção personalizada entretanto removida mostra *Seção removida*. Cada seção apresenta ao lado do seu título o mesmo ícone de chat que a de uma decisão, no editor e na pré-visualização, com o número de tópicos abertos quando há discussão; clique nele para abrir a discussão sobre essa seção com a seção já selecionada para um novo comentário.
+- **Rejeição.** Qualquer signatário que tenha a permissão de assinar (`soaw.sign`) — ou a permissão de edição — pode rejeitar um SoAW, tal como nas decisões; até agora, rejeitar exigia a permissão de edição. O motivo abre um tópico **Motivo da rejeição** na discussão.
+- **Menções.** Um SoAW não tem cards ligados, por isso, sem nada escrito depois de **@**, os cards são listados por ordem alfabética; num comentário, os signatários do SoAW aparecem primeiro entre as pessoas. **Procurar…** funciona como numa decisão.
+- **Nota de assinatura.** **Assinar** abre agora uma caixa de diálogo onde o signatário pode acrescentar uma nota opcional; esta aparece na discussão como **Nota de assinatura** e no Histórico.
+- **Histórico.** Uma versão contém o nome do SoAW, as suas informações de documento, a sua tabela Histórico de versões do documento e todas as seções; a iniciativa não faz parte de uma versão. O Histórico regista o que acontece ao documento; a tabela Histórico de versões do documento, no documento, só regista o que os seus autores nela escrevem. Um SoAW com o status **Aprovado** ainda pode ser editado, por isso, tal como num rascunho, as suas gravações são guardadas como versões e uma versão anterior pode ser restaurada nele.
 
 ### Pré-visualização e Exportação
 
@@ -72,7 +93,7 @@ Uma vez que um SoAW é aprovado, você pode solicitar assinaturas das partes int
 
 ![Card de iniciativa — aba SoAW](../assets/img/pt/55_iniciativa_soaw_tab.png)
 
-As iniciativas também expõem uma aba **SoAW** dedicada diretamente na sua página de detalhe. A aba lista cada SoAW vinculado àquela iniciativa (título, chip de status, número de revisão, data da última modificação) com um botão **+ Novo SoAW** que pré-seleciona a iniciativa atual — para que você possa redigir ou abrir um SoAW sem sair do card no qual está trabalhando. A criação reutiliza o mesmo diálogo da página Entregas de EA, e o novo documento aparece em ambos os lugares. A visibilidade da aba segue as regras padrão de permissão dos cards.
+As iniciativas também expõem uma aba **SoAW** dedicada diretamente na sua página de detalhe. A aba lista a revisão atual de cada SoAW vinculado àquela iniciativa, mais qualquer revisão em redação (título, chip de status, número de revisão, data da última modificação) com um botão **+ Novo SoAW** que pré-seleciona a iniciativa atual — para que você possa redigir ou abrir um SoAW sem sair do card no qual está trabalhando. A criação reutiliza o mesmo diálogo da página Entregas de EA, e o novo documento aparece em ambos os lugares. A visibilidade da aba segue as regras padrão de permissão dos cards.
 
 ## Registros de Decisões de Arquitetura (ADR)
 

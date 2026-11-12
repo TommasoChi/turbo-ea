@@ -65,7 +65,7 @@ MCP_PUBLIC_URL=https://your-domain.example.com/mcp
 
 | 变量 | 默认值 | 描述 |
 |------|--------|------|
-| `TURBO_EA_PUBLIC_URL` | `http://localhost:8920` | Turbo EA 实例的公共 URL |
+| `TURBO_EA_PUBLIC_URL` | `MCP_PUBLIC_URL` 的源（origin），否则为 `http://localhost:8920` | Turbo EA 实例的公共 URL。MCP 工具返回的每个链接（编辑器中的草稿、已保存的清单视图）都基于它构建。未设置时，或在 `MCP_PUBLIC_URL` 指向真实主机的情况下被设置为本地地址（`localhost`、`127.0.0.1` 或 `[::1]`，任意端口——`.env.example` 默认提供 `http://localhost`）时，MCP 服务器改用 `MCP_PUBLIC_URL` 的协议和主机（`https://ea.example.com/mcp` 得到 `https://ea.example.com`），只要 MCP 在应用自身主机的 `/mcp` 下提供服务，这就是正确的。真实主机上的值始终会被使用；当应用部署在其他位置时请设置一个 |
 | `MCP_PUBLIC_URL` | `http://localhost:8920/mcp`（docker compose） | MCP 服务器的公共 URL（用于 OAuth 重定向 URI）。单独运行容器时，代码默认值为 `http://localhost:8001` |
 | `MCP_PORT` | `8001` | MCP 容器的内部端口（很少需要更改） |
 | `SECRET_KEY` | *（无）* | 设置为与后端相同的值。用于签名 MCP 服务器颁发的 OAuth 客户端 ID，使注册过一次的客户端在重启后仍可继续使用；未设置时，服务器使用随进程消失的密钥签名并记录一条警告。Docker Compose、Helm Chart 和各云平台模板会自动传入 |
@@ -183,31 +183,34 @@ pip install ./mcp-server
 
 ## 可用功能
 
-MCP 服务器提供 **56 个工具**，分为两组：**35 个读取工具** 用于查询 EA 数据，**21 个写入工具**（15 个增量型、6 个破坏型）用于创建和维护卡片、关系、图表、风险、ADR 等——包括将 AI 工具上下文中的工件（电子表格、BPMN XML、DrawIO XML、文档、图像）转换为结构化的 EA 数据。每个工具都带有 MCP `ToolAnnotations`（只读 / 破坏性 / 幂等提示），以便连接器在其界面中呈现破坏性程度。
+MCP 服务器提供 **70 个工具**，分为两组：**43 个读取工具** 用于查询 EA 数据，**27 个写入工具**（21 个增量型、6 个破坏型）用于创建和维护卡片、关系、图表、风险、ADR、已保存的清单视图等——包括将 AI 工具上下文中的工件（电子表格、BPMN XML、DrawIO XML、文档、图像）转换为结构化的 EA 数据。每个工具都带有 MCP `ToolAnnotations`（只读 / 破坏性 / 幂等提示），以便连接器在其界面中呈现破坏性程度。每个工具还会拒绝其未声明的参数：调用失败，错误信息会指出未知参数并列出有效参数，且不执行任何操作。（在 2.203.0 之前，此类参数会被静默忽略，因此调用可能报告成功，而所请求的部分内容却丢失了。）
 
 ### 写入操作的演练安全机制
 
 每个写入工具默认使用 **`dry_run=true`**，在 AI 工具以 `dry_run=false` 再次调用之前不会持久化任何内容——而它只应在用户查看预览并确认之后才这样做。这可以防止过于热心的代理在解读错误的电子表格基础上悄悄创建数百张卡片。预览分为两种：
 
 - **由后端验证。** 当底层端点支持演练时，后端会运行每一个校验器和解析器——权限、卡片 id、用户可读取的内容——构建完整结果，然后**回滚事务**。这涵盖卡片（`create_cards_bulk`、`update_cards_bulk`）、关系（`upsert_relations_bulk`）和图表（`create_diagram`、`update_diagram`）。图表预览会返回后端接受的卡片链接；对于更新，则返回确切的变更：重命名的字段、新增和移除的卡片链接，以及画布是否发生变化。
-- **由 MCP 服务器构建。** 当端点没有演练功能时，工具会校验并转换其输入，并展示提交将发送的确切负载，而不会调用写入端点：`import_bpmn`（草稿 → 提交 → 批准流程；其流程节点数量只是估算，预览会显示 `verified: false`）、`create_adr`、`update_adr`、`sign_adr`、`create_soaw`、`add_card_comment`、`transition_card_lifecycle`、`assign_stakeholders`、`create_risks`、`update_risks`、`archive_cards`（会显示每张卡片的归档影响），以及 `set_card_logos` / `clear_card_logos`（会查询每张卡片的类型和当前徽标，并获取每个 `image_url`）。
+- **由 MCP 服务器构建。** 当端点没有演练功能时，工具会校验并转换其输入，并展示提交将发送的确切负载，而不会调用写入端点：`import_bpmn`（查找提交时将保存到的草稿；其流程节点数量只是估算，因此预览会显示 `verified: false`）、`submit_process_flow` 和 `approve_process_flow`（读取该版本并报告状态变化，或说明为何无法进行）、`link_process_flow_elements`（读取版本及其步骤，并报告每个链接的当前值和新值，或其不认识的步骤）、`create_adr`、`update_adr`、`sign_adr`、`revise_adr`（读取该决策并报告将创建的修订号，或后端会拒绝的原因）、`create_soaw`、`add_card_comment`、`add_document_comment`（读取讨论并报告您是否可以评论，以及您回复的主题是否属于该文档）、`transition_card_lifecycle`、`save_inventory_view`（运行查询并报告匹配的卡片数量及若干示例名称）、`assign_stakeholders`、`create_risks`、`update_risks`、`archive_cards`（会显示每张卡片的归档影响），以及 `set_card_logos` / `clear_card_logos`（会查询每张卡片的类型和当前徽标，并获取每个 `image_url`）。
 
 无论哪种方式，预览都会作为演练批次记录在审计日志中，因此管理员既能看到代理提议了什么，也能看到它提交了什么。
 
 ### 读取工具
 
-服务器以八个集群提供 35 个读取工具。
+服务器以十个集群提供 43 个读取工具。
 
 **卡片与元模型**
 
 | 工具 | 描述 |
 |------|------|
 | `search_cards` | 按类型、状态或自由文本搜索和筛选卡片 |
+| `query_cards` | 通过一条关系链查找卡片，每一跳都可设置条件——参见[多跳卡片查询](#multi-hop-card-queries) |
+| `list_inventory_views` | 列出您可见的已保存清单视图，包括每个视图的查询及创建它的渠道 |
 | `get_card` | 通过 UUID 获取卡片的完整详细信息 |
 | `get_card_relations` | 获取连接到卡片的所有关系 |
 | `get_card_hierarchy` | 获取卡片的祖先和子级 |
 | `list_card_types` | 列出元模型中的所有卡片类型；每个类型的 `category` 是其分类（架构层）的键 |
 | `get_relation_types` | 列出关系类型，可按卡片类型筛选 |
+| `list_tag_groups` | 列出标签组（及每个标签组适用的卡片类型）及其标签；标签 id 即 `query_cards` 和 `save_inventory_view` 在 `where.tags` 下所接受的值 |
 | `resolve_card_refs` | 在批量导入之前预校验基于名称的卡片引用（名称 → UUID）——仅解析，从不写入 |
 | `analyze_impact` | 针对卡片的一项拟议变更进行依赖影响范围分析 |
 
@@ -239,9 +242,11 @@ MCP 服务器提供 **56 个工具**，分为两组：**35 个读取工具** 用
 | 工具 | 描述 |
 |------|------|
 | `list_principles` | 已发布的 EA 原则（声明、依据、影响） |
-| `list_adrs` | 架构决策记录，可按举措 / 状态筛选 |
-| `get_adr` | 单条 ADR，含章节、关联卡片与签署记录 |
-| `list_soaws` | 某项举措的架构工作说明书 |
+| `list_adrs` | 架构决策记录，可按举措、状态和效力状态筛选（`standing="in_force,amended"` 列出生效中的决策）。显示每项决策的当前修订版；`include_earlier` 会加入早期修订版 |
+| `get_adr` | 单个 ADR 修订版，含章节、关联卡片、签署记录、效力状态、指向其他决策的类型化关联、决策者和参与者、日期、修订版以及文件名 |
+| `list_soaws` | 某项举措的架构工作说明书（当前修订版；`include_earlier` 会加入早期修订版） |
+| `get_document_discussion` | 决策或 SoAW 的讨论：各个主题及其回复、章节、作者和解决状态，包括拒绝原因和签署备注。每条评论同时以 HTML 和纯文本提供，提及写作 `@Name`，您无权查看的卡片则写作 `[restricted]`；`include_earlier_revisions` 会加入早期修订版的主题 |
+| `get_document_history` | 决策或 SoAW 的时间线（创建、保存、提交审核、签署、拒绝、恢复……），逐页返回。打开、比较和恢复已保存的版本仍需在 Web 界面中进行 |
 
 **报告**
 
@@ -271,6 +276,14 @@ MCP 服务器提供 **56 个工具**，分为两组：**35 个读取工具** 用
 | `get_diagram` | 按 id 获取单个图表：其 `kind`，以及 `data.xml` 中的 DrawIO XML（ArchiMate 图则为 Exchange XML） |
 | `get_archimate_mapping` | Turbo EA 的卡片类型和关系类型如何映射到 ArchiMate 3.x 的元素类型和关系类型（绘制 ArchiMate 图之前先读取） |
 
+**流程图**
+
+| 工具 | 描述 |
+|------|------|
+| `list_process_flow_versions` | 列出某个业务流程的流程图版本——已发布的版本，以及对有权查看的用户而言的草稿和待审批版本——每个版本附带 id、修订号、状态、所基于的版本，以及在编辑器中打开草稿的链接。不含 BPMN XML。 |
+| `get_process_flow_version` | 读取单个流程图版本（包括其 BPMN XML），以便代理修订草稿并通过 `import_bpmn` 保存回去。 |
+| `get_process_flow_elements` | 列出流程图版本的步骤——每个步骤的元素 ID、类型、名称、泳道和顺序——以及每个步骤所关联的卡片：应用、数据对象、IT 组件、该步骤交接至的业务流程，以及组织。用户无权查看的已关联卡片显示为无链接。说明该版本的步骤链接是否可以设置（草稿或待审批修订）。 |
+
 **审计与变更历史**
 
 | 工具 | 描述 |
@@ -281,9 +294,9 @@ MCP 服务器提供 **56 个工具**，分为两组：**35 个读取工具** 用
 
 ### 写入工具
 
-服务器提供 21 个写入工具，每个都标注为**增量型**（创建或扩展数据）或**破坏型**（修改或删除现有数据），以便连接器给出相应的警示。
+服务器提供 27 个写入工具，每个都标注为**增量型**（创建或扩展数据）或**破坏型**（修改或删除现有数据），以便连接器给出相应的警示。
 
-**增量型（15 个）**
+**增量型（21 个）**
 
 | 工具 | 描述 |
 |------|------|
@@ -292,15 +305,21 @@ MCP 服务器提供 **56 个工具**，分为两组：**35 个读取工具** 用
 | `create_risks` | 在 EA 风险登记册中创建条目。 |
 | `update_risks` | 更新风险登记册条目（字段、关联卡片）。 |
 | `add_card_comment` | 在卡片上发表评论——一种非破坏性、可审阅的备注，而不是直接修改字段。 |
+| `add_document_comment` | 在决策或 SoAW 上发表评论：新的主题（可选择关联到某个章节），或对某个主题的回复。评论为纯文本；提及只能在 Web 界面中进行。需要 `adr.comment` / `soaw.comment` 权限，或是该文档的签署人。已发表的评论无法通过 `rollback_batch` 撤销；请在 Web 界面的讨论中将其删除。 |
 | `create_soaw` | 为某项举措创建架构工作说明书。 |
 | `assign_stakeholders` | 在卡片上分配或移除干系人角色。 |
 | `update_cards_bulk` | 在一次调用中对多张卡片进行字段级修补。 |
-| `create_adr` | 创建架构决策记录。 |
-| `update_adr` | 更新 ADR（标题、章节、状态、关联卡片）。 |
+| `create_adr` | 创建架构决策记录，可带有指向其他决策的类型化关联（`replaces`、`amends`、`revokes`、`relates`）、决策者、参与者和日期。取代或撤销决策即通过这种方式完成：创建一项带有 `replaces` / `revokes` 关联的新决策，它在签署后生效。 |
+| `update_adr` | 更新草稿 ADR（标题、章节、关联卡片、类型化关联、人员、日期、变更摘要）。审核中的决策只接受关联卡片的更改，已签署的决策永远不会被编辑。 |
 | `sign_adr` | 签署 ADR（需要 `adr.sign` 权限；否则返回一个界面深层链接，供在浏览器中签署）。 |
+| `revise_adr` | 为已签署的 ADR 开始下一个修订版：一份沿用相同编号、采用下一个修订号的草稿，可选择整合修正它的决策。如果已有修订版正在起草、更新的修订版已签署，或该决策已被撤销或取代，则会被拒绝。将过去的决策登记为已决定仍需在 Web 界面中完成。 |
 | `create_diagram` | 创建一个自由形式的 DrawIO 图，可选链接到已有卡片。 |
 | `create_archimate_diagram` | 根据 Open Group Exchange Format XML 创建 ArchiMate 图，可选链接到已有卡片。演练（dry run）在服务器上校验模型，并返回 `valid` 和 `issues`，不会创建任何内容。 |
-| `import_bpmn` | 将 BPMN 2.0 XML 图保存到**已存在**的业务流程卡片上。如果没有匹配指定名称的卡片，工具会返回 `card_not_found` 错误，引导代理使用 `create_cards_bulk` — 这迫使先以完整的描述、子类型和属性显式创建卡片，而不是走捷径生成一张内容稀薄的卡片。 |
+| `save_inventory_view` | 将多跳卡片查询保存为清单视图（新建，或通过 `view_id` 指定已有视图并替换其查询）。每次打开该视图时，清单都会重新运行查询；响应中附带一个可打开该视图的链接。更新只会更改名称和查询，以及在传入时更改可见性和列；视图的分组和布局保持不变。 |
+| `import_bpmn` | 将 BPMN 2.0 XML 图保存为**已存在**的业务流程卡片的流程图**草稿**。它从不提交或发布该草稿。默认情况下，它基于已发布的流程图新建草稿，因此已建立的元素链接会保留；`based_on_version_id` 改为基于另一个版本新建，`draft_version_id` 则替换现有草稿的图（修订号不变，不新建草稿）。响应包含草稿的 id、修订号和状态，以及在编辑器中打开它的链接。如果没有匹配指定名称的卡片，工具会返回 `card_not_found` 错误，引导代理使用 `create_cards_bulk` — 这迫使先以完整的描述、子类型和属性显式创建卡片，而不是走捷径生成一张内容稀薄的卡片。已保存的草稿无法通过 `rollback_batch` 撤销；请在卡片的「流程图 → 草稿」子标签页中将其删除。 |
+| `link_process_flow_elements` | 将草稿或待审批流程图的步骤链接到卡片：应用、数据对象、IT 组件、步骤交接至的业务流程，以及组织。每个步骤一个条目，使用 `get_process_flow_elements` 返回的元素 ID；省略的链接保持不变，空值则清除该链接。仅接受卡片 ID（使用 `search_cards` 或 `resolve_card_refs` 查找）。已保存图中不存在的步骤 ID 会在写入任何内容之前被拒绝。每个链接接受一张其自身类型的活动卡片（应用、数据对象、IT 组件、业务流程、组织）。如果后端拒绝某个步骤（其他类型的卡片、已归档或用户无权查看的卡片、数据对象上的流程链接），运行将在此停止，响应会列出哪些步骤已链接、哪些未链接。修订获批后，这些链接对已发布的步骤生效。它们不记录任何事件，因此 `rollback_batch` 无法撤销：请使用旧值再次调用该工具。需要 `bpm.edit`。 |
+| `submit_process_flow` | 将流程图草稿提交审批（草稿 → 待审批），效果与 Web 界面中的 **提交审批** 按钮相同。流程负责人会收到通知和一项审批待办事项。需要 `bpm.edit`。无法通过 `rollback_batch` 撤销：审批人在 Web 界面中驳回该修订即可将其退回草稿。 |
+| `approve_process_flow` | 批准待审批的流程图，从而将其发布并归档先前发布的修订。需要审批权限（`bpm.approve_flows`，或流程负责人这一利益相关者角色），并遵循要求由另一位审批人审批的设置。被拒绝时会返回后端给出的原因。无法通过 `rollback_batch` 撤销：误发布的修订应在 Web 界面中撤回，它会保留记录并新开一个草稿。 |
 | `set_card_logos` | Set the custom logo on many cards at once — the bulk way to put product marks on an Application inventory. Three ways to supply the image, one per row: a built-in `icon_slug` (resolved server-side, nothing transferred), an `image_url` the MCP server downloads for you from an allowlisted icon host, or `image_base64` from the agent's own context. The packs are a shortcut, not the source of truth — a dry run lists the slugs they do not carry under `unknown_icon_slugs` **and** fetches every `image_url`, so a missing brand or a dead link is reported before anything is written rather than left as a logo nobody could set. `mime` is optional and sniffed from the bytes. PNG/JPEG/WebP/GIF only, 1 MB each. Each row echoes a sha256 so the caller can prove what landed. Use `clear_card_logos` to remove one. |
 
 **破坏型（6 个）**
@@ -323,6 +342,113 @@ ArchiMate 图有自己的工具，与自由绘制（DrawIO）图的工具分开�
 > 绘制 CRM 及其所有关联对象的 ArchiMate Application Cooperation 视图。
 
 编辑器方面的说明见 [ArchiMate 指南](../guide/archimate.md)。
+### 多跳卡片查询 { #multi-hop-card-queries }
+
+`query_cards` 可以在一次调用中回答链式关系的问题——「使用生命周期为 Active 的应用程序、且该应用程序受状态为 On Track 的举措影响的组织」——而 `save_inventory_view` 会把同一查询保存为已保存的清单视图。视图保存的是查询而非结果：每次有人打开视图时，清单都会重新运行它，因此列表始终是最新的。
+
+查询是一个**仅由键**组成的小型 JSON 对象——卡片类型、关系类型、字段和选项的键，与 `list_card_types` 和 `get_relation_types` 返回的一致；卡片 id 仅可出现在 `where.cards` 下，标签 id 仅可出现在 `where.tags` 下；绝不使用标签文本：
+
+```text
+CardQuery = { type, where?, related?: [Hop] }
+Hop       = { relation: "<relation type key>" | "<key>__out" | "<key>__in",
+              type, where?, negate?: true|false, related?: [Hop] }
+Where     = { lifecycle_phase?: [plan | phaseIn | active | phaseOut | endOfLife | none],
+              subtype?: [subtype key],
+              approval_status?: [status],
+              data_quality_band?: [complete | partial | minimal],
+              eol_status?: [eol | approaching | supported | unknown | __empty__],
+              attributes?: { field key: [option key | "true" | "false" | text | "__empty__"] },
+              tags?: [tag id],
+              cards?: [card id],
+              include_descendants?: true|false }
+```
+
+查询也可以**堆叠**，使一个视图组合多个完整的查询：
+
+```text
+Query = CardQuery | { all_of: [CardQuery, …] } | { any_of: [Group, …] }
+Group = CardQuery | { all_of: [CardQuery, …] }
+```
+
+- `all_of`（**且**）：只有当卡片匹配列表中的每个查询时才会被列出。其中所有查询都从同一卡片类型开始（否则返回 `all_of_type_mismatch`），并且至少需要两个（`all_of_needs_two`）。
+- `any_of`（**或**）：只要卡片匹配任一分组即被列出，每个分组是一个普通查询或一个 `all_of`。至少需要两个分组（`any_of_needs_two`）。各分组可以从不同的卡片类型开始，因此**一个视图可以列出多种卡片类型**；这样的视图会在所有这些类型上打开，表格显示它们共有的列。
+- `any_of` 不能放在另一个 `any_of` 或 `all_of` 之内，而 `all_of` 只包含普通查询（`invalid_query`）。
+- `all_of` 的各个查询仅在起始卡片处汇合：「使用即将淘汰的 IT 组件」且「受到某个举措影响」可以指两张不同的相关卡片。若要对**同一**张相关卡片提出两项要求，请把两跳放在同一行，并排置于其下。
+
+- 当该类型的**任意一张**相关卡片满足其 `where`（及其自身嵌套的跳）时，该跳即匹配。`negate: true` 会将其变为「**没有**这样的卡片」。
+- 同一层级并列的跳必须全部匹配（与）；同一列表中的值是备选项（或）。
+- `<key>__out` 和 `<key>__in` 用于选择把某卡片类型与自身相连的关系类型的一侧（该卡片是源或目标）。其他情况下使用普通键即可。
+- `data_quality_band` 按档位匹配卡片的数据质量得分，与清单的数据质量筛选器一致：`complete`（80 及以上）、`partial`（40 起至 80 之前，不含 80）或 `minimal`（低于 40）。任何其他值都会被拒绝，并返回 `unknown_band`。
+- `eol_status` 匹配卡片的生命周期终止状态，与清单的“生命周期终止”列所显示的一致，由 endoflife.date 或自定义 EOL 产品计算得出：`eol`、`approaching`、`supported`、`unknown`，或 `__empty__`（表示没有 EOL 关联且没有手动生命周期终止的卡片）。任何其他值都会被拒绝并返回 `unknown_eol_status`；不跟踪生命周期终止的卡片类型则返回 `eol_not_tracked`。此类条件需要查看 EOL 数据的权限：没有该权限时，保存、预览和打开包含它的视图会被拒绝（`eol_view_required`），运行查询同样如此。
+- `tags` 接受来自 `list_tag_groups` 的标签 id，并按标签组分组：卡片必须在所列出的**每个**标签组中至少带有其中一个标签（组内为备选，组间为与）。若某标签所属的标签组不适用于该跳的卡片类型，会被拒绝并返回 `tag_not_for_type`；未知 id 则返回 `unknown_tag`。
+- `cards` 将该节点固定到所列卡片（备选项）：其 id 取自 `search_cards` 或 `resolve_card_refs`。每张应为该节点自身类型的卡片。运行查询时不会检查这些选择：不对应任何卡片的 id、其他类型的卡片，或用户无权读取的卡片，只是不匹配任何内容。保存视图时则会检查，并以 `unknown_card` 拒绝这样的选择。已归档的卡片在跳中不匹配任何内容。`include_descendants: true` 会通过父级链接把每个选择扩展到其下的所有卡片（子能力、下级组织）；未设置 `cards` 时设置它会被 `descendants_without_cards` 拒绝，在没有层级的卡片类型上则被 `descendants_without_hierarchy` 拒绝。查询中其他任何位置出现的卡片 id 或标签 id 都会被 `query_holds_an_id` 拒绝。
+- 相关卡片仅在处于活动状态且用户有权读取时才计入：用户看不到的卡片会使链断开，与网页界面中的行为完全一致。保存视图时，有写入权限的用户无法固定对其隐藏的卡片（`unknown_card`）；编辑他人共享给自己的视图的协作者会保留其中已有的选择，即使其无权读取。读者打开一个所选卡片中包含对其隐藏的卡片的视图时不会被拒绝——被隐藏的选择只是不匹配任何内容。
+
+示例——使用某个活动应用程序、且该应用程序受状态为 *On Track* 的举措影响的组织：
+
+```json
+{
+  "type": "Organization",
+  "related": [
+    {
+      "relation": "relOrgToApp",
+      "type": "Application",
+      "where": { "lifecycle_phase": ["active"] },
+      "related": [
+        {
+          "relation": "relInitiativeToApp",
+          "type": "Initiative",
+          "where": { "attributes": { "initiativeStatus": ["onTrack"] } }
+        }
+      ]
+    }
+  ]
+}
+```
+
+示例——受某个举措影响、运行在老化技术上的活跃应用程序，**或**使用某个应用程序的组织（一个列出两种卡片类型的视图）：
+
+```json
+{
+  "any_of": [
+    {
+      "all_of": [
+        {
+          "type": "Application",
+          "where": { "lifecycle_phase": ["active"] },
+          "related": [
+            {
+              "relation": "relAppToITC",
+              "type": "ITComponent",
+              "where": { "lifecycle_phase": ["phaseOut", "endOfLife"] }
+            }
+          ]
+        },
+        {
+          "type": "Application",
+          "related": [{ "relation": "relInitiativeToApp", "type": "Initiative" }]
+        }
+      ]
+    },
+    {
+      "type": "Organization",
+      "related": [{ "relation": "relOrgToApp", "type": "Application" }]
+    }
+  ]
+}
+```
+
+在清单中，以这种方式保存的视图会在网格上方以可读路径显示其链，并附有说明其通过 MCP 创建的提示。其查询可在清单中更改（路径条上的铅笔图标），也可通过 `save_inventory_view` 更改（将 `list_inventory_views` 返回的视图 id 作为 `view_id` 传入；更新会替换名称和查询，仅在传入时更改可见性和列，并保留在网页界面中设置的分组和布局——除非新查询从其他卡片类型开始，此时视图的筛选条件和分组会被重置，因为它们属于旧类型；无法编辑的视图会被拒绝，并返回 `view_not_found` 或 `view_not_editable`；您无权进行的可见性更改（只有所有者可以更改，且设为公开或共享需要 `bookmarks.share` 权限）会被拒绝，并返回 `visibility_not_allowed`）；在网页界面中，其所有者也可重命名、更改共享和 OData 设置、调整列布局或删除它。
+
+视图的 `columns` 还可以包含**匹配列** `via:<line>:<hop path>`：这种列按行显示查询某一步骤中使该行匹配的卡片（对于「使用某个应用程序、而该应用程序使用已终止支持的 IT 组件的组织」，即哪些应用程序和哪些 IT 组件）。`line` 是该行在查询所有行中按顺序排列的位置，从零开始（普通查询为第 0 行；`all_of` 的各行以及依次每个 `any_of` 分组的各行连续编号），`hop path` 是从该行第一张卡片到该步骤、在 `related` 中从零开始的索引，以点连接：`via:0:0` 是第一行的第一跳，`via:0:0.1` 是其下的第二跳，`via:2:0` 是第三行的第一跳。行的第一张卡片以及位于「没有」（`negate`）之后的步骤没有匹配列。匹配仅在网页界面中显示：目前还没有 MCP 工具读取它们。更新视图的 `query` 而不发送 `columns` 时，其已保存的 `via:` 键保持不变，因此当步骤发生变化时请发送 `columns`。
+
+限制：
+
+- 一个堆叠最多 **6 个查询**（`too_many_lines`）；`all_of` 中的查询共用同一个起始卡片类型，而 `any_of` 的各分组可以列出多种。
+- 每个查询的 `related` 最多 **3 层**，同一层级最多并列 10 个跳，整个查询最多 **12 个跳**（并列、嵌套以及堆叠中所有查询合计）。更长的查询会被拒绝，并返回 `too_many_hops`。
+- 每个条件最多选择 **50** 张卡片。
+- 文本属性与其值**完全**匹配——不支持部分匹配或不区分大小写的匹配。
+- **`rollback_batch` 无法撤销已保存的视图。** 保存视图会记录一个变更批次，但不会发布可供回滚撤销的事件；请在清单的「已保存视图」中删除不需要的视图。
 
 ### 工件上传
 
@@ -336,16 +462,24 @@ ArchiMate 图有自己的工具，与自由绘制（DrawIO）图的工具分开�
 4. 用户确认后，代理再以 `dry_run=False` 调用一次以提交。
 5. 如果存在关系列，代理随后以相同的 演练 / 确认 循环调用 `upsert_relations_bulk`。
 
+BPMN 图与在 Web 界面中绘制的图走相同的审批工作流，每次一个明确的步骤：
+
+1. `import_bpmn` 将图保存为**草稿**并返回其链接。不会发布任何内容。
+2. 如需将步骤链接到卡片，代理使用 `get_process_flow_elements` 读取步骤 ID，并使用 `link_process_flow_elements` 设置链接（一如既往，先试运行）。`import_bpmn` 本身不接受链接。
+3. 用户审阅草稿。如需修改，代理使用 `get_process_flow_version` 读取草稿，编辑 XML，并带上 `draft_version_id` 再次调用 `import_bpmn`，从而更新同一份草稿，而不是新建一份。新 XML 中保留了元素 ID 的每个步骤，其链接都会保留。
+4. 在用户要求时，`submit_process_flow` 将草稿提交审批。
+5. `approve_process_flow` 将其发布——仅限有权审批流程图的用户。其他人则在 Web 界面中，从卡片的 **流程图 → 草稿** 子标签页进行审批。
+
 ### 写入工具防护栏
 
 在演练之上的纵深防御，以确保 LLM 失误不会造成大规模损害：
 
 - **每次调用的大小上限。** MCP 写入工具强制施加比底层 Excel 导入端点小得多的上限：`create_cards_bulk` 为 200 行，`upsert_relations_bulk` 为 500 次操作。足以应对任何实际的单一工件上传，又小到可以快速扫描演练预览。
 - **默认不允许删除关系。** `upsert_relations_bulk` 拒绝 `action: "delete"` 操作——若要删除关系，请使用 Web 界面，那里的操作会以用户身份被记录。运营者可通过设置 `MCP_ALLOW_RELATION_DELETE=true` 启用此功能。
-- **紧急开关。** `MCP_WRITES_ENABLED=false` 可在无需重新部署代码的情况下关闭全部 21 个写入工具。35 个读取工具继续工作。
+- **紧急开关。** `MCP_WRITES_ENABLED=false` 可在无需重新部署代码的情况下关闭全部 27 个写入工具。43 个读取工具继续工作。
 - **徽标下载仅限白名单主机。** 内置图标包无法覆盖客户使用的每一款产品，而助手往往运行在无法访问外网的沙箱里，因此 `set_card_logos` 接受 `image_url`，由 MCP 服务器代为下载。仅限 `https`、仅限 `MCP_LOGO_FETCH_HOSTS` 中的主机、仅限公网地址，最多两次重定向（每次重新校验），最多以流式读取 1 MB，且字节必须带有真实的 PNG/JPEG/WebP/GIF 签名。下载发生在 MCP 边缘而非后端，随后图片经普通通道上传 —— 由大模型选定的 URL 永远不会抵达持有数据库的进程。`MCP_LOGO_FETCH_ENABLED=false` 可将其关闭。
 - **审计来源标记。** 来自 MCP 服务器的每个后端请求都携带 `X-Turbo-EA-Origin: mcp` 头。从这些请求发出的事件在审计日志载荷中被标记为 `origin: "mcp"`，以便管理员可以将 MCP 驱动的写入与 Web 界面操作分别从时间线中筛选出来。
-- **变更批次。** 每次 MCP 写入调用——无论是预览还是提交——都是审计日志中的一个变更批次，在任何写入发生之前打开；调用期间发出的每个事件都会被标记上批次 id，每个写入工具都会返回该 `batch_id`。管理员（或 `get_change_history` 工具）可以凭一个 id 重建某次提交的完整逐事件差异，而 `rollback_batch` 可以将其撤销——包括删除由 `create_diagram` 创建的图表，除非此后有人已将其发布。图表更新会被报告为不可撤销，因为之前的画布不会被保留。超过 `MCP_BATCH_CONFIRMATION_THRESHOLD` 行的提交必须回传先前演练返回的一次性 `confirm_token`。后端在提交的批次打开时、任何写入发生之前校验它：它必须来自同一用户在 15 分钟内对同一工具执行的演练，并且只能授权一次提交。所有批量写入工具都遵循这一「预览 → 确认」流程：`create_cards_bulk`, `update_cards_bulk`, `archive_cards`, `upsert_relations_bulk`, `assign_stakeholders`, `create_risks`, `update_risks`, `set_card_logos`, `clear_card_logos`。
+- **变更批次。** 每次 MCP 写入调用——无论是预览还是提交——都是审计日志中的一个变更批次，在任何写入发生之前打开；调用期间发出的每个事件都会被标记上批次 id，每个写入工具都会返回该 `batch_id`。管理员（或 `get_change_history` 工具）可以凭一个 id 重建某次提交的完整逐事件差异，而 `rollback_batch` 可以将其撤销——包括删除由 `create_diagram` 创建的图表，除非此后有人已将其发布。图表更新会被报告为不可撤销，因为之前的画布不会被保留。在决策或 SoAW 上发表的评论同样不可撤销：它可能已经被人阅读，因此应改为在讨论中将其删除。流程图的各个步骤同样如此：`rollback_batch` 会将提交或批准报告为不可撤销，且不做任何更改——待审批的修订由审批人驳回，已发布的修订则被撤回，两者都在 Web 界面中完成。由 `import_bpmn` 保存的草稿不可撤销，因为它不记录任何事件；应在「草稿」子标签页中将其删除。由 `link_process_flow_elements` 设置的步骤链接同样不记录任何事件；如需更改，请重新设置。超过 `MCP_BATCH_CONFIRMATION_THRESHOLD` 行的提交必须回传先前演练返回的一次性 `confirm_token`。后端在提交的批次打开时、任何写入发生之前校验它：它必须来自同一用户在 15 分钟内对同一工具执行的演练，并且只能授权一次提交。所有批量写入工具都遵循这一「预览 → 确认」流程：`create_cards_bulk`, `update_cards_bulk`, `archive_cards`, `upsert_relations_bulk`, `assign_stakeholders`, `create_risks`, `update_risks`, `set_card_logos`, `clear_card_logos`、`link_process_flow_elements`。
 - **没有硬删除。** 工具集刻意省略了卡片的永久删除。`archive_cards` 和 `update_cards_bulk` *确实*已暴露，但归档是可恢复的软删除（30 天还原窗口），且两者都带有破坏性标注并受演练机制约束。添加任何执行不可逆变更的工具（硬删除、强制清除）都需要进行明确的设计评审。
 
 MCP 容器上的六个防护栏环境变量：
@@ -385,7 +519,7 @@ MCP 容器上的六个防护栏环境变量：
 | 角色 | 访问权限 |
 |------|----------|
 | **管理员** | 配置 MCP 设置（`admin.mcp` 权限）。通过 MCP 拥有完整的读取 + 写入访问。 |
-| **所有已认证用户** | 读取访问由其现有 RBAC 控制。写入工具需要相应的后端权限——`inventory.create` / `inventory.edit` / `inventory.archive`（卡片）、`relations.manage`（关系）、`diagrams.manage`（图表）、`bpm.edit`（BPMN）、`risks.manage`（风险登记册）、`comments.create`（评论）、`stakeholders.manage`（干系人）、`soaw.create`（SoAW）、`adr.create` / `adr.sign`（ADR）。 |
+| **所有已认证用户** | 读取访问由其现有 RBAC 控制。写入工具需要相应的后端权限——`inventory.create` / `inventory.edit` / `inventory.archive`（卡片）、`relations.manage`（关系）、`diagrams.manage`（图表）、`bpm.edit`（BPMN 草稿、其步骤链接及其提交）、`bpm.approve_flows`（批准流程图）、`risks.manage`（风险登记册）、`comments.create`（评论）、`stakeholders.manage`（干系人）、`soaw.create`（SoAW）、`adr.manage` / `adr.sign`（ADR）、`adr.comment` / `soaw.comment`（决策和 SoAW 的讨论）、`bookmarks.manage` / `bookmarks.share`（已保存的清单视图）。 |
 
 `admin.mcp` 权限控制谁可以管理 MCP 设置。默认情况下仅对管理员角色可用。可以通过角色管理页面向自定义角色授予此权限。
 
@@ -414,6 +548,8 @@ MCP 容器上的六个防护栏环境变量：
 | Nginx 日志中出现「host not found」 | MCP 服务未运行。使用 `docker compose --profile mcp up -d` 启动它。Nginx 配置优雅地处理此情况（502 响应，无崩溃）。 |
 | OAuth 回调失败 | 验证是否已将 `https://your-domain.example.com/mcp/oauth/callback` 添加为 SSO 应用注册中的重定向 URI。 |
 | AI 工具无法连接 | 检查 `MCP_PUBLIC_URL` 是否与用户机器可访问的 URL 匹配。确保 HTTPS 正常工作。 |
+| AI 工具返回的链接打开的是 `http://localhost:8920` | MCP 容器不知道用户访问应用所用的地址。将 `TURBO_EA_PUBLIC_URL`（或 `MCP_PUBLIC_URL`，未设置前者时回退到其主机）设置为公共 URL，然后重启 MCP 容器。 |
+| 工具调用失败并提示 `Unknown argument(s): …` | AI 工具传入了该工具不接受的参数；错误信息会列出有效参数，且未执行任何操作。如需设置流程图的步骤链接，请使用 `link_process_flow_elements`，而不是 `import_bpmn`。 |
 | 用户获得空结果 | MCP 遵循 RBAC 权限。如果用户访问受限，他们只能看到其角色允许的卡片。 |
 | 连接在 1 小时后断开 | AI 工具应自动处理令牌刷新。如果不行，请重新连接。 |
 | Copilot Studio 报告「Connection creation failed」 | Copilot Studio 从 Microsoft 云端发起调用。请检查 `https://your-domain.example.com/mcp` 能否从互联网通过公共受信任的证书访问，以及 `MCP_PUBLIC_URL` 是否就是该公共地址。尝试连接期间的 Nginx 日志会显示最后到达的请求；如果没有任何请求到达，说明实例无法访问。 |

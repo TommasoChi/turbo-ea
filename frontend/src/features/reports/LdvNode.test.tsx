@@ -4,6 +4,7 @@ import { render, screen, fireEvent, act } from "@testing-library/react";
 import { LdvNode, hostingTypePresentation } from "./LayeredDependencyView";
 import type { LdvNodeData } from "./layeredDependencyLayout";
 import { STATUS_COLORS, TIMELINE_COLORS } from "@/theme";
+import { createTheme } from "@mui/material/styles";
 
 /**
  * The card's chrome, rendered for real.
@@ -113,9 +114,18 @@ describe("LdvNode connection-change icons", () => {
 });
 
 describe("LdvNode badges and focus ring", () => {
-  it("badges a proposed card as new", () => {
+  it("badges a proposed card as new, in the card's own accent", () => {
     renderNode({ proposed: true });
+    // The fork's TO-BE presentation: the badge wears the type accent, not a fixed green.
     expect(screen.getByText("NEW")).toBeInTheDocument();
+  });
+
+  it("badges a card retired by the viewed date, white on its change colour", () => {
+    renderNode({ changeState: "retired" });
+    expect(screen.getByText("RETIRED")).toHaveStyle({
+      backgroundColor: STATUS_COLORS.error,
+      color: createTheme().palette.common.white,
+    });
   });
 
   it("leaves an ordinary card unbadged", () => {
@@ -231,6 +241,58 @@ describe("LdvNode card logo", () => {
     renderNode({ extraLines: [{ label: "Alias", value: "CRM-v2" }] });
     expect(screen.getByText("Alias:")).toBeInTheDocument();
     expect(screen.getByText(/CRM-v2/)).toBeInTheDocument();
+  });
+
+  it("keeps the type line when another line is ticked beside it (#1377)", () => {
+    // The type used to be drawn only when no other line was: ticking Alias
+    // beside Card type replaced the type instead of joining it.
+    renderNode({ showType: true, extraLines: [{ label: "Alias", value: "CRM-v2" }] });
+    expect(screen.getByText("[Application]")).toBeInTheDocument();
+    expect(screen.getByText("Alias:")).toBeInTheDocument();
+    // Two caption lines, so the name yields its second line.
+    const nameEl = document.querySelector("p") as HTMLElement;
+    expect(getComputedStyle(nameEl).webkitLineClamp).toBe("1");
+  });
+
+  it("prints the type first, then only as many lines as are left", () => {
+    renderNode({
+      showType: true,
+      extraLines: [
+        { label: "Subtype", value: "Business Application" },
+        { label: "Alias", value: "CRM-v2" },
+      ],
+    });
+    const captions = Array.from(document.querySelectorAll("span.MuiTypography-caption")).map(
+      (el) => el.textContent,
+    );
+    expect(captions).toEqual(["[Application]", "Subtype: Business Application"]);
+  });
+
+  it("gives both lines to the picked fields when the type is unticked", () => {
+    renderNode({
+      showType: false,
+      extraLines: [
+        { label: "Subtype", value: "Business Application" },
+        { label: "Alias", value: "CRM-v2" },
+        { label: "Owner", value: "A. Someone" },
+      ],
+    });
+    const captions = Array.from(document.querySelectorAll("span.MuiTypography-caption")).map(
+      (el) => el.textContent,
+    );
+    expect(captions).toEqual(["Subtype: Business Application", "Alias: CRM-v2"]);
+  });
+
+  it("shows the type alone, on a two-line name, when nothing else is ticked", () => {
+    renderNode({ showType: true });
+    expect(screen.getByText("[Application]")).toBeInTheDocument();
+    const nameEl = document.querySelector("p") as HTMLElement;
+    expect(getComputedStyle(nameEl).webkitLineClamp).toBe("2");
+  });
+
+  it("prints no caption at all when everything is unticked", () => {
+    renderNode({ showType: false });
+    expect(document.querySelectorAll("span.MuiTypography-caption")).toHaveLength(0);
   });
 
   it("falls back to the plain type icon when the image fails to load", () => {

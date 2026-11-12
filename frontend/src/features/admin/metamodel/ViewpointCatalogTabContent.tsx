@@ -21,6 +21,7 @@ import { useOptionalAuthUser } from "@/hooks/AuthContext";
 import { usePermissions } from "@/hooks/usePermissions";
 import type { ArchimateViewpoint } from "@/types";
 import ViewpointEditDialog from "./ViewpointEditDialog";
+import { MUTED_ICON_COLORS, RAG_COLORS } from "@/theme/tokens";
 
 /** The 3 diagram-creation tabs (TAB_LAYERS, backend `api/v1/diagrams.py`) a viewpoint's `domains`
  *  can name, in table-column order. */
@@ -179,7 +180,7 @@ export default function ViewpointCatalogTabContent() {
                     <MaterialSymbol
                       icon={vp.is_hidden ? "visibility_off" : "visibility"}
                       size={18}
-                      color={vp.is_hidden ? "#f57c00" : "#bbb"}
+                      color={vp.is_hidden ? RAG_COLORS.amber : MUTED_ICON_COLORS.soft}
                     />
                   </IconButton>
                 </Tooltip>
@@ -191,7 +192,7 @@ export default function ViewpointCatalogTabContent() {
                   disabled={!canEdit}
                   onClick={() => handleDelete(vp)}
                 >
-                  <MaterialSymbol icon="delete" size={18} color="#bbb" />
+                  <MaterialSymbol icon="delete" size={18} color={MUTED_ICON_COLORS.soft} />
                 </IconButton>
               </TableCell>
             </TableRow>

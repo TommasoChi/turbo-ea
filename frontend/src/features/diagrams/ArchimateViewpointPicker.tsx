@@ -36,6 +36,7 @@ import type { ElementType } from "@/features/archimate/taxonomy/elements";
 import { useMetamodel } from "@/hooks/useMetamodel";
 import { useTypeLabel } from "@/hooks/useResolveLabel";
 import type { ArchimateViewpointForPicker, Card as EaCard } from "@/types";
+import { MUTED_ICON_COLORS } from "@/theme/tokens";
 
 interface Props {
   /** `null` is the unscoped `Diagrams` entry point — every Viewpoint, no layer filter. */
@@ -195,7 +196,7 @@ export default function ArchimateViewpointPicker({ tab, onSelect, disabled }: Pr
                   {pending === "blank" ? (
                     <CircularProgress size={40} />
                   ) : (
-                    <MaterialSymbol icon="note_add" size={40} color="#666" />
+                    <MaterialSymbol icon="note_add" size={40} color={MUTED_ICON_COLORS.strong} />
                   )}
                   <Typography variant="subtitle2" sx={{ mt: 1 }}>
                     {t("archimatePicker.blank")}
@@ -222,7 +223,7 @@ export default function ArchimateViewpointPicker({ tab, onSelect, disabled }: Pr
                     {pending === ex.id ? (
                       <CircularProgress size={40} />
                     ) : (
-                      <MaterialSymbol icon="description" size={40} color="#666" />
+                      <MaterialSymbol icon="description" size={40} color={MUTED_ICON_COLORS.strong} />
                     )}
                     <Typography variant="subtitle2" sx={{ mt: 1 }}>
                       {ex.name}

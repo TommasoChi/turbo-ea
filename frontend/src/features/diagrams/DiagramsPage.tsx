@@ -26,8 +26,9 @@ import ListItemIcon from "@mui/material/ListItemIcon";
 import ListItemText from "@mui/material/ListItemText";
 import Drawer from "@mui/material/Drawer";
 import useMediaQuery from "@mui/material/useMediaQuery";
-import { useTheme } from "@mui/material/styles";
+import { alpha, useTheme } from "@mui/material/styles";
 import MaterialSymbol from "@/components/MaterialSymbol";
+import { FAVORITE_COLOR, STATUS_COLORS, brand, ARCHIMATE_DIAGRAM_COLOR } from "@/theme/tokens";
 import OriginChip from "@/components/OriginChip";
 import ShareDiagramDialog from "./ShareDiagramDialog";
 import { useAuthContext } from "@/hooks/AuthContext";
@@ -53,10 +54,8 @@ import DiagramsFilterSidebar, {
 
 type SortKey = "updated_at" | "created_at" | "name";
 
-const FAVORITE_COLOR = "#f5b400";
 const DIAGRAM_ICON = "schema";
 const ARCHIMATE_DIAGRAM_ICON = "hub";
-const ARCHIMATE_DIAGRAM_COLOR = "#7b1fa2";
 
 /** The nav label each layer's scoped entry point uses (nav.json), reused for
  *  this page's own heading when it opens pre-scoped to that layer. */
@@ -369,7 +368,7 @@ export default function DiagramsPage({ initialLayer }: Props) {
             <MaterialSymbol
               icon={d.kind === "archimate" ? ARCHIMATE_DIAGRAM_ICON : DIAGRAM_ICON}
               size={36}
-              color="#bbb"
+              color={theme.palette.action.disabled}
             />
           )}
         </Box>
@@ -379,7 +378,7 @@ export default function DiagramsPage({ initialLayer }: Props) {
             <MaterialSymbol
               icon={d.kind === "archimate" ? ARCHIMATE_DIAGRAM_ICON : DIAGRAM_ICON}
               size={18}
-              color={d.kind === "archimate" ? ARCHIMATE_DIAGRAM_COLOR : "#1976d2"}
+              color={d.kind === "archimate" ? ARCHIMATE_DIAGRAM_COLOR : brand.primary}
             />
             <Typography variant="body2" fontWeight={600} noWrap sx={{ flex: 1 }}>
               {d.name}
@@ -421,14 +420,14 @@ export default function DiagramsPage({ initialLayer }: Props) {
             position: "absolute",
             top: 2,
             left: 2,
-            bgcolor: "rgba(255,255,255,0.85)",
-            "&:hover": { bgcolor: "rgba(255,255,255,0.95)" },
+            bgcolor: alpha(theme.palette.common.white, 0.85),
+            "&:hover": { bgcolor: alpha(theme.palette.common.white, 0.95) },
           }}
         >
           <MaterialSymbol
             icon="star"
             size={16}
-            color={d.is_favorite ? FAVORITE_COLOR : "#999"}
+            color={d.is_favorite ? FAVORITE_COLOR : STATUS_COLORS.neutral}
             style={d.is_favorite ? { fontVariationSettings: "'FILL' 1" } : undefined}
           />
         </IconButton>
@@ -441,8 +440,8 @@ export default function DiagramsPage({ initialLayer }: Props) {
           position: "absolute",
           top: 2,
           right: 2,
-          bgcolor: "rgba(255,255,255,0.85)",
-          "&:hover": { bgcolor: "rgba(255,255,255,0.95)" },
+          bgcolor: alpha(theme.palette.common.white, 0.85),
+          "&:hover": { bgcolor: alpha(theme.palette.common.white, 0.95) },
         }}
         onClick={(e) => openMenu(e, d)}
       >
@@ -689,7 +688,7 @@ export default function DiagramsPage({ initialLayer }: Props) {
           sx={{ color: "error.main" }}
         >
           <ListItemIcon>
-            <MaterialSymbol icon="delete" size={18} color="#d32f2f" />
+            <MaterialSymbol icon="delete" size={18} color={theme.palette.error.main} />
           </ListItemIcon>
           <ListItemText>{t("common:actions.delete")}</ListItemText>
         </MenuItem>
