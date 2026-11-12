@@ -978,3 +978,35 @@ describe("column labels", () => {
     expect(opt("line", ROWS, { wrapLabelsAt: 64 }).xAxis.axisLabel).not.toHaveProperty("formatter");
   });
 });
+
+describe("tooltips never inject a label as markup", () => {
+  const evil = "<img src=x onerror=alert(1)>";
+
+  it("escapes a heatmap cell's two labels", () => {
+    const o = opt(
+      "heatmap",
+      [{ x: "A", y: "B", value: 2 }] as DashboardQueryRow[],
+      { labels: () => evil, labels2: () => evil },
+    );
+    const html = o.tooltip.formatter({ value: [0, 0, 2] });
+    expect(html).not.toContain("<img");
+    expect(html).toContain("&lt;img");
+  });
+
+  it("escapes a sankey node and a sankey edge", () => {
+    const o = opt("sankey", [{ source: "A", target: "B", value: 2 }] as DashboardQueryRow[], {
+      labels: () => evil,
+      labels2: () => evil,
+    });
+    const node = o.tooltip.formatter({ dataType: "node", name: "s:A", value: 2 });
+    const edge = o.tooltip.formatter({
+      dataType: "edge",
+      value: 2,
+      data: { source: "s:A", target: "t:B" },
+    });
+    for (const html of [node, edge]) {
+      expect(html).not.toContain("<img");
+      expect(html).toContain("&lt;img");
+    }
+  });
+});

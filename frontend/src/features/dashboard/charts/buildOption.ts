@@ -22,6 +22,7 @@ import {
   axisLabel,
   BAR_MAX_THICKNESS,
   base,
+  escapeHtml,
   COLUMN_MAX_WIDTH,
   defaultValueFormatter,
   fmt,
@@ -557,7 +558,7 @@ function buildHeatmap(rows: DashboardQueryRow[], ctx: BuildContext): EChartsCore
       trigger: "item",
       formatter: (p: { value?: [number, number, number] }) => {
         const [xi, yi, v] = p.value ?? [0, 0, 0];
-        return `${ctx.labels(xs[xi] ?? "")} · ${labelY(ys[yi] ?? "")}: ${fmt(ctx)(v)}`;
+        return `${escapeHtml(ctx.labels(xs[xi] ?? ""))} · ${escapeHtml(labelY(ys[yi] ?? ""))}: ${fmt(ctx)(v)}`;
       },
     }),
     xAxis: {
@@ -703,9 +704,11 @@ function buildSankey(rows: DashboardQueryRow[], ctx: BuildContext): EChartsCoreO
       formatter: (p: { dataType?: string; name?: string; value?: number; data?: { source?: string; target?: string } }) => {
         const v = fmt(ctx)(Number(p.value ?? 0));
         if (p.dataType === "edge" && p.data) {
-          return `${label.get(p.data.source ?? "") ?? ""} ${arrow} ${label.get(p.data.target ?? "") ?? ""}: ${v}`;
+          const from = escapeHtml(label.get(p.data.source ?? "") ?? "");
+          const to = escapeHtml(label.get(p.data.target ?? "") ?? "");
+          return `${from} ${arrow} ${to}: ${v}`;
         }
-        return `${label.get(p.name ?? "") ?? ""}: ${v}`;
+        return `${escapeHtml(label.get(p.name ?? "") ?? "")}: ${v}`;
       },
     }),
     series: [

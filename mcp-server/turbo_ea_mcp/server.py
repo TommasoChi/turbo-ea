@@ -7268,6 +7268,7 @@ def create_app() -> Starlette:
         # instead of (or before) the OAuth 2.1 / RFC 8414 well-known.
         Route("/.well-known/openid-configuration", oauth.authorization_server_metadata),
         Route("/oauth/authorize", oauth.authorize),
+        Route("/oauth/authorize/consent", oauth.authorize_consent, methods=["POST"]),
         Route("/oauth/callback", oauth.sso_callback),
         Route("/oauth/token", oauth.token_endpoint, methods=["POST"]),
         Route("/oauth/register", oauth.register_client, methods=["POST"]),

@@ -13,8 +13,8 @@ import inspect
 import json as _json
 import logging
 import re
-from urllib.parse import quote
 from typing import Any, Awaitable, Callable
+from urllib.parse import quote
 
 import httpx
 from mcp.server.fastmcp import FastMCP

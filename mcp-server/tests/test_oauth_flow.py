@@ -65,18 +65,21 @@ def store(monkeypatch):
 
 @pytest.fixture
 def app(store):
-    return TestClient(
+    client = TestClient(
         Starlette(
             routes=[
                 Route("/rs", oauth.protected_resource_metadata),
                 Route("/as", oauth.authorization_server_metadata),
                 Route("/oauth/authorize", oauth.authorize, methods=["GET"]),
+                Route("/oauth/authorize/consent", oauth.authorize_consent, methods=["POST"]),
                 Route("/oauth/callback", oauth.sso_callback, methods=["GET"]),
                 Route("/oauth/token", oauth.token_endpoint, methods=["POST"]),
                 Route("/oauth/register", oauth.register_client, methods=["POST"]),
             ]
         )
     )
+    client.base_url = PUBLIC  # the Secure consent cookie only travels over https
+    return client
 
 
 def body(resp) -> dict:
@@ -309,7 +312,7 @@ class TestAuthorize:
     def test_the_operator_allowlist_admits_a_static_uri(self, app, monkeypatch):
         monkeypatch.setattr(oauth, "MCP_OAUTH_ALLOWED_REDIRECT_URIS", ["https://fixed/cb"])
         resp = self.get(app, client_id="unregistered", redirect_uri="https://fixed/cb")
-        assert resp.status_code == 302
+        assert resp.status_code == 200  # the consent page
 
     @pytest.mark.parametrize("sso", [{"enabled": False}, {}])
     def test_sso_must_be_configured(self, app, store, sso):
@@ -320,12 +323,17 @@ class TestAuthorize:
         assert store.pending == {}
 
     def test_redirects_to_the_idp_and_remembers_the_request(self, app, store):
-        resp = self.get(app)
+        assert self.get(app).status_code == 200
+        [internal] = store.pending
+        resp = app.post(
+            "/oauth/authorize/consent",
+            data={"state": internal, "decision": "approve"},
+            follow_redirects=False,
+        )
         assert resp.status_code == 302
         url = urlsplit(resp.headers["location"])
         assert f"{url.scheme}://{url.netloc}{url.path}" == SSO["authorization_endpoint"]
         query = dict(parse_qsl(url.query))
-        [internal] = store.pending
         assert query == {
             "client_id": "sso-cid",
             "response_type": "code",
@@ -365,7 +373,7 @@ class TestAuthorize:
 
 class TestSsoCallback:
     @pytest.fixture(autouse=True)
-    def _pending(self, store, monkeypatch):
+    def _pending(self, app, store, monkeypatch):
         store.pending["st8"] = PendingAuth(
             client_id="good",
             redirect_uri=CB,
@@ -373,7 +381,9 @@ class TestSsoCallback:
             state="client-state",
             code_challenge="chal",
             code_challenge_method="S256",
+            consented=True,
         )
+        app.cookies.set(oauth.CONSENT_COOKIE, "st8")
         self.exchange = AsyncMock(return_value={"access_token": "turbo.jwt.value"})
         monkeypatch.setattr(api_client, "exchange_sso_code", self.exchange)
 
@@ -798,12 +808,19 @@ class TestPublicUrlEndingInX:
     def test_authorize_callback_url(self, app, store, monkeypatch):
         store.clients["good"] = RegisteredClient(client_id="good", redirect_uris=[CB])
         monkeypatch.setattr(oauth, "_get_sso_config", AsyncMock(return_value=SSO))
-        resp = app.get("/oauth/authorize", params=authorize_params(), follow_redirects=False)
+        app.get("/oauth/authorize", params=authorize_params(), follow_redirects=False)
+        [internal] = store.pending
+        resp = app.post(
+            "/oauth/authorize/consent",
+            data={"state": internal, "decision": "approve"},
+            follow_redirects=False,
+        )
         query = dict(parse_qsl(urlsplit(resp.headers["location"]).query))
         assert query["redirect_uri"] == f"{self.BASE}/oauth/callback"
 
     def test_sso_callback_exchange_url(self, app, store, monkeypatch):
-        store.pending["st8"] = PendingAuth("good", CB, "s", "st", "ch", "S256")
+        store.pending["st8"] = PendingAuth("good", CB, "s", "st", "ch", "S256", consented=True)
+        app.cookies.set(oauth.CONSENT_COOKIE, "st8")
         exchange = AsyncMock(return_value={"access_token": "j"})
         monkeypatch.setattr(api_client, "exchange_sso_code", exchange)
         app.get("/oauth/callback", params={"code": "c", "state": "st8"}, follow_redirects=False)

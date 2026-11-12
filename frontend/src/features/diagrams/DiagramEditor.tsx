@@ -2712,6 +2712,8 @@ export default function DiagramEditor() {
   /* ---------- PostMessage handler ---------- */
   useEffect(() => {
     const handler = (e: MessageEvent) => {
+      // The DrawIO iframe is same-origin; any other window could be a page that opened this one.
+      if (e.origin !== window.location.origin) return;
       if (typeof e.data !== "string") return;
       let msg: DrawIOMessage;
       try {

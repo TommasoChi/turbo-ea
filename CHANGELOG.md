@@ -18,6 +18,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - **The password-reset and set-password links are built only from the configured application base URL**, never from the request's `Host` header. Without a base URL no email is sent, so a forged `Host` can no longer deliver a reset token to another site.
 - **A tag manager can no longer tag or untag a card hidden from them** by a View deny on its type: the card answers 404, as everywhere else.
 - **The ArchiMate diagram list now hides the diagrams of layers the caller has no permission for**, as the mixed list already did.
+- **Connecting an AI tool over MCP now shows a consent page first.** Registration is open, so a site could previously send a signed-in user straight to the sign-in and receive their MCP token without a click. The page names the application and where the sign-in will be sent, the answer must come from the same browser that was shown it, and the sign-in callback refuses a request that skipped either step.
+- **The diagram editor and viewer ignore messages from other sites.** A page that opened a diagram's edit link could previously send it a save message and overwrite the diagram with the viewer's session; only messages from this application's own origin are accepted now.
+- **The dashboard heatmap and sankey tooltips no longer render a card name as markup**, so a card named like an image tag cannot load an outside resource when someone hovers it.
 - **An extension's MCP tool can no longer step out of its own namespace.** A path parameter such as `../../cards/1` is now escaped, so the call cannot reach a core route with the user's token.
 - **Files uploaded by an extension are checked by their content**, like every other upload: the declared type decides nothing, the 20 MB limit applies, and the stored type is the one the bytes prove.
 
