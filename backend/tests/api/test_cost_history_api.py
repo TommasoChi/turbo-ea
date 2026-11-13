@@ -231,11 +231,15 @@ async def test_a_history_write_and_delete_publish_an_event_with_keys_only(client
     assert resp.status_code == 204
 
     events = await _cost_events(db, card)
-    assert [e["changes"]["cost_items"] for e in events] == [
-        {"old": [], "new": ["costTotalAnnual"]},
-        {"old": ["costTotalAnnual"], "new": ["costTotalAnnual"]},
-        {"old": ["costTotalAnnual"], "new": []},
-    ]
+    # The three events share one transaction timestamp, so their order is not defined.
+    assert sorted((e["changes"]["cost_items"] for e in events), key=str) == sorted(
+        [
+            {"old": [], "new": ["costTotalAnnual"]},
+            {"old": ["costTotalAnnual"], "new": ["costTotalAnnual"]},
+            {"old": ["costTotalAnnual"], "new": []},
+        ],
+        key=str,
+    )
     assert {e["source"] for e in events} == {"cost_history"}
     assert {e["fiscal_year"] for e in events} == {YEAR}
     dumped = str(events)
