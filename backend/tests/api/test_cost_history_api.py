@@ -1,3 +1,5 @@
+import json
+
 import pytest
 
 from app.services.fiscal_year import current_fiscal_year
@@ -220,6 +222,11 @@ async def _cost_events(db, card):
     return [e.data for e in rows.scalars().all()]
 
 
+def _stable(change: dict) -> str:
+    """A sort key that does not depend on the order the JSON column returns its keys in."""
+    return json.dumps(change, sort_keys=True)
+
+
 async def test_a_history_write_and_delete_publish_an_event_with_keys_only(client, db, env):
     admin = env["admin"]
     card = await create_card(db, card_type="Provider", name="ERP", user_id=admin.id)
@@ -232,13 +239,13 @@ async def test_a_history_write_and_delete_publish_an_event_with_keys_only(client
 
     events = await _cost_events(db, card)
     # The three events share one transaction timestamp, so their order is not defined.
-    assert sorted((e["changes"]["cost_items"] for e in events), key=str) == sorted(
+    assert sorted((e["changes"]["cost_items"] for e in events), key=_stable) == sorted(
         [
             {"old": [], "new": ["costTotalAnnual"]},
             {"old": ["costTotalAnnual"], "new": ["costTotalAnnual"]},
             {"old": ["costTotalAnnual"], "new": []},
         ],
-        key=str,
+        key=_stable,
     )
     assert {e["source"] for e in events} == {"cost_history"}
     assert {e["fiscal_year"] for e in events} == {YEAR}
