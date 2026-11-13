@@ -21,21 +21,24 @@ back. The session that called you owns git: **you never commit, push, tag, label
 
 1. Read `CLAUDE.md` (already loaded) and the **rule file of the area you are about to change**. Path
    scoped rules load when you *read* a matching file, not when you grep or glob one, so open one real
-   file of the area first, then the rule. **To find the rule for a file you do not recognise**, grep the
+   file of the area first, then **one rule** (the row below; open a second only when the first points
+   you to it, to keep your context for the work). **To find the rule for a file you do not recognise**, grep the
    frontmatter: every `.claude/rules/*.md` lists the paths that trigger it under `paths:`
    (`grep -l "backend/app/services/foo" .claude/rules/*.md`).
 
    | You change | Read |
    |---|---|
-   | any route under `backend/app/api/v1/`, anything that returns cards | `card-read-scope.md`, `api-contracts.md`, `relations.md` |
+   | any route under `backend/app/api/v1/`, anything that returns cards | `card-read-scope.md` |
    | events, audit log, DB sessions, background work | `db-sessions-events-audit.md` |
-   | costs, fiscal year | `cost-items.md`, `cost-fiscal-year.md` |
+   | costs (items, TCO) | `cost-items.md` |
+   | fiscal year, cost reports | `cost-fiscal-year.md` |
    | licences | `licensing-items.md` |
    | card health flags, EOL | `card-flags-eol.md` |
-   | models, migrations, anything stored | `workspace-transfer.md` (the checklist is mandatory), `settings-and-seed.md` |
+   | models, migrations, anything stored | `workspace-transfer.md` (its checklist is mandatory) |
    | uploads | `uploads.md` |
    | translations in `seed.py` | `i18n-locales.md` |
-   | extensions, SDK bridges | `extensions-backend.md`, `extensions-sdk-bridges.md` |
+   | extensions (store, licences, content packs) | `extensions-backend.md` |
+   | extension SDK bridges | `extensions-sdk-bridges.md` |
    | public portals, published diagrams | `public-access.md` |
    | BPM | `bpm.md` |
    | PPM | `ppm.md` |

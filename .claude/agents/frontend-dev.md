@@ -14,9 +14,10 @@ back. The session that called you owns git: **you never commit, push, tag, label
 
 ## Before you write anything
 
-1. Read `frontend/UI_GUIDELINES.md` and `.claude/rules/frontend-patterns.md`. Then the rule of the
-   area, after opening one real file of it (path scoped rules load when you *read* a matching file,
-   not when you grep or glob one). **To find the rule for a file you do not recognise**, grep the
+1. Read `frontend/UI_GUIDELINES.md` and `.claude/rules/frontend-patterns.md`. Then **one rule** for the
+   area (the row below; open a second only when the first points you to it, to keep your context for the
+   work), after opening one real file of the area: path scoped rules load when you *read* a matching file,
+   not when you grep or glob one. **To find the rule for a file you do not recognise**, grep the
    frontmatter: every `.claude/rules/*.md` lists the paths that trigger it under `paths:`
    (`grep -l "frontend/src/features/foo" .claude/rules/*.md`).
 
@@ -27,12 +28,18 @@ back. The session that called you owns git: **you never commit, push, tag, label
    | extension UI, `window.TurboEA.sdk` | `extensions-ui.md` |
    | public pages, routes, route permissions | `public-access.md` |
    | relations, relation labels | `relations.md` |
-   | costs, fiscal year, licences | `cost-items.md`, `cost-fiscal-year.md`, `licensing-items.md` |
+   | costs | `cost-items.md` |
+   | fiscal year, cost reports | `cost-fiscal-year.md` |
+   | licences | `licensing-items.md` |
    | card health flags, EOL | `card-flags-eol.md` |
    | dashboards, widgets, charts | `dashboards.md` |
-   | ArchiMate, Data Modeller, Value Chain | `archimate.md`, `data-modeller.md`, `value-chain.md` |
-   | BPM, PPM | `bpm.md`, `ppm.md` |
-   | Risk Register, TurboLens, compliance | `risk-register.md`, `turbolens-grc.md` |
+   | ArchiMate | `archimate.md` |
+   | Data Modeller | `data-modeller.md` |
+   | Value Chain | `value-chain.md` |
+   | BPM | `bpm.md` |
+   | PPM | `ppm.md` |
+   | Risk Register | `risk-register.md` |
+   | TurboLens, compliance | `turbolens-grc.md` |
    | AI suggestions, ServiceNow | `ai-and-integrations.md` |
    | uploads | `uploads.md` |
    | card visibility on screen | `card-read-scope.md` |
