@@ -106,7 +106,7 @@ async def test_list_defaults_to_drawio_and_filters_by_kind(client, env):
 
 
 async def test_card_linked_listing_hides_archimate_diagrams_by_default(client, env, db):
-    """The card's Resources tab lists `GET /diagrams?card_id=`: DrawIO only."""
+    """`GET /diagrams?card_id=` with no `kind` lists DrawIO only; the Resources tab asks `kind=all`."""
     h = auth_headers(env["admin"])
     await create_card_type(db, key="Application", label="Application")
     card = await create_card(db, card_type="Application", name="App", user_id=env["admin"].id)
