@@ -54,8 +54,6 @@ from tests.conftest import (
     create_user,
 )
 
-pytestmark = pytest.mark.anyio
-
 BASE = "/api/v1/bo-relationship"
 ER = "relDataObjectToDataObject"
 APP_LINK = "relAppToDataObj"

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router";
 
 /* ── mocks ─────────────────────────────────────────────────────── */
@@ -41,7 +41,10 @@ vi.mock("@/hooks/useMetamodel", () => ({
   }),
 }));
 // Drags in the whole cards feature; the viewer only mounts it closed.
-vi.mock("@/components/CardDetailSidePanel", () => ({ default: () => null }));
+vi.mock("@/components/CardDetailSidePanel", () => ({
+  default: ({ cardId, open }: { cardId: string | null; open: boolean }) =>
+    open ? <div data-testid="side-panel">{cardId}</div> : null,
+}));
 // jsdom never fires `Image.onload`, so the real composer would hang. Partial:
 // `drawio-shapes` reads the module's pure helpers when it paints the style.
 vi.mock("./cardLogoImage", async (importOriginal) => ({
@@ -122,6 +125,29 @@ describe("DiagramViewer", () => {
     expect(screen.queryByText("Diagram not found")).not.toBeInTheDocument();
     // Exactly the stored document, logos and all left as they were.
     expect(iframe()!.getAttribute("src")).toContain(encodeURIComponent(d.data.xml));
+  });
+
+  it("opens a card on a click message from this origin only", async () => {
+    mockGet.mockImplementation(async (path: string) => {
+      if (path === "/diagrams/d1") return diagram([]);
+      throw new Error(`unexpected path ${path}`);
+    });
+    renderViewer();
+    await waitFor(() => expect(iframe()).not.toBeNull());
+    const click = (origin: string) =>
+      act(() => {
+        window.dispatchEvent(
+          new MessageEvent("message", {
+            data: JSON.stringify({ event: "cardClicked", cardId: "card-9" }),
+            origin,
+          }),
+        );
+      });
+
+    click("https://evil.example");
+    expect(screen.queryByTestId("side-panel")).toBeNull();
+    click(window.location.origin);
+    expect(await screen.findByTestId("side-panel")).toHaveTextContent("card-9");
   });
 
   it("shows not-found only when the diagram itself cannot be loaded", async () => {

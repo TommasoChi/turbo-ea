@@ -365,6 +365,7 @@ def _oauth_app() -> Starlette:
     return Starlette(
         routes=[
             Route("/oauth/authorize", oauth.authorize, methods=["GET"]),
+            Route("/oauth/authorize/consent", oauth.authorize_consent, methods=["POST"]),
             Route("/oauth/callback", oauth.sso_callback, methods=["GET"]),
             Route("/oauth/token", oauth.token_endpoint, methods=["POST"]),
             Route("/oauth/register", oauth.register_client, methods=["POST"]),
@@ -377,7 +378,7 @@ class TestAuthorizeRoute:
         """The CVE: an attacker-supplied redirect_uri for an unknown client
         must be rejected with a direct 400, never a 302 to that URI."""
         _, challenge = _pkce_pair()
-        client = TestClient(_oauth_app())
+        client = TestClient(_oauth_app(), base_url="https://testserver")
         resp = client.get(
             "/oauth/authorize",
             params={
@@ -395,8 +396,9 @@ class TestAuthorizeRoute:
         # And crucially, no Location header pointing at the attacker.
         assert "attacker" not in resp.headers.get("location", "")
 
-    def test_registered_redirect_uri_redirects_to_sso(self, fresh_store):
-        """A properly registered redirect_uri proceeds to the SSO provider."""
+    def test_registered_redirect_uri_asks_for_consent_before_the_sso_provider(self, fresh_store):
+        """A registered redirect_uri reaches a consent page; only the answer, from the same
+        browser, goes on to the SSO provider."""
         _, challenge = _pkce_pair()
         fresh_store.clients["good-client"] = RegisteredClient(
             client_id="good-client",
@@ -408,7 +410,7 @@ class TestAuthorizeRoute:
             "authorization_endpoint": "https://sso.example.com/authorize",
         }
         with patch.object(oauth, "_get_sso_config", AsyncMock(return_value=sso_config)):
-            client = TestClient(_oauth_app())
+            client = TestClient(_oauth_app(), base_url="https://testserver")
             resp = client.get(
                 "/oauth/authorize",
                 params={
@@ -420,6 +422,13 @@ class TestAuthorizeRoute:
                     "code_challenge": challenge,
                     "code_challenge_method": "S256",
                 },
+                follow_redirects=False,
+            )
+            assert resp.status_code == 200 and "location" not in resp.headers
+            [state] = fresh_store.pending
+            resp = client.post(
+                "/oauth/authorize/consent",
+                data={"state": state, "decision": "approve"},
                 follow_redirects=False,
             )
         assert resp.status_code == 302

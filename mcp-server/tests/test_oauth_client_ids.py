@@ -51,15 +51,18 @@ def store(monkeypatch):
 
 @pytest.fixture
 def app(store):
-    return TestClient(
+    client = TestClient(
         Starlette(
             routes=[
                 Route("/oauth/register", oauth.register_client, methods=["POST"]),
                 Route("/oauth/authorize", oauth.authorize, methods=["GET"]),
+                Route("/oauth/authorize/consent", oauth.authorize_consent, methods=["POST"]),
                 Route("/oauth/token", oauth.token_endpoint, methods=["POST"]),
             ]
         )
     )
+    client.base_url = "https://mcp.example.com"  # the Secure consent cookie needs https
+    return client
 
 
 def authorize(app, client_id, redirect_uri=CB):
@@ -88,8 +91,7 @@ class TestSurvivesARestart:
         cid = app.post("/oauth/register", json={"redirect_uris": [CB]}).json()["client_id"]
         store.clients.clear()  # what a restart does to the in-memory store
         resp = authorize(app, cid)
-        assert resp.status_code == 302
-        assert resp.headers["location"].startswith(SSO["authorization_endpoint"] + "?")
+        assert resp.status_code == 200 and "location" not in resp.headers  # the consent page
         (pending,) = store.pending.values()
         assert (pending.client_id, pending.redirect_uri) == (cid, CB)
 
@@ -262,7 +264,7 @@ class TestRegistrationBounds:
         assert cid in store.clients
         # An evicted registration still authorizes from its id alone.
         del store.clients[cid]
-        assert authorize(app, cid).status_code == 302
+        assert authorize(app, cid).status_code == 200
 
 
 class TestSigningKey:

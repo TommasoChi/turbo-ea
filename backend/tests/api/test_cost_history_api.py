@@ -1,3 +1,5 @@
+import json
+
 import pytest
 
 from app.services.fiscal_year import current_fiscal_year
@@ -220,6 +222,11 @@ async def _cost_events(db, card):
     return [e.data for e in rows.scalars().all()]
 
 
+def _stable(change: dict) -> str:
+    """A sort key that does not depend on the order the JSON column returns its keys in."""
+    return json.dumps(change, sort_keys=True)
+
+
 async def test_a_history_write_and_delete_publish_an_event_with_keys_only(client, db, env):
     admin = env["admin"]
     card = await create_card(db, card_type="Provider", name="ERP", user_id=admin.id)
@@ -231,14 +238,18 @@ async def test_a_history_write_and_delete_publish_an_event_with_keys_only(client
     assert resp.status_code == 204
 
     events = await _cost_events(db, card)
-    assert [e["changes"]["cost_items"] for e in events] == [
-        {"old": [], "new": ["costTotalAnnual"]},
-        {"old": ["costTotalAnnual"], "new": ["costTotalAnnual"]},
-        {"old": ["costTotalAnnual"], "new": []},
-    ]
+    # The three events share one transaction timestamp, so their order is not defined.
+    assert sorted((e["changes"]["cost_items"] for e in events), key=_stable) == sorted(
+        [
+            {"old": [], "new": ["costTotalAnnual"]},
+            {"old": ["costTotalAnnual"], "new": ["costTotalAnnual"]},
+            {"old": ["costTotalAnnual"], "new": []},
+        ],
+        key=_stable,
+    )
     assert {e["source"] for e in events} == {"cost_history"}
     assert {e["fiscal_year"] for e in events} == {YEAR}
-    dumped = str(events)
+    dumped = str([{k: v for k, v in e.items() if k != "id"} for e in events])  # id is random
     assert "123456" not in dumped and "654321" not in dumped
 
 
@@ -250,3 +261,37 @@ async def test_deleting_a_year_that_has_no_row_publishes_nothing(client, db, env
     )
     assert resp.status_code == 204
     assert await _cost_events(db, card) == []
+
+
+async def test_a_put_that_loses_the_race_to_a_concurrent_insert_still_succeeds(
+    client, db, env, monkeypatch
+):
+    """The row appears between the existence check and the write: no unique-key 500."""
+    from sqlalchemy import select
+
+    from app.api.v1 import cost_history
+    from app.models.card_cost_history import CardCostHistory
+
+    admin = env["admin"]
+    card = await create_card(db, card_type="Provider", name="Raced", user_id=admin.id)
+    real_publish = cost_history._publish_history_change
+
+    async def _publish_then_lose_the_race(db_, user, card_, fiscal_year, *, old, new):
+        await real_publish(db_, user, card_, fiscal_year, old=old, new=new)
+        db_.add(
+            CardCostHistory(
+                card_id=card_.id, fiscal_year=fiscal_year, field_key="costTotalAnnual", value=1
+            )
+        )
+        await db_.flush()
+
+    monkeypatch.setattr(cost_history, "_publish_history_change", _publish_then_lose_the_race)
+    resp = await _put(client, card, admin, fiscal_year=YEAR, field_key="costTotalAnnual", value=7)
+    assert resp.status_code == 200
+    assert resp.json()["value"] == 7
+    rows = (
+        (await db.execute(select(CardCostHistory).where(CardCostHistory.card_id == card.id)))
+        .scalars()
+        .all()
+    )
+    assert [r.value for r in rows] == [7]

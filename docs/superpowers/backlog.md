@@ -62,6 +62,6 @@ Things noticed while working on `fix/cost-report` that are out of scope for it. 
 
 **What.** (1) `card_costs.delete_item` has no `in_window` check, so `DELETE /cards/{id}/costs/{fy}/items/{key}` can erase a year that PUT refuses (the licensing twin was fixed in the licensing branch). (2) `GET /saved-reports` returns `thumbnail` and `config` of public reports of any type without checking the permission that type needs: a viewer without `licenses.view` (or `costs.view`) receives the thumbnail, a picture of the figures, and a role that cannot read a card type receives the hidden card's id in `config.cardId` / `pickedCardId`. Creating a report is correctly gated.
 
-**Why it matters.** Both are Low (found by the licensing VAPT, `docs/superpowers/vapt-2026-11-06-licensing.md`): the first needs an old row to exist, the second shows a picture of numbers the caller cannot open.
+**Why it matters.** Both are Low (found by the licensing VAPT): the first needs an old row to exist, the second shows a picture of numbers the caller cannot open.
 
 **Size.** (1) one line and a test in `card_costs.py`. (2) Small-medium, in its own pull request: in the saved-reports list, withhold `thumbnail` and `config` of reports whose type needs a permission the caller lacks, and drop card ids that `CardReadScope` hides; one test per report type that carries a card id.

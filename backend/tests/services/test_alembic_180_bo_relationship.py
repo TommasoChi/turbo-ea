@@ -16,8 +16,6 @@ spec = importlib.util.spec_from_file_location("mig180", path)
 mig = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(mig)
 
-pytestmark = pytest.mark.anyio
-
 
 async def test_upgrade_is_additive_and_idempotent(db):
     from app.services.seed import RELATIONS, TYPES

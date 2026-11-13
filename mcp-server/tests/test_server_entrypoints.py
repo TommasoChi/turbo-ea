@@ -223,9 +223,14 @@ class TestCreateApp:
         ):
             assert path in paths
             assert client.post(path).status_code == 405, path
-        for path in ("/oauth/token", "/oauth/register"):
+        for path in ("/oauth/token", "/oauth/register", "/oauth/authorize/consent"):
             assert path in paths
             assert client.get(path).status_code == 405, path
+
+    def test_the_consent_answer_is_mounted_and_reaches_its_handler(self, client):
+        response = client.post("/oauth/authorize/consent", data={"state": "nope"})
+        assert response.status_code == 400
+        assert "This request has expired" in response.text
 
     def test_the_oidc_alias_serves_the_authorization_server_metadata(self, client):
         alias = client.get("/.well-known/openid-configuration")

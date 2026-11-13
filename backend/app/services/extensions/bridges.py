@@ -397,7 +397,6 @@ class _CoreQueryBridge:
 
         visible_cards: dict[UUID, Card] = {root.id: root}
         filtered_ids: set[UUID] = set()
-        nodes: dict[UUID, DependencyNode] = {root.id: self._dependency_node(root, card_attributes)}
         edges: dict[tuple[str, UUID, UUID], DependencyEdge] = {}
         visited: set[UUID] = {root.id}
         frontier: deque[tuple[Card, int]] = deque([(root, 0)])
@@ -459,7 +458,6 @@ class _CoreQueryBridge:
                         partial = True
                         continue
                     visible_cards[other.id] = other
-                    nodes[other.id] = self._dependency_node(other, card_attributes)
 
                 edge_key = (relation.type, relation.source_id, relation.target_id)
                 if edge_key not in edges:
@@ -483,7 +481,7 @@ class _CoreQueryBridge:
                     frontier.append((other, depth + 1))
 
         logo_updates = await logo_updated_map(self._db, list(visible_cards.values()))
-        nodes = {
+        nodes: dict[UUID, DependencyNode] = {
             card_id: self._dependency_node(
                 card,
                 card_attributes,
@@ -1277,7 +1275,8 @@ class _ResourceBridge:
             required_permission=required_permission,
         )
         try:
-            await validate_file_upload(self._db, mime_type=mime_type, data=data)
+            # The declared ``mime_type`` decides nothing: the bytes do.
+            stored_mime = await validate_file_upload(self._db, name=name or "untitled", data=data)
         except ResourcePolicyError as exc:
             raise ExtensionBridgeError(
                 "validation_failed" if exc.status_code == 400 else "permission_denied",
@@ -1288,7 +1287,7 @@ class _ResourceBridge:
             entity_type=entity_type,
             entity_id=entity_id,
             name=name or "untitled",
-            mime_type=mime_type,
+            mime_type=stored_mime,
             size=len(data),
             data=data,
             category=category,

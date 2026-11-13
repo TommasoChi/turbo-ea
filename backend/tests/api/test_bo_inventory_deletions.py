@@ -33,8 +33,6 @@ from tests.conftest import (
     create_user,
 )
 
-pytestmark = pytest.mark.anyio
-
 
 @pytest.mark.parametrize("same_actor", [True, False])
 async def test_bo_card_delete_and_relation_delete_do_not_deadlock(test_engine, same_actor):

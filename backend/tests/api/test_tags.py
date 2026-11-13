@@ -754,3 +754,52 @@ class TestTagAudit:
         )
         assert resp.status_code == 403
         assert await _audit_rows(db, "admin.") == []
+
+
+async def test_a_global_tags_manager_cannot_tag_or_untag_a_card_hidden_from_them(
+    client, db, tags_env
+):
+    """`tags.manage` is a landscape-wide grant, but a card whose type is View-denied for the
+    caller does not exist for them: 404, and no tag row, score change or history event."""
+    from sqlalchemy import select
+
+    from app.models.card_type import CardType
+    from app.models.tag import CardTag
+    from app.services.permission_service import PermissionService
+
+    await create_role(
+        db, key="tagger", label="Tagger", permissions={**VIEWER_PERMISSIONS, "tags.manage": True}
+    )
+    tagger = await create_user(db, email="tagger@test.com", role="tagger")
+    admin = tags_env["admin"]
+    card = tags_env["card"]
+    group = await client.post(
+        "/api/v1/tag-groups", json={"name": "G", "mode": "multi"}, headers=auth_headers(admin)
+    )
+    tag = await client.post(
+        f"/api/v1/tag-groups/{group.json()['id']}/tags",
+        json={"name": "T"},
+        headers=auth_headers(admin),
+    )
+    tag_id = tag.json()["id"]
+
+    # Control: before the deny the tagger can tag.
+    ok = await client.post(
+        f"/api/v1/cards/{card.id}/tags", json=[tag_id], headers=auth_headers(tagger)
+    )
+    assert ok.status_code == 201
+
+    ct = (await db.execute(select(CardType).where(CardType.key == "Application"))).scalar_one()
+    ct.role_permissions = {"tagger": {"inventory.view": False}}
+    await db.flush()
+    PermissionService.invalidate_type_permission_cache()
+
+    add = await client.post(
+        f"/api/v1/cards/{card.id}/tags", json=[tag_id], headers=auth_headers(tagger)
+    )
+    rem = await client.delete(
+        f"/api/v1/cards/{card.id}/tags/{tag_id}", headers=auth_headers(tagger)
+    )
+    assert (add.status_code, rem.status_code) == (404, 404)
+    rows = (await db.execute(select(CardTag).where(CardTag.card_id == card.id))).scalars().all()
+    assert len(rows) == 1

@@ -191,3 +191,17 @@ def test_migration_keeps_explicit_values_and_wildcards():
     )
     assert planned["archimatediagrams.business.manage"] is False
     assert planned["archimatediagrams.technology.manage"] is True
+
+
+async def test_archimate_list_hides_diagrams_of_layers_the_caller_has_no_key_for(client, env, db):
+    business = Diagram(name="biz", kind="archimate", viewpoint_key="vp-business", data=AM)
+    technology = Diagram(name="tech", kind="archimate", viewpoint_key="vp-technology", data=AM)
+    db.add_all([business, technology])
+    await db.flush()
+    url = "/api/v1/diagrams?kind=archimate"
+
+    r = await client.get(url, headers=auth_headers(env["business_viewer"]))
+    assert r.status_code == 200
+    assert [d["name"] for d in r.json()] == ["biz"]
+    r = await client.get(url, headers=auth_headers(env["technology_manager"]))
+    assert [d["name"] for d in r.json()] == ["tech"]

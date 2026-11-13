@@ -4,7 +4,8 @@ import re
 
 from fastapi import APIRouter, Depends, HTTPException, Path
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import func, select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, parse_uuid
@@ -149,18 +150,22 @@ async def upsert_cost_history(
         old=[body.field_key] if existed else [],
         new=[body.field_key],
     )
-    if row is None:
-        row = CardCostHistory(
+    # An upsert, not select-then-insert: two PUTs on one cell must not collide on the unique key.
+    await db.execute(
+        pg_insert(CardCostHistory)
+        .values(
             card_id=card.id,
             fiscal_year=body.fiscal_year,
             field_key=body.field_key,
             value=body.value,
         )
-        db.add(row)
-    else:
-        row.value = body.value
+        .on_conflict_do_update(
+            index_elements=["card_id", "fiscal_year", "field_key"],
+            set_={"value": body.value, "updated_at": func.now()},
+        )
+    )
     await db.commit()
-    return CostHistoryRow(fiscal_year=row.fiscal_year, field_key=row.field_key, value=row.value)
+    return CostHistoryRow(fiscal_year=body.fiscal_year, field_key=body.field_key, value=body.value)
 
 
 @router.delete("/cards/{card_id}/cost-history/{fiscal_year}/{field_key}", status_code=204)

@@ -142,10 +142,23 @@ describe("DiagramEditor colours", () => {
     await screen.findByText("Landscape");
     const msg = { event: "edgeConnected", edgeCellId: "e1", sourceType: "Application", targetType: "Application", ...colours };
     act(() => {
-      window.dispatchEvent(new MessageEvent("message", { data: JSON.stringify(msg) }));
+      window.dispatchEvent(new MessageEvent("message", { data: JSON.stringify(msg), origin: window.location.origin }));
     });
     const endpoints = JSON.parse((await screen.findByTestId("rel-endpoints")).textContent!);
     expect(endpoints).toMatchObject({ sourceColor: source, targetColor: target });
+  });
+
+  it("ignores a message that does not come from this origin", async () => {
+    renderEditor();
+    await screen.findByText("Landscape");
+    const msg = { event: "edgeConnected", edgeCellId: "e1", sourceType: "Application", targetType: "Application" };
+    act(() => {
+      window.dispatchEvent(
+        new MessageEvent("message", { data: JSON.stringify(msg), origin: "https://evil.example" }),
+      );
+    });
+    await new Promise((r) => setTimeout(r, 50));
+    expect(screen.queryByTestId("rel-endpoints")).toBeNull();
   });
 
   it("draws a new card in its type colour and lists pending work in type colours", async () => {

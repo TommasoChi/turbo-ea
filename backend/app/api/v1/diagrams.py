@@ -420,7 +420,7 @@ async def list_diagrams(
     result = await db.execute(stmt)
     rows = list(result.scalars().all())
 
-    if kind == "all":
+    if kind in ("all", "archimate"):
         # A mixed listing: plain diagrams.view (checked above) covers every
         # DrawIO row, but an ArchiMate row also needs its own
         # archimatediagrams.<tab>.* permission on at least one tab it spans --

@@ -91,6 +91,7 @@ function buildViewerSrc(xml: string): string {
  */
 function listenForCardClicks(onCardClick: (cardId: string) => void) {
   const handler = (e: MessageEvent) => {
+    if (e.origin !== window.location.origin) return;
     if (typeof e.data !== "string") return;
     try {
       const msg = JSON.parse(e.data);

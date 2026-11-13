@@ -15,7 +15,6 @@ migration = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(migration)
 
 
-@pytest.mark.anyio
 async def test_upgrade_adds_only_missing_view_grants_for_seeded_roles(db):
     existing = {
         "admin": {"*": True},
@@ -40,7 +39,6 @@ async def test_upgrade_adds_only_missing_view_grants_for_seeded_roles(db):
     assert dict(rows.all()) == expected
 
 
-@pytest.mark.anyio
 @pytest.mark.parametrize("permissions", [{"*": True}, ["legacy"]])
 async def test_upgrade_leaves_wildcard_or_non_object_permissions_as_stored(db, permissions):
     role = await create_role(db, key="member")

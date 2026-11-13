@@ -1338,18 +1338,15 @@ def _build_setup_email_body(display_name: str, app_title: str, setup_url: str) -
     return body_html, body_text
 
 
-def _resolve_app_base_url(request: Request) -> str:
-    """Resolve the public base URL for emailed links.
+def _resolve_app_base_url() -> str | None:
+    """The admin-configured `app_base_url` (general / email settings push it onto
+    `app_config._app_base_url`), or None.
 
-    Priority:
-    1. Admin-configured `app_base_url` (general / email settings push it onto
-       `app_config._app_base_url`).
-    2. The current request's base URL (works for direct deployments).
+    Never derived from the request: the Host header is attacker-chosen, so a link built from it
+    would hand a reset token to whoever sent the request.
     """
     explicit = settings._app_base_url
-    if explicit:
-        return explicit.rstrip("/")
-    return str(request.base_url).rstrip("/")
+    return explicit.rstrip("/") if explicit else None
 
 
 @router.post("/forgot-password")
@@ -1381,9 +1378,13 @@ async def forgot_password(
         user = result.scalar_one_or_none()
 
     email_sent = False
-    if user is not None and user.is_active and email_service._is_configured():
+    base_url = _resolve_app_base_url()
+    if user is not None and user.is_active and email_service._is_configured() and not base_url:
+        logger.warning(
+            "Password email not sent: set the application base URL in the email settings"
+        )
+    if user is not None and user.is_active and email_service._is_configured() and base_url:
         message: tuple[str, str, str] | None = None
-        base_url = _resolve_app_base_url(request)
         app_title = email_service._get_app_title()
 
         if user.password_hash is not None:

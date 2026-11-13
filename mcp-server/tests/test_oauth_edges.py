@@ -128,10 +128,13 @@ class TestSsoCallbackLogs:
             state="client-state",
             code_challenge="chal",
             code_challenge_method="S256",
+            consented=True,
         )
-        return TestClient(
+        client = TestClient(
             Starlette(routes=[Route("/oauth/callback", oauth.sso_callback)]),
         )
+        client.cookies.set(oauth.CONSENT_COOKIE, "st8")
+        return client
 
     def test_an_idp_error_without_a_description(self, app, caplog):
         with caplog.at_level(logging.WARNING, logger="turbo_ea_mcp.oauth"):

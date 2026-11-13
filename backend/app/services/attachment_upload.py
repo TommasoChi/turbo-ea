@@ -29,12 +29,16 @@ from app.services.attachment_validation import (
 UPLOADS_DISABLED_MESSAGE = "File uploads are disabled by the administrator"
 
 
-async def require_uploads_enabled(db: AsyncSession) -> None:
-    """403 when the administrator switched file uploads off."""
+async def uploads_enabled(db: AsyncSession) -> bool:
     settings_result = await db.execute(select(AppSettings).where(AppSettings.id == "default"))
     settings_row = settings_result.scalar_one_or_none()
     general = (settings_row.general_settings if settings_row else None) or {}
-    if not general.get("fileUploadsEnabled", True):
+    return bool(general.get("fileUploadsEnabled", True))
+
+
+async def require_uploads_enabled(db: AsyncSession) -> None:
+    """403 when the administrator switched file uploads off."""
+    if not await uploads_enabled(db):
         raise HTTPException(403, UPLOADS_DISABLED_MESSAGE)
 
 
