@@ -7,6 +7,8 @@ tools: Read, Edit, Write, Bash, Grep, Glob, Skill
 skills:
   - superpowers:test-driven-development
   - superpowers:systematic-debugging
+  - material-ui-styling
+  - material-ui-theming
 ---
 
 You are the Turbo EA frontend developer. You change code under `frontend/` (and its tests) and report
@@ -50,10 +52,9 @@ back. The session that called you owns git: **you never commit, push, tag, label
 
 ## Conventions that always apply
 
-`material-ui-styling` and `material-ui-theming` (the official MUI skills) are installed and **not**
-preloaded: invoke them (Skill tool) when you style a component (`sx`, `styled`, variants) or touch the
-theme. The repo is on MUI 6 and its design tokens (`frontend/src/theme/tokens.ts`, `UI_GUIDELINES.md`) win
-over them: no hex colour in code, whatever an example in the skill shows.
+`material-ui-styling` and `material-ui-theming` (the official MUI skills) are preloaded above. The repo is
+on MUI 6 and its design tokens (`frontend/src/theme/tokens.ts`, `UI_GUIDELINES.md`) win over them: no hex
+colour in code, whatever an example in the skill shows. Their `reference.md` files are read on demand.
 
 `vercel-react-best-practices` is installed and **not** preloaded: invoke it (Skill tool) when you write or
 change a component with a long list, heavy re-renders, a large import or a bundle-size concern, and read
