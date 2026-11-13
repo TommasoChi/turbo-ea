@@ -27,6 +27,9 @@ import { useFileUploadsEnabled } from "@/hooks/useFileUploadsEnabled";
 import { useResourceTypes } from "@/hooks/useResourceTypes";
 import { fieldLabel } from "@/hooks/useResolveLabel";
 import { api, ApiError } from "@/api/client";
+import { hasPermission } from "@/components/RequirePermission";
+import { useOptionalAuthUser } from "@/hooks/AuthContext";
+import { ARCHIMATE_MANAGE_ANY_LAYER } from "@/lib/routePermissions";
 import { getUrlErrorMsg, isValidUrl } from "./cardDetailUtils";
 import {
   ATTACHMENT_ACCEPT,
@@ -75,6 +78,10 @@ function ResourcesTab({
 }) {
   const { t, i18n } = useTranslation(["cards", "common"]);
   const navigate = useNavigate();
+  const user = useOptionalAuthUser();
+  // The ArchiMate editor has no read-only mode (route needs manage on some layer),
+  // so a view-only user sees the row but cannot open it.
+  const canOpenArchimate = hasPermission(user?.permissions, ARCHIMATE_MANAGE_ANY_LAYER);
   const { fileUploadsEnabled } = useFileUploadsEnabled();
   const { linkTypes, fileCategories, byKindKey } = useResourceTypes();
   const locale = i18n.language;
@@ -162,7 +169,7 @@ function ResourcesTab({
 
   const loadDiagrams = useCallback(() => {
     api
-      .get<DiagramSummary[]>(`/diagrams?card_id=${fsId}`)
+      .get<DiagramSummary[]>(`/diagrams?card_id=${fsId}&kind=all`)
       .then(setLinkedDiagrams)
       .catch(() => {});
   }, [fsId]);
@@ -730,7 +737,7 @@ function ResourcesTab({
               <ListItem
                 key={d.id}
                 secondaryAction={
-                  canManageDiagramLinks ? (
+                  canManageDiagramLinks && d.kind !== "archimate" ? (
                     <Tooltip title={t("resources.unlinkDiagram")}>
                       <IconButton
                         size="small"
@@ -746,8 +753,13 @@ function ResourcesTab({
                     </Tooltip>
                   ) : undefined
                 }
-                sx={{ cursor: "pointer" }}
-                onClick={() => navigate(`/diagrams/${d.id}`)}
+                sx={{
+                  cursor: d.kind !== "archimate" || canOpenArchimate ? "pointer" : "default",
+                }}
+                onClick={() => {
+                  if (d.kind !== "archimate") navigate(`/diagrams/${d.id}`);
+                  else if (canOpenArchimate) navigate(`/admin/architectureStudio/${d.id}`);
+                }}
               >
                 {d.thumbnail && (
                   <ListItemIcon sx={{ minWidth: 56 }}>
@@ -800,6 +812,9 @@ function ResourcesTab({
                   primary={
                     <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                       <Typography variant="body2">{d.name}</Typography>
+                      {d.kind === "archimate" && (
+                        <Chip label={t("resources.archimateDiagram")} size="small" />
+                      )}
                     </Box>
                   }
                 />
