@@ -249,7 +249,7 @@ async def test_a_history_write_and_delete_publish_an_event_with_keys_only(client
     )
     assert {e["source"] for e in events} == {"cost_history"}
     assert {e["fiscal_year"] for e in events} == {YEAR}
-    dumped = str(events)
+    dumped = str([{k: v for k, v in e.items() if k != "id"} for e in events])  # id is random
     assert "123456" not in dumped and "654321" not in dumped
 
 

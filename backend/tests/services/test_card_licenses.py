@@ -184,7 +184,8 @@ async def test_event_carries_type_keys_only(db):
     assert ev.event_type == svc.LICENSE_EVENT
     assert ev.data["changes"] == {"license_types": {"old": [], "new": ["admin"]}}
     assert ev.data["fiscal_year"] == CUR
-    blob = json.dumps(ev.data)
+    # The event's own random id could contain any short digit run: look at the rest.
+    blob = json.dumps({k: v for k, v in ev.data.items() if k != "id"})
     assert "12345" not in blob and "678" not in blob and "licensed" not in blob
 
 

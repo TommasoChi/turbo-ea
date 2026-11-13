@@ -88,7 +88,8 @@ it("groups drawing actions above the workspace and reserves a card panel before 
   const heading = await screen.findByRole("heading", { name: "boRelationship.title" });
   const header = heading.closest("header")!;
   expect(within(header).getByRole("button", { name: "toolbar.back" })).toBeInTheDocument();
-  expect(within(header).getByRole("button", { name: "editor.toolbar.sync" })).toBeInTheDocument();
+  // The header's sync button only exists once the graph has loaded; the title does not wait for it.
+  expect(await within(header).findByRole("button", { name: "editor.toolbar.sync" })).toBeInTheDocument();
   const toolbar = screen.getByRole("toolbar", { name: "boRelationship.title" });
   expect(within(toolbar).getByRole("button", { name: "boRelationship.newObject" })).toBeInTheDocument();
   expect(within(toolbar).getByRole("button", { name: "common:actions.save" })).toBeDisabled();
