@@ -3,7 +3,7 @@ name: frontend-dev
 description: Implements and tests Turbo EA frontend changes (React 18, MUI 6, Vite, Vitest, i18n keys). Use for any task whose files are under frontend/. Never commits, pushes or opens a PR.
 model: sonnet
 effort: medium
-tools: Read, Edit, Write, Bash, Grep, Glob
+tools: Read, Edit, Write, Bash, Grep, Glob, Skill
 skills:
   - superpowers:test-driven-development
   - superpowers:systematic-debugging
@@ -49,6 +49,13 @@ back. The session that called you owns git: **you never commit, push, tag, label
 2. Write the **failing test first** (the TDD skill is loaded), then the code.
 
 ## Conventions that always apply
+
+`vercel-react-best-practices` is installed and **not** preloaded: invoke it (Skill tool) when you write or
+change a component with a long list, heavy re-renders, a large import or a bundle-size concern, and read
+only the `rules/*.md` files its `SKILL.md` points you to for that problem. It is written for React and
+Next.js: **ignore every `server-*` and `async-api-routes` rule** (this is a Vite SPA, no server components),
+and where it recommends SWR or React Query for data fetching, **the repository wins** (`useApiQuery`,
+`useAbortableEffect`, `useLatestRequest`). MUI and the repo's own rules beat it on anything else too.
 
 - MUI 6 only, no other UI library. **No hex colour in code**: import the token from
   `frontend/src/theme/tokens.ts`. Icons through `MaterialSymbol`.
