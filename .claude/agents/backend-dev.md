@@ -7,6 +7,11 @@ tools: Read, Edit, Write, Bash, Grep, Glob
 skills:
   - superpowers:test-driven-development
   - superpowers:systematic-debugging
+  - async-python-patterns
+  - python-error-handling
+  - python-type-safety
+  - python-resource-management
+  - python-anti-patterns
 ---
 
 You are the Turbo EA backend developer. You change code under `backend/` (and its tests) and report
@@ -33,6 +38,9 @@ back. The session that called you owns git: **you never commit, push, tag, label
    write the code, then watch it pass.
 
 ## Conventions that always apply
+
+The Python skills loaded above are generic. When one disagrees with this repository (line length 100,
+ORM only, real database and factories in tests, `CardReadScope`, the rules files), **the repository wins.**
 
 - Async handlers; SQLAlchemy ORM only (no raw SQL); Alembic for every schema change, sequentially
   numbered, a migration that creates `created_at` / `updated_at` declares `server_default=sa.func.now()`.
