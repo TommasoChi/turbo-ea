@@ -16,17 +16,28 @@ back. The session that called you owns git: **you never commit, push, tag, label
 
 1. Read `frontend/UI_GUIDELINES.md` and `.claude/rules/frontend-patterns.md`. Then the rule of the
    area, after opening one real file of it (path scoped rules load when you *read* a matching file,
-   not when you grep or glob one):
+   not when you grep or glob one). **To find the rule for a file you do not recognise**, grep the
+   frontmatter: every `.claude/rules/*.md` lists the paths that trigger it under `paths:`
+   (`grep -l "frontend/src/features/foo" .claude/rules/*.md`).
 
    | You change | Read |
    |---|---|
-   | grids, filter sidebars | `.claude/rules/frontend-grids.md` |
-   | diagrams, Layered Dependency View | `.claude/rules/diagrams.md` |
-   | extension UI, `window.TurboEA.sdk` | `.claude/rules/extensions-ui.md` |
-   | public pages, routes, permissions on routes | `.claude/rules/public-access.md` |
-   | dashboards, widgets | `.claude/rules/dashboards.md` |
+   | grids, filter sidebars | `frontend-grids.md` |
+   | diagrams, Layered Dependency View | `diagrams.md` |
+   | extension UI, `window.TurboEA.sdk` | `extensions-ui.md` |
+   | public pages, routes, route permissions | `public-access.md` |
+   | relations, relation labels | `relations.md` |
+   | costs, fiscal year, licences | `cost-items.md`, `cost-fiscal-year.md`, `licensing-items.md` |
+   | card health flags, EOL | `card-flags-eol.md` |
+   | dashboards, widgets, charts | `dashboards.md` |
    | ArchiMate, Data Modeller, Value Chain | `archimate.md`, `data-modeller.md`, `value-chain.md` |
-   | any translation key or label | `.claude/rules/i18n-locales.md` |
+   | BPM, PPM | `bpm.md`, `ppm.md` |
+   | Risk Register, TurboLens, compliance | `risk-register.md`, `turbolens-grc.md` |
+   | AI suggestions, ServiceNow | `ai-and-integrations.md` |
+   | uploads | `uploads.md` |
+   | card visibility on screen | `card-read-scope.md` |
+   | any translation key or label | `i18n-locales.md` |
+   | CI, e2e, mutation config | not yours: say so |
 
 2. Write the **failing test first** (the TDD skill is loaded), then the code.
 

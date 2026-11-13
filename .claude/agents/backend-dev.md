@@ -21,18 +21,35 @@ back. The session that called you owns git: **you never commit, push, tag, label
 
 1. Read `CLAUDE.md` (already loaded) and the **rule file of the area you are about to change**. Path
    scoped rules load when you *read* a matching file, not when you grep or glob one, so open one real
-   file of the area first, then the rule:
+   file of the area first, then the rule. **To find the rule for a file you do not recognise**, grep the
+   frontmatter: every `.claude/rules/*.md` lists the paths that trigger it under `paths:`
+   (`grep -l "backend/app/services/foo" .claude/rules/*.md`).
 
    | You change | Read |
    |---|---|
-   | any route (`backend/app/api/v1/`), card reads, relations | `.claude/rules/card-read-scope.md`, `api-contracts.md`, `relations.md` |
-   | events, audit log, DB sessions | `.claude/rules/db-sessions-events-audit.md` |
-   | costs, licences, fiscal year | `cost-items.md`, `cost-fiscal-year.md`, `licensing-items.md` |
+   | any route under `backend/app/api/v1/`, anything that returns cards | `card-read-scope.md`, `api-contracts.md`, `relations.md` |
+   | events, audit log, DB sessions, background work | `db-sessions-events-audit.md` |
+   | costs, fiscal year | `cost-items.md`, `cost-fiscal-year.md` |
+   | licences | `licensing-items.md` |
+   | card health flags, EOL | `card-flags-eol.md` |
    | models, migrations, anything stored | `workspace-transfer.md` (the checklist is mandatory), `settings-and-seed.md` |
    | uploads | `uploads.md` |
+   | translations in `seed.py` | `i18n-locales.md` |
    | extensions, SDK bridges | `extensions-backend.md`, `extensions-sdk-bridges.md` |
    | public portals, published diagrams | `public-access.md` |
+   | BPM | `bpm.md` |
+   | PPM | `ppm.md` |
+   | TurboLens, compliance | `turbolens-grc.md` |
+   | Risk Register | `risk-register.md` |
+   | ArchiMate, Enterprise Objects | `archimate.md` |
+   | Data Modeller (BO relationship) | `data-modeller.md` |
+   | Value Chain / Value Stream | `value-chain.md` |
+   | dashboards, widgets | `dashboards.md` |
+   | AI suggestions, ServiceNow | `ai-and-integrations.md` |
+   | platform migration / import | `platform-migration.md` |
+   | permissions, auth, session code | `vapt.md` (a pass is owed: tell the session) |
    | MCP server | not yours: say so, `mcp-dev` owns `mcp-server/` |
+   | CI, Helm, Docker | not yours: say so |
 
 2. Write the **failing test first** (the TDD skill is loaded): watch it fail for the right reason, then
    write the code, then watch it pass.
