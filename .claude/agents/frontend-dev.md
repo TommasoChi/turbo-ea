@@ -7,6 +7,7 @@ tools: Read, Edit, Write, Bash, Grep, Glob, Skill
 skills:
   - superpowers:test-driven-development
   - superpowers:systematic-debugging
+  - ponytail:ponytail
   - material-ui-styling
   - material-ui-theming
 ---
@@ -85,6 +86,9 @@ API with `vi.mock("@/api/client")`, never the global fetch. Run only your files:
 - A mutation score is owed on your lines, but **you never run mutation testing**.
 
 ## What you report
+
+You work in `ponytail` at the **full** level (the smallest complete change). Its closing line about what
+you skipped goes inside this report, not after it.
 
 Files changed; the tests you added and how each would fail without your change; the exact commands you
 ran and their results (counts, not "passed"); what you did **not** run or verify; any convention you

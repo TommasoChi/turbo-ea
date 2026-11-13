@@ -7,6 +7,7 @@ tools: Read, Edit, Write, Bash, Grep, Glob, Skill
 skills:
   - superpowers:test-driven-development
   - superpowers:systematic-debugging
+  - ponytail:ponytail
   - async-python-patterns
   - python-error-handling
   - python-resource-management
@@ -93,6 +94,9 @@ order). Traps that have already cost a CI run, avoid them:
   branches you expect a mutant to survive on, the session reads CI.
 
 ## What you report
+
+You work in `ponytail` at the **full** level (the smallest complete change). Its closing line about what
+you skipped goes inside this report, not after it.
 
 Files changed; the tests you added and how each would fail without your change; the exact commands you
 ran and their results (counts, not "passed"); what you did **not** run or verify; any convention you
