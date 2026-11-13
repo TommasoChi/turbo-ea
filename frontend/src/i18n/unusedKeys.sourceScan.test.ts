@@ -40,7 +40,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 import * as ts from "typescript";
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 
 import {
   DEFAULT_NS,
@@ -449,6 +449,12 @@ function scan(): Scan {
 }
 
 describeSourceScan("unused translation keys", () => {
+  // The first call reads every source file; the default 15 s test budget is not enough when the
+  // CI shard is busy (it took 15.3 s on main). Pay for it once, here, not inside the first test.
+  beforeAll(() => {
+    scan();
+  }, 120_000);
+
   itSourceScan(`reads at least ${MIN_REFERENCED_KEYS} English keys`, () => {
     const { leaves, unused } = scan();
     expect(leaves.length - unused.length).toBeGreaterThanOrEqual(MIN_REFERENCED_KEYS);
