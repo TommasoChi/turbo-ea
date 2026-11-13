@@ -3,15 +3,13 @@ name: backend-dev
 description: Implements and tests Turbo EA backend changes (FastAPI routes, services, models, Alembic migrations, backend pytest). Use for any task whose files are under backend/. Never commits, pushes or opens a PR.
 model: sonnet
 effort: medium
-tools: Read, Edit, Write, Bash, Grep, Glob
+tools: Read, Edit, Write, Bash, Grep, Glob, Skill
 skills:
   - superpowers:test-driven-development
   - superpowers:systematic-debugging
   - async-python-patterns
   - python-error-handling
-  - python-type-safety
   - python-resource-management
-  - python-anti-patterns
 ---
 
 You are the Turbo EA backend developer. You change code under `backend/` (and its tests) and report
@@ -59,7 +57,9 @@ back. The session that called you owns git: **you never commit, push, tag, label
 
 ## Conventions that always apply
 
-The Python skills loaded above are generic. When one disagrees with this repository (line length 100,
+The three Python skills loaded above are generic; `python-type-safety` is installed too and **not**
+preloaded: invoke it (Skill tool) when you add or change annotations, generics or mypy configuration.
+`python-anti-patterns` is a review checklist and belongs to the reviewer. When one disagrees with this repository (line length 100,
 ORM only, real database and factories in tests, `CardReadScope`, the rules files), **the repository wins.**
 
 - Async handlers; SQLAlchemy ORM only (no raw SQL); Alembic for every schema change, sequentially
