@@ -74,8 +74,9 @@ user came from. **Chosen: (1)**, by the user, on 2026-11-13.
   diagram's links come from its model. This also removes the permission gap (no write is possible on an
   ArchiMate diagram). `unlink` keeps its `Diagram.kind.in_(DIAGRAM_KINDS)` filter: a `boRelationship`
   diagram stays 404 (`test_diagrams.py` pins it).
-- For a DrawIO diagram, resolve the card through `CardReadScope` with `mode="module"` before any lookup of
-  the link: a card that does not exist or is not readable is 404 (a single hidden card is 404, not 403).
+- For a DrawIO diagram, resolve the card with `require_card_readable(..., mode="module")` (not
+  `_readable_card_ids`, which lets a non-existent id through for an unrestricted caller) before any lookup
+  of the link: a card that does not exist or is not readable is 404 (a single hidden card is 404, not 403).
   `unlink` answers the same 404 for such a card, before it looks at the link. Keep the existing 404
   "Diagram not found" and 409 "already linked" for the cases they already cover.
 - Malformed UUIDs are out of scope: keep the current behaviour.
@@ -90,9 +91,11 @@ user came from. **Chosen: (1)**, by the user, on 2026-11-13.
   existing `t()` key if one fits, otherwise a new English key in `en/cards.json`.
 - `frontend/src/features/archimate/ArchimateEditorPage.tsx`: Back goes `navigate(-1)` when the user
   navigated inside the app, else `navigate("/diagrams")`. **"Inside the app" is `window.history.state?.idx
-  > 0`** (react-router's own position counter, which restarts at 0 on every document load), not
-  `location.key !== "default"`: after an SSO login `SsoCallback` replaces the entry, so the key is no
-  longer `"default"` while the entry before it is the identity provider's page.
+  > 0`** (react-router's own position counter: it is 0 on a deep link or a return from the identity
+  provider, and a reload keeps it), not `location.key !== "default"`: after an SSO login `SsoCallback`
+  replaces the entry, so the key is no longer `"default"` while the entry before it is the identity
+  provider's page. The fallback is `/diagrams`, or `/admin/architectureStudio` for a role that cannot open
+  `/diagrams` (it requires `diagrams.view`; a role with only `archimatediagrams.*` keys can open the editor).
 - `frontend/src/features/admin/SettingsAdmin.tsx`: remove the "Open Architecture Studio" button and its
   `settings.archimate.openSandbox` key from `en/admin.json`; the nine other locales lose it through
   `/translate`. `SettingsAdmin.test.tsx` loses the tests that asserted the button.
@@ -142,5 +145,10 @@ Back behaves while the unsaved-changes guard's sentinel entry is on the stack (a
    change to test and to run a VAPT on. Cost if wrong: such a role sees no diagram in Resources.
 3. **A 409 for ArchiMate only after the layer permission check**, reusing the existing loader's 403, so
    the 409 does not reveal that a UUID is an ArchiMate diagram to a caller who has no key on its layer.
-4. The Settings button is removed together with its translation key; the list page stays (non-goals).
-5. Version: a **patch** bump (two fixes and a removal), `CHANGELOG.md` under Fixed / Removed / Security.
+4. **Back's fallback depends on the permission**: `/diagrams` when the user may open it, else
+   `/admin/architectureStudio` (found by the plan's fresh review: `/diagrams` needs `diagrams.view`).
+5. **Back while the unsaved-changes guard's sentinel entry is on the stack goes to the fallback, not to the
+   origin** (the sentinel is `pushState(null)`, so `idx` reads 0): a short window (autosave is 3 s), no
+   error. Cost if wrong: one Back lands on `/diagrams` instead of the origin.
+6. The Settings button is removed together with its translation key; the list page stays (non-goals).
+7. Version: a **patch** bump (two fixes and a removal), `CHANGELOG.md` under Fixed / Removed / Security.

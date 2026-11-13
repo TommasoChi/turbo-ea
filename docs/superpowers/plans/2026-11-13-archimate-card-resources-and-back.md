@@ -24,7 +24,7 @@
 
 1. A hidden card and a non-existent card must be indistinguishable on `POST` and `DELETE /diagrams/{id}/cards` (Task 1).
 2. An ArchiMate row on a layer the caller has no key on must not appear in `GET /diagrams?card_id=…&kind=all` (Task 1).
-3. Back after an SSO login or a reload (entry key not `"default"`, `history.state.idx` 0) must land on `/diagrams`, never leave the app (Task 3).
+3. Back after an SSO login or on a deep link (`history.state.idx` 0, key possibly not `"default"`) must land on `/diagrams`, never leave the app; a reload keeps `idx` and Back still goes `-1` (Task 3).
 4. Back while `useUnsavedChangesGuard`'s sentinel entry is on the stack (`history.state === null`) must not throw and must land on `/diagrams` (Task 3).
 5. A card linked to one DrawIO and one ArchiMate diagram shows both, each opening its own viewer (Task 2).
 
@@ -37,18 +37,19 @@
 - Test: `backend/tests/api/test_diagrams_archimate_kind.py` (it already has `env`, `cards_env`, `_create`, `AM`, hidden-card patterns around lines 225-290)
 
 **Interfaces:**
-- Consumes: `_diagram_for(db, user, diagram_id: str, action: str) -> Diagram` (loader: DrawIO behind `diagrams.<action>`, ArchiMate behind its layer key, 404 when missing, keeps the `DIAGRAM_KINDS` filter) and `_readable_card_ids(db, user, card_ids: list[str]) -> list[str]` (read this one first: confirm a non-existent id is also dropped).
-- Produces: both handlers load the diagram with `_diagram_for(..., "manage")`; `d.kind == "archimate"` → `HTTPException(409, "An ArchiMate diagram's card links come from its model")`; then the card id must be in `_readable_card_ids` or `HTTPException(404, "Card not found")`; the rest (409 "already linked", 404 "Link not found", insert/delete) is unchanged.
+- Consumes: `_diagram_for(db, user, diagram_id: str, action: str) -> Diagram` (loader: DrawIO behind `diagrams.<action>`, ArchiMate behind its layer key, 404 when missing, keeps the `DIAGRAM_KINDS` filter) and `require_card_readable(db, user, card_id: uuid.UUID, mode="module")` from `app.services.card_read_scope` (raises `HTTPException(404, "Card not found")` for a missing **or** hidden card, for any caller, admin included: read its signature first). **Do not use `_readable_card_ids`**: for an unrestricted caller it returns its input unchanged, so a non-existent id would pass and reach the FK error.
+- Produces: both handlers load the diagram with `_diagram_for(..., "manage")`; `d.kind == "archimate"` → `HTTPException(409, "An ArchiMate diagram's card links come from its model")`; then `await require_card_readable(...)`; the rest (409 "already linked", 404 "Link not found", insert/delete) is unchanged. A missing `card_id` on `POST` keeps its 400 only for a DrawIO diagram (an ArchiMate one answers 409 first: accepted).
 
 - [ ] **Step 1: Write the failing tests** in `test_diagrams_archimate_kind.py`. Names and assertions:
   - `test_link_an_archimate_diagram_is_refused` / `test_unlink_an_archimate_diagram_is_refused`: admin creates an ArchiMate diagram with `_create(..., kind="archimate", data=AM)`, then `POST`/`DELETE /api/v1/diagrams/{id}/cards[/{card}]` → `409`.
   - `test_link_an_archimate_diagram_needs_the_layer_key`: a user holding `diagrams.manage` only (custom role via `create_role`) → `403`, not `409`, for both verbs.
-  - `test_link_a_hidden_card_and_a_missing_card_answer_the_same`: on a DrawIO diagram, `POST` with a card hidden from the caller (reuse the `cards_env` hidden-card setup) and with `uuid.uuid4()` → both `404`, `r1.json() == r2.json()`; same for `DELETE`.
+  - `test_link_a_hidden_card_and_a_missing_card_answer_the_same`: on a DrawIO diagram, `POST` with a card hidden from the caller (`member` in `cards_env`, who has a deny) and with `uuid.uuid4()` → both `404`, `r1.json() == r2.json()`; same for `DELETE`.
+  - `test_an_unrestricted_caller_gets_404_for_a_missing_card`: **admin** + `uuid.uuid4()` on `POST` and on `DELETE` → `404` (this is the case `_readable_card_ids` would let through).
   - `test_link_and_unlink_a_readable_card_still_work`: `201` then `204`; linking twice → `409`; unlinking an unlinked readable card → `404` with `"Link not found"`.
-  - Characterisation (should already pass): `test_card_listing_with_kind_all_hides_an_archimate_layer_the_caller_cannot_view`: an ArchiMate diagram linked to a card, caller without the layer's view key → `GET /api/v1/diagrams?card_id=<id>&kind=all` omits it; with the key → includes it. Add a similar one for `kind=archimate` only if `grep -n "kind=archimate" backend/tests/api` shows none.
+  - Characterisation (should already pass), in `backend/tests/api/test_archimate_diagram_permissions.py` (its `vp-business` / `vp-technology` fixture has real per-layer keys, which `env` here does not): `test_card_listing_with_kind_all_hides_an_archimate_layer_the_caller_cannot_view`: an ArchiMate diagram on the technology layer linked to a card; a caller with the business key only → `GET /api/v1/diagrams?card_id=<id>&kind=all` omits it, a caller with the technology key → includes it. `kind=archimate` listing tests already exist there (~lines 104, 201): add nothing for it.
 - [ ] **Step 2: Run and confirm the new tests fail for the right reason**
-  Run: `./scripts/test.sh backend/tests/api/test_diagrams_archimate_kind.py -k "link or kind_all"`
-  Expected: the refusal and hidden-card tests FAIL (201/204 or 409 instead of the asserted status); the characterisation test passes.
+  Run: `./scripts/test.sh backend/tests/api/test_diagrams_archimate_kind.py -k "link"` (the characterisation test lives in the other file: run it with `backend/tests/api/test_archimate_diagram_permissions.py -k kind_all`)
+  Expected: the refusal and hidden/missing-card tests FAIL (201/204/500 or 409 instead of the asserted status); the characterisation test passes.
 - [ ] **Step 3: Implement** in the two handlers as described under Produces. Keep `test_diagrams.py` green: a `boRelationship` diagram on unlink stays 404 (`_diagram_for` filters `DIAGRAM_KINDS`).
 - [ ] **Step 4: Run the file and the neighbours**
   Run: `./scripts/test.sh backend/tests/api/test_diagrams_archimate_kind.py backend/tests/api/test_diagrams.py backend/tests/api/test_archimate_diagram_permissions.py`
@@ -84,9 +85,9 @@
 - Test: `frontend/src/features/archimate/ArchimateEditorPage.test.tsx`
 
 **Interfaces:**
-- Produces: `onBack` computes `const inApp = ((window.history.state as { idx?: number } | null)?.idx ?? 0) > 0;` and calls `navigate(inApp ? -1 : "/diagrams")`. It must **not** test `location.key` (an SSO login replaces the entry, so the key is not `"default"` while the previous entry is the identity provider).
+- Produces: `onBack` computes `const inApp = ((window.history.state as { idx?: number } | null)?.idx ?? 0) > 0;` and calls `navigate(inApp ? -1 : fallback)`, where `fallback` is `/diagrams` when the user may open it (`ROUTE_PERMISSIONS` gives it `diagrams.view`: use `canAccessPath` from `frontend/src/lib/routePermissions.ts`, confirm its name and how components call it), else `/admin/architectureStudio` (a role with only `archimatediagrams.*` keys can open the editor but not `/diagrams`). It must **not** test `location.key` (an SSO login replaces the entry, so the key is not `"default"` while the previous entry is the identity provider). A reload keeps `history.state`, so `idx` survives it and Back still goes `-1` inside the app: correct, and the e2e `frontend/e2e/archimate-editor.spec.ts` (~lines 84-89, reload then Back then `waitForURL(/\/admin\/architectureStudio$/)`) must still pass: re-check it by reading, and run it only if the session has the browser suite available.
 
-- [ ] **Step 1: Write the failing tests** (replace `goes back to the sandbox list`): `goes back to the previous page when the app navigated here` (set `window.history.replaceState({ idx: 1 }, "")`, render with the page reached from a prior in-memory entry, click back, assert the prior path), `falls back to /diagrams on a deep link` (`replaceState({ idx: 0 }, "")`), `falls back to /diagrams when the entry key is not "default" but idx is 0` (the SSO case; reach the page via an in-memory `navigate(..., { replace: true })` so the key differs), `falls back to /diagrams while the unsaved-changes sentinel is on the stack` (`replaceState(null, "")`, no throw). Reset `window.history.replaceState(null, "")` in `afterEach`.
+- [ ] **Step 1: Write the failing tests** (replace `goes back to the sandbox list`). `renderWithProviders` takes a single `route`: start on a prior path, push to the editor with a button like `Where`'s `go-d2`, and list `/diagrams`, the prior path and `/admin/architectureStudio` in `routes` so the landing page renders. `MemoryRouter` never touches `window.history`: `idx` is driven only by `window.history.replaceState` in the test (say so in a comment). Tests: `goes back to the previous page when the app navigated here` (`replaceState({ idx: 1 }, "")`, assert the prior path); `falls back to /diagrams on a deep link` (`{ idx: 0 }`); `falls back to /diagrams when the entry key is not "default" but idx is 0` (the SSO case: reach the page with `navigate(..., { replace: true })`); `falls back to /diagrams while the unsaved-changes sentinel is on the stack` (`replaceState(null, "")`, no throw); `falls back to /admin/architectureStudio for a role without diagrams.view` (mock the permission helper). Reset `window.history.replaceState(null, "")` in `afterEach`.
 - [ ] **Step 2: Run, see them fail**
   Run: `cd frontend && npx vitest run src/features/archimate/ArchimateEditorPage.test.tsx`
   Expected: FAIL (the page still navigates to `/admin/architectureStudio`).
@@ -102,9 +103,9 @@
 - Modify: `frontend/src/features/admin/SettingsAdmin.tsx` (~1740-1749), `frontend/src/i18n/locales/en/admin.json` (key `settings.archimate.openSandbox`, line ~741)
 - Test: `frontend/src/features/admin/SettingsAdmin.test.tsx` (the two tests at ~630-660 assert the button)
 
-**Interfaces:** removes the `archimateEnabled && (<Box>…<Button>…openSandbox…)` block and, if `navigate` / `MaterialSymbol` become unused in that file, their imports; the `settings.archimate.*` toggle texts stay.
+**Interfaces:** removes the `archimateEnabled && (<Box>…<Button>…openSandbox…)` block, the now unused `const navigate = useNavigate()` (~line 219) and `useNavigate` in the react-router import at line 3 (keep `useSearchParams`); `MaterialSymbol` stays used. The `settings.archimate.*` toggle texts stay.
 
-- [ ] **Step 1: Rewrite the tests first**: replace the two sandbox tests with one, `does not offer an Architecture Studio button, enabled or not` (toggle on, `queryByRole("button", { name: endsWith(t("settings.archimate.openSandbox")) })` is absent). It fails now because the button renders when enabled.
+- [ ] **Step 1: Rewrite the tests first**: replace the two sandbox tests with one, `does not offer an Architecture Studio button, enabled or not`: with the module switched on, the ArchiMate card contains **no `button` role at all** (only the checkbox) and `queryByText("Open Architecture Studio")` is null. **Do not assert through `t("settings.archimate.openSandbox")`**: once the key leaves `en/admin.json` that call returns the key itself and the test passes even with the button present. It fails now because the button renders when enabled.
 - [ ] **Step 2: Run, see it fail**
   Run: `cd frontend && npx vitest run src/features/admin/SettingsAdmin.test.tsx -t "Architecture Studio"`
   Expected: FAIL (button present).
@@ -116,10 +117,10 @@
 
 ### Task 5: Version, changelog, docs, translations (session)
 
-**Files:** `VERSION`, `CHANGELOG.md`, `docs/guide/card-details.md` (section "Resources Tab", ~line 189), `docs/guide/diagrams.md`; the nine locale siblings and the nine other locales' `admin.json` via `/translate`.
+**Files:** `VERSION`, `CHANGELOG.md`, `docs/guide/card-details.md` (section "Resources Tab", ~line 189), `docs/guide/diagrams.md`, `docs/guide/archimate.md` (the "Open the sandbox" section ~16-24 and ~197 "reach them from the sandbox"), `docs/admin/settings.md` (~195-198); the stale comments `frontend/src/lib/routePermissions.ts:147-149`, `frontend/src/lib/pageTitle.ts:103` and the docstring of `test_card_linked_listing_hides_archimate_diagrams_by_default`; the nine locale siblings and the nine other locales' `admin.json` via `/translate`.
 
 - [ ] **Step 1:** `VERSION` → `2.204.2`; `CHANGELOG.md` heading `## [2.204.2] - 2026-11-13` with **Fixed** (ArchiMate diagrams now appear in a card's Resources and open in the Architecture Studio; the editor's Back returns to the previous page), **Removed** (the Settings "Open Architecture Studio" button), **Security** (linking or unlinking cards on an ArchiMate diagram is refused; a hidden card on a diagram link answers 404 like a missing one).
-- [ ] **Step 2:** English docs: the Resources-tab section says ArchiMate diagrams are listed (open-only, links come from the model); `docs/guide/diagrams.md` likewise where it describes a card's linked diagrams. No screenshot change.
+- [ ] **Step 2:** English docs: the Resources-tab section says ArchiMate diagrams are listed (open-only, links come from the model); `docs/guide/diagrams.md` likewise; `docs/guide/archimate.md` and `docs/admin/settings.md` stop describing the Settings button (say where ArchiMate diagrams are opened now: Diagrams page, a card's Resources). Check whether the screenshots `95_admin_settings_modules` and `28_admin_settings_general` show the button (look at the PNGs and their `pages.ts` entries); if they do, the screenshot job regenerates them and the plan notes it, otherwise no screenshot change. Fix the three stale comments listed above.
 - [ ] **Step 3:** run `/translate`; expect it to report clean (it removes `settings.archimate.openSandbox` from the nine locales, adds the new `resources` chip key, creates the nine doc siblings).
 - [ ] **Step 4:** `mkdocs build --strict` passes; `python scripts/dump_openapi.py` leaves `docs/api/openapi.json` unchanged (the routes did not change shape; if it differs, include the regenerated file).
 - [ ] **Step 5:** commit (`docs: 2.204.2 changelog, manual and translations`).
