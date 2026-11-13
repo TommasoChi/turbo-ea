@@ -144,6 +144,13 @@ cd backend && mutmut show app.services.lifecycle.x_is_live_in_fiscal_year__mutmu
 open frontend/reports/mutation/index.html
 ```
 
+On Windows, where the shadow root's symlinks are refused (`WinError 1314`), run
+the Python suites in containers instead: `scripts/mutation/docker-mutate.sh mcp
+turbo_ea_mcp/oauth.py`, `... backend app/services/lifecycle.py`, `... diff`
+(backend + MCP, scored like the PR gate), `... shell` (for `mutmut browse`). It
+needs Docker and a bash such as Git Bash; the first run installs the
+dependencies and pays mutmut's stats pass, both kept in a Docker volume.
+
 Never run `mutmut run` by hand; go through `mutmut_scope.py` (the make targets
 do). It builds the shadow root (below) and passes the mutant-name patterns
 that scope the run.
