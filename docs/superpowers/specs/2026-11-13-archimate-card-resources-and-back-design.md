@@ -67,9 +67,13 @@ user came from. **Chosen: (1)**, by the user, on 2026-11-13.
 
 ### Backend (`backend/app/api/v1/diagrams.py`)
 
-- `link_card_to_diagram` and `unlink_card_from_diagram`: load the diagram first. If `d.kind ==
-  "archimate"`, raise 409 with a message that says an ArchiMate diagram's links come from its model.
-  This also removes the permission gap (no write is possible on an ArchiMate diagram).
+- `link_card_to_diagram` and `unlink_card_from_diagram`: load the diagram first, through the existing
+  loader that applies the ArchiMate per-layer key (`diagrams.py`, the helper around line 347), so a caller
+  without a key on that layer gets the loader's 403 and never learns the UUID is an ArchiMate diagram. For
+  a caller who passes it, `d.kind == "archimate"` raises 409 with a message that says an ArchiMate
+  diagram's links come from its model. This also removes the permission gap (no write is possible on an
+  ArchiMate diagram). `unlink` keeps its `Diagram.kind.in_(DIAGRAM_KINDS)` filter: a `boRelationship`
+  diagram stays 404 (`test_diagrams.py` pins it).
 - For a DrawIO diagram, resolve the card through `CardReadScope` with `mode="module"` before any lookup of
   the link: a card that does not exist or is not readable is 404 (a single hidden card is 404, not 403).
   `unlink` answers the same 404 for such a card, before it looks at the link. Keep the existing 404
@@ -84,8 +88,11 @@ user came from. **Chosen: (1)**, by the user, on 2026-11-13.
   click goes to `/admin/architectureStudio/:id` when `d.kind === "archimate"`, else `/diagrams/:id`; the
   unlink button renders only for DrawIO rows. A small label or icon marks an ArchiMate row, through an
   existing `t()` key if one fits, otherwise a new English key in `en/cards.json`.
-- `frontend/src/features/archimate/ArchimateEditorPage.tsx`: Back goes `navigate(-1)` when the router has
-  history (`location.key !== "default"`), else `navigate("/diagrams")`.
+- `frontend/src/features/archimate/ArchimateEditorPage.tsx`: Back goes `navigate(-1)` when the user
+  navigated inside the app, else `navigate("/diagrams")`. **"Inside the app" is `window.history.state?.idx
+  > 0`** (react-router's own position counter, which restarts at 0 on every document load), not
+  `location.key !== "default"`: after an SSO login `SsoCallback` replaces the entry, so the key is no
+  longer `"default"` while the entry before it is the identity provider's page.
 - `frontend/src/features/admin/SettingsAdmin.tsx`: remove the "Open Architecture Studio" button and its
   `settings.archimate.openSandbox` key from `en/admin.json`; the nine other locales lose it through
   `/translate`. `SettingsAdmin.test.tsx` loses the tests that asserted the button.
@@ -110,11 +117,30 @@ user came from. **Chosen: (1)**, by the user, on 2026-11-13.
   and a missing card on a DrawIO diagram → 404 (same body); the success path still works; the
   `card_id=…&kind=all` listing returns an ArchiMate diagram linked to the card and omits one on a layer the
   caller cannot view.
+- Backend adds: link and unlink of an ArchiMate diagram by a caller with `diagrams.manage` but no key on
+  that layer → 403 (not 409); a `boRelationship` diagram on unlink stays 404.
 - Frontend, next to the source: Resources tab lists an ArchiMate row, opens the Architecture Studio route
-  on click and shows no unlink button on it; Back goes to the previous page and falls back to `/diagrams`;
-  Settings no longer renders the button.
+  on click and shows no unlink button on it; Back goes to the previous page and falls back to `/diagrams`
+  when `history.state.idx` is 0 **including an entry whose key is not `"default"`** (the SSO case); Back
+  with a diagram holding unsaved changes (`useUnsavedChangesGuard` pushes a sentinel history entry, so the
+  history count is not reliable); Settings no longer renders the button.
 - Mutation score on the lines written is read from CI, never run locally.
 
 ## Left to the builder
 
-The exact wording of the 409 message, the ArchiMate row's label, and the view-only behaviour above.
+The exact wording of the 409 message, the ArchiMate row's label, the view-only behaviour above, and how
+Back behaves while the unsaved-changes guard's sentinel entry is on the stack (a test pins the outcome).
+
+## Agent's calls (to check while reading)
+
+1. **Back uses `history.state.idx`, not `location.key`** (the fresh reviewer's finding): after an SSO login
+   the key is not `"default"` but the previous entry is the identity provider, so `navigate(-1)` would
+   leave the app. Cost if wrong: Back lands on `/diagrams` instead of the origin in some edge case.
+2. **`kind=all` keeps requiring `diagrams.view` for the whole list.** A role with an ArchiMate layer key
+   but no `diagrams.view` already gets a 403 from today's `GET /diagrams?card_id=` (the default `drawio`
+   branch needs the same key), so this is no regression; widening the gate would be a further permission
+   change to test and to run a VAPT on. Cost if wrong: such a role sees no diagram in Resources.
+3. **A 409 for ArchiMate only after the layer permission check**, reusing the existing loader's 403, so
+   the 409 does not reveal that a UUID is an ArchiMate diagram to a caller who has no key on its layer.
+4. The Settings button is removed together with its translation key; the list page stays (non-goals).
+5. Version: a **patch** bump (two fixes and a removal), `CHANGELOG.md` under Fixed / Removed / Security.
