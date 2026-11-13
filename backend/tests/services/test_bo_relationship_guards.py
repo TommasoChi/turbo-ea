@@ -6,8 +6,6 @@ from sqlalchemy.exc import IntegrityError
 from app.models.relation import Relation
 from tests.conftest import create_card
 
-pytestmark = pytest.mark.anyio
-
 
 @pytest.mark.parametrize("kind", ["er", "master"])
 async def test_bo_unique_indexes_reject_conflicting_links(db, kind):
