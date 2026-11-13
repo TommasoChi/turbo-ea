@@ -106,7 +106,7 @@ async def test_list_defaults_to_drawio_and_filters_by_kind(client, env):
 
 
 async def test_card_linked_listing_hides_archimate_diagrams_by_default(client, env, db):
-    """`GET /diagrams?card_id=` with no `kind` lists DrawIO only; the Resources tab asks `kind=all`."""
+    """`GET /diagrams?card_id=` with no `kind` lists DrawIO only (Resources tab asks `kind=all`)."""
     h = auth_headers(env["admin"])
     await create_card_type(db, key="Application", label="Application")
     card = await create_card(db, card_type="Application", name="App", user_id=env["admin"].id)
@@ -363,8 +363,9 @@ async def test_an_unrestricted_caller_gets_404_for_a_missing_card(client, cards_
     h = auth_headers(cards_env["admin"])
     url = f"/api/v1/diagrams/{d}/cards"
     r = await client.post(url, json={"card_id": str(uuid.uuid4())}, headers=h)
-    assert r.status_code == 404
-    assert (await client.delete(f"{url}/{uuid.uuid4()}", headers=h)).status_code == 404
+    assert r.status_code == 404 and r.json()["detail"] == "Card not found"
+    r = await client.delete(f"{url}/{uuid.uuid4()}", headers=h)
+    assert r.status_code == 404 and r.json()["detail"] == "Card not found"
 
 
 async def test_link_and_unlink_a_readable_card_still_work(client, cards_env):

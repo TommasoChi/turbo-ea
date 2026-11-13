@@ -625,7 +625,7 @@ describe("SettingsAdmin — module toggles", () => {
     expect(card.getByText(t("settings.archimate.enabled"))).toBeInTheDocument();
   });
 
-  it("does not offer an Architecture Studio button, enabled or not", async () => {
+  it("does not offer an Architecture Studio button when ArchiMate is enabled", async () => {
     scriptLoad({ bootstrap: { archimate_enabled: true } });
     await renderGeneral();
     const card = section(t("settings.archimate.title"));

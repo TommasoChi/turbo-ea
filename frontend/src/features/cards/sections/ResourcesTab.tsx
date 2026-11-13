@@ -81,6 +81,7 @@ function ResourcesTab({
   const user = useOptionalAuthUser();
   // The ArchiMate editor has no read-only mode (route needs manage on some layer),
   // so a view-only user sees the row but cannot open it.
+  const isArchimate = (d: DiagramSummary) => d.kind === "archimate";
   const canOpenArchimate = hasPermission(user?.permissions, ARCHIMATE_MANAGE_ANY_LAYER);
   const { fileUploadsEnabled } = useFileUploadsEnabled();
   const { linkTypes, fileCategories, byKindKey } = useResourceTypes();
@@ -737,7 +738,7 @@ function ResourcesTab({
               <ListItem
                 key={d.id}
                 secondaryAction={
-                  canManageDiagramLinks && d.kind !== "archimate" ? (
+                  canManageDiagramLinks && !isArchimate(d) ? (
                     <Tooltip title={t("resources.unlinkDiagram")}>
                       <IconButton
                         size="small"
@@ -754,10 +755,10 @@ function ResourcesTab({
                   ) : undefined
                 }
                 sx={{
-                  cursor: d.kind !== "archimate" || canOpenArchimate ? "pointer" : "default",
+                  cursor: !isArchimate(d) || canOpenArchimate ? "pointer" : "default",
                 }}
                 onClick={() => {
-                  if (d.kind !== "archimate") navigate(`/diagrams/${d.id}`);
+                  if (!isArchimate(d)) navigate(`/diagrams/${d.id}`);
                   else if (canOpenArchimate) navigate(`/admin/architectureStudio/${d.id}`);
                 }}
               >
@@ -812,7 +813,7 @@ function ResourcesTab({
                   primary={
                     <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                       <Typography variant="body2">{d.name}</Typography>
-                      {d.kind === "archimate" && (
+                      {isArchimate(d) && (
                         <Chip label={t("resources.archimateDiagram")} size="small" />
                       )}
                     </Box>
