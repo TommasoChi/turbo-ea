@@ -49,8 +49,11 @@ back. The session that called you owns git: **you never commit, push, tag, label
    | dashboards, widgets | `dashboards.md` |
    | AI suggestions, ServiceNow | `ai-and-integrations.md` |
    | platform migration / import | `platform-migration.md` |
+   | relations (any writer of `Relation(`, relation direction) | `relations.md` |
+   | seed data, `general_settings`, metamodel defaults, card type categories | `settings-and-seed.md` |
+   | a request/response contract, a new route (schemas first, OpenAPI) | `api-contracts.md` |
    | permissions, auth, session code | `vapt.md` (a pass is owed: tell the session) |
-   | MCP server | not yours: say so, `mcp-dev` owns `mcp-server/` |
+   | MCP server | not yours: say so, the session handles `mcp-server/` (`mcp-server.md`) |
    | CI, Helm, Docker | not yours: say so |
 
 2. Write the **failing test first** (the TDD skill is loaded): watch it fail for the right reason, then

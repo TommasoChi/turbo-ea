@@ -358,6 +358,18 @@ async def test_link_a_hidden_card_and_a_missing_card_answer_the_same(client, car
     assert hidden.json() == missing.json()
 
 
+async def test_a_caller_cannot_unlink_a_card_it_cannot_read(client, cards_env):
+    d = await _drawio(client, cards_env["admin"])
+    secret = str(cards_env["secret"].id)
+    url = f"/api/v1/diagrams/{d}/cards"
+    admin = auth_headers(cards_env["admin"])
+    assert (await client.post(url, json={"card_id": secret}, headers=admin)).status_code == 201
+    r = await client.delete(f"{url}/{secret}", headers=auth_headers(cards_env["member"]))
+    assert r.status_code == 404 and r.json()["detail"] == "Card not found"
+    r = await client.get(f"/api/v1/diagrams/{d}", headers=admin)
+    assert secret in r.json()["card_ids"]
+
+
 async def test_an_unrestricted_caller_gets_404_for_a_missing_card(client, cards_env):
     d = await _drawio(client, cards_env["admin"])
     h = auth_headers(cards_env["admin"])
