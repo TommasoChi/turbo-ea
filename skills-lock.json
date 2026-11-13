@@ -7,6 +7,18 @@
       "skillPath": "plugins/python-development/skills/async-python-patterns/SKILL.md",
       "computedHash": "5ed4e3ea95b394323088b0754668d72d8d0f70905826be41bf3b440f71fa9f07"
     },
+    "material-ui-styling": {
+      "source": "mui/material-ui",
+      "sourceType": "github",
+      "skillPath": "skills/material-ui-styling/SKILL.md",
+      "computedHash": "de001e8b94d49dc4e733fecbaf48dd0755821d04821326a9c069af29df5b0495"
+    },
+    "material-ui-theming": {
+      "source": "mui/material-ui",
+      "sourceType": "github",
+      "skillPath": "skills/material-ui-theming/SKILL.md",
+      "computedHash": "2a469402c1c4b95866e4527eef5dc3389ab88bbc7f6585cac6698de91f2852a4"
+    },
     "python-anti-patterns": {
       "source": "wshobson/agents",
       "sourceType": "github",
