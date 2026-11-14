@@ -295,6 +295,8 @@ async def test_patch_refuses_a_new_link_to_a_hidden_card(client, cards_env):
 
 # ── card link / unlink endpoints ─────────────────────────────────────────────
 
+REFUSED = "An ArchiMate diagram's card links come from its model"
+
 
 async def _archimate_row(db):
     from app.models.diagram import Diagram
@@ -323,6 +325,7 @@ async def test_link_an_archimate_diagram_is_refused(client, cards_env, db):
         f"/api/v1/diagrams/{d.id}/cards", json={"card_id": str(cards_env["app"].id)}, headers=h
     )
     assert r.status_code == 409
+    assert r.json()["detail"] == REFUSED
 
 
 async def test_unlink_an_archimate_diagram_is_refused(client, cards_env, db):
@@ -330,6 +333,7 @@ async def test_unlink_an_archimate_diagram_is_refused(client, cards_env, db):
     h = auth_headers(cards_env["admin"])
     r = await client.delete(f"/api/v1/diagrams/{d.id}/cards/{cards_env['app'].id}", headers=h)
     assert r.status_code == 409
+    assert r.json()["detail"] == REFUSED
 
 
 async def test_link_an_archimate_diagram_needs_the_layer_key(client, cards_env, db):
@@ -390,3 +394,19 @@ async def test_link_and_unlink_a_readable_card_still_work(client, cards_env):
     assert (await client.delete(f"{url}/{app}", headers=h)).status_code == 204
     r = await client.delete(f"{url}/{app}", headers=h)
     assert r.status_code == 404 and r.json()["detail"] == "Link not found"
+
+
+async def test_refusing_archimate_links_is_decided_by_the_diagram_kind(client, cards_env, db):
+    h = auth_headers(cards_env["admin"])
+    app = str(cards_env["app"].id)
+    drawio = await _drawio(client, cards_env["admin"])
+    url = f"/api/v1/diagrams/{drawio}/cards"
+    assert (await client.post(url, json={"card_id": app}, headers=h)).status_code == 201
+    assert (await client.delete(f"{url}/{app}", headers=h)).status_code == 204
+
+    am = (await _archimate_row(db)).id
+    url = f"/api/v1/diagrams/{am}/cards"
+    r = await client.post(url, json={"card_id": app}, headers=h)
+    assert r.status_code == 409 and r.json()["detail"] == REFUSED
+    r = await client.delete(f"{url}/{app}", headers=h)
+    assert r.status_code == 409 and r.json()["detail"] == REFUSED
