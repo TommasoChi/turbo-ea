@@ -257,7 +257,6 @@ describe("canAccessPath", () => {
     expect(canAccessPath({ "soaw.view": true }, "/ea-delivery/adr/abc")).toBe(false);
     expect(canAccessPath({ "adr.view": true }, "/ea-delivery/adr/abc")).toBe(true);
   });
-
 });
 
 describe("ROUTE_PATH", () => {
