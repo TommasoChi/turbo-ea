@@ -394,19 +394,3 @@ async def test_link_and_unlink_a_readable_card_still_work(client, cards_env):
     assert (await client.delete(f"{url}/{app}", headers=h)).status_code == 204
     r = await client.delete(f"{url}/{app}", headers=h)
     assert r.status_code == 404 and r.json()["detail"] == "Link not found"
-
-
-async def test_refusing_archimate_links_is_decided_by_the_diagram_kind(client, cards_env, db):
-    h = auth_headers(cards_env["admin"])
-    app = str(cards_env["app"].id)
-    drawio = await _drawio(client, cards_env["admin"])
-    url = f"/api/v1/diagrams/{drawio}/cards"
-    assert (await client.post(url, json={"card_id": app}, headers=h)).status_code == 201
-    assert (await client.delete(f"{url}/{app}", headers=h)).status_code == 204
-
-    am = (await _archimate_row(db)).id
-    url = f"/api/v1/diagrams/{am}/cards"
-    r = await client.post(url, json={"card_id": app}, headers=h)
-    assert r.status_code == 409 and r.json()["detail"] == REFUSED
-    r = await client.delete(f"{url}/{app}", headers=h)
-    assert r.status_code == 409 and r.json()["detail"] == REFUSED

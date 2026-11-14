@@ -186,7 +186,7 @@ export default function ReportShell<V extends string = "chart" | "table">({
     exportEnabled &&
     allows("xlsx") &&
     (!!buildExportData || (hasTableToggle && view === "table"));
-  const showPptxItem = exportEnabled && allows("pptx") && (!hasTableToggle || view === "chart");
+  const showPptxItem = exportEnabled && allows("pptx") && (!hasTableToggle || view !== "table");
 
   return (
     // `data-theme-mode`: a dark-theme report prints the text set on the page

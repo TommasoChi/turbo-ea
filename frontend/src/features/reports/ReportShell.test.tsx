@@ -390,6 +390,20 @@ describe("ReportShell", () => {
       expect(screen.queryByText("Export to PowerPoint (.pptx)")).not.toBeInTheDocument();
     });
 
+    it("keeps PowerPoint on in an extra chart view such as sankey", async () => {
+      const user = userEvent.setup();
+      renderShell({
+        chartRef: chartRef(),
+        hasTableToggle: true,
+        view: "sankey",
+        onViewChange: vi.fn(),
+        extraViews: [{ value: "sankey", icon: "waterfall_chart", label: "Sankey chart view" }],
+        exportFormats: ["pptx", "xlsx"],
+      });
+      await openMenu(user);
+      expect(screen.getByText("Export to PowerPoint (.pptx)")).toBeInTheDocument();
+    });
+
     it("shows progress and refuses a second click while an export runs", async () => {
       let finish: () => void = () => {};
       exportMocks.pptx.mockImplementation(() => new Promise<void>((r) => (finish = r)));

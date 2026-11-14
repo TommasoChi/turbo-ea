@@ -594,4 +594,59 @@ describe("CardDetailSidePanel — unsaved edits (#1397)", () => {
     expect(confirm).toHaveBeenCalledWith(MESSAGE);
     expect(screen.getByTestId("card-content")).toHaveTextContent("SAP ERP");
   });
+
+  describe("docked BO panel", () => {
+    const detailPaths = () => vi.mocked(api.get).mock.calls.map(([path]) => path);
+
+    async function dockedDirty() {
+      vi.mocked(api.get).mockImplementation((path: string) => Promise.resolve({
+        card: path.includes("/c2/") ? OTHER : CARD, permissions: { can_view: true },
+      }));
+      const onClose = vi.fn();
+      const view = (open: boolean, cardId: string) => (
+        <MemoryRouter>
+          <CardDetailSidePanel cardId={cardId} open={open} onClose={onClose} docked boScoped />
+        </MemoryRouter>
+      );
+      const utils = render(view(true, "c1"));
+      expect(await screen.findByTestId("card-content")).toHaveTextContent("SAP ERP");
+      await userEvent.click(screen.getByRole("button", { name: "Edit" }));
+      return { ...utils, onClose, view };
+    }
+
+    it("keeps the region and does not close on Escape when the user declines", async () => {
+      const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+      const { onClose } = await dockedDirty();
+
+      await userEvent.click(screen.getByRole("button", { name: "Edit" }));
+      await userEvent.keyboard("{Escape}");
+
+      expect(confirm).toHaveBeenCalledWith(MESSAGE);
+      expect(onClose).not.toHaveBeenCalled();
+      expect(screen.getByRole("region")).toBeInTheDocument();
+    });
+
+    it("stays rendered when the parent closes it and the user keeps the edits", async () => {
+      const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+      const { rerender, view } = await dockedDirty();
+
+      rerender(view(false, "c1"));
+
+      expect(confirm).toHaveBeenCalledWith(MESSAGE);
+      expect(screen.getByRole("region")).toBeInTheDocument();
+      expect(screen.getByTestId("card-content")).toHaveTextContent("SAP ERP");
+    });
+
+    it("does not load another object's detail when the user declines the switch", async () => {
+      const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+      const { rerender, view } = await dockedDirty();
+
+      rerender(view(true, "c2"));
+
+      expect(confirm).toHaveBeenCalledWith(MESSAGE);
+      expect(detailPaths()).not.toContain("/bo-relationship/objects/c2/detail");
+      expect(detailPaths().some((path) => path.startsWith("/cards/"))).toBe(false);
+      expect(screen.getByTestId("card-content")).toHaveTextContent("SAP ERP");
+    });
+  });
 });

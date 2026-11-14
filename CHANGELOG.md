@@ -5,7 +5,7 @@ All notable changes to Turbo EA are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
-## [2.204.3] - 2026-11-14
+## [2.205.0] - 2026-11-14
 
 Upstream sync (upstream 2.203.1 to 2.204.0). The fork's cost and licensing features are kept as they are: upstream's change that counts an Initiative's PPM lines in the cost report (#1395) is not taken.
 
