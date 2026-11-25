@@ -186,3 +186,116 @@ def test_parse_type_keys_accepts_the_cap():
 def test_parse_type_keys_refuses_more_than_the_cap():
     with pytest.raises(ValueError, match="at most 5"):
         parse_type_keys("a,b,c,d,e,f")
+
+
+# --- provider splits -------------------------------------------------------------------
+
+
+async def _provider_env(db):
+    from app.services import cost_item_types
+
+    await create_card_type(db, key="Application")
+    await create_card_type(db, key="Initiative")
+    await create_card_type(db, key="Provider")
+    await cost_item_types.create_item(db, "lic", "Licences")
+    await cost_item_types.create_item(db, "sup", "Support")
+    return await create_card(db, card_type="Application", name="ERP")
+
+
+async def _costs(db, card, **items):
+    from app.models.card_cost import CardCost
+
+    db.add(CardCost(card_id=card.id, fiscal_year=FY, items=items))
+    await db.flush()
+
+
+def _line(amount, provider=None):
+    return {
+        "amount": amount,
+        "renewal_date": None,
+        **({"provider_id": str(provider)} if provider else {}),
+    }
+
+
+async def _splits(db, card, cost_field="costTotalAnnual", scope=None):
+    from app.services.cost_report import provider_splits
+
+    return await provider_splits(
+        db, scope or CardReadScope.everything(), [card.id], cost_field, FY, 1
+    )
+
+
+async def test_provider_splits_group_items_by_provider_and_keep_the_total(db):
+    from app.services.cost_grouping import OTHER_GROUP
+
+    app = await _provider_env(db)
+    p1 = await create_card(db, card_type="Provider", name="P1")
+    p2 = await create_card(db, card_type="Provider", name="P2")
+    await _costs(
+        db, app, lic=_line(10, p1.id), sup=_line(5, p2.id), extra=_line(3), zero=_line(0, p1.id)
+    )
+    splits, names = await _splits(db, app)
+    assert splits[app.id] == {
+        str(p1.id): {"lic": 10.0},
+        str(p2.id): {"sup": 5.0},
+        OTHER_GROUP: {"extra": 3.0},
+    }
+    assert names == {str(p1.id): "P1", str(p2.id): "P2"}
+    assert sum(a for g in splits[app.id].values() for a in g.values()) == 18
+
+
+async def test_provider_splits_same_name_two_providers_stay_apart(db):
+    app = await _provider_env(db)
+    a = await create_card(db, card_type="Provider", name="Same")
+    b = await create_card(db, card_type="Provider", name="Same", status="ARCHIVED")
+    await _costs(db, app, lic=_line(1, a.id), sup=_line(2, b.id))
+    splits, names = await _splits(db, app)
+    assert set(splits[app.id]) == {str(a.id), str(b.id)}
+    assert names[str(b.id)] == "Same"
+
+
+async def test_provider_splits_unreadable_or_deleted_provider_is_other(db):
+    import uuid
+
+    from app.services.cost_grouping import OTHER_GROUP
+
+    app = await _provider_env(db)
+    hidden = await create_card(db, card_type="Provider", name="Hidden")
+    notprov = await create_card(db, card_type="Initiative", name="NotAProvider")
+    scope = CardReadScope(
+        role_key="x",
+        wildcard=False,
+        base_view=True,
+        denied_types=frozenset({"Provider"}),
+        allowed_types=frozenset(),
+        stakeholder_card_ids=frozenset(),
+    )
+    await _costs(
+        db,
+        app,
+        lic=_line(1, hidden.id),
+        sup=_line(2, uuid.uuid4()),
+        a=_line(4, notprov.id),
+    )
+    splits, names = await _splits(db, app, scope=scope)
+    assert splits[app.id] == {OTHER_GROUP: {"lic": 1.0, "sup": 2.0, "a": 4.0}}
+    assert names == {}
+
+
+async def test_provider_splits_single_item_cost_field_counts_only_that_item(db):
+    app = await _provider_env(db)
+    p = await create_card(db, card_type="Provider", name="P")
+    await _costs(db, app, lic=_line(10, p.id), sup=_line(5, p.id))
+    splits, _ = await _splits(db, app, cost_field="sup")
+    assert splits[app.id] == {str(p.id): {"sup": 5.0}}
+
+
+async def test_require_item_grouping_refuses_other_types_and_plain_fields(db):
+    from app.services.cost_report import require_item_grouping
+
+    await _provider_env(db)
+    await require_item_grouping(db, ["Application"], "costTotalAnnual")
+    await require_item_grouping(db, ["Application"], "lic")
+    for types, field in ((["Initiative"], "costTotalAnnual"), (["Application"], "plainField")):
+        with pytest.raises(ValueError):
+            await require_item_grouping(db, types, field)

@@ -70,6 +70,8 @@ from app.services.cost_report import (
     cards_with_cost_for_types,
     item_labels,
     parse_type_keys,
+    provider_splits,
+    require_item_grouping,
 )
 from app.services.cost_value import cost_value
 from app.services.data_quality_bands import DQ_BAND_BOUNDS, band_of, dq_band_condition
@@ -1639,17 +1641,35 @@ async def cost_treemap(
     items.sort(key=lambda x: x["cost"], reverse=True)
 
     groups = None
-    grouping = parse_group_by(group_by, field_keys)
-    if grouping:
+    group_names = None
+    grouping = parse_group_by(group_by, field_keys, allow_provider=True)
+    if grouping and grouping.kind == "provider":
+        try:
+            await require_item_grouping(db, type_keys, cost_field)
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        splits, group_names = await provider_splits(
+            db, read_scope, [c.id for c, _ in sheets], cost_field, target_fy, fy_start
+        )
+        base = {i["id"]: i for i in items}
+        items = [
+            {**base[str(card_id)], "cost": sum(share.values()), "group": g, "costs": share}
+            for card_id, shares in splits.items()
+            for g, share in shares.items()
+        ]
+        items.sort(key=lambda x: x["cost"], reverse=True)
+    if grouping and grouping.kind != "provider":
         try:
             assigned = await assign_groups(
                 db, read_scope, [c for c, _ in sheets], grouping, type_keys
             )
         except ValueError as exc:
             raise HTTPException(400, str(exc)) from exc
-        groups_dict: dict[str, float] = {}
         for item in items:
             item["group"] = assigned[uuid.UUID(item["id"])]
+    if grouping:
+        groups_dict: dict[str, float] = {}
+        for item in items:
             groups_dict[item["group"]] = groups_dict.get(item["group"], 0) + item["cost"]
         groups = [
             {"name": k, "cost": v} for k, v in sorted(groups_dict.items(), key=lambda x: -x[1])
@@ -1659,6 +1679,7 @@ async def cost_treemap(
         "items": items,
         "total": total,
         "groups": groups,
+        **({"group_names": group_names} if group_names is not None else {}),
         "components": await cost_components(db, type_keys, cost_field),
         "item_labels": await item_labels(db),
         "fiscal_year": target_fy,
@@ -1743,7 +1764,7 @@ async def cost_sankey(
             read_scope,
             type_keys,
             cost_field,
-            parse_group_by(group_by, field_keys),
+            parse_group_by(group_by, field_keys, allow_provider=True),
             target_fy,
             fy,
             fy_start,

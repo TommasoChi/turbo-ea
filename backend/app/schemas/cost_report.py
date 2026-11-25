@@ -20,12 +20,14 @@ class CostReportNode(BaseModel):
     model_config = ConfigDict(extra="allow")
 
     logo_updated_at: str | None = None
+    costs: dict[str, float] | None = None
 
 
 class CostTreemapResponse(BaseModel):
     model_config = ConfigDict(extra="allow")
 
     items: list[CostReportNode]
+    group_names: dict[str, str] | None = None
 
 
 class CostSankeyResponse(BaseModel):

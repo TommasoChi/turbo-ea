@@ -30,7 +30,8 @@ from app.services.card_costs import (
 from app.services.card_logo_service import logo_updated_map
 from app.services.card_read_scope import CardReadScope
 from app.services.cost_components import cost_components
-from app.services.cost_grouping import GroupBy, assign_groups
+from app.services.cost_grouping import OTHER_GROUP, GroupBy, assign_groups
+from app.services.cost_providers import provider_names
 from app.services.cost_value import cost_value
 from app.services.fiscal_year import current_fiscal_year
 from app.services.lifecycle import is_live_in_fiscal_year
@@ -93,6 +94,50 @@ async def item_costs_by_card(
         items, confirmed, fb = resolve_year(years.get(fiscal_year), prev, fiscal_year, cur)
         out[card_id] = year_costs(items, confirmed, fb, fiscal_year, cur, archived)
     return out
+
+
+async def require_item_grouping(db: AsyncSession, type_keys: list[str], cost_field: str) -> None:
+    """Grouping by provider splits cost items: each type must own them and ``cost_field`` be one."""
+    for key in type_keys:
+        if not await is_item_field(db, key, cost_field):
+            raise ValueError(f"cannot group {key!r} / {cost_field!r} by provider: not a cost item")
+
+
+async def provider_splits(
+    db: AsyncSession,
+    read_scope: CardReadScope,
+    card_ids: list[uuid.UUID],
+    cost_field: str,
+    target_fy: int,
+    fy_start: int,
+) -> tuple[dict[uuid.UUID, dict[str, dict[str, float]]], dict[str, str]]:
+    """``{card: {provider id: {item key: amount}}}`` and ``{provider id: name}``.
+
+    A missing, deleted, unreadable or non-Provider id falls in ``OTHER_GROUP``; an archived
+    provider keeps its own group.
+    """
+    costs = await item_costs_by_card(db, card_ids, target_fy, fy_start)
+    lines: dict[uuid.UUID, list[tuple[str, float, uuid.UUID | None]]] = {}
+    for card_id in card_ids:
+        lines[card_id] = []
+        for line in costs[card_id].items:
+            if not line.amount or cost_field not in (DERIVED_KEY, line.key):
+                continue
+            try:
+                pid = uuid.UUID(line.provider_id) if line.provider_id else None
+            except ValueError:
+                pid = None
+            lines[card_id].append((line.key, line.amount, pid))
+    known = await provider_names(
+        db, read_scope, {pid for ls in lines.values() for _, _, pid in ls if pid}
+    )
+    splits: dict[uuid.UUID, dict[str, dict[str, float]]] = {}
+    for card_id, ls in lines.items():
+        groups = splits[card_id] = {}
+        for key, amount, pid in ls:
+            group = str(pid) if pid in known else OTHER_GROUP
+            groups.setdefault(group, {})[key] = groups.get(group, {}).get(key, 0) + amount
+    return splits, {str(i): n for i, n in known.items()}
 
 
 async def _item_cards(
@@ -281,11 +326,17 @@ async def build_cost_sankey(
         if split and rest > 0:
             costs[OTHER_ITEM] = rest
     cards = sorted(per_card.values(), key=lambda cc: -cc[1])
-    groups = (
-        await assign_groups(db, read_scope, [c for c, _, _ in cards], group_by, type_keys)
-        if group_by
-        else {}
-    )
+    by_provider = group_by is not None and group_by.kind == "provider"
+    splits: dict[uuid.UUID, dict[str, dict[str, float]]] = {}
+    provider_label: dict[str, str] = {}
+    groups: dict[uuid.UUID, str] = {}
+    if by_provider:
+        await require_item_grouping(db, type_keys, cost_field)
+        splits, provider_label = await provider_splits(
+            db, read_scope, [c.id for c, _, _ in cards], cost_field, target_fy, fy_start
+        )
+    elif group_by:
+        groups = await assign_groups(db, read_scope, [c for c, _, _ in cards], group_by, type_keys)
 
     nodes: list[dict] = []
     index: dict[tuple[str, str], int] = {}
@@ -307,7 +358,6 @@ async def build_cost_sankey(
     total = 0.0
     for card, card_total, costs in cards:
         total += card_total
-        link_total = sum(costs.values())
         card_idx = node(
             "card",
             str(card.id),
@@ -323,11 +373,18 @@ async def build_cost_sankey(
                 for i, v in costs.items()
             ]
             continue
-        g = groups[card.id]
-        g_idx = node("group", g, g, "Group")
-        links.append({"source": g_idx, "target": card_idx, "value": link_total})
-        for i, v in costs.items():
-            flows[(i, g)] = flows.get((i, g), 0) + v
+        if by_provider:
+            shares = {
+                g: {(i if i in costs else OTHER_ITEM): v for i, v in share.items()}
+                for g, share in splits[card.id].items()
+            }
+        else:
+            shares = {groups[card.id]: costs}
+        for g, share in shares.items():
+            g_idx = node("group", g, provider_label.get(g, g), "Group")
+            links.append({"source": g_idx, "target": card_idx, "value": sum(share.values())})
+            for i, v in share.items():
+                flows[(i, g)] = flows.get((i, g), 0) + v
     links += [
         {"source": index[("item", i)], "target": index[("group", g)], "value": v}
         for (i, g), v in flows.items()
