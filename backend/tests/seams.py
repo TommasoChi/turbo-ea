@@ -282,7 +282,7 @@ def one_shot_asyncio() -> SimpleNamespace:
         ns.sleeps.append(delay)
         if len(ns.sleeps) > 1:
             raise asyncio.CancelledError
-        return None
+        return
 
     ns.sleep = sleep
     return ns

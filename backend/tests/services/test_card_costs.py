@@ -380,7 +380,7 @@ async def test_fallback_is_only_looked_up_for_a_current_year_without_a_row(db, m
 
     async def spy(db_, card_id, fy):
         asked.append(fy)
-        return None
+        return
 
     monkeypatch.setattr(svc, "_fallback_row", spy)
     await svc._resolve(db, card.id, CUR, SM)  # has a row

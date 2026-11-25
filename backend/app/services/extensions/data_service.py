@@ -1114,7 +1114,7 @@ class ExtensionData:
                 full_affected=full,
                 direct_children=direct_children,
             )
-            return None
+            return
 
         return await self._write(op)
 

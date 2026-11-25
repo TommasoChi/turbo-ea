@@ -264,12 +264,12 @@ async def after_save(
     changed (``document_history_service.record_save``); a save in review
     (filing only) records nothing."""
     if not was_draft:
-        return None
+        return
     # Imported here: the history service builds on this module.
     from app.services import document_history_service as history
 
     await history.record_save(db, doc_kind, doc, user=user, before=before)
-    return None
+    return
 
 
 async def on_workflow(

@@ -17,7 +17,7 @@ from tests.conftest import auth_headers, create_role, create_user
 
 async def _noop_job(*args, **kwargs):
     """The preview job opens its own session, outside the test's savepoint."""
-    return None
+    return
 
 
 @pytest.fixture
