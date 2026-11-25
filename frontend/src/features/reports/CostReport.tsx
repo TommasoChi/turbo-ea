@@ -30,6 +30,9 @@ import { buildCostSankeyOption, chartSankeyNodeHeight } from "./costSankeyOption
 import SaveReportDialog from "./SaveReportDialog";
 import CostTrendChart, { type TrendSelection } from "./CostTrendChart";
 import CostDrillBar from "./CostDrillBar";
+import CostFilters from "./CostFilters";
+import { restoreCardFilters } from "./cardFilters";
+import { costCardFiltersParam, type CostCardFilters } from "./costCardFilters";
 import CostImportDialog from "./CostImportDialog";
 import { applyDrill, crumbsOf, type Drill } from "./costDrill";
 import { useCostBreakdown } from "./useCostBreakdown";
@@ -485,6 +488,10 @@ export default function CostReport() {
     return raw.map((f) => ({ ...f, label: fieldLabel(f) }));
   }, [schemas, fieldLabel]);
   const [extraColumns, setExtraColumns] = useState<string[]>([]);
+  // Field and relation filters, one value per card type; a type that is toggled off keeps its own.
+  const [cardFilters, setCardFilters] = useState<CostCardFilters>({});
+  const [filtersCollapsed, setFiltersCollapsed] = useState(false);
+  const cardFiltersParam = useMemo(() => costCardFiltersParam(cardFilters, typeKeys), [cardFilters, typeKeys]);
 
   // Drop picked columns the current type no longer defines (card-type
   // switch) — mirrors the removed aggregateOptions pruning effect.
@@ -542,6 +549,14 @@ export default function CostReport() {
             (v): v is string => typeof v === "string",
           ),
         );
+      if (cfg.cardFilters && typeof cfg.cardFilters === "object" && !Array.isArray(cfg.cardFilters)) {
+        setCardFilters(
+          Object.fromEntries(
+            Object.entries(cfg.cardFilters).map(([k, v]) => [k, restoreCardFilters((v ?? {}) as Record<string, unknown>)]),
+          ),
+        );
+      }
+      if (cfg.filtersCollapsed != null) setFiltersCollapsed(!!cfg.filtersCollapsed);
       // Set for the restored type, so the scope is read as that type's from
       // the render the type lands on.
       if (Array.isArray(cfg.scopeIds)) {
@@ -564,12 +579,14 @@ export default function CostReport() {
     scopeIds: scope.loading || scope.error ? scopeIds : effectiveScopeIds,
     extraColumns,
     fiscalYearParam,
+    cardFilters,
+    filtersCollapsed,
   });
 
   // Auto-persist config to localStorage
   useEffect(() => {
     saved.persistConfig(getConfig());
-  }, [cardTypeKey, costField, groupBy, view, sortK, sortD, scopeIds, effectiveScopeIds, scope.loading, scope.error, extraColumns, fiscalYearParam]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [cardTypeKey, costField, groupBy, view, sortK, sortD, scopeIds, effectiveScopeIds, scope.loading, scope.error, extraColumns, fiscalYearParam, cardFilters, filtersCollapsed]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Reset all parameters to defaults
   const handleReset = useCallback(() => {
@@ -583,6 +600,8 @@ export default function CostReport() {
     clearScope();
     setExtraColumns([]);
     setFiscalYearParam(null);
+    setCardFilters({});
+    setFiltersCollapsed(false);
   }, [saved, clearScope]);
 
   // The table's group-by: single selects with options and yes/no fields (a
@@ -643,6 +662,7 @@ export default function CostReport() {
         });
         if (effectiveGroupBy) p.set("group_by", effectiveGroupBy);
         if (fiscalYearParam != null) p.set("fiscal_year", String(fiscalYearParam));
+        if (cardFiltersParam) p.set("card_filters", cardFiltersParam);
         const r = await api.get<CostSankeyResponse>(
           `/reports/cost-sankey?${p}`,
           { signal },
@@ -660,6 +680,7 @@ export default function CostReport() {
         });
         if (effectiveGroupBy) p.set("group_by", effectiveGroupBy);
         if (fiscalYearParam != null) p.set("fiscal_year", String(fiscalYearParam));
+        if (cardFiltersParam) p.set("card_filters", cardFiltersParam);
         const r = await api.get<CostTreemapResponse>(
           `/reports/cost-treemap?${p}`,
           { signal },
@@ -674,7 +695,7 @@ export default function CostReport() {
         adoptCurrentFiscalYear(r.current_fiscal_year);
       }
     },
-    [cardTypeKey, costField, effectiveGroupBy, view, canViewCostsGlobally, fiscalYearParam, refreshVersion],
+    [cardTypeKey, costField, effectiveGroupBy, view, canViewCostsGlobally, fiscalYearParam, cardFiltersParam, refreshVersion],
   );
 
   // Delta badge baseline: the current fiscal year's per-card costs, fetched
@@ -696,13 +717,14 @@ export default function CostReport() {
         cost_field: costField,
       });
       if (byProvider) p.set("group_by", "provider");
+      if (cardFiltersParam) p.set("card_filters", cardFiltersParam);
       const r = await api.get<CostTreemapResponse>(`/reports/cost-treemap?${p}`, {
         signal,
       });
       if (!isCurrent()) return;
       setBaselineCosts(new Map(r.items.map((it) => [rowKeyOf(it), it.cost])));
     },
-    [cardTypeKey, costField, view, canViewCostsGlobally, fiscalYearParam, refreshVersion, byProvider, rowKeyOf],
+    [cardTypeKey, costField, view, canViewCostsGlobally, fiscalYearParam, cardFiltersParam, refreshVersion, byProvider, rowKeyOf],
   );
 
   // The earliest year the picker itself offers — a selected year at or below
@@ -737,6 +759,7 @@ export default function CostReport() {
         fiscal_year: String(fiscalYearParam - 1),
       });
       if (byProvider) p.set("group_by", "provider");
+      if (cardFiltersParam) p.set("card_filters", cardFiltersParam);
       const r = await api.get<CostTreemapResponse>(`/reports/cost-treemap?${p}`, {
         signal,
       });
@@ -750,6 +773,7 @@ export default function CostReport() {
       canViewCostsGlobally,
       fiscalYearParam,
       minFiscalYearOption,
+      cardFiltersParam,
       refreshVersion,
       byProvider,
       rowKeyOf,
@@ -912,13 +936,14 @@ export default function CostReport() {
   // A drill names ids that exist only under the current selection.
   useEffect(() => {
     setDrill((d) => (d.group === undefined && d.cardId === undefined ? d : {}));
-  }, [cardTypeKey, costField, effectiveGroupBy, fiscalYearParam, scopeIds]);
+  }, [cardTypeKey, costField, effectiveGroupBy, fiscalYearParam, scopeIds, cardFiltersParam]);
   // The table's item columns and a drilled card need the per-item breakdown; no costs.view, no request.
   const { breakdown } = useCostBreakdown({
     enabled:
       canViewCostsGlobally && (view === "table" || (view === "chart" && drill.cardId !== undefined)),
     typeParam: typeParam(cardTypeKey),
     fiscalYear: fiscalYearParam,
+    cardFilters: cardFiltersParam,
     refreshVersion,
   });
   // A drilled card: one tile per cost item (catalogue order), the first 8 coloured, the rest merged.
@@ -981,6 +1006,7 @@ export default function CostReport() {
           years={trendYears}
           currentFiscalYear={currentFiscalYear}
           groupBy={effectiveGroupBy}
+          cardFilters={cardFiltersParam}
           selection={trendSelection}
           scopeIds={scope.closure}
           refreshVersion={refreshVersion}
@@ -1533,6 +1559,14 @@ export default function CostReport() {
               ))}
             </TextField>
           )}
+
+          <CostFilters
+            typeKeys={typeKeys}
+            value={cardFilters}
+            onChange={setCardFilters}
+            collapsed={filtersCollapsed}
+            onToggle={() => setFiltersCollapsed((v) => !v)}
+          />
         </>
       }
     >

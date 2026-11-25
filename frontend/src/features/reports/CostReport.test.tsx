@@ -68,6 +68,7 @@ vi.mock("./CostTrendChart", () => ({
     components,
     labelOf,
     groupBy,
+    cardFilters,
     scopeIds,
     refreshVersion,
   }: {
@@ -78,6 +79,7 @@ vi.mock("./CostTrendChart", () => ({
     components: string[];
     labelOf?: (key: string) => string;
     groupBy?: string;
+    cardFilters?: string;
     scopeIds?: Set<string> | null;
     refreshVersion?: number;
   }) => {
@@ -91,6 +93,7 @@ vi.mock("./CostTrendChart", () => ({
         data-type={typeParam}
         data-field={costField}
         data-group-by={groupBy ?? ""}
+        data-card-filters={cardFilters ?? ""}
         data-components={components.join(",")}
         data-scope={scopeIds ? [...scopeIds].sort().join(",") : ""}
         data-labels={components.map((c) => labelOf?.(c) ?? c).join(",")}
@@ -156,6 +159,34 @@ const CATALOGUE = [
   { id: "1", key: "licenses", label: "Licenses", sort_order: 1, archived: false, translations: {} },
 ];
 
+/** `GET /reports/cost-filter-options`: Provider as a Related by facet. */
+const FILTER_OPTIONS = {
+  fields_schema: [],
+  relation_types: [
+    {
+      key: "relProviderToApp",
+      label: "provides",
+      reverse_label: "is provided by",
+      source_type_key: "Provider",
+      target_type_key: "Application",
+      other_type_key: "Provider",
+    },
+  ],
+  groupable_types: { Provider: [{ id: "p1", name: "Acme" }] },
+  tag_groups: [],
+};
+const ACME_FILTER = { Application: { relationFilters: { Provider: ["p1"] } } };
+const ACME_PARAM = JSON.stringify({
+  Application: {
+    attrFilters: {},
+    relationFilters: { Provider: ["p1"] },
+    relSubtypeFilters: {},
+    subtypeFilters: [],
+    tagFilterIds: [],
+    includeDescendants: false,
+  },
+});
+
 let fyStart = 1;
 
 /** The server echoes the REQUESTED year as `fiscal_year` (2026 when none is asked for). */
@@ -198,6 +229,7 @@ beforeEach(async () => {
     if (path.startsWith("/metamodel/cost-item-types")) {
       return Promise.resolve(CATALOGUE) as never;
     }
+    if (path.startsWith("/reports/cost-filter-options")) return Promise.resolve(FILTER_OPTIONS) as never;
     // The scope hook's own hierarchy fetch.
     return Promise.resolve({
       items: HIERARCHY,
@@ -2226,5 +2258,109 @@ describe("CostReport group by Provider", () => {
     act(() => sankey().onContextMenu!({ dataType: "node", name: "erp" }));
     await waitFor(() => expect(sankeyIds()).not.toContain("group:p2"));
     expect(sankeyIds().sort()).toEqual(["erp", "group:p1", "item:licenses", "item:support"]);
+  });
+});
+
+describe("CostReport field and relation filters", () => {
+  const costCalls = () =>
+    vi.mocked(api.get).mock.calls
+      .map(([p]) => String(p))
+      .filter((p) => p.startsWith("/reports/cost-treemap") || p.startsWith("/reports/cost-sankey"));
+  const param = (path: string) => new URL(path, "http://x").searchParams.get("card_filters");
+
+  const fy = (path: string) => new URL(path, "http://x").searchParams.get("fiscal_year");
+  const kinds = (view: string): [string, (p: string) => boolean][] =>
+    view === "sankey"
+      ? [["sankey", (p) => p.startsWith("/reports/cost-sankey") && fy(p) === "2027"]]
+      : [
+          ["treemap", (p) => p.startsWith("/reports/cost-treemap") && fy(p) === "2027"],
+          ...(view === "table"
+            ? ([
+                ["prior-year", (p) => p.startsWith("/reports/cost-treemap") && fy(p) === "2026"],
+                ["breakdown", (p) => p.startsWith("/reports/cost-sankey")],
+              ] as [string, (p: string) => boolean][])
+            : ([["baseline", (p) => p.startsWith("/reports/cost-treemap") && fy(p) === null]] as [
+                string,
+                (p: string) => boolean,
+              ][])),
+        ];
+
+  // The first render fetches before the saved config lands, so the last request of each kind is the one that counts.
+  it.each(["table", "chart", "sankey"])("sends card_filters on every %s view request and to the trend chart", async (view) => {
+    consumedConfig = { view, fiscalYearParam: 2027, cardFilters: ACME_FILTER };
+    renderCost();
+    for (const [name, matches] of kinds(view)) {
+      await waitFor(() => {
+        const last = costCalls().filter(matches).at(-1);
+        expect(last, name).toBeDefined();
+        expect(param(last!), name).toBe(ACME_PARAM);
+      });
+    }
+    await waitFor(() => expect(screen.getByTestId("cost-trend-chart")).toHaveAttribute("data-card-filters", ACME_PARAM));
+  });
+
+  it("sends no card_filters while nothing is filtered", async () => {
+    consumedConfig = { view: "table" };
+    renderCost();
+    await waitFor(() => expect(costCalls().length).toBeGreaterThan(0));
+    expect(costCalls().every((p) => param(p) === null)).toBe(true);
+  });
+
+  const pickAcme = async () => {
+    const [provider] = await screen.findAllByRole("combobox", { name: "Provider" });
+    fireEvent.mouseDown(provider);
+    fireEvent.click(within(screen.getByRole("listbox")).getByText("Acme"));
+  };
+
+  it("a filter change resets the drill and refetches with the filter", async () => {
+    consumedConfig = { view: "chart" };
+    renderCost();
+    await screen.findByRole("img", { name: "Cost Analysis" });
+    act(() => echartState.byName("Cost Analysis").onContextMenu!({ data: { id: "crm" } }));
+    await screen.findByRole("button", { name: /back/i });
+    await pickAcme();
+    await waitFor(() => expect(screen.queryByRole("button", { name: /back/i })).not.toBeInTheDocument());
+    await waitFor(() => expect(param(treemapPaths().at(-1)!)).toBe(ACME_PARAM));
+  });
+
+  it("the filter and its collapsed state are saved with the report config and restored", async () => {
+    consumedConfig = { view: "table", cardFilters: ACME_FILTER, filtersCollapsed: true };
+    renderCost();
+    await waitFor(() => expect(vi.mocked(useSavedReport).mock.results.at(-1)?.value.persistConfig).toHaveBeenLastCalledWith(
+      expect.objectContaining({ cardFilters: { Application: JSON.parse(ACME_PARAM).Application }, filtersCollapsed: true }),
+    ));
+    expect(await screen.findByRole("button", { name: /Application Filters/ })).toHaveAttribute("aria-expanded", "false");
+  });
+
+  it("toggling a type off stops sending its filter and keeps its stored value", async () => {
+    consumedConfig = { view: "table", cardTypeKey: "Application+ITComponent", cardFilters: ACME_FILTER };
+    renderCost();
+    await waitFor(() => expect(param(treemapPaths().at(-1)!)).toBe(ACME_PARAM));
+    await userEvent.click(typeButton("Application"));
+    await waitFor(() => expect(lastTreemapType()).toBe("ITComponent"));
+    await waitFor(() => expect(param(treemapPaths().at(-1)!)).toBeNull());
+    await userEvent.click(typeButton("Application"));
+    await waitFor(() => expect(param(treemapPaths().at(-1)!)).toBe(ACME_PARAM));
+  });
+
+  it("keeps the report working and says filters are unavailable when the options fail", async () => {
+    const defaultGet = vi.mocked(api.get).getMockImplementation()!;
+    vi.mocked(api.get).mockImplementation((path: string, ...args: unknown[]) =>
+      path.startsWith("/reports/cost-filter-options")
+        ? (Promise.reject(new Error("boom")) as never)
+        : (defaultGet(path, ...(args as [])) as never),
+    );
+    consumedConfig = { view: "table" };
+    renderCost();
+    expect(await screen.findByText("Filters are unavailable right now")).toBeInTheDocument();
+    expect((await screen.findAllByText("ERP")).length).toBeGreaterThan(0);
+  });
+
+  it("clears the filters with the page reset", async () => {
+    consumedConfig = { view: "table", cardFilters: ACME_FILTER };
+    renderCost();
+    await waitFor(() => expect(param(treemapPaths().at(-1)!)).toBe(ACME_PARAM));
+    await userEvent.click(screen.getByRole("button", { name: /reset/i }));
+    await waitFor(() => expect(param(treemapPaths().at(-1)!)).toBeNull());
   });
 });

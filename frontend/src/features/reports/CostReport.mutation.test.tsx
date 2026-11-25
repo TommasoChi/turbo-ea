@@ -663,6 +663,8 @@ describe("CostReport saved configuration", () => {
         scopeIds: [],
         extraColumns: [],
         fiscalYearParam: null,
+        cardFilters: {},
+        filtersCollapsed: false,
       }),
     );
   });

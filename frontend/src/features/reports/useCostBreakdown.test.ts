@@ -41,6 +41,15 @@ describe("useCostBreakdown", () => {
     expect(q.get("fiscal_year")).toBe("2027");
   });
 
+  it("sends card_filters and refetches when it changes", async () => {
+    const { rerender } = renderHook((p) => useCostBreakdown(args(p)), { initialProps: { cardFilters: '{"Application":{}}' } });
+    await waitFor(() => expect(api.get).toHaveBeenCalledTimes(1));
+    expect(new URLSearchParams(String(vi.mocked(api.get).mock.calls[0][0]).split("?")[1]).get("card_filters")).toBe('{"Application":{}}');
+    rerender({ cardFilters: undefined });
+    await waitFor(() => expect(api.get).toHaveBeenCalledTimes(2));
+    expect(String(vi.mocked(api.get).mock.calls[1][0])).not.toContain("card_filters");
+  });
+
   it("ends the loading state with an empty map when the request fails", async () => {
     vi.mocked(api.get).mockRejectedValue(new Error("boom"));
     const { result } = renderHook(() => useCostBreakdown(args()));

@@ -344,6 +344,7 @@
   "cost.combinedType": "{{first}} + {{second}}",
   "cost.groupByNone": "None",
   "cost.groupByProvider": "Provider",
+  "cost.filtersUnavailable": "Filters are unavailable right now",
   "cost.otherCostItem": "Other costs",
   "cost.groupByUnavailable": "No field or relation to group by.",
   "cost.fiscalYear": "Fiscal year",

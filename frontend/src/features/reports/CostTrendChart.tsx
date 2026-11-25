@@ -35,6 +35,7 @@ export default function CostTrendChart({
   years,
   currentFiscalYear,
   groupBy,
+  cardFilters,
   selection,
   scopeIds,
   refreshVersion,
@@ -48,6 +49,8 @@ export default function CostTrendChart({
   currentFiscalYear: number;
   /** Sent as `group_by` so group members can be told apart. */
   groupBy?: string;
+  /** The `card_filters` query value of the report's field and relation filters. */
+  cardFilters?: string;
   selection?: TrendSelection;
   /** Cards in scope; null/undefined = all. */
   scopeIds?: Set<string> | null;
@@ -67,7 +70,7 @@ export default function CostTrendChart({
               api.get<TrendResponse>(
                 `/reports/cost-treemap?type=${typeParam}&cost_field=${component}&fiscal_year=${year}${
                   groupBy ? `&group_by=${encodeURIComponent(groupBy)}` : ""
-                }`,
+                }${cardFilters ? `&card_filters=${encodeURIComponent(cardFilters)}` : ""}`,
                 { signal },
               ),
             ),
@@ -80,7 +83,7 @@ export default function CostTrendChart({
       if (isCurrent()) setFetched(results);
     },
     // costField: a new field can keep the same components yet must not show the old rows.
-    [typeParam, costField, components.join(","), years, groupBy, refreshVersion],
+    [typeParam, costField, components.join(","), years, groupBy, cardFilters, refreshVersion],
   );
 
   const rows = useMemo<CostTrendRow[]>(

@@ -64,6 +64,18 @@ describe("CostTrendChart", () => {
     );
   });
 
+  it("sends card_filters on every request and refetches when it changes", async () => {
+    const filters = JSON.stringify({ Application: { attrFilters: { status: ["active"] } } });
+    const { rerender } = render(<CostTrendChart {...props({ cardFilters: filters })} />);
+    await waitFor(() => expect(api.get).toHaveBeenCalledTimes(4));
+    for (const [path] of vi.mocked(api.get).mock.calls) {
+      expect(new URLSearchParams(String(path).split("?")[1]).get("card_filters")).toBe(filters);
+    }
+    rerender(<CostTrendChart {...props({ cardFilters: undefined })} />);
+    await waitFor(() => expect(api.get).toHaveBeenCalledTimes(8));
+    expect(String(vi.mocked(api.get).mock.calls[7][0])).not.toContain("card_filters");
+  });
+
   it("draws one bar per component, keyed by the technical key, with distinct colours", async () => {
     render(<CostTrendChart {...props()} />);
     await waitFor(() => expect(barKeys()).toEqual(COMPONENTS));
