@@ -43,6 +43,19 @@ describe("applyDrill", () => {
   });
 });
 
+describe("applyDrill on a card split over two groups", () => {
+  const shares = [
+    { id: "a", group: "p1", cost: 70 },
+    { id: "a", group: "p2", cost: 30 },
+  ];
+  it("keeps only the share in the drilled group", () => {
+    expect(applyDrill(shares, { group: "p2", cardId: "a" }, none)).toEqual([shares[1]]);
+  });
+  it("keeps every share of the card when only the card is drilled", () => {
+    expect(applyDrill(shares, { cardId: "a" }, none)).toEqual(shares);
+  });
+});
+
 describe("crumbsOf", () => {
   const labels = { root: "All", group: (k: string) => `G:${k}`, card: (id: string) => `C:${id}` };
   it("is just the root at the top", () => {

@@ -343,6 +343,7 @@
   "cost.unspecified": "Unspecified",
   "cost.combinedType": "{{first}} + {{second}}",
   "cost.groupByNone": "None",
+  "cost.groupByProvider": "Provider",
   "cost.otherCostItem": "Other costs",
   "cost.groupByUnavailable": "No field or relation to group by.",
   "cost.fiscalYear": "Fiscal year",

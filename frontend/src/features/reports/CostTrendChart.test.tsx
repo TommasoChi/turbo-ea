@@ -191,6 +191,34 @@ describe("CostTrendChart selection and scope", () => {
   });
 });
 
+describe("CostTrendChart grouped by provider", () => {
+  // Card "a" is split over two providers: one entry per share, the same id.
+  const SHARES = [
+    { id: "a", cost: 70, group: "p1" },
+    { id: "a", cost: 30, group: "p2" },
+    { id: "b", cost: 5, group: "p2" },
+  ];
+  const withShares = () =>
+    vi.mocked(api.get).mockImplementation(() =>
+      Promise.resolve({ items: SHARES, total: 105 }) as never,
+    );
+  const provider = (over: Partial<React.ComponentProps<typeof CostTrendChart>>) =>
+    props({ components: ["licenseCost"], years: [2025], groupBy: "provider", ...over });
+
+  it("a drilled provider group shows that group's shares", async () => {
+    withShares();
+    render(<CostTrendChart {...provider({ selection: { kind: "group", keys: ["p2"] } })} />);
+    await waitFor(() => expect(rowsOf()).toEqual({ licenseCost: [35] }));
+    expect(String(vi.mocked(api.get).mock.calls[0][0])).toContain("group_by=provider");
+  });
+
+  it("a card split over two providers sums to its whole cost", async () => {
+    withShares();
+    render(<CostTrendChart {...provider({ selection: { kind: "card", id: "a" } })} />);
+    await waitFor(() => expect(rowsOf()).toEqual({ licenseCost: [100] }));
+  });
+});
+
 it("refetches all component years when the refresh version changes", async () => {
   const years = [2025, 2026];
   const { rerender } = render(<CostTrendChart {...props({ years, refreshVersion: 0 })} />);

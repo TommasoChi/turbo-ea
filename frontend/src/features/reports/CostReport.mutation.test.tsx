@@ -844,6 +844,7 @@ describe("CostReport toolbar", () => {
       "None",
       "Business Criticality",
       "Cloud Hosted",
+      "Provider",
     ]);
 
     fireEvent.click(
@@ -854,10 +855,11 @@ describe("CostReport toolbar", () => {
       "None",
       "Business Criticality",
       "Cloud Hosted",
+      "Provider",
     ]);
   });
 
-  it("disables the grouping picker when the new type has nothing to group by", async () => {
+  it("offers only Provider when the new type has no field or relation to group by", async () => {
     saved.config = { view: "table" };
     renderCost();
     await screen.findByRole("combobox", { name: /group by/i });
@@ -865,11 +867,12 @@ describe("CostReport toolbar", () => {
     await waitFor(() =>
       expect(lastTreemapParams().get("type")).toBe("ITComponent"),
     );
-    await waitFor(() =>
-      expect(screen.getByRole("combobox", { name: /group by/i })).toHaveAttribute(
-        "aria-disabled",
-        "true",
-      ),
+    await waitFor(async () =>
+      expect(await optionsOf(/group by/i)).toEqual(["None", "Provider"]),
+    );
+    expect(screen.getByRole("combobox", { name: /group by/i })).not.toHaveAttribute(
+      "aria-disabled",
+      "true",
     );
   });
 
@@ -952,8 +955,8 @@ describe("CostReport toolbar", () => {
         "Unspecified(1)$1010.0%",
       ]),
     );
-    // A single-select with no options cannot group: only the yes/no field is offered.
-    expect(await optionsOf(/group by/i)).toEqual(["None", "Managed"]);
+    // A single-select with no options cannot group: only the yes/no field is offered (and Provider).
+    expect(await optionsOf(/group by/i)).toEqual(["None", "Managed", "Provider"]);
   });
 
   it("offers no cost field picker for a type with a single cost field", async () => {
