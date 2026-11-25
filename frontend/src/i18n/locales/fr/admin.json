@@ -537,6 +537,7 @@
   "metamodel.stakeholderPanel.keyLength": "Doit comporter entre {{min}} et {{max}} caractères",
   "metamodel.stakeholderPanel.failedToDelete": "Échec de la suppression du rôle",
   "metamodel.stakeholderPanel.translations": "Traductions",
+  "metamodel.graph.title": "Graphe du métamodèle des types de fiches et de leurs relations",
   "metamodel.graph.noTypes": "Aucun type visible à afficher. Créez d’abord des types de fiches.",
   "tags.title": "Gestion des tags",
   "tags.newGroup": "Nouveau groupe de tags",

@@ -131,7 +131,8 @@ Las Aplicaciones y los Componentes de TI registran su coste como una lista de **
 - **TCO** — El coste total de propiedad del año es la suma de sus partidas. Nunca se escribe a mano.
 - **Gráfico y tarjetas** — Las tarjetas muestran solo el año seleccionado. Cada partida tiene una tarjeta con su **importe anual** y su **fecha de renovación**; una renovación en los próximos 90 días se muestra en naranja. Los costes son siempre anuales.
 - **Añadir y editar** — Una partida se añade, edita o elimina en un cuadro de diálogo. Las partidas proceden del catálogo que gestiona un administrador en [Metamodelo → Partidas de coste](../admin/metamodel.md#partidas-de-coste).
-- **Copiar a Forecast** — Copia las partidas del año que está viendo al año Forecast, para empezar un plan a partir de las cifras actuales.
+- **Proveedor** — El cuadro de diálogo tiene un campo opcional **Proveedor**: el proveedor al que se paga esta partida, uno por partida. La lista ofrece los proveedores activos que puede leer y que están vinculados a esta tarjeta, a cualquiera de sus tarjetas padre o a cualquiera de sus subtarjetas. Elija **Ninguno** para borrarlo. Un proveedor archivado o desvinculado más tarde permanece en la partida hasta que lo cambie, y aún puede guardar un importe en esa partida. Un proveedor que no puede leer no se muestra, y guardar nunca lo elimina. El informe de costes puede agrupar por este campo.
+- **Copiar a Forecast** — Copia las partidas del año que está viendo al año Forecast, para empezar un plan a partir de las cifras actuales. El proveedor acompaña a la partida.
 
 **Un nuevo año fiscal.** Cuando cambia el año fiscal y una ficha aún no tiene costes para el nuevo año actual, la sección muestra las partidas del año anterior marcadas como **sin confirmar**, con sus fechas de renovación adelantadas. Siguen así hasta que alguien las confirme o edite un importe. El Forecast y los años pasados nunca recurren a otro año.
 

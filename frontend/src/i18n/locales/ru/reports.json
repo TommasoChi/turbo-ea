@@ -351,6 +351,8 @@
   "cost.unspecified": "Не указано",
   "cost.combinedType": "{{first}} + {{second}}",
   "cost.groupByNone": "Нет",
+  "cost.groupByProvider": "Поставщик",
+  "cost.filtersUnavailable": "Фильтры сейчас недоступны",
   "cost.otherCostItem": "Прочие затраты",
   "cost.groupByUnavailable": "Нет поля или связи для группировки.",
   "cost.fiscalYear": "Финансовый год",

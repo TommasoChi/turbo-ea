@@ -343,6 +343,8 @@
   "cost.unspecified": "Nicht angegeben",
   "cost.combinedType": "{{first}} + {{second}}",
   "cost.groupByNone": "Keine",
+  "cost.groupByProvider": "Anbieter",
+  "cost.filtersUnavailable": "Filter sind derzeit nicht verfügbar",
   "cost.otherCostItem": "Sonstige Kosten",
   "cost.groupByUnavailable": "Kein Feld oder keine Beziehung zum Gruppieren vorhanden.",
   "cost.fiscalYear": "Geschäftsjahr",

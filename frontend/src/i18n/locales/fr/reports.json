@@ -343,6 +343,8 @@
   "cost.unspecified": "Non spécifié",
   "cost.combinedType": "{{first}} + {{second}}",
   "cost.groupByNone": "Aucun",
+  "cost.groupByProvider": "Fournisseur",
+  "cost.filtersUnavailable": "Les filtres sont indisponibles pour le moment",
   "cost.otherCostItem": "Autres coûts",
   "cost.groupByUnavailable": "Aucun champ ni relation pour regrouper.",
   "cost.fiscalYear": "Exercice fiscal",

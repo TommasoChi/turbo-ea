@@ -537,6 +537,7 @@
   "metamodel.stakeholderPanel.keyLength": "Deve contenere da {{min}} a {{max}} caratteri",
   "metamodel.stakeholderPanel.failedToDelete": "Impossibile eliminare il ruolo",
   "metamodel.stakeholderPanel.translations": "Traduzioni",
+  "metamodel.graph.title": "Grafo del metamodello dei tipi di scheda e delle loro relazioni",
   "metamodel.graph.noTypes": "Nessun tipo visibile da visualizzare. Crei prima alcuni tipi di scheda.",
   "tags.title": "Gestione tag",
   "tags.newGroup": "Nuovo gruppo tag",

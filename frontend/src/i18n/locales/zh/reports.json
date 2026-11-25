@@ -343,6 +343,8 @@
   "cost.unspecified": "未指定",
   "cost.combinedType": "{{first}} + {{second}}",
   "cost.groupByNone": "无",
+  "cost.groupByProvider": "供应商",
+  "cost.filtersUnavailable": "筛选器当前不可用",
   "cost.otherCostItem": "其他成本",
   "cost.groupByUnavailable": "没有可用于分组的字段或关系。",
   "cost.fiscalYear": "财年",

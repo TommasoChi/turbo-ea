@@ -172,7 +172,7 @@ Todas las vistas comparten la misma barra de herramientas, los mismos filtros, e
 
 **Gráfico de tendencia** — La tendencia del coste (el año actual, los cuatro anteriores y, cuando se selecciona, la **Forecast**) se muestra encima del gráfico en las tres vistas, no solo en el treemap, y sigue el tipo de coste seleccionado.
 
-**Colores y leyenda** — Cada grupo tiene su propio tono; dentro de un grupo, un tono más oscuro significa una tarjeta más costosa. Más allá de los ocho grupos más costosos, el resto se pliega en un único grupo **Otros**, y las tarjetas sin valor en el campo de agrupación van a **Sin especificar**. La leyenda junto al gráfico lista los grupos con sus colores; el Sankey y la tabla usan los mismos colores.
+**Colores y leyenda** — Cada grupo tiene su propio tono; dentro de un grupo, un tono más oscuro significa una tarjeta más costosa. Más allá de los ocho grupos más costosos, el resto se pliega en un único grupo **Otros**, y las tarjetas sin valor en el campo de agrupación van a **Sin especificar**. La leyenda bajo el mapa de árbol y el Sankey lista los grupos con sus colores, también en pantalla completa; el Sankey y la tabla usan los mismos colores. La leyenda sigue el desglose: lista todos los grupos en el nivel superior, solo el grupo actual cuando está dentro de él y, dentro de una tarjeta, las partidas de coste de la tarjeta en el mapa de árbol (el Sankey mantiene el grupo de la tarjeta). Haga clic en un grupo de la leyenda para entrar en él; la ruta de navegación se actualiza. La tabla no tiene leyenda.
 
 **Desglose** — Un **clic derecho** en un grupo o una tarjeta profundiza en él: el gráfico se limita a ese grupo (o tarjeta) y aparece una ruta de navegación encima. Haga clic en **Volver**, o en cualquier segmento de la ruta, para subir un nivel. Profundizar en **Otros** lista los grupos que se plegaron en él. Un **clic izquierdo** en una tarjeta abre en cambio su panel lateral (un clic izquierdo en un grupo no hace nada). Una indicación sobre el gráfico recuerda ambos gestos.
 
@@ -198,9 +198,14 @@ Solo puede importar costes para Aplicaciones y Componentes TI cuyos costes pueda
 **Agrupar por** está disponible en el mapa de árbol, la tabla y el Sankey. Una tarjeta se agrupa por:
 
 - el valor de un **campo de la tarjeta** (solo campos de valor único; no se ofrecen los campos de selección múltiple, porque situarían una tarjeta en dos grupos), o
-- una **tarjeta vinculada**, designada por el nombre de esa tarjeta, a través de una relación en la que cada tarjeta tiene **como máximo una** tarjeta vinculada de ese tipo. Nunca se ofrecen las relaciones de muchos a muchos, de modo que un coste nunca puede caer en dos grupos.
+- una **tarjeta vinculada**, designada por el nombre de esa tarjeta, a través de una relación en la que cada tarjeta tiene **como máximo una** tarjeta vinculada de ese tipo. Nunca se ofrecen las relaciones de muchos a muchos, de modo que un coste nunca puede caer en dos grupos, o
+- el **proveedor** de cada partida de coste. Este agrupa partidas, no tarjetas: el importe de cada partida va al grupo de su propio proveedor, de modo que una tarjeta cuyas partidas pertenecen a dos proveedores aparece una vez por proveedor, cada vez con la parte de ese proveedor. Abrir un mosaico sigue abriendo la tarjeta. Las partidas sin proveedor, y los proveedores que no puede leer, van a **Unspecified**; dos proveedores con el mismo nombre siguen siendo dos grupos; los proveedores archivados conservan su grupo. El total de todos los grupos es igual al total sin agrupar. Las partidas registradas antes de que existiera el campo Proveedor no tienen proveedor, y no se rellena nada a partir de los proveedores vinculados a la tarjeta.
 
 Las tarjetas sin valor, o sin tarjeta vinculada, van al grupo **Unspecified**. Para la opción combinada **Aplicación + Componente TI** solo se ofrecen los campos que existen en ambos tipos; el selector queda desactivado cuando no hay ninguno. La agrupación nunca cuenta un coste dos veces ni descarta ninguno.
+
+### Filtros
+
+Bajo los botones de tipo de tarjeta, el informe muestra un grupo de filtros por cada tipo seleccionado (**Filtros de Aplicación**, **Filtros de Componente TI**), con el mismo diseño que el filtro de iniciativas de PPM. **Relacionado por** restringe las tarjetas según las tarjetas a las que están vinculadas, entre ellas **Proveedor** (las tarjetas vinculadas a ese proveedor, distinto del proveedor de una partida de coste), con el interruptor **Incluir subtarjetas**; **Campos** restringe por los campos de selección única, selección múltiple y sí/no del tipo y por su subtipo. Un filtro solo se aplica mientras su tipo está seleccionado, de modo que con ambos tipos activos cada filtro restringe su propio tipo. Los filtros se combinan con el alcance de tarjetas y el año fiscal, se aplican a todas las vistas y al gráfico de tendencia, y se guardan con el informe. **Borrar todo** vacía un grupo.
 
 ### Año fiscal
 

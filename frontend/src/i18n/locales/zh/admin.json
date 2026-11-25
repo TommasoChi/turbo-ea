@@ -537,6 +537,7 @@
   "metamodel.stakeholderPanel.keyLength": "长度必须为 {{min}}-{{max}} 个字符",
   "metamodel.stakeholderPanel.failedToDelete": "删除角色失败",
   "metamodel.stakeholderPanel.translations": "翻译",
+  "metamodel.graph.title": "卡片类型及其关系的元模型图",
   "metamodel.graph.noTypes": "没有可显示的可见类型。请先创建一些卡片类型。",
   "tags.title": "标签管理",
   "tags.newGroup": "新建标签组",

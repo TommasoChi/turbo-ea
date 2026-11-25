@@ -359,6 +359,8 @@
   "cost.unspecified": "غير محدد",
   "cost.combinedType": "{{first}} + {{second}}",
   "cost.groupByNone": "لا شيء",
+  "cost.groupByProvider": "المزوّد",
+  "cost.filtersUnavailable": "المرشحات غير متاحة حاليًا",
   "cost.otherCostItem": "تكاليف أخرى",
   "cost.groupByUnavailable": "لا يوجد حقل أو علاقة للتجميع حسبها.",
   "cost.fiscalYear": "السنة المالية",
