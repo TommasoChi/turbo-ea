@@ -1972,3 +1972,92 @@ def test_pml_budget_provider_condition_rewrites_reference():
     rewritten, tally = remap.rewrite_pml_field_configuration(config, ctx)
     assert rewritten["fields"][0]["calculation"]["rules"][0]["when"]["value"] == target
     assert tally.counts[remap.REMAPPED] == 1
+
+
+# ── card costs: the provider id of an item ─────────────────────────────────
+
+
+async def _costed_application(db, user):
+    from app.models.card_cost import CardCost
+    from app.models.cost_item_type import CostItemType
+
+    await create_card_type(db, key="Application", label="Application")
+    await create_card_type(db, key="Provider", label="Provider")
+    app_card = await create_card(db, name="Billing", user_id=user.id)
+    vendor = await create_card(db, name="Acme", card_type="Provider", user_id=user.id)
+    db.add(CostItemType(key="licences", label="Licences"))
+    item = {"amount": 120.5, "renewal_date": "2027-01-31", "provider_id": str(vendor.id)}
+    db.add(CardCost(card_id=app_card.id, fiscal_year=2026, items={"licences": item}))
+    await db.flush()
+    return app_card, vendor
+
+
+async def test_card_costs_provider_id_is_remapped_into_a_wiped_inventory(db):
+    from app.models.card_cost import CardCost
+
+    user = await create_user(db, email="cc-remap@test.com", role="admin")
+    _, vendor = await _costed_application(db, user)
+    old_vendor = str(vendor.id)
+
+    raw = await build_bundle(db)
+    await _wipe(db)
+    result = await apply_bundle(db, parse_bundle(raw), user)
+    assert result.total_failed == 0 and result.total_conflict == 0, result.as_dict()
+
+    new_vendor = await _by_name(db, "Acme", "Provider")
+    assert str(new_vendor.id) != old_vendor
+    row = (await db.execute(select(CardCost))).scalar_one()
+    assert row.items["licences"] == {
+        "amount": 120.5,
+        "renewal_date": "2027-01-31",
+        "provider_id": str(new_vendor.id),
+    }
+    assert old_vendor not in json.dumps(row.items)
+    assert _section(result, "CardCosts").references == {"remapped": 1}
+
+
+async def test_card_costs_provider_absent_on_target_is_dropped_but_the_amount_stays(db):
+    from app.models.card_cost import CardCost
+
+    user = await create_user(db, email="cc-drop@test.com", role="admin")
+    _, vendor = await _costed_application(db, user)
+    raw = await build_bundle(db)
+    bundle = parse_bundle(raw)
+    bundle.sheets[schema.SHEET_CARDS] = [
+        r for r in bundle.rows(schema.SHEET_CARDS) if r.get("type") != "Provider"
+    ]
+    await _wipe(db)
+
+    result = await apply_bundle(db, bundle, user)
+    assert result.total_failed == 0, result.as_dict()
+
+    row = (await db.execute(select(CardCost))).scalar_one()
+    assert row.items["licences"] == {"amount": 120.5, "renewal_date": "2027-01-31"}
+    assert _section(result, "CardCosts").references == {"unresolved": 1}
+
+
+async def test_import_over_an_existing_cost_row_under_another_pk_still_remaps_the_provider(db):
+    """The natural-key match branch used to copy the bundle's kwargs before the
+    rewrite ran, writing the source's provider id over the target's row."""
+    from app.models.card_cost import CardCost
+
+    user = await create_user(db, email="cc-nk@test.com", role="admin")
+    app_card, vendor = await _costed_application(db, user)
+    raw = await build_bundle(db)
+
+    # The target holds the card and a (card, year) row under a different PK;
+    # the provider is a different card there, so the id must be translated.
+    other = await create_card(db, name="Acme", card_type="Provider", user_id=user.id)
+    other_id, vendor_id, app_id = other.id, vendor.id, app_card.id
+    await db.execute(delete(CardCost))
+    db.add(CardCost(card_id=app_id, fiscal_year=2026, items={"licences": {"amount": 1}}))
+    await db.execute(delete(Card).where(Card.id == vendor_id))
+    await db.flush()
+
+    result = await apply_bundle(db, parse_bundle(raw), user)
+    assert result.total_failed == 0, result.as_dict()
+
+    db.expire_all()
+    row = (await db.execute(select(CardCost))).scalar_one()
+    assert row.items["licences"]["provider_id"] == str(other_id)
+    assert str(vendor_id) not in json.dumps(row.items)

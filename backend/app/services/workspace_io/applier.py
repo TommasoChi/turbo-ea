@@ -814,7 +814,7 @@ async def _run(
                 wanted_entity_sections,
                 include_pml_live=bool(financial_keys & incoming_general.keys())
                 or any(
-                    ent.sheet in {"PpmBudgetLines", "PpmCostLines", "PpmInvoices"}
+                    ent.sheet in {"PpmBudgetLines", "PpmCostLines", "PpmInvoices", "CardCosts"}
                     for ent in wanted_entity_sections
                 ),
             )

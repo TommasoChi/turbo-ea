@@ -268,6 +268,31 @@ def rewrite_pml_row(kwargs: dict[str, Any], ctx: RemapContext) -> RewriteTally:
     return tally
 
 
+def rewrite_card_costs_row(kwargs: dict[str, Any], ctx: RemapContext) -> RewriteTally:
+    """Translate each item's ``provider_id``; an id with no counterpart is dropped
+    (the item keeps its amount), as a provider the target does not hold."""
+    tally = RewriteTally()
+    items = kwargs.get("items")
+    if not isinstance(items, dict):
+        return tally
+    rewritten: dict[str, Any] = {}
+    for key, item in items.items():
+        if isinstance(item, dict) and item.get("provider_id"):
+            source = canonical_uuid(item["provider_id"])
+            target = ctx.ids.lookup(CARDS, source)
+            if target is None and source in ctx.live_card_ids:
+                target = source
+            item = {k: v for k, v in item.items() if k != "provider_id"}
+            if target is None:
+                tally.bump(UNRESOLVED)
+            else:
+                item["provider_id"] = target
+                tally.bump(REMAPPED)
+        rewritten[key] = item
+    kwargs["items"] = rewritten
+    return tally
+
+
 RowRewriter = Callable[[dict[str, Any], RemapContext], RewriteTally]
 
 

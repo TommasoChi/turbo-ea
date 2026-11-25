@@ -314,6 +314,8 @@ ENTITY_SECTIONS: tuple[EntitySection, ...] = (
         CardCost,
         card_fk_columns=("card_id",),
         natural_key=("card_id", "fiscal_year"),
+        rewrite=remap.rewrite_card_costs_row,
+        id_bearing_columns=("items",),
     ),
     # Past-year cost values of Initiative / Provider; they feed the cost report only, so like the
     # license rows this sheet is not a card-finalising one.
