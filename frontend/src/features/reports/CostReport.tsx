@@ -92,6 +92,8 @@ import type { CostItemType, FieldDef, TranslationMap } from "@/types";
 
 const COST_REPORT_TYPE_KEYS = ["Application", "ITComponent"] as const;
 type CostView = "chart" | "sankey" | "table";
+/** A Sankey group node's id is `group:<raw group value>`. */
+const rawGroup = (n: { id: string }) => n.id.replace(/^group:/, "");
 
 interface CostItem {
   id: string;
@@ -801,7 +803,7 @@ export default function CostReport() {
         ? Object.fromEntries(
             sankeyData.nodes
               .filter((n) => n.type === "Group")
-              .map((n) => [n.id.replace(/^group:/, ""), n.name]),
+              .map((n) => [rawGroup(n), n.name]),
           )
         : providerNames,
     [sankeyData, providerNames],
@@ -834,7 +836,7 @@ export default function CostReport() {
       if (src?.type === "Group")
         groupsOf.set(l.target, [
           ...(groupsOf.get(l.target) ?? []),
-          { group: src.id.replace(/^group:/, ""), value: l.value },
+          { group: rawGroup(src), value: l.value },
         ]);
     }
     return sankeyData.nodes.flatMap((n, i) => {
@@ -1029,7 +1031,6 @@ export default function CostReport() {
   const sankeyView = useMemo(() => {
     if (!sankeyData) return null;
     const closure = scope.closure;
-    const rawGroup = (n: SankeyNode) => n.id.replace(/^group:/, "");
     const recompute = !!closure || drillActive;
     const drilled = drillActive ? applyDrill(sankeyCards, drill, foldedKeys) : null;
     const drillIds = drilled && new Set(drilled.map((c) => c.id));
@@ -1042,7 +1043,7 @@ export default function CostReport() {
     // providers keeps its other provider's link out of a drilled provider's view.
     const live = (l: SankeyLink) => {
       const from = sankeyData.nodes[l.source];
-      return !drillShares || from.type !== "Group" || drillShares.has(costRowKey(sankeyData.nodes[l.target].id, rawGroup(from), byProvider));
+      return !drillShares || from.type !== "Group" || drillShares.has(rowKeyOf({ id: sankeyData.nodes[l.target].id, group: rawGroup(from) }));
     };
     // Recomputed: an item -> group flow is the sum of the kept cards' own values for that item; a
     // provider link carries its share's exact amounts, any other link falls back to the card's.
@@ -1103,7 +1104,7 @@ export default function CostReport() {
       merged.set(key, { source, target, value: (prev?.value ?? 0) + values[k] });
     });
     return { ...sankeyData, nodes, links: [...merged.values()] };
-  }, [sankeyData, sankeyCards, scope.closure, drill, drillActive, foldedKeys, colorPlan, groupLabel, itemLabel, typeLabelOf, t, types, byProvider, rowKeyOf]);
+  }, [sankeyData, sankeyCards, scope.closure, drill, drillActive, foldedKeys, colorPlan, groupLabel, itemLabel, typeLabelOf, t, types, rowKeyOf]);
 
   const printParams = useMemo(() => {
     const params: { label: string; value: string }[] = [];
@@ -1513,10 +1514,6 @@ export default function CostReport() {
             label={t("cost.groupBy")}
             value={effectiveGroupBy}
             onChange={(e) => setGroupBy(e.target.value)}
-            disabled={groupOptions.length === 0}
-            helperText={
-              groupOptions.length === 0 ? t("cost.groupByUnavailable") : undefined
-            }
             sx={{ minWidth: 150 }}
           >
             <MenuItem value="">{t("cost.groupByNone")}</MenuItem>

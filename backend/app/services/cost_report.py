@@ -136,8 +136,8 @@ async def provider_splits(
     for card_id, ls in lines.items():
         groups = splits[card_id] = {}
         for key, amount, pid in ls:
-            group = str(pid) if pid in known else OTHER_GROUP
-            groups.setdefault(group, {})[key] = groups.get(group, {}).get(key, 0) + amount
+            share = groups.setdefault(str(pid) if pid in known else OTHER_GROUP, {})
+            share[key] = share.get(key, 0) + amount
     return splits, {str(i): n for i, n in known.items()}
 
 

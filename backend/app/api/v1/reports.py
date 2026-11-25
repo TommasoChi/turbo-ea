@@ -1685,12 +1685,17 @@ async def cost_treemap(
             await require_item_grouping(db, type_keys, cost_field)
         except ValueError as exc:
             raise HTTPException(400, str(exc)) from exc
+        card_ids = [c.id for c, _ in sheets]
         splits, group_names = await provider_splits(
-            db, read_scope, [c.id for c, _ in sheets], cost_field, target_fy, fy_start
+            db, read_scope, card_ids, cost_field, target_fy, fy_start
         )
         # `cost` is the selected item's share; `costs` is everything the provider holds
-        held, _ = await provider_splits(
-            db, read_scope, [c.id for c, _ in sheets], DERIVED_KEY, target_fy, fy_start
+        held = (
+            splits
+            if cost_field == DERIVED_KEY
+            else (
+                await provider_splits(db, read_scope, card_ids, DERIVED_KEY, target_fy, fy_start)
+            )[0]
         )
         base = {i["id"]: i for i in items}
         items = [
@@ -1704,7 +1709,7 @@ async def cost_treemap(
             for g, share in shares.items()
         ]
         items.sort(key=lambda x: x["cost"], reverse=True)
-    if grouping and grouping.kind != "provider":
+    elif grouping:
         try:
             assigned = await assign_groups(
                 db, read_scope, [c for c, _ in sheets], grouping, type_keys
