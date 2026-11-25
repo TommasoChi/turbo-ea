@@ -16,7 +16,7 @@
 - Colours only from existing tokens (`costColors.ts`, `chartTheme`); never a raw hex.
 - The drill stays component state (`drill` in `CostReport.tsx`); no URL state.
 - No legend on the table view.
-- Version bump (patch) and a `CHANGELOG.md` entry once for the PR; docs page `docs/guide/reports.md` updated.
+- Version bump (minor) and a `CHANGELOG.md` entry once for the PR; docs page `docs/guide/reports.md` updated.
 
 ## Review Focus
 
