@@ -5,6 +5,18 @@ All notable changes to Turbo EA are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.214.0] - 2026-11-25
+
+### Added
+
+- A **Provider** on each Application and IT Component cost item, chosen from the Providers linked to the card, its parents or its sub-cards.
+- **Group by Provider** in the Cost Report treemap, Sankey and table: each item's amount goes to its own provider.
+- Field and relation filters in the Cost Report, one group per selected card type, the same as the PPM initiative filter.
+
+### Changed
+
+- Workspace transfer carries the provider of each cost item to the right card.
+
 ## [2.213.0] - 2026-11-25
 
 ### Added

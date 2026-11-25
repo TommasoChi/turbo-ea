@@ -129,7 +129,8 @@ Applications and IT Components record their cost as a list of **cost items** (fo
 - **TCO** — The total cost of ownership of the year is the sum of its items. It is never typed by hand.
 - **Chart and tiles** — The tiles show the selected year only. Each item has a tile with its **annual amount** and **renewal date**; a renewal within 90 days is shown in orange. Costs are always annual.
 - **Adding and editing** — Add, edit or delete an item in a dialog. Items come from the catalogue an administrator manages under [Metamodel → Cost items](../admin/metamodel.md#cost-items).
-- **Copy to Forecast** — Copies the items of the year you are viewing into the Forecast year, to start a plan from the current figures.
+- **Provider** — The dialog has an optional **Provider** field: the supplier this item is paid to, one per item. The list offers the active Providers linked to this card, to any of its parent cards or to any of its sub-cards, that you can read. Choose **None** to clear it. A provider that was archived or unlinked later stays on the item until you change it, and you can still save an amount on that item. A provider you cannot read is not shown, and saving never removes it. The Cost Report can group by this field.
+- **Copy to Forecast** — Copies the items of the year you are viewing into the Forecast year, to start a plan from the current figures. The provider travels with the item.
 
 **A new fiscal year.** When the fiscal year changes and a card has no costs for the new current year yet, the section shows the previous year's items marked **not confirmed**, with their renewal dates moved forward. They stay that way until someone confirms them or edits an amount. The Forecast and past years never fall back to another year.
 

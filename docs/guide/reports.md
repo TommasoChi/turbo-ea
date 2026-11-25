@@ -174,7 +174,7 @@ All views share the same toolbar, filters, fiscal year and cost field, so switch
 
 **Trend chart** — The cost trend (the current year, the four before it and, when selected, the **Forecast**) is shown above the chart in all three views, not only in the treemap, and follows the selected cost type.
 
-**Colours and legend** — Each group has its own hue, and within a group a darker shade means a costlier card. Beyond the eight costliest groups, the rest are folded into one **Others** group, and cards with no value for the grouping field go to **Unspecified**. The legend beside the chart lists the groups with their colours; the Sankey and the table use the same colours.
+**Colours and legend** — Each group has its own hue, and within a group a darker shade means a costlier card. Beyond the eight costliest groups, the rest are folded into one **Others** group, and cards with no value for the grouping field go to **Unspecified**. The legend under the Treemap and the Sankey lists the groups with their colours, also in fullscreen; the Sankey and the table use the same colours. The legend follows the drill-down: it lists every group at the top, only the current group once you are inside it, and, inside a card, the card's cost items in the Treemap (the Sankey keeps the card's group). Click a group in the legend to drill into it; the breadcrumb updates. The Table has no legend.
 
 **Drill-down** — A **right click** on a group or a card drills into it: the chart narrows to that group (or card) and a breadcrumb appears above it. Click **Back**, or any segment of the breadcrumb, to go up one level. Drilling into **Others** lists the groups that were folded into it. A **left click** on a card opens its side panel instead (a left click on a group does nothing). A hint above the chart reminds you of both gestures.
 
@@ -198,9 +198,14 @@ You can import costs only for the Applications and IT Components whose costs you
 **Group by** is available in the treemap, the table and the Sankey. A card is grouped either by:
 
 - the value of a **field on the card** (single-valued fields only; multiple-choice fields are not offered, since they would put a card in two groups), or
-- a **linked card**, named by the linked card's name, through a relation in which each card has **at most one** linked card of that type. Many-to-many relations are never offered, so a cost can never land in two groups.
+- a **linked card**, named by the linked card's name, through a relation in which each card has **at most one** linked card of that type. Many-to-many relations are never offered, so a cost can never land in two groups, or
+- the **Provider** of each cost item. This one groups cost items, not cards: each item's amount goes to the group of its own provider, so a card whose items belong to two providers appears once per provider, each time with that provider's share. Opening a tile still opens the card. Items with no provider, and providers you cannot read, go to **Unspecified**; two providers with the same name stay two groups; archived providers keep their group. The total of all groups equals the total without grouping. Items recorded before the Provider field existed have no provider, and nothing is filled in from the card's linked providers.
 
 Cards with no value, or no linked card, go to the group **Unspecified**. For the combined **Application + IT Component** option only the fields that exist in both types are offered; the picker is disabled when there are none. Grouping never counts a cost twice and never drops one.
+
+### Filters
+
+Under the card-type buttons the report shows one filter group per selected type (**Application Filters**, **IT Component Filters**), in the same layout as the PPM initiative filter. **Related by** narrows the cards by the cards they are linked to, **Provider** among them (the cards linked to that provider, which is separate from the Provider of a single cost item), with the **Include sub-cards** switch; **Fields** narrows by the single-select, multi-select and yes/no fields of the type and by its sub-type. A filter applies only while its type is selected, so with both types on each filter narrows its own type. Filters combine with the card scope and the fiscal year, apply to every view and to the trend chart, and are saved with the report. **Clear all** empties one group.
 
 ### Fiscal year
 
