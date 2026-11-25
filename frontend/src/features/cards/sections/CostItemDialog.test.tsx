@@ -40,6 +40,10 @@ function setup(over: Partial<React.ComponentProps<typeof CostItemDialog>> = {}) 
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.mocked(api.get).mockResolvedValue([
+    { id: "p1", name: "Acme" },
+    { id: "p2", name: "Globex" },
+  ] as never);
   vi.mocked(api.put).mockResolvedValue({} as never);
   vi.mocked(api.post).mockResolvedValue({} as never);
   vi.mocked(api.delete).mockResolvedValue({} as never);
@@ -101,7 +105,7 @@ describe("CostItemDialog", () => {
     expect(screen.getByText(/Add cost item/)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Delete/ })).toBeNull();
     expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
-    await user.click(screen.getByRole("combobox"));
+    await user.click(screen.getByRole("combobox", { name: "Item" }));
     await user.click(await screen.findByRole("option", { name: "Cloud" }));
     await user.type(screen.getByLabelText(AMOUNT), "40");
     await user.click(screen.getByRole("button", { name: "Save" }));
@@ -126,5 +130,77 @@ describe("CostItemDialog", () => {
     await user.click(screen.getByRole("button", { name: "Save" }));
     expect(await screen.findByText("archived_item")).toBeInTheDocument();
     expect(onChanged).not.toHaveBeenCalled();
+  });
+
+  describe("provider", () => {
+    const PROVIDER = "Provider";
+    const providerLine: CostLine = { ...line, provider_id: "gone", provider_name: "Old Corp" };
+
+    it("lists the candidate providers and a None option", async () => {
+      const { user } = setup();
+      await waitFor(() =>
+        expect(api.get).toHaveBeenCalledWith("/cards/c1/cost-providers", expect.anything()),
+      );
+      await user.click(screen.getByLabelText(PROVIDER));
+      expect(await screen.findByRole("option", { name: "Acme" })).toBeInTheDocument();
+      expect(screen.getByRole("option", { name: "Globex" })).toBeInTheDocument();
+      expect(screen.getByRole("option", { name: "None" })).toBeInTheDocument();
+    });
+
+    it("shows the stored provider by name even when it is not a candidate", async () => {
+      setup({ line: providerLine });
+      await waitFor(() => expect(api.get).toHaveBeenCalled());
+      expect(await screen.findByText("Old Corp")).toBeInTheDocument();
+    });
+
+    it("omits provider_id from the PUT body when the field was not touched", async () => {
+      const { user } = setup({ line: providerLine });
+      await user.click(screen.getByRole("button", { name: "Save" }));
+      await waitFor(() => expect(api.put).toHaveBeenCalled());
+      expect(vi.mocked(api.put).mock.calls[0][1]).not.toHaveProperty("provider_id");
+    });
+
+    it("sends provider_id when a provider is picked", async () => {
+      const { user } = setup();
+      await user.click(screen.getByLabelText(PROVIDER));
+      await user.click(await screen.findByRole("option", { name: "Globex" }));
+      await user.click(screen.getByRole("button", { name: "Save" }));
+      await waitFor(() =>
+        expect(api.put).toHaveBeenCalledWith("/cards/c1/costs/2026/items/lic", {
+          amount: 100,
+          renewal_date: "2026-03-01",
+          provider_id: "p2",
+        }),
+      );
+    });
+
+    it("sends provider_id null when None is picked", async () => {
+      const { user } = setup({ line: providerLine });
+      await user.click(screen.getByLabelText(PROVIDER));
+      await user.click(await screen.findByRole("option", { name: "None" }));
+      await user.click(screen.getByRole("button", { name: "Save" }));
+      await waitFor(() =>
+        expect(api.put).toHaveBeenCalledWith("/cards/c1/costs/2026/items/lic", {
+          amount: 100,
+          renewal_date: "2026-03-01",
+          provider_id: null,
+        }),
+      );
+    });
+
+    it("shows the error and keeps the dialog open on invalid_provider", async () => {
+      const { user, onChanged } = setup();
+      vi.mocked(api.put).mockRejectedValueOnce(
+        Object.assign(new Error("invalid_provider"), { status: 400, detail: "invalid_provider" }),
+      );
+      await user.click(screen.getByLabelText(PROVIDER));
+      await user.click(await screen.findByRole("option", { name: "Acme" }));
+      await user.click(screen.getByRole("button", { name: "Save" }));
+      expect(
+        await screen.findByText("This card cannot be chosen as the provider."),
+      ).toBeInTheDocument();
+      expect(onChanged).not.toHaveBeenCalled();
+      expect(screen.getByRole("button", { name: "Save" })).toBeEnabled();
+    });
   });
 });

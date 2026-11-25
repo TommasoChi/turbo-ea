@@ -12,6 +12,7 @@ import MenuItem from "@mui/material/MenuItem";
 import TextField from "@mui/material/TextField";
 import { useTranslation } from "react-i18next";
 import { api, apiErrorMessage } from "@/api/client";
+import { useApiQuery } from "@/hooks/useApiQuery";
 import { DateField } from "@/components/DateField";
 import MaterialSymbol from "@/components/MaterialSymbol";
 import { useCurrency } from "@/hooks/useCurrency";
@@ -49,10 +50,20 @@ export default function CostItemDialog({
   const [key, setKey] = useState(line?.key ?? "");
   const [amount, setAmount] = useState(line ? String(line.amount) : "");
   const [renewal, setRenewal] = useState(line?.renewal_date ?? "");
+  const [provider, setProvider] = useState(line?.provider_id ?? "");
+  const [providerTouched, setProviderTouched] = useState(false);
   const [copy, setCopy] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copyError, setCopyError] = useState<string | null>(null);
+
+  const { data: candidates } = useApiQuery<{ id: string; name: string }[]>(
+    `/cards/${cardId}/cost-providers`,
+  );
+  const providerOptions = [...(candidates ?? [])];
+  if (line?.provider_id && !providerOptions.some((c) => c.id === line.provider_id)) {
+    providerOptions.push({ id: line.provider_id, name: line.provider_name ?? line.provider_id });
+  }
 
   const editing = line !== null;
   const base = `/cards/${cardId}/costs/${fiscalYear}/items/${key}`;
@@ -77,9 +88,19 @@ export default function CostItemDialog({
     setError(null);
     setCopyError(null);
     try {
-      await api.put(base, { amount: amountNumber, renewal_date: renewal || null });
+      await api.put(base, {
+        amount: amountNumber,
+        renewal_date: renewal || null,
+        // Untouched: omitted, so a stored provider the caller cannot see is never overwritten.
+        ...(providerTouched && { provider_id: provider || null }),
+      });
     } catch (e) {
-      setError(apiErrorMessage(e, t("costs.dialog.saveFailed")));
+      const invalid = (e as { detail?: unknown }).detail === "invalid_provider";
+      setError(
+        invalid
+          ? t("costs.dialog.invalidProvider")
+          : apiErrorMessage(e, t("costs.dialog.saveFailed")),
+      );
       setBusy(false);
       return;
     }
@@ -104,7 +125,9 @@ export default function CostItemDialog({
           year: shortFiscalYear(fiscalYear),
         })}
       </DialogTitle>
-      <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 2, pt: "8px !important" }}>
+      <DialogContent
+        sx={{ display: "flex", flexDirection: "column", gap: 2, pt: "8px !important" }}
+      >
         {error && <Alert severity="error">{error}</Alert>}
         {copyError && (
           <Alert severity="warning">
@@ -151,6 +174,23 @@ export default function CostItemDialog({
           onChange={setRenewal}
           size="small"
         />
+        <TextField
+          select
+          label={t("costs.dialog.provider")}
+          value={provider}
+          onChange={(e) => {
+            setProvider(e.target.value);
+            setProviderTouched(true);
+          }}
+          size="small"
+        >
+          <MenuItem value="">{t("costs.dialog.providerNone")}</MenuItem>
+          {providerOptions.map((c) => (
+            <MenuItem key={c.id} value={c.id}>
+              {c.name}
+            </MenuItem>
+          ))}
+        </TextField>
         {fiscalYear < forecastYear && (
           <FormControlLabel
             control={<Checkbox checked={copy} onChange={(e) => setCopy(e.target.checked)} />}

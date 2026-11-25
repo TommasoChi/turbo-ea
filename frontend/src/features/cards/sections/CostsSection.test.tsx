@@ -20,7 +20,9 @@ vi.mock("@/hooks/useCurrency", () => ({
 vi.mock("@/hooks/useDateFormat", () => ({
   useDateFormat: () => ({ formatDate: (v: string) => `d:${v}` }),
 }));
-vi.mock("@/components/charts/EChart", () => import("@/test/echartMock").then((m) => m.echartModule()));
+vi.mock("@/components/charts/EChart", () =>
+  import("@/test/echartMock").then((m) => m.echartModule()),
+);
 
 import { api, ApiError } from "@/api/client";
 import i18n from "@/i18n";
@@ -80,9 +82,10 @@ const response = (over: Partial<CardCostsResponse> = {}): CardCostsResponse => (
 });
 
 function mockGet(r: CardCostsResponse | Error) {
-  vi.mocked(api.get).mockImplementation(
-    () => (r instanceof Error ? Promise.reject(r) : Promise.resolve(r)) as never,
-  );
+  vi.mocked(api.get).mockImplementation(((path: string) => {
+    if (path.endsWith("/cost-providers")) return Promise.resolve([]);
+    return r instanceof Error ? Promise.reject(r) : Promise.resolve(r);
+  }) as never);
 }
 const renderSection = () => render(<CostsSection cardId="c1" />);
 const chartOption = () => echartState.byName("Share of each cost item in the TCO").option;
@@ -138,7 +141,9 @@ describe("CostsSection", () => {
     const near = await screen.findByTestId("cost-tile-lic");
     const far = screen.getByTestId("cost-tile-sup");
     const nearOf = (el: HTMLElement) =>
-      within(el).getByText(/renewal/).getAttribute("data-near");
+      within(el)
+        .getByText(/renewal/)
+        .getAttribute("data-near");
     expect(nearOf(near)).toBe("true");
     expect(nearOf(far)).toBe("false");
   });
@@ -182,7 +187,9 @@ describe("CostsSection", () => {
     renderSection();
     await screen.findByRole("slider");
     const opacities = () =>
-      chartOption().series[0].data.map((d: { itemStyle: { opacity: number } }) => d.itemStyle.opacity);
+      chartOption().series[0].data.map(
+        (d: { itemStyle: { opacity: number } }) => d.itemStyle.opacity,
+      );
     // the default year is the current one, FY26 (row 1)
     expect(opacities()[1]).toBe(1);
     expect(opacities().filter((o: number) => o === 1)).toHaveLength(1);
@@ -253,7 +260,9 @@ describe("CostsSection", () => {
           fy === FY + 1
             ? year(fy, { items: [{ key: "sup", amount: 7, renewal_date: null, archived: false }] })
             : fy === FY
-              ? year(fy, { items: [{ key: "lic", amount: 5, renewal_date: null, archived: false }] })
+              ? year(fy, {
+                  items: [{ key: "lic", amount: 5, renewal_date: null, archived: false }],
+                })
               : year(fy),
         ),
       }),
@@ -287,7 +296,9 @@ describe("CostsSection", () => {
     await screen.findByRole("slider");
     await goTo(2027);
     expect(
-      screen.getByText("No amounts entered for FY27 yet. Showing the items of FY26, not confirmed."),
+      screen.getByText(
+        "No amounts entered for FY27 yet. Showing the items of FY26, not confirmed.",
+      ),
     ).toBeInTheDocument();
     expect(screen.getByText("TCO (from FY26)")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Confirm FY27" }));
@@ -300,7 +311,7 @@ describe("CostsSection", () => {
     renderSection();
     await user.click(await screen.findByRole("button", { name: "+ Add item" }));
     const dialog = await screen.findByRole("dialog");
-    await user.click(within(dialog).getByRole("combobox"));
+    await user.click(within(dialog).getByRole("combobox", { name: "Item" }));
     const options = (await screen.findAllByRole("option")).map((o) => o.textContent);
     expect(options).toEqual(["Cloud"]);
   });

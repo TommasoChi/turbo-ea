@@ -3935,6 +3935,8 @@ export interface CostLine {
   amount: number;
   renewal_date: string | null;
   archived: boolean;
+  provider_id?: string | null;
+  provider_name?: string | null;
 }
 export interface YearCosts {
   fiscal_year: number;
