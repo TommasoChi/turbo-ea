@@ -7,6 +7,7 @@ from app.models.card_type import CardType
 from app.models.event import Event
 from app.services import cost_item_types
 from app.services.fiscal_year import current_fiscal_year
+from app.services.permission_service import PermissionService
 from tests.conftest import auth_headers, create_card, create_card_type, create_role, create_user
 
 CUR = current_fiscal_year(1)
@@ -90,6 +91,7 @@ async def test_hidden_card_is_404(client, db, env):
         .values(role_permissions={"viewer": {"inventory.view": False}})
     )
     await db.flush()
+    PermissionService.invalidate_type_permission_cache()
     r = await client.get(url(env["card"]), headers=auth_headers(env["viewer"]))
     assert r.status_code == 404
 
@@ -317,3 +319,116 @@ async def test_cost_event_is_authored_by_the_writer(client, db, env):
     await put(client, env, amount=5)
     evs = cost_events(await events(db, env["card"]))
     assert [e.user_id for e in evs] == [env["admin"].id]
+
+
+@pytest.fixture
+async def prov(db, env):
+    from tests.conftest import create_relation, create_relation_type
+
+    await create_card_type(db, key="Provider", label="Provider")
+    await create_relation_type(
+        db, key="relProviderToApp", source_type_key="Provider", target_type_key="Application"
+    )
+    linked = await create_card(db, card_type="Provider", name="Linked")
+    other = await create_card(db, card_type="Provider", name="Other")
+    await create_relation(
+        db, type_key="relProviderToApp", source_id=linked.id, target_id=env["card"].id
+    )
+    return {"linked": linked, "other": other}
+
+
+async def put_provider(client, env, provider_id, **kw):
+    return await client.put(
+        url(env["card"], f"/{CUR}/items/lic"),
+        json={"amount": 10, "renewal_date": None, "provider_id": provider_id},
+        headers=auth_headers(env["admin"]),
+    )
+
+
+def line(r, key="lic"):
+    return next(i for i in r.json()["items"] if i["key"] == key)
+
+
+async def test_put_item_with_provider_stores_it_and_returns_name(client, env, prov):
+    r = await put_provider(client, env, str(prov["linked"].id))
+    assert r.status_code == 200
+    assert (line(r)["provider_id"], line(r)["provider_name"]) == (str(prov["linked"].id), "Linked")
+
+
+async def test_put_item_without_provider_key_keeps_the_stored_one(client, env, prov):
+    await put_provider(client, env, str(prov["linked"].id))
+    r = await put(client, env, amount=55)
+    assert line(r)["amount"] == 55 and line(r)["provider_id"] == str(prov["linked"].id)
+
+
+async def test_put_item_null_provider_clears_it(client, env, prov):
+    await put_provider(client, env, str(prov["linked"].id))
+    r = await put_provider(client, env, None)
+    assert line(r)["provider_id"] is None and line(r)["provider_name"] is None
+
+
+async def test_put_item_with_non_candidate_provider_is_400(client, env, prov):
+    r = await put_provider(client, env, str(prov["other"].id))
+    assert r.status_code == 400 and r.json()["detail"] == "invalid_provider"
+    r = await put_provider(client, env, "not-a-uuid")
+    assert r.status_code == 422
+
+
+async def test_api_re_sending_the_stored_provider_id_of_an_archived_provider_saves(
+    client, db, env, prov
+):
+    await put_provider(client, env, str(prov["linked"].id))
+    prov["linked"].status = "ARCHIVED"
+    await db.flush()
+    r = await put_provider(client, env, str(prov["linked"].id))
+    assert r.status_code == 200 and line(r)["provider_id"] == str(prov["linked"].id)
+    assert line(r)["provider_name"] == "Linked"
+
+
+async def test_get_costs_returns_provider_name_for_a_readable_provider_and_omits_an_unreadable_one(
+    client, db, env, prov
+):
+    await put_provider(client, env, str(prov["linked"].id))
+    r = await client.get(url(env["card"]), headers=auth_headers(env["admin"]))
+    cur = next(y for y in r.json()["years"] if y["fiscal_year"] == CUR)
+    assert cur["items"][0]["provider_name"] == "Linked"
+    ct = (await db.execute(select(CardType).where(CardType.key == "Provider"))).scalar_one()
+    ct.role_permissions = {"reader": {"inventory.view": False}}
+    await create_role(
+        db, key="reader", label="Reader", permissions={"inventory.view": True, "costs.view": True}
+    )
+    reader = await create_user(db, email="r@costs-api.com", role="reader")
+    await db.flush()
+    PermissionService.invalidate_type_permission_cache()
+    r = await client.get(url(env["card"]), headers=auth_headers(reader))
+    cur = next(y for y in r.json()["years"] if y["fiscal_year"] == CUR)
+    assert cur["items"][0]["provider_id"] is None and cur["items"][0]["provider_name"] is None
+    r = await client.get(url(env["card"], f"/{CUR}"), headers=auth_headers(reader))
+    assert r.json()["items"][0]["provider_id"] is None
+
+
+async def test_provider_candidates_lists_card_parent_child_providers(client, db, env, prov):
+    from tests.conftest import create_relation
+
+    parent = await create_card(db, card_type="Application", name="Parent")
+    env["card"].parent_id = parent.id
+    pp = await create_card(db, card_type="Provider", name="ParentProv")
+    await create_relation(db, type_key="relProviderToApp", source_id=pp.id, target_id=parent.id)
+    await db.flush()
+    r = await client.get(
+        f"/api/v1/cards/{env['card'].id}/cost-providers", headers=auth_headers(env["admin"])
+    )
+    assert r.status_code == 200
+    assert r.json() == [
+        {"id": str(prov["linked"].id), "name": "Linked"},
+        {"id": str(pp.id), "name": "ParentProv"},
+    ]
+
+
+async def test_copy_to_forecast_keeps_the_provider(client, env, prov):
+    await put_provider(client, env, str(prov["linked"].id))
+    r = await client.post(
+        url(env["card"], f"/{CUR}/items/lic/copy-to-forecast"),
+        headers=auth_headers(env["admin"]),
+    )
+    assert line(r)["provider_id"] == str(prov["linked"].id)

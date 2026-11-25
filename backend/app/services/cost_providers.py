@@ -1,0 +1,97 @@
+"""The Provider of a cost item: who may be picked, what a write stores, names for reads.
+
+Flushes nothing; the id is stored as a lower-case ``str`` in ``card_costs.items``.
+"""
+
+from __future__ import annotations
+
+import uuid
+from collections.abc import Iterable
+
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.models.card import Card
+from app.models.relation import Relation
+from app.services.card_costs import UNSET, CostError, _Unset
+from app.services.card_read_scope import CardReadScope
+from app.services.portal_card_filters import descendant_ids
+
+PROVIDER_RELATIONS = {"Application": "relProviderToApp", "ITComponent": "relProviderToITC"}
+
+
+async def _ancestor_ids(db: AsyncSession, card_id: uuid.UUID) -> set[uuid.UUID]:
+    """Every ancestor, readable or not; a cycle stops the walk."""
+    seen: set[uuid.UUID] = set()
+    current: uuid.UUID | None = card_id
+    while current is not None:
+        current = (
+            await db.execute(select(Card.parent_id).where(Card.id == current))
+        ).scalar_one_or_none()
+        if current is None or current in seen:
+            break
+        seen.add(current)
+    return seen
+
+
+async def candidate_providers(
+    db: AsyncSession, read_scope: CardReadScope, card_id: uuid.UUID, card_type: str
+) -> list[tuple[uuid.UUID, str]]:
+    """Active, readable Providers linked to the card, an ancestor or a descendant."""
+    targets = {card_id, *await _ancestor_ids(db, card_id), *await descendant_ids(db, [card_id])}
+    rows = await db.execute(
+        select(Card.id, Card.name)
+        .join(Relation, Relation.source_id == Card.id)
+        .where(
+            Relation.type == PROVIDER_RELATIONS[card_type],
+            Relation.target_id.in_(targets),
+            Card.type == "Provider",
+            Card.status == "ACTIVE",
+            *read_scope.where(Card, mode="module"),
+        )
+        .distinct()
+        .order_by(Card.name, Card.id)
+    )
+    return [(i, n) for i, n in rows.all()]
+
+
+async def provider_names(
+    db: AsyncSession, read_scope: CardReadScope, ids: Iterable[uuid.UUID]
+) -> dict[uuid.UUID, str]:
+    """Existing Provider cards (any status) the reader may see."""
+    wanted = set(ids)
+    if not wanted:
+        return {}
+    rows = await db.execute(
+        select(Card.id, Card.name).where(
+            Card.id.in_(wanted),
+            Card.type == "Provider",
+            *read_scope.where(Card, mode="module"),
+        )
+    )
+    return {i: n for i, n in rows.all()}
+
+
+async def resolve_write(
+    db: AsyncSession,
+    read_scope: CardReadScope,
+    card_id: uuid.UUID,
+    card_type: str,
+    stored: str | None,
+    requested: str | None | _Unset,
+) -> str | None:
+    """The provider id to store; never drops a link the caller cannot see."""
+    if requested is UNSET or requested == stored:
+        return stored
+    if requested is None:
+        if stored is None:
+            return None
+        stored_id = uuid.UUID(stored)
+        if stored_id in await provider_names(db, read_scope, [stored_id]):
+            return None
+        exists = (await db.execute(select(Card.id).where(Card.id == stored_id))).first()
+        return stored if exists else None  # a deleted card is not a hidden one
+    allowed = {str(i) for i, _ in await candidate_providers(db, read_scope, card_id, card_type)}
+    if requested not in allowed:
+        raise CostError("invalid_provider", "Provider is not linked to this card")
+    return requested

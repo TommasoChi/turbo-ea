@@ -396,3 +396,27 @@ async def test_apply_reloads_scope_after_lock(client, env, monkeypatch):
     assert response.status_code == 200
     assert response.json()["applied"] == 0
     assert response.json()["skipped"] == [{"row": 2, "reason": "card_not_found"}]
+
+
+async def test_import_resave_keeps_providers(client, db, env):
+    card, admin = env["card"], env["admin"]
+    db.add(
+        CardCost(
+            card_id=card.id,
+            fiscal_year=CUR,
+            items={
+                "lic": {
+                    "amount": 1,
+                    "renewal_date": None,
+                    "provider_id": "11111111-1111-1111-1111-111111111111",
+                }
+            },
+        )
+    )
+    await db.flush()
+    response = await upload(client, admin, [[str(card.id), CUR, "lic", 99, None]], dry_run=False)
+    assert response.status_code == 200 and response.json()["applied"] == 1
+    row = (await db.execute(select(CardCost).where(CardCost.card_id == card.id))).scalar_one()
+    await db.refresh(row)
+    assert row.items["lic"]["amount"] == 99
+    assert row.items["lic"]["provider_id"] == "11111111-1111-1111-1111-111111111111"

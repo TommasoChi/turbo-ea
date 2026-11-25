@@ -7,6 +7,7 @@ from app.models.stakeholder import Stakeholder
 from app.services import cost_item_types
 from app.services.event_bus import event_bus
 from app.services.fiscal_year import current_fiscal_year
+from app.services.permission_service import PermissionService
 from tests.conftest import (
     auth_headers,
     create_card,
@@ -304,3 +305,44 @@ async def test_admin_dashboard_activity_redacted_without_cost_access(client, db,
     _assert_no_amounts(evs)
     r = await client.get("/api/v1/reports/admin-dashboard", headers=auth_headers(env["admin"]))
     assert "4321" in str(r.json()["recent_activity"])
+
+
+async def test_provider_candidates_gates(client, db, env):
+    cards = "/api/v1/cards"
+    ok = await client.get(
+        f"{cards}/{env['card'].id}/cost-providers", headers=auth_headers(env["resp"])
+    )
+    assert ok.status_code == 200 and ok.json() == []
+    for who in ("obs", "inv"):
+        r = await client.get(
+            f"{cards}/{env['card'].id}/cost-providers", headers=auth_headers(env[who])
+        )
+        assert r.status_code == 403
+    await create_card_type(db, key="Process", label="Process")
+    proc = await create_card(db, card_type="Process", name="P", user_id=env["admin"].id)
+    r = await client.get(f"{cards}/{proc.id}/cost-providers", headers=auth_headers(env["admin"]))
+    assert r.status_code == 404
+
+
+async def test_provider_candidates_404_for_a_card_the_caller_cannot_read(client, db, env):
+    from sqlalchemy import select
+
+    from app.models.card_type import CardType
+
+    ct = (await db.execute(select(CardType).where(CardType.key == "Application"))).scalar_one()
+    ct.role_permissions = {"inv": {"inventory.view": False}}
+    await db.flush()
+    PermissionService.invalidate_type_permission_cache()
+    r = await client.get(
+        f"/api/v1/cards/{env['card'].id}/cost-providers", headers=auth_headers(env["inv"])
+    )
+    assert r.status_code == 404
+
+
+async def test_put_with_provider_by_a_caller_without_edit_right_is_403(client, env):
+    r = await client.put(
+        url(env, f"/{CUR}/items/lic"),
+        json={"amount": 1, "provider_id": str(env["card"].id)},
+        headers=auth_headers(env["obs"]),
+    )
+    assert r.status_code == 403

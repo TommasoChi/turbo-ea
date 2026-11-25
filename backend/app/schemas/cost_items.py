@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import uuid
 from datetime import date
 
 from pydantic import BaseModel, Field
@@ -35,6 +36,13 @@ class CostLineOut(BaseModel):
     amount: float
     renewal_date: date | None = None
     archived: bool = False
+    provider_id: str | None = None
+    provider_name: str | None = None
+
+
+class ProviderCandidateOut(BaseModel):
+    id: str
+    name: str
 
 
 class YearCostsOut(BaseModel):
@@ -61,6 +69,8 @@ class CostItemWrite(BaseModel):
     # le: a finite 1e308 on two cards sums to inf and breaks every cost report.
     amount: float = Field(..., ge=0, le=1e15, allow_inf_nan=False)
     renewal_date: date | None = Field(None, ge=date(1900, 1, 1), le=date(2200, 12, 31))
+    # Absent keeps the stored provider; an explicit null clears it.
+    provider_id: uuid.UUID | None = None
 
 
 class CostImportIssueOut(BaseModel):
