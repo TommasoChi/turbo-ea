@@ -12,6 +12,7 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "lint": "eslint .",
+    "lint:biome": "biome lint --only=a11y/useSemanticElements --only=a11y/noStaticElementInteractions --only=a11y/noSvgWithoutTitle --only=a11y/useKeyWithClickEvents --only=a11y/useAriaPropsSupportedByRole src",
     "knip": "knip --no-gitignore",
     "test": "vitest",
     "test:run": "vitest run",
