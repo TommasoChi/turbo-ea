@@ -198,3 +198,73 @@ async def test_a_deleted_provider_falls_into_unspecified(client, db, env):
     await _costs(db, solo, lic=(9, uuid.uuid4()))
     data = await _get(client, env["admin"], "cost-treemap", type="Application", group_by="provider")
     assert [(i["group"], i["cost"]) for i in data["items"] if i["name"] == "Solo"] == [(OTHER, 9)]
+
+
+async def test_sankey_provider_links_carry_the_item_amounts_of_their_share(client, env):
+    sank = await _get(client, env["admin"], "cost-sankey", type="Application", group_by="provider")
+    nodes = sank["nodes"]
+    from_group = [link for link in sank["links"] if nodes[link["source"]]["type"] == "Group"]
+    assert all(link["costs"] for link in from_group)
+    assert all(link["value"] == sum(link["costs"].values()) for link in from_group)
+    by_card = {
+        (nodes[link["source"]]["id"], nodes[link["target"]]["name"]): link for link in from_group
+    }
+    assert by_card[(f"group:{env['p1'].id}", "ERP")]["costs"] == {"lic": 100}
+    assert by_card[(f"group:{env['p2'].id}", "ERP")]["costs"] == {"sup": 50}
+    assert by_card[(f"group:{OTHER}", "ERP")]["costs"] == {OTHER: 7}
+    rederived: dict[tuple[str, str], float] = {}
+    for link in from_group:
+        for item, amount in link["costs"].items():
+            key = (item, nodes[link["source"]]["id"])
+            rederived[key] = rederived.get(key, 0) + amount
+    flows = {
+        (nodes[link["source"]]["name"], nodes[link["target"]]["id"]): link["value"]
+        for link in sank["links"]
+        if nodes[link["source"]]["type"] == "CostItem"
+    }
+    assert rederived == flows
+
+
+async def test_sankey_field_grouping_links_carry_no_costs(client, env):
+    sank = await _get(
+        client, env["admin"], "cost-sankey", type="Application", group_by="field:costTotalAnnual"
+    )
+    assert sank["links"]
+    assert all("costs" not in link for link in sank["links"])
+
+
+async def test_single_item_treemap_entry_lists_every_item_the_provider_holds(client, db, env):
+    both = await create_card(db, card_type="Application", name="Both")
+    await _costs(db, both, sup=(20, env["p1"].id), lic=(5, env["p1"].id), misc=(3, env["p2"].id))
+    data = await _get(
+        client,
+        env["admin"],
+        "cost-treemap",
+        type="Application",
+        cost_field="sup",
+        group_by="provider",
+    )
+    rows = {(i["name"], i["group"]): i for i in data["items"]}
+    p1, p2 = str(env["p1"].id), str(env["p2"].id)
+    assert set(rows) == {("ERP", p2), ("Both", p1)}
+    assert rows[("Both", p1)]["cost"] == 20
+    assert rows[("Both", p1)]["costs"] == {"sup": 20, "lic": 5}
+    assert rows[("ERP", p2)]["costs"] == {"sup": 50}
+    assert data["total"] == 70
+    assert {g["name"]: g["cost"] for g in data["groups"]} == {p1: 20, p2: 50}
+
+
+async def test_a_provider_the_reader_cannot_see_falls_into_unspecified(client, db, env):
+    await create_role(db, key="blind", permissions={"inventory.view": True, "costs.view": True})
+    reader = await create_user(db, email="b@prov-group.com", role="blind")
+    ct = (await db.execute(select(CardType).where(CardType.key == "Provider"))).scalar_one()
+    ct.role_permissions = {"blind": {"inventory.view": False}}
+    await db.flush()
+    PermissionService.invalidate_type_permission_cache()
+    tree = await _get(client, reader, "cost-treemap", type="Application", group_by="provider")
+    assert tree["items"] and {i["group"] for i in tree["items"]} == {OTHER}
+    assert tree["group_names"] == {}
+    assert tree["total"] == 187
+    sank = await _get(client, reader, "cost-sankey", type="Application", group_by="provider")
+    assert {n["id"] for n in sank["nodes"] if n["type"] == "Group"} == {f"group:{OTHER}"}
+    assert "Acme" not in {n["name"] for n in sank["nodes"]}

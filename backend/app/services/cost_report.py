@@ -404,7 +404,8 @@ async def build_cost_sankey(
             shares = {groups[card.id]: costs}
         for g, share in shares.items():
             g_idx = node("group", g, provider_label.get(g, g), "Group")
-            links.append({"source": g_idx, "target": card_idx, "value": sum(share.values())})
+            link = {"source": g_idx, "target": card_idx, "value": sum(share.values())}
+            links.append({**link, "costs": dict(share)} if by_provider else link)
             for i, v in share.items():
                 flows[(i, g)] = flows.get((i, g), 0) + v
     links += [

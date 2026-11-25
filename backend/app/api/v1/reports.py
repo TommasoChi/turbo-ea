@@ -1688,9 +1688,18 @@ async def cost_treemap(
         splits, group_names = await provider_splits(
             db, read_scope, [c.id for c, _ in sheets], cost_field, target_fy, fy_start
         )
+        # `cost` is the selected item's share; `costs` is everything the provider holds
+        held, _ = await provider_splits(
+            db, read_scope, [c.id for c, _ in sheets], DERIVED_KEY, target_fy, fy_start
+        )
         base = {i["id"]: i for i in items}
         items = [
-            {**base[str(card_id)], "cost": sum(share.values()), "group": g, "costs": share}
+            {
+                **base[str(card_id)],
+                "cost": sum(share.values()),
+                "group": g,
+                "costs": held[card_id][g],
+            }
             for card_id, shares in splits.items()
             for g, share in shares.items()
         ]

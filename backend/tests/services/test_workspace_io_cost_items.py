@@ -109,3 +109,45 @@ async def test_cardcosts_only_import_recomputes_the_derived_total(db):
     db.expire_all()
     stored = (await db.execute(select(Card.attributes).where(Card.id == card_id))).scalar_one()
     assert stored["costTotalAnnual"] == 5
+
+
+async def test_cardcosts_only_import_keeps_a_live_provider_and_drops_a_missing_one(db):
+    import uuid
+
+    from app.services.workspace_io import apply_selected
+
+    user = await create_user(db, email="cost-ws4@test.com", role="admin")
+    await create_card_type(db, key="Application", label="Application")
+    await create_card_type(db, key="Provider", label="Provider")
+    card = await create_card(db, card_type="Application", name="Billing", user_id=user.id)
+    provider = await create_card(db, card_type="Provider", name="Acme", user_id=user.id)
+    card_id, provider_id, gone = card.id, str(provider.id), str(uuid.uuid4())
+    db.add_all(
+        [
+            CostItemType(key="licences", label="Licences"),
+            CostItemType(key="support", label="Support"),
+            CardCost(
+                card_id=card_id,
+                fiscal_year=2026,
+                items={
+                    "licences": {"amount": 5, "provider_id": provider_id},
+                    "support": {"amount": 7, "provider_id": gone},
+                },
+            ),
+        ]
+    )
+    await db.flush()
+    raw = await build_bundle(db)
+    await db.execute(delete(CardCost))
+    await db.flush()
+
+    bundle = parse_bundle(raw)
+    # the provider is on the target but nothing in the bundle maps it
+    bundle.sheets["Cards"] = [r for r in bundle.sheets["Cards"] if r["type"] != "Provider"]
+    result = await apply_selected(db, bundle, user, sheets={"CardCosts"}, dry_run=False)
+    assert result.total_failed == 0, result.as_dict()
+    db.expire_all()
+    row = (await db.execute(select(CardCost).where(CardCost.card_id == card_id))).scalar_one()
+    assert row.items["licences"]["provider_id"] == provider_id
+    assert "provider_id" not in row.items["support"]
+    assert row.items["support"]["amount"] == 7
