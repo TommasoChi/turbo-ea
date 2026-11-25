@@ -174,15 +174,15 @@ All views share the same toolbar, filters, fiscal year and cost field, so switch
 
 **Trend chart** — The cost trend (the current year, the four before it and, when selected, the **Forecast**) is shown above the chart in all three views, not only in the treemap, and follows the selected cost type.
 
-**Colours and legend** — Each group has its own hue, and within a group a darker shade means a costlier card. Beyond the eight costliest groups, the rest are folded into one **Others** group, and cards with no value for the grouping field go to **Unspecified**. The legend below the chart lists the groups with their colours; the Sankey and the table use the same colours. Click a legend entry to drill into that group. The legend follows the breadcrumb: inside a group it lists that group only, and inside a card the Treemap lists the card's cost items (the Sankey keeps the card's group).
+**Colours and legend** — Each group has its own hue, and within a group a darker shade means a costlier card. Beyond the eight costliest groups, the rest are folded into one **Others** group, and cards with no value for the grouping field go to **Unspecified**. The legend beside the chart lists the groups with their colours; the Sankey and the table use the same colours.
 
-**Drill-down** — A **right click** on a group or a card drills into it: the chart narrows to that group (or card) and a breadcrumb appears above it. Click **Back**, or any segment of the breadcrumb, to go up one level. Drilling into **Others** lists the groups that were folded into it. A **left click** on a card opens its side panel instead (a left click on a group does nothing). A hint above the chart reminds you of both gestures, and a click on a legend entry drills into its group too.
+**Drill-down** — A **right click** on a group or a card drills into it: the chart narrows to that group (or card) and a breadcrumb appears above it. Click **Back**, or any segment of the breadcrumb, to go up one level. Drilling into **Others** lists the groups that were folded into it. A **left click** on a card opens its side panel instead (a left click on a group does nothing). A hint above the chart reminds you of both gestures.
 
 **Card badges** — Treemap, Sankey and Table identify cards with their logo and type icon. Cards without a logo show the type icon. When a chart item is too small for the badge, hover to see it in the tooltip.
 
 **Table** — The first column shows the badge followed by the card name. The other columns show cost items, **TCO** and any selected fields. Sorting by the selected cost type puts the costliest first. Group headers and the footer show item totals. Right-click a row to drill into it, or click it to open the card.
 
-**Fullscreen** — Use the fullscreen button in Treemap, Sankey or Table. The breadcrumb and the legend stay available, and a right-click in Treemap drills down while keeping fullscreen open. In Table, you can scroll the rows while the column headers stay visible.
+**Fullscreen** — Use the fullscreen button in Treemap, Sankey or Table. The breadcrumb stays available, and a right-click in Treemap drills down while keeping fullscreen open. In Table, you can scroll the rows while the column headers stay visible.
 
 ### Import costs from Excel
 
