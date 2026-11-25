@@ -2096,10 +2096,10 @@ describe("CostReport group by Provider", () => {
     { source: 1, target: 2, value: 100 },
     { source: 0, target: 3, value: 100 },
     { source: 1, target: 4, value: 50 },
-    { source: 2, target: 5, value: 300 },
-    { source: 3, target: 5, value: 100 },
-    { source: 2, target: 6, value: 100 },
-    { source: 4, target: 7, value: 50 },
+    { source: 2, target: 5, value: 300, costs: { licenses: 200, support: 100 } },
+    { source: 3, target: 5, value: 100, costs: { licenses: 100 } },
+    { source: 2, target: 6, value: 100, costs: { licenses: 100 } },
+    { source: 4, target: 7, value: 50, costs: { support: 50 } },
   ];
   const shareCalls = (prefix: string) =>
     vi.mocked(api.get).mock.calls.map(([p]) => String(p)).filter((p) => p.startsWith(prefix));
@@ -2258,6 +2258,39 @@ describe("CostReport group by Provider", () => {
     act(() => sankey().onContextMenu!({ dataType: "node", name: "erp" }));
     await waitFor(() => expect(sankeyIds()).not.toContain("group:p2"));
     expect(sankeyIds().sort()).toEqual(["erp", "group:p1", "item:licenses", "item:support"]);
+  });
+
+  const flowOf = (from: string, to: string) =>
+    sankeySeries().links.find((l: { source: string; target: string }) => l.source === from && l.target === to)?.value;
+
+  it("Sankey: a drill into one provider sums the exact link costs of its shares, not a proportional scaling", async () => {
+    consumedConfig = { view: "sankey", groupBy: "provider" };
+    renderCost();
+    await screen.findByTestId("cost-sankey-panel");
+    await waitFor(() => expect(sankeyIds()).toContain("erp"));
+    act(() => sankey().onContextMenu!({ dataType: "node", name: "group:p1" }));
+    await waitFor(() => expect(sankeyIds()).not.toContain("group:p2"));
+    expect(flowOf("item:licenses", "group:p1")).toBe(300);
+    expect(flowOf("item:support", "group:p1")).toBe(100);
+  });
+
+  it("Sankey: a scope sums the exact link costs of each provider's share of the kept card", async () => {
+    consumedConfig = { view: "sankey", groupBy: "provider", scopeIds: ["erp"] };
+    renderCost();
+    await screen.findByTestId("cost-sankey-panel");
+    await waitFor(() => expect(sankeyIds()).not.toContain("crm"));
+    expect(flowOf("item:licenses", "group:p1")).toBe(200);
+    expect(flowOf("item:support", "group:p1")).toBe(100);
+    expect(flowOf("item:licenses", "group:p2")).toBe(100);
+  });
+
+  it("table: with one item selected, another item's column shows the provider's own amount", async () => {
+    consumedConfig = { view: "table", groupBy: "provider", costField: "support" };
+    renderCost();
+    await screen.findByTestId("cost-group-swatch-p1");
+    const rows = screen.getAllByRole("row").filter((r) => within(r).queryByTestId("cost-row-name"));
+    const erpP1 = rows.find((r) => within(r).getByTestId("cost-row-name").textContent === "ERP")!;
+    expect(texts(erpP1).slice(1, 3)).toEqual(["$200", "$100"]);
   });
 });
 

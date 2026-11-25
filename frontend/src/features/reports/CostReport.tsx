@@ -147,6 +147,8 @@ interface SankeyLink {
   source: number;
   target: number;
   value: number;
+  /** Provider grouping, group -> card links: this share's amount per cost item key. */
+  costs?: Record<string, number>;
 }
 
 interface CostSankeyResponse {
@@ -1042,19 +1044,14 @@ export default function CostReport() {
       const from = sankeyData.nodes[l.source];
       return !drillShares || from.type !== "Group" || drillShares.has(costRowKey(sankeyData.nodes[l.target].id, rawGroup(from), byProvider));
     };
-    // Recomputed: an item -> group flow is the sum of the kept cards' own values for that item.
-    // shortcut: a card under two providers has only its whole costs on the node, so its share of an
-    // item is the card's amount times the link's share of the card; exact for one provider per card.
+    // Recomputed: an item -> group flow is the sum of the kept cards' own values for that item; a
+    // provider link carries its share's exact amounts, any other link falls back to the card's.
     const flowValue = (l: SankeyLink) => {
       if (!recompute || sankeyData.nodes[l.target]?.type !== "Group") return l.value;
       const item = sankeyData.nodes[l.source].id.replace(/^item:/, "");
       return sankeyData.links
         .filter((c) => c.source === l.target && keep[c.target] && live(c))
-        .reduce((n, c) => {
-          const card = sankeyData.nodes[c.target];
-          const part = byProvider && card.cost ? c.value / card.cost : 1;
-          return n + (card.costs?.[item] ?? 0) * part;
-        }, 0);
+        .reduce((n, c) => n + ((c.costs ?? sankeyData.nodes[c.target].costs)?.[item] ?? 0), 0);
     };
     const values = sankeyData.links.map(flowValue);
     if (recompute) {
@@ -1336,10 +1333,10 @@ export default function CostReport() {
   // figure; anything else is unknown (undefined, printed as a dash).
   const cellValue = (d: CostItem, key: string): number | undefined => {
     // Grouped by provider a row is one share: its own amounts, not the card's whole breakdown.
-    if (byProvider)
-      return costField === TCO_KEY
-        ? key === TCO_KEY ? d.cost : (d.costs?.[key] ?? 0)
-        : key === costField ? d.cost : undefined;
+    if (byProvider) {
+      if (key !== TCO_KEY) return d.costs?.[key] ?? 0;
+      return costField === TCO_KEY ? d.cost : Object.values(d.costs ?? {}).reduce((n, v) => n + v, 0);
+    }
     const b = breakdown?.get(d.id);
     if (b) return key === TCO_KEY ? b.total : (b.items[key] ?? 0);
     return key === costField ? d.cost : undefined;
