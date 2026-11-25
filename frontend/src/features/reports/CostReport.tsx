@@ -872,8 +872,7 @@ export default function CostReport() {
     fiscalYear: fiscalYearParam,
     refreshVersion,
   });
-  // A drilled card: one tile per cost item (catalogue order), the first 8 coloured, the rest merged;
-  // `legend` lists the same items under the same keys and colours.
+  // A drilled card: one tile per cost item (catalogue order), the first 8 coloured, the rest merged.
   const cardItems = useMemo<{ tiles: CostTreemapItem[]; legend: CostLegendEntry[] } | null>(() => {
     if (drill.cardId === undefined || !breakdown) return null;
     const b = breakdown.get(drill.cardId);
@@ -890,25 +889,21 @@ export default function CostReport() {
       index: i,
       color: chartTheme.categorical[i],
     }));
-    const legend: CostLegendEntry[] = tiles.map((tile, i) => ({
-      key: keys[i],
-      label: tile.name,
-      color: tile.color,
-    }));
     const rest = keys.slice(MAX_GROUP_HUES);
-    if (rest.length > 0) {
-      const tile = {
+    if (rest.length > 0)
+      tiles.push({
         name: t("cost.otherItems"),
         cost: rest.reduce((sum, k) => sum + b.items[k], 0),
         index: MAX_GROUP_HUES,
         color: CHART_OTHER[chartTheme.mode],
-      };
-      tiles.push(tile);
-      legend.push({ key: "__rest__", label: tile.name, color: tile.color });
-    }
+      });
+    const legend: CostLegendEntry[] = tiles.map((tile, i) => ({
+      key: i < MAX_GROUP_HUES ? keys[i] : "__rest__",
+      label: tile.name,
+      color: tile.color,
+    }));
     return { tiles, legend };
   }, [drill.cardId, breakdown, trendComponents, trendLabelOf, t, chartTheme.categorical, chartTheme.mode]);
-  const cardItemTiles = cardItems?.tiles ?? null;
   const trendSelection = useMemo<TrendSelection | undefined>(() => {
     if (drill.cardId !== undefined) return { kind: "card", id: drill.cardId };
     if (drill.group === undefined) return undefined;
@@ -1201,7 +1196,7 @@ export default function CostReport() {
         }))
       : undefined;
   const treemapItems =
-    cardItemTiles ??
+    cardItems?.tiles ??
     [...(groupDrilled ? applyDrill(items, drill, foldedKeys) : items)]
       .sort((x, y) => y.cost - x.cost)
       .map(treemapLeaf);
@@ -1222,9 +1217,7 @@ export default function CostReport() {
     <CostLegend
       entries={legendEntries}
       activeKey={drill.group}
-      onSelect={
-        cardDrilled ? undefined : (k) => setDrill({ group: k })
-      }
+      onSelect={cardDrilled ? undefined : (k) => setDrill({ group: k })}
     />
   );
 
@@ -1525,7 +1518,7 @@ export default function CostReport() {
                 {(isFullscreen) => (
                   <>
                   {drillBar}
-                  {cardDrilled && cardItemTiles === null ? (
+                  {cardDrilled && cardItems === null ? (
                     <Box sx={{ display: "flex", justifyContent: "center", py: 8 }}><CircularProgress /></Box>
                   ) : (
                   <CostTreemapPanel

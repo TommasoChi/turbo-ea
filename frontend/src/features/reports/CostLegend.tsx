@@ -14,7 +14,9 @@ interface Props {
   activeKey?: string;
 }
 
-/** Swatch and label per group of the cost report; nothing when there is no group. */
+const layout = { display: "flex", alignItems: "center", gap: 0.75 };
+
+/** Swatch and label per entry of the cost report (a group, or a drilled card's cost item); nothing when empty. */
 export default function CostLegend({ entries, onSelect, activeKey }: Props) {
   if (entries.length === 0) return null;
   return (
@@ -32,7 +34,6 @@ export default function CostLegend({ entries, onSelect, activeKey }: Props) {
             </Typography>
           </>
         );
-        const layout = { display: "flex", alignItems: "center", gap: 0.75 };
         return onSelect ? (
           <ButtonBase
             key={e.key}
