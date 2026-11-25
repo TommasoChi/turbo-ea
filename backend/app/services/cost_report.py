@@ -10,8 +10,9 @@ live until next year, still has the cost that was (or will be) recorded for it.
 from __future__ import annotations
 
 import uuid
+from collections.abc import Mapping, Sequence
 
-from sqlalchemy import select
+from sqlalchemy import ColumnElement, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.card import Card
@@ -148,6 +149,7 @@ async def _item_cards(
     current_fy: int,
     fy_start: int,
     line: str | None = None,
+    extra: Sequence[ColumnElement[bool]] = (),
 ) -> list[tuple[Card, float]]:
     """Live/readable cards of the type with their TCO, or with one item's amount (``line``)."""
     cards = (
@@ -157,6 +159,7 @@ async def _item_cards(
                     Card.type == type_key,
                     Card.status == "ACTIVE",
                     *read_scope.where(Card, mode="module"),
+                    *extra,
                 )
             )
         )
@@ -183,8 +186,12 @@ async def cards_with_cost(
     target_fy: int,
     current_fy: int,
     fy_start: int,
+    extra: Sequence[ColumnElement[bool]] = (),
 ) -> list[tuple[Card, float]]:
-    """The cards of ``type_key`` that count in ``target_fy``, each with its cost."""
+    """The cards of ``type_key`` that count in ``target_fy``, each with its cost.
+
+    ``extra`` are further where-clauses on ``Card`` (the report's card filters).
+    """
     if await is_item_field(db, type_key, cost_field):
         return await _item_cards(
             db,
@@ -194,6 +201,7 @@ async def cards_with_cost(
             current_fy,
             fy_start,
             None if cost_field == DERIVED_KEY else cost_field,
+            extra,
         )
     if target_fy == current_fy:
         result = await db.execute(
@@ -201,6 +209,7 @@ async def cards_with_cost(
                 Card.type == type_key,
                 Card.status == "ACTIVE",
                 *read_scope.where(Card, mode="module"),
+                *extra,
             )
         )
         costed = (
@@ -220,6 +229,7 @@ async def cards_with_cost(
             CardCostHistory.field_key == cost_field,
             CardCostHistory.value != 0,
             *read_scope.where(Card, mode="module"),
+            *extra,
         )
     )
     return [(card, value) for card, value in history.all()]
@@ -248,12 +258,23 @@ async def cards_with_cost_for_types(
     target_fy: int,
     current_fy: int,
     fy_start: int,
+    conditions: Mapping[str, Sequence[ColumnElement[bool]]] | None = None,
 ) -> list[tuple[Card, float]]:
-    """``cards_with_cost`` over several types, in the order of ``type_keys``."""
+    """``cards_with_cost`` over several types, in the order of ``type_keys``.
+
+    ``conditions`` maps a type key to its filter clauses (``cost_filters``).
+    """
     rows: list[tuple[Card, float]] = []
     for key in type_keys:
         rows += await cards_with_cost(
-            db, read_scope, key, cost_field, target_fy, current_fy, fy_start
+            db,
+            read_scope,
+            key,
+            cost_field,
+            target_fy,
+            current_fy,
+            fy_start,
+            (conditions or {}).get(key, ()),
         )
     return rows
 
@@ -268,6 +289,7 @@ async def build_cost_sankey(
     current_fy: int,
     fy_start: int,
     user: User,
+    conditions: Mapping[str, Sequence[ColumnElement[bool]]] | None = None,
 ) -> dict:
     """Cost items -> cards, or cost items -> groups -> cards when ``group_by`` is set.
 
@@ -284,7 +306,7 @@ async def build_cost_sankey(
     # every type sums cost items: the items are the components, nothing is left over
     item_mode = split and all(uses_items(k, cost_field) for k in type_keys)
     totals = await cards_with_cost_for_types(
-        db, read_scope, type_keys, cost_field, target_fy, current_fy, fy_start
+        db, read_scope, type_keys, cost_field, target_fy, current_fy, fy_start, conditions
     )
     allowed = await PermissionService.card_ids_with_cost_access(
         db, user, (card.id for card, _ in totals)

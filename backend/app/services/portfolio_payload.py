@@ -25,6 +25,7 @@ from app.models.card_type import CardType
 from app.models.relation import Relation
 from app.models.relation_type import RelationType
 from app.models.tag import CardTag, Tag, TagGroup
+from app.models.user import User
 from app.services.bo_relationship_constants import APPLICATION_RELATION, OWNERSHIP_KEY
 from app.services.card_read_scope import CardReadScope
 
@@ -327,4 +328,23 @@ def roadmap_from_portfolio(payload: dict, type_key: str) -> dict:
         "relation_types": payload["relation_types"],
         "groupable_types": payload["groupable_types"],
         "tag_groups": payload["tag_groups"],
+    }
+
+
+async def filter_options_payload(db: AsyncSession, user: User, type_key: str) -> dict:
+    """What a card filter offers for one card type, without the cards themselves.
+
+    The portal dialog and the cost report share it: ``{fields_schema, relation_types,
+    groupable_types, tag_groups}`` with the related cards inside ``user``'s read scope.
+    The caller owns the permission check. ``LookupError`` for an unknown or hidden type.
+    """
+    all_types = (await db.execute(select(CardType))).scalars().all()
+    target_type = next((t for t in all_types if t.key == type_key), None)
+    if target_type is None or target_type.is_hidden:
+        raise LookupError(type_key)
+    read_scope = await CardReadScope.load(db, user)
+    payload = await build_portfolio_payload(db, read_scope, target_type, all_types)
+    return {
+        key: payload[key]
+        for key in ("fields_schema", "relation_types", "groupable_types", "tag_groups")
     }

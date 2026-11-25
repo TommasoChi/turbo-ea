@@ -11,6 +11,15 @@ class CostScopeItem(BaseModel):
     alias: str | None
 
 
+class CostFilterOptionsOut(BaseModel):
+    """The vocabulary of the cost report's card filters (shared with the web portals)."""
+
+    fields_schema: list[dict]
+    relation_types: list[dict]
+    groupable_types: dict[str, list[dict]]
+    tag_groups: list[dict]
+
+
 class CostScopeResponse(BaseModel):
     items: list[CostScopeItem]
     total: int
