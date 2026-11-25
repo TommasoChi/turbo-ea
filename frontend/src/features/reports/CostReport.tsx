@@ -1223,7 +1223,7 @@ export default function CostReport() {
       entries={legendEntries}
       activeKey={drill.group}
       onSelect={
-        cardDrilled ? undefined : (k) => k !== drill.group && setDrill({ group: k })
+        cardDrilled ? undefined : (k) => setDrill({ group: k })
       }
     />
   );

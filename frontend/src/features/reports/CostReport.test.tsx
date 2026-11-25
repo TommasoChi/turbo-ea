@@ -1516,13 +1516,20 @@ describe("CostReport Sankey colours, fold, drill and right click", () => {
     series().links.find((l: { source: string; target: string }) => l.source === from && l.target === to)?.value;
   const backButton = () => screen.queryByRole("button", { name: /back/i });
 
-  const open = async () => {
+  // `loose` adds a card with no group value, filed under the Unspecified group node.
+  const open = async (loose = false) => {
     mockTierMetamodel();
     vi.mocked(api.get).mockImplementation((path: string) => {
       if (path.startsWith("/reports/cost-sankey"))
         return Promise.resolve({
-          nodes: NODES,
-          links: LINKS,
+          nodes: loose
+            ? [
+                ...NODES,
+                { id: "group:__other__", name: "__other__", type: "Group" },
+                { id: "u", name: "Loose", type: "Application", cost: 5, costs: { lic: 5 } },
+              ]
+            : NODES,
+          links: loose ? [...LINKS, { source: 0, target: 22, value: 5 }, { source: 22, target: 23, value: 5 }] : LINKS,
           total: 1,
           fiscal_year: 2026,
           current_fiscal_year: 2026,
@@ -1615,6 +1622,33 @@ describe("CostReport Sankey colours, fold, drill and right click", () => {
     const legend = () => screen.getByTestId("cost-legend");
     const labels = () => within(legend()).queryAllByRole("button").map((b) => b.getAttribute("aria-label"));
     const drillNode = (name: string) => act(() => sankey().onContextMenu!({ dataType: "node", name }));
+    const openWithLoose = () => open(true);
+
+    it("a card with no group value shows exactly the Unspecified entry", async () => {
+      await openWithLoose();
+      drillNode("u");
+      await waitFor(() => expect(within(legend()).queryAllByRole("button")).toHaveLength(0));
+      expect(within(legend()).getAllByTestId(/^cost-legend-swatch-/)).toHaveLength(1);
+      expect(screen.getByTestId("cost-legend-swatch-__other__")).toBeInTheDocument();
+      expect(within(legend()).getByText("Unspecified")).toBeInTheDocument();
+    });
+
+    it("clicking Unspecified drills into the unspecified bucket and the breadcrumb reads Unspecified", async () => {
+      await openWithLoose();
+      await userEvent.click(within(legend()).getByRole("button", { name: "Unspecified" }));
+      expect(labels()).toEqual(["Unspecified"]);
+      expect(screen.getAllByText("Unspecified")).toHaveLength(2);
+      await waitFor(() => expect(ids().sort()).toEqual(["group:__other__", "item:lic", "u"]));
+    });
+
+    it("clicking the active entry does not refetch", async () => {
+      await open();
+      await userEvent.click(within(legend()).getByRole("button", { name: "g2" }));
+      const calls = vi.mocked(api.get).mock.calls.length;
+      await userEvent.click(within(legend()).getByRole("button", { name: "g2" }));
+      expect(vi.mocked(api.get).mock.calls.length).toBe(calls);
+      expect(labels()).toEqual(["g2"]);
+    });
 
     it("lists every group at the root, inside the fullscreen panel", async () => {
       await open();
