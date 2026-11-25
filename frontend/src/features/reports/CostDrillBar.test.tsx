@@ -15,6 +15,11 @@ describe("CostDrillBar", () => {
     expect(screen.queryByRole("button", { name: /back/i })).not.toBeInTheDocument();
   });
 
+  it("reserves room on the right for the fullscreen icon", () => {
+    const { container } = render(<CostDrillBar crumbs={[root]} onSelect={vi.fn()} hint="h" />);
+    expect(container.firstElementChild).toHaveStyle({ paddingRight: "40px" });
+  });
+
   it("Back selects the parent level", async () => {
     const onSelect = vi.fn();
     render(<CostDrillBar crumbs={[root, group, card]} onSelect={onSelect} hint="h" />);
