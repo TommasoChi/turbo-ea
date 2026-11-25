@@ -28,6 +28,7 @@ function RoutedChip({
     navigate(href);
   };
   return (
+    // biome-ignore lint/a11y/useSemanticElements: the chip is a styled inline span; an anchor would take link styling and lose Space activation
     <span
       {...attrs}
       role="link"

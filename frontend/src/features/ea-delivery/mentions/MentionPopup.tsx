@@ -330,6 +330,7 @@ export default function MentionPopup({ store, kinds, context, hidden = false }: 
             <Box component="ul" role="presentation" sx={{ m: 0, p: 0, listStyle: "none" }}>
               {groups.map((group) => (
                 <li key={group.kind} role="presentation">
+                  {/* biome-ignore lint/a11y/useSemanticElements: option group inside a listbox; a fieldset is not valid there */}
                   <ul role="group" aria-label={t(GROUP_TITLE_KEYS[group.kind])} style={{ padding: 0 }}>
                     <ListSubheader role="presentation" sx={{ lineHeight: 2.5 }}>
                       {t(GROUP_TITLE_KEYS[group.kind])}

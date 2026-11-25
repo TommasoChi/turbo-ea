@@ -47,13 +47,15 @@ vi.mock("@wamra/gantt-task-react", async (importOriginal) => {
       gantt.props = props;
       return (
         <>
-          <div role="row">
-            {props.columns.map((c) => (
-              <div key={c.id} role="columnheader">
-                {c.title}
-              </div>
-            ))}
-          </div>
+          <table>
+            <thead>
+              <tr>
+                {props.columns.map((c) => (
+                  <th key={c.id}>{c.title}</th>
+                ))}
+              </tr>
+            </thead>
+          </table>
           <div data-testid="gantt">{props.tasks.map((t) => t.name).join("|")}
             <svg><g className="gridBody"><g className="today"><rect data-testid="today-line" /></g></g></svg>
           </div>
