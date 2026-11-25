@@ -26,8 +26,9 @@ export default function CostLegend({ entries, onSelect, activeKey }: Props) {
         const content = (
           <>
             <Box
+              component="span"
               data-testid={`cost-legend-swatch-${e.key}`}
-              sx={{ width: 12, height: 12, borderRadius: 0.5, bgcolor: e.color }}
+              sx={{ display: "inline-block", width: 12, height: 12, borderRadius: 0.5, bgcolor: e.color }}
             />
             <Typography variant="caption" sx={{ fontWeight: active ? 600 : undefined }}>
               {e.label}

@@ -66,4 +66,13 @@ describe("CostLegend", () => {
     expect(screen.getByText("Finance")).toBeInTheDocument();
     expect(screen.getByTestId("cost-legend-swatch-a")).toBeInTheDocument();
   });
+
+  it("keeps the swatch a phrasing element inside the button", () => {
+    render(<CostLegend entries={entries} onSelect={vi.fn()} />);
+    for (const e of entries) {
+      const swatch = screen.getByTestId(`cost-legend-swatch-${e.key}`);
+      expect(swatch.tagName).toBe("SPAN");
+      expect(swatch).toHaveStyle({ display: "inline-block" });
+    }
+  });
 });

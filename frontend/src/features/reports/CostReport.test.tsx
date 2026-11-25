@@ -1397,6 +1397,48 @@ describe("CostReport treemap colours, type badge and drill", () => {
       act(() => document.dispatchEvent(new Event("fullscreenchange")));
     });
 
+    it("a card with no group value does not bold its __other__ cost item as the drilled group", async () => {
+      mockTierMetamodel();
+      mockApi([...TEN, LOOSE], [
+        { id: "u", name: "Loose", type: "Application", cost: 8, costs: { licenses: 5, __other__: 3 } },
+      ]);
+      consumedConfig = { view: "chart", groupBy: "field:tier" };
+      renderCost();
+      await screen.findByTestId("cost-legend");
+      clickTile({ id: "u" });
+      await waitFor(() => expect(screen.getByTestId("cost-legend-swatch-__other__")).toBeInTheDocument());
+      expect(within(legend()).getByText("Other costs")).not.toHaveStyle({ fontWeight: 600 });
+      expect(legend().querySelector("[aria-current]")).toBeNull();
+    });
+
+    it("a card of more than 8 cost items ends its legend with the Other items entry, in the tile colour", async () => {
+      const costs = Object.fromEntries(Array.from({ length: 10 }, (_, i) => [`ci${i}`, 100 - i]));
+      mockTierMetamodel();
+      mockApi(TEN, [{ id: "c1", name: "Card 1", type: "Application", cost: 955, costs }]);
+      consumedConfig = { view: "chart", groupBy: "field:tier" };
+      renderCost();
+      await screen.findByTestId("cost-legend");
+      clickTile({ id: "c1" });
+      await waitFor(() => expect(screen.getByTestId("cost-legend-swatch-__rest__")).toBeInTheDocument());
+      expect(within(legend()).getByText("Other items")).toBeInTheDocument();
+      expect(screen.getByTestId("cost-legend-swatch-__rest__")).toHaveStyle({ backgroundColor: CHART_OTHER.light });
+      expect(within(legend()).getAllByTestId(/^cost-legend-swatch-/)).toHaveLength(9);
+      const last = series().data.at(-1);
+      expect(last.name).toBe("Other items");
+      expect(last.itemStyle.color).toBe(CHART_OTHER.light);
+    });
+
+    it("without a group-by the legend appears only inside a card", async () => {
+      mockApi(TEN, [FIRST]);
+      consumedConfig = { view: "chart" };
+      renderCost();
+      await screen.findByRole("img", { name: "Cost Analysis" });
+      expect(screen.queryByTestId("cost-legend")).not.toBeInTheDocument();
+      clickTile({ id: "c1" });
+      await waitFor(() => expect(screen.getByTestId("cost-legend-swatch-licenses")).toBeInTheDocument());
+      expect(within(legend()).getByText("Support")).toBeInTheDocument();
+    });
+
     it("Others, then a card of a folded group, then Back twice keeps legend and breadcrumb in step", async () => {
       await open();
       await userEvent.click(within(legend()).getByRole("button", { name: "Others (2 groups)" }));
@@ -1681,6 +1723,13 @@ describe("CostReport Sankey colours, fold, drill and right click", () => {
       expect(within(legend()).getAllByTestId(/^cost-legend-swatch-/)).toHaveLength(1);
       expect(within(legend()).getByText("g1")).toBeInTheDocument();
       expect(screen.getByTestId("cost-legend-swatch-g1")).toHaveStyle({ backgroundColor: CHART_CATEGORICAL.light[0] });
+    });
+
+    it("inside a card the group entry stays marked as the active one", async () => {
+      await open();
+      drillNode("c1");
+      await waitFor(() => expect(within(legend()).queryAllByRole("button")).toHaveLength(0));
+      expect(within(legend()).getByText("g1")).toHaveStyle({ fontWeight: 600 });
     });
 
     it("a card of a folded group shows Others; Back twice keeps legend and breadcrumb in step", async () => {

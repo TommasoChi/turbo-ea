@@ -1206,17 +1206,17 @@ export default function CostReport() {
     label: groupDisplayLabel(g.key, g.label),
     color: g.hue,
   }));
-  const legendEntries = cardDrilled
-    ? view === "sankey"
-      ? groupEntries.filter((e) => e.key === (drill.group ?? OTHER_GROUP))
-      : (cardItems?.legend ?? [])
-    : drill.group !== undefined
-      ? groupEntries.filter((e) => e.key === drill.group)
-      : groupEntries;
+  // A Sankey card always hangs under a group node, so its drill carries the group.
+  const cardItemsLegend = cardDrilled && view !== "sankey";
+  const legendEntries = cardItemsLegend
+    ? (cardItems?.legend ?? [])
+    : drill.group === undefined
+      ? groupEntries
+      : groupEntries.filter((e) => e.key === drill.group);
   const legend = (
     <CostLegend
       entries={legendEntries}
-      activeKey={drill.group}
+      activeKey={cardItemsLegend ? undefined : drill.group}
       onSelect={cardDrilled ? undefined : (k) => setDrill({ group: k })}
     />
   );
