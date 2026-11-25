@@ -275,6 +275,24 @@ describe("MatrixReport cells", () => {
   });
 });
 
+describe("MatrixReport keyboard", () => {
+  it("steps the depth buttons and opens a row header with Enter", async () => {
+    const user = userEvent.setup();
+    renderMatrix();
+    await loaded();
+    const collapse = screen.getByLabelText("Collapse rows");
+    expect(collapse.tagName).toBe("BUTTON");
+    collapse.focus();
+    await user.keyboard("{Enter}");
+    await waitFor(() => expect(screen.queryByText("App One Child")).not.toBeInTheDocument());
+
+    const header = within(table()).getByText("App One").closest("td")!;
+    header.focus();
+    await user.keyboard("{Enter}");
+    expect(await screen.findByTestId("side-panel")).toHaveTextContent("app-1");
+  });
+});
+
 describe("MatrixReport hierarchy and sorting", () => {
   it("collapses and expands both axes level by level", async () => {
     renderMatrix();

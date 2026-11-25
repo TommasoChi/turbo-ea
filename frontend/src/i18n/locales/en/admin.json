@@ -537,6 +537,7 @@
   "metamodel.stakeholderPanel.keyLength": "Must be {{min}}-{{max}} characters",
   "metamodel.stakeholderPanel.failedToDelete": "Failed to delete role",
   "metamodel.stakeholderPanel.translations": "Translations",
+  "metamodel.graph.title": "Metamodel graph of card types and their relations",
   "metamodel.graph.noTypes": "No visible types to display. Create some card types first.",
   "tags.title": "Tag Management",
   "tags.newGroup": "New Tag Group",

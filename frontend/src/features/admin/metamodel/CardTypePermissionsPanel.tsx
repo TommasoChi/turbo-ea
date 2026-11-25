@@ -300,7 +300,7 @@ export default function CardTypePermissionsPanel({
                       return (
                         <TableCell key={action.key} align="center">
                           <Tooltip title={t("metamodel.permissionsPanel.lockedByView")}>
-                            <span aria-label={t("metamodel.permissionsPanel.lockedByView")}>
+                            <span role="img" aria-label={t("metamodel.permissionsPanel.lockedByView")}>
                               <MaterialSymbol icon="visibility_off" size={18} color={STATUS_COLORS.neutral} />
                             </span>
                           </Tooltip>

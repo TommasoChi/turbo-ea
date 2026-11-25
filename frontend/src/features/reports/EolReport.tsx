@@ -868,7 +868,7 @@ export default function EolReport() {
                                     lineHeight: 0,
                                   }}
                                 >
-                                  <svg width="24" height="24" viewBox="0 0 24 24">
+                                  <svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24">
                                     <circle
                                       cx="12"
                                       cy="12"

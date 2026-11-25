@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import i18n from "@/i18n";
 import { mockApi } from "@/test/apiMock";
 import { invalidateCardTypeCategories } from "@/hooks/useCardTypeCategories";
@@ -96,5 +97,18 @@ describe("MetamodelGraph layers", () => {
   it("says so when there is nothing to draw", () => {
     render(<MetamodelGraph types={[]} relationTypes={[]} onNodeClick={() => {}} />);
     expect(screen.getByText(i18n.t("admin:metamodel.graph.noTypes"))).toBeInTheDocument();
+  });
+});
+
+describe("MetamodelGraph keyboard", () => {
+  it("opens a node with Enter and Space and names it by its label", async () => {
+    const onNodeClick = vi.fn();
+    render(<MetamodelGraph types={TYPES} relationTypes={[]} onNodeClick={onNodeClick} />);
+    const node = screen.getByRole("button", { name: "Application" });
+    node.focus();
+    await userEvent.keyboard("{Enter}");
+    await userEvent.keyboard(" ");
+    expect(onNodeClick).toHaveBeenCalledTimes(2);
+    expect(onNodeClick).toHaveBeenCalledWith("Application");
   });
 });

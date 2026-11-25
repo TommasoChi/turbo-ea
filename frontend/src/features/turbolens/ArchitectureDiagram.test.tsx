@@ -1,3 +1,4 @@
+// biome-ignore-all lint/a11y/noStaticElementInteractions: test fixture: a stand-in for a React Flow node, which the library itself renders
 /**
  * ArchitectureDiagram — the React Flow rendering of an Architect result.
  *
@@ -57,6 +58,7 @@ vi.mock("@xyflow/react", async (importOriginal) => {
           return (
             <div
               key={n.id}
+              role="presentation"
               className={`react-flow__node react-flow__node-${n.type}`}
               data-id={n.id}
               onMouseEnter={(e) => props.onNodeMouseEnter?.(e, n)}
@@ -66,7 +68,7 @@ vi.mock("@xyflow/react", async (importOriginal) => {
             </div>
           );
         })}
-        <svg>
+        <svg aria-hidden="true">
           {edges.map((e) => {
             const EdgeComp = props.edgeTypes?.[e.type ?? ""] as Comp | undefined;
             return (
@@ -748,7 +750,7 @@ describe("ArchitectureDiagram — edge rendering", () => {
     unmount();
 
     render(
-      <svg>
+      <svg aria-hidden="true">
         <ArchEdge
           id="bare"
           source="a"

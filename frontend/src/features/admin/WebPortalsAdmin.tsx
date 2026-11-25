@@ -973,6 +973,8 @@ export default function WebPortalsAdmin() {
                           <Tooltip describeChild title={t("webPortals.ppm.subtypeNotPublished")}>
                             {/* A disabled item takes no pointer events; this span does,
                                 so the tooltip shows, and it swallows the click. */}
+                            {/* biome-ignore lint/a11y/noStaticElementInteractions: swallows the click only, so the disabled item is not selected; it is not a control */}
+                            {/* biome-ignore lint/a11y/useKeyWithClickEvents: swallows the click only; no action exists to trigger by key */}
                             <span
                               style={{ pointerEvents: "auto" }}
                               onClick={(e) => e.stopPropagation()}

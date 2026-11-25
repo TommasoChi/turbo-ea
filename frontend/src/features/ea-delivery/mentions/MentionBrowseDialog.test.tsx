@@ -57,12 +57,12 @@ vi.mock("@/components/UserMultiSelect", () => ({
     value: { id: string }[];
     onChange: (users: { id: string; display_name: string; email: string }[]) => void;
   }) => (
-    <div data-testid="user-select" aria-label={props.label}>
+    <fieldset data-testid="user-select" aria-label={props.label}>
       <span data-testid="user-value">{props.value.map((u) => u.id).join(",")}</span>
       <button onClick={() => props.onChange([{ id: "u1", display_name: "Ann Lee", email: "ann@x.io" }])}>
         pick-ann
       </button>
-    </div>
+    </fieldset>
   ),
 }));
 

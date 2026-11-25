@@ -1,3 +1,4 @@
+// biome-ignore-all lint/a11y/noStaticElementInteractions: test fixture: a plain wrapper stands in for a clickable ancestor, to prove the toggle stops the click reaching it
 import { screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
@@ -27,7 +28,7 @@ describe("CollapseToggle", () => {
     const onToggle = vi.fn();
     const onParentClick = vi.fn();
     const { user } = renderWithProviders(
-      <div onClick={onParentClick}>
+      <div role="presentation" onClick={onParentClick}>
         <CollapseToggle collapsed={false} onToggle={onToggle} />
       </div>,
     );

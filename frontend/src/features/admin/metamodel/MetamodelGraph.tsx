@@ -1,5 +1,6 @@
 import { useState, useMemo, memo } from "react";
 import { useTranslation } from "react-i18next";
+import { onActivateKey } from "@/lib/keyboardActivate";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import { useTheme, darken } from "@mui/material/styles";
@@ -569,6 +570,7 @@ const MetamodelGraph = memo(function MetamodelGraph({ types, relationTypes, onNo
         height={svgDimensions.svgH}
         style={{ display: "block", minWidth: svgDimensions.svgW }}
       >
+        <title>{t("metamodel.graph.title")}</title>
         <style>{`
           .mm-edge:hover > path, .mm-edge-hl > path { stroke: ${EDGE_HOVER}; stroke-width: 2; }
           .mm-edge:hover > path[marker-end], .mm-edge-hl > path[marker-end] { marker-end: url(#mm-arrow-hover); }
@@ -688,10 +690,15 @@ const MetamodelGraph = memo(function MetamodelGraph({ types, relationTypes, onNo
           const pos = layout.map[t.key];
           if (!pos) return null;
           return (
+            // biome-ignore lint/a11y/useSemanticElements: an SVG group cannot be a native button, so role="button" with a key handler is the only form
             <g
               key={t.key}
               style={{ cursor: "pointer" }}
+              role="button"
+              tabIndex={0}
+              aria-label={t.label}
               onClick={() => onNodeClick(t.key)}
+              onKeyDown={onActivateKey(() => onNodeClick(t.key))}
               onMouseEnter={() => setHoveredNode(t.key)}
               onMouseLeave={() => setHoveredNode(null)}
             >

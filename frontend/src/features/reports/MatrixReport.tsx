@@ -29,6 +29,7 @@ import IconButton from "@mui/material/IconButton";
 import InputAdornment from "@mui/material/InputAdornment";
 import Alert from "@mui/material/Alert";
 import MaterialSymbol from "@/components/MaterialSymbol";
+import { onActivateKey } from "@/lib/keyboardActivate";
 import ReportShell from "./ReportShell";
 import SaveReportDialog from "./SaveReportDialog";
 import MetricCard from "./MetricCard";
@@ -132,6 +133,10 @@ const MAX_DENSE_GLYPHS = 4;
 // Depth control icon button styles
 const DEPTH_ICON_SIZE = 22;
 const depthBtnStyle = (disabled: boolean): React.CSSProperties => ({
+  padding: 0,
+  border: 0,
+  background: "none",
+  color: "inherit",
   display: "inline-flex",
   alignItems: "center",
   justifyContent: "center",
@@ -143,6 +148,39 @@ const depthBtnStyle = (disabled: boolean): React.CSSProperties => ({
   transition: "opacity 0.15s",
   flexShrink: 0,
 });
+/** A -/+ step button of the matrix headers. aria-disabled, not disabled: a disabled button would pass its click to the clickable header cell. */
+function DepthButton({
+  label,
+  placement,
+  icon,
+  disabled,
+  color,
+  onStep,
+}: {
+  label: string;
+  placement?: "right";
+  icon: string;
+  disabled: boolean;
+  color: string;
+  onStep: () => void;
+}) {
+  const step = (e: React.SyntheticEvent) => {
+    e.stopPropagation();
+    if (!disabled) onStep();
+  };
+  return (
+    <Tooltip title={label} placement={placement}>
+      <button
+        type="button"
+        aria-disabled={disabled}
+        style={depthBtnStyle(disabled)}
+        onClick={step}
+      >
+        <MaterialSymbol icon={icon} size={DEPTH_ICON_SIZE} color={color} />
+      </button>
+    </Tooltip>
+  );
+}
 const depthCounterStyle: React.CSSProperties = {
   fontSize: 9,
   fontWeight: 700,
@@ -602,7 +640,7 @@ export default function MatrixReport() {
   );
 
   const handleCellClick = (
-    e: React.MouseEvent<HTMLTableCellElement>,
+    e: React.SyntheticEvent<HTMLTableCellElement>,
     rowNode: TreeNode,
     colNode: TreeNode,
     cell: CellDatum,
@@ -1079,23 +1117,21 @@ export default function MatrixReport() {
                             alignItems: "center",
                             gap: 3,
                           }}>
-                            <Tooltip title={t("matrix.collapseRows")}>
-                              <span
-                                style={depthBtnStyle(effectiveRowDepth <= 0)}
-                                onClick={(e) => { e.stopPropagation(); if (effectiveRowDepth > 0) setRowExpandedDepth((p) => stepDepth(p, rowTreeFull!.maxDepth, -1)); }}
-                              >
-                                <MaterialSymbol icon="do_not_disturb_on" size={DEPTH_ICON_SIZE} color={depthIconColor} />
-                              </span>
-                            </Tooltip>
+                            <DepthButton
+                              label={t("matrix.collapseRows")}
+                              icon="do_not_disturb_on"
+                              disabled={effectiveRowDepth <= 0}
+                              color={depthIconColor}
+                              onStep={() => setRowExpandedDepth((p) => stepDepth(p, rowTreeFull!.maxDepth, -1))}
+                            />
                             <span style={depthCounterStyle}>{effectiveRowDepth}/{rowTreeFull!.maxDepth}</span>
-                            <Tooltip title={t("matrix.expandRows")}>
-                              <span
-                                style={depthBtnStyle(effectiveRowDepth >= rowTreeFull!.maxDepth)}
-                                onClick={(e) => { e.stopPropagation(); if (effectiveRowDepth < rowTreeFull!.maxDepth) setRowExpandedDepth((p) => stepDepth(p, rowTreeFull!.maxDepth, 1)); }}
-                              >
-                                <MaterialSymbol icon="add_circle" size={DEPTH_ICON_SIZE} color={depthIconColor} />
-                              </span>
-                            </Tooltip>
+                            <DepthButton
+                              label={t("matrix.expandRows")}
+                              icon="add_circle"
+                              disabled={effectiveRowDepth >= rowTreeFull!.maxDepth}
+                              color={depthIconColor}
+                              onStep={() => setRowExpandedDepth((p) => stepDepth(p, rowTreeFull!.maxDepth, 1))}
+                            />
                           </div>
                         )}
                         {/* Column depth: vertical -/+ centered vertically, flush right */}
@@ -1110,23 +1146,21 @@ export default function MatrixReport() {
                             alignItems: "center",
                             gap: 1,
                           }}>
-                            <Tooltip title={t("matrix.collapseColumns")} placement="right">
-                              <span
-                                style={depthBtnStyle(effectiveColDepth <= 0)}
-                                onClick={(e) => { e.stopPropagation(); if (effectiveColDepth > 0) setColExpandedDepth((p) => stepDepth(p, colTreeFull!.maxDepth, -1)); }}
-                              >
-                                <MaterialSymbol icon="do_not_disturb_on" size={DEPTH_ICON_SIZE} color={depthIconColor} />
-                              </span>
-                            </Tooltip>
+                            <DepthButton
+                              label={t("matrix.collapseColumns")} placement="right"
+                              icon="do_not_disturb_on"
+                              disabled={effectiveColDepth <= 0}
+                              color={depthIconColor}
+                              onStep={() => setColExpandedDepth((p) => stepDepth(p, colTreeFull!.maxDepth, -1))}
+                            />
                             <span style={depthCounterStyle}>{effectiveColDepth}/{colTreeFull!.maxDepth}</span>
-                            <Tooltip title={t("matrix.expandColumns")} placement="right">
-                              <span
-                                style={depthBtnStyle(effectiveColDepth >= colTreeFull!.maxDepth)}
-                                onClick={(e) => { e.stopPropagation(); if (effectiveColDepth < colTreeFull!.maxDepth) setColExpandedDepth((p) => stepDepth(p, colTreeFull!.maxDepth, 1)); }}
-                              >
-                                <MaterialSymbol icon="add_circle" size={DEPTH_ICON_SIZE} color={depthIconColor} />
-                              </span>
-                            </Tooltip>
+                            <DepthButton
+                              label={t("matrix.expandColumns")} placement="right"
+                              icon="add_circle"
+                              disabled={effectiveColDepth >= colTreeFull!.maxDepth}
+                              color={depthIconColor}
+                              onStep={() => setColExpandedDepth((p) => stepDepth(p, colTreeFull!.maxDepth, 1))}
+                            />
                           </div>
                         )}
                       </th>
@@ -1170,7 +1204,9 @@ export default function MatrixReport() {
                           }}
                           onMouseEnter={() => setHoveredCol(cell.node.item.id)}
                           onMouseLeave={() => setHoveredCol(null)}
+                          tabIndex={0}
                           onClick={() => setSidePanelCardId(cardIdOf(cell.node))}
+                          onKeyDown={onActivateKey(() => setSidePanelCardId(cardIdOf(cell.node)))}
                         >
                           {/* A self column repeats its parent's name directly
                               under that parent's header, so the marker alone
@@ -1255,7 +1291,9 @@ export default function MatrixReport() {
                           }}
                           onMouseEnter={() => setHoveredRow(cell.node.item.id)}
                           onMouseLeave={() => setHoveredRow(null)}
+                          tabIndex={0}
                           onClick={() => setSidePanelCardId(cardIdOf(cell.node))}
+                          onKeyDown={onActivateKey(() => setSidePanelCardId(cardIdOf(cell.node)))}
                         >
                           <Tooltip title={cell.node.item.name} placement="right">
                             <span style={{
@@ -1307,6 +1345,7 @@ export default function MatrixReport() {
                       }
 
                       return (
+                        // biome-ignore lint/a11y/useKeyWithClickEvents: a matrix holds tens of thousands of data cells; making each focusable would put them all in the tab order; a roving-tabindex grid is a separate change
                         <td
                           key={colNode.item.id}
                           title={val > 0 ? cellTitle(leafRow, colNode, cell, isAggregated) : undefined}

@@ -9,6 +9,7 @@ import {
   useRef,
 } from "react";
 import { createPortal } from "react-dom";
+import { onActivateKey } from "@/lib/keyboardActivate";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import ToggleButton from "@mui/material/ToggleButton";
@@ -102,6 +103,19 @@ interface ArrowGeometry {
   toY: number;
 }
 
+/** A native button that looks like the plain text or icon it wraps. */
+const BARE_BUTTON_STYLE: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  padding: 0,
+  border: 0,
+  background: "none",
+  color: "inherit",
+  font: "inherit",
+  textAlign: "left",
+  cursor: "pointer",
+};
+
 interface DependencyArrowOverlayProps {
   arrows: ArrowGeometry[];
   buildPath: (
@@ -120,13 +134,14 @@ interface DependencyArrowOverlayProps {
  *  sits in the same DOM parent as the bars, scroll moves them together
  *  and our coordinates (which are already wrapper-local) stay valid
  *  without any per-render re-measurement. */
-function DependencyArrowOverlay({
+export function DependencyArrowOverlay({
   arrows,
   buildPath,
   onClick,
   color,
   dangerColor: _dangerColor,
 }: DependencyArrowOverlayProps) {
+  const { t } = useTranslation("ppm");
   const [hoverId, setHoverId] = useState<string | null>(null);
 
   return (
@@ -142,6 +157,7 @@ function DependencyArrowOverlay({
         zIndex: 5,
       }}
     >
+      <title>{t("dependencyArrows")}</title>
       <defs>
         <marker
           id="ppm-gantt-arrowhead"
@@ -170,12 +186,17 @@ function DependencyArrowOverlay({
         return (
           <g key={a.id} style={{ pointerEvents: "auto", cursor: "pointer" }}>
             {/* Wide invisible hit target — inset to avoid the bar edges. */}
+            {/* biome-ignore lint/a11y/useSemanticElements: an SVG path cannot be a native button, so role="button" with a key handler is the only form */}
             <path
               d={clickD}
               fill="none"
               stroke="transparent"
               strokeWidth={12}
+              role="button"
+              tabIndex={0}
+              aria-label={t("deleteDependencyArrow")}
               onClick={() => onClick(a.id)}
+              onKeyDown={onActivateKey(() => onClick(a.id))}
               onMouseEnter={() => setHoverId(a.id)}
               onMouseLeave={() => setHoverId(null)}
             />
@@ -856,6 +877,7 @@ export default function PpmGanttTab({ initiativeId, card }: Props) {
    *  expander arrow for WBS parents. Avoids the library's broken onClick. */
   const NameCell = useMemo(() => {
     const Cell = ({ data }: ColumnProps) => {
+      const { t } = useTranslation("ppm");
       const {
         task,
         hasChildren,
@@ -867,7 +889,7 @@ export default function PpmGanttTab({ initiativeId, card }: Props) {
       const handleExpand = () => {
         if (task.type !== "empty") onExpanderClick(task as Task);
       };
-      const handleNameClick = (e: React.MouseEvent<HTMLDivElement>) => {
+      const handleNameClick = (e: React.MouseEvent<HTMLButtonElement>) => {
         e.stopPropagation();
         if (task.id === EMPTY_ROW_ID) {
           // useState setters are referentially stable, so the memo below
@@ -894,28 +916,37 @@ export default function PpmGanttTab({ initiativeId, card }: Props) {
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              cursor: hasChildren ? "pointer" : "default",
             }}
-            onClick={handleExpand}
           >
             {/* A Material symbol, not a text triangle: iOS draws "▶" as the
                 play-button emoji. */}
             {hasChildren && (
-              <MaterialSymbol icon={isClosed ? "arrow_right" : "arrow_drop_down"} size={20} />
+              <button
+                type="button"
+                aria-expanded={!isClosed}
+                aria-label={isClosed ? t("expandTask") : t("collapseTask")}
+                style={{ ...BARE_BUTTON_STYLE, width: "100%", height: "100%", justifyContent: "center" }}
+                onClick={handleExpand}
+              >
+                <MaterialSymbol icon={isClosed ? "arrow_right" : "arrow_drop_down"} size={20} />
+              </button>
             )}
           </div>
-          <div
+          <button
+            type="button"
             style={{
               overflow: "hidden",
               textOverflow: "ellipsis",
               whiteSpace: "nowrap",
-              cursor: "pointer",
+              ...BARE_BUTTON_STYLE,
+              display: "block",
+              minWidth: 0,
             }}
             onClick={handleNameClick}
             title={task.name}
           >
             {task.name || (task.id === EMPTY_ROW_ID ? "+" : "")}
-          </div>
+          </button>
         </div>
       );
     };

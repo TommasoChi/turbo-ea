@@ -1,3 +1,4 @@
+// biome-ignore-all lint/a11y/noStaticElementInteractions: test fixtures: a plain wrapper stands in for a clickable or key-handling ancestor, to prove HelpTip stops the event reaching it
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
@@ -50,7 +51,7 @@ describe("HelpTip", () => {
   it("does not let a click reach a clickable parent", () => {
     const onParent = vi.fn();
     render(
-      <div onClick={onParent}>
+      <div role="presentation" onClick={onParent}>
         <HelpTip text="Stop" />
       </div>,
     );
@@ -214,7 +215,7 @@ describe("HelpTip", () => {
   it("does not let Enter or Space reach a parent's key handler", () => {
     const onParentKey = vi.fn();
     render(
-      <div onKeyDown={(e) => onParentKey(e.key)}>
+      <div role="presentation" onKeyDown={(e) => onParentKey(e.key)}>
         <HelpTip text="Key stop" />
       </div>,
     );
