@@ -10,7 +10,7 @@ The cost of an Application or IT Component is a sum of items (Infrastructure, Ap
 
 1. **Provider on a cost item.** In "Edit cost item" a new Provider field. One provider per item (a deliberate simplification: an item might in reality have several; not now).
 2. **Group by Provider** in the cost report (treemap, Sankey, table): costs add up per provider.
-3. **Field and relation filters** in the cost report: one filter group for Application and one for IT Component, shown according to the card-type toggle (Application, IT Component, or both). Same look as the PPM initiative filter, only the "Fields" section, which here also lists the relation facets (so Provider is filterable).
+3. **Field and relation filters** in the cost report: one filter group for Application and one for IT Component, shown according to the card-type toggle (Application, IT Component, or both). Same look as the PPM initiative filter; the relation facets are included, so Provider is filterable.
 
 ## Non-goals
 
@@ -48,7 +48,7 @@ The cost of an Application or IT Component is a sum of items (Infrastructure, Ap
 
 ## Field and relation filters
 
-The cost report shows `CardFilterSection` (shared by Lifecycle, Portfolio, the PPM board and the portals admin) once per selected type, with that type's `cardTypeKey`. The component has no "Fields only" mode and the other reports keep it unchanged: the cost report passes no tag groups and no relation sub-types, so what shows is the **Fields** row (the single-select, multi-select and boolean fields of the type, `isFacetField`, and the card sub-type) and the existing **Related by** row (Provider among the relation facets, with its *Include sub-cards* switch). Both groups are active only when their type is selected; in the combined view each filter applies to its own type's cards.
+The cost report shows `CardFilterSection` (shared by Lifecycle, Portfolio, the PPM board and the portals admin) once per selected type, with that type's `cardTypeKey`. The look is the PPM initiative filter, the whole section, unchanged for the other reports: the **Related by** row (Provider among the relation facets, with its *Include sub-cards* switch) and the **Fields** row (the single-select, multi-select and boolean fields of the type, `isFacetField`, and the card sub-type). The cost report passes no tag groups. Both groups are active only when their type is selected; in the combined view each filter applies to its own type's cards.
 
 A filter narrows which cards count. It is **evaluated on the server**: `cost-treemap` and `cost-sankey` take the filter value (field and relation filters, as the portals' filters do) and apply it under `CardReadScope`, so the treemap, Sankey, table and yearly trend all see the same cards; it combines with AND with the card-scope filter and the fiscal year, and is saved with the report config like the scope. The facet options come from an existing endpoint scoped by `CardReadScope`. Filtering by the Provider relation matches **cards linked to that provider**; it is independent of the item-level provider used for grouping.
 
@@ -59,7 +59,7 @@ A filter narrows which cards count. It is **evaluated on the server**: `cost-tre
 - Items recorded before this feature have no provider and land in "Unspecified"; nothing is back-filled from the card's linked provider.
 - The provider is stored in the JSONB, not in a new column.
 
-- Saving an item whose stored provider the caller cannot read: a missing or `null` `provider_id` leaves the hidden one untouched; a new valid pick **replaces** it. This is an authorization rule and is put to the owner for a yes.
+- Saving an item whose stored provider the caller cannot read: a missing or `null` `provider_id` leaves the hidden one untouched; a new valid pick **replaces** it. Confirmed by the owner.
 
 ## Left to the builder
 
