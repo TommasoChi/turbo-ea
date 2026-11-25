@@ -320,6 +320,5 @@ class ExtensionTodos(TodosBridge):
         async def op(db: AsyncSession):
             todo = await self._load_writable(db, todo_id)
             await todo_service.delete_todo(db, self._actor(), todo)
-            return None
 
         return await self._write(op)

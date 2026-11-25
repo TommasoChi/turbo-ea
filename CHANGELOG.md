@@ -5,6 +5,16 @@ All notable changes to Turbo EA are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.213.0] - 2026-11-25
+
+### Added
+
+- Click a legend entry in the Cost Report to drill into that group; the legend follows the breadcrumb, down to a card's cost items.
+
+### Fixed
+
+- Keep the Cost Report click hint clear of the fullscreen button, and show the legend in fullscreen.
+
 ## [2.212.0] - 2026-11-24
 
 ### Added

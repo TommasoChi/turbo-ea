@@ -18,7 +18,7 @@ export default function CostDrillBar({
   const { t } = useTranslation("reports");
   const current = crumbs[crumbs.length - 1];
   return (
-    <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap", mb: 1 }}>
+    <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap", mb: 1, pr: 5 }}>
       {crumbs.length > 1 && (
         <Button size="small" onClick={() => onSelect(backOf(current.target))}>
           {`‹ ${t("cost.back")}`}

@@ -20,6 +20,9 @@
     "enabled": true,
     "rules": {
       "preset": "none",
+      "a11y": {
+        "useSemanticElements": "error"
+      },
       "complexity": {
         "noExcessiveCognitiveComplexity": {
           "level": "warn",

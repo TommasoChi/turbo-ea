@@ -467,6 +467,7 @@ export default function CatalogueBrowser({
           )}
         </Typography>
 
+        {/* biome-ignore lint/a11y/useSemanticElements: a fieldset would add default border, padding and min-width to the styled stepper */}
         <div className="tcc-stepper" role="group" aria-label="Expand by level">
           <button
             type="button"
@@ -629,6 +630,7 @@ function L1Card({
   return (
     <section className={`tcc-l1-card${selfSelected ? " is-selected" : ""}`}>
       <header className="tcc-l1-header">
+        {/* biome-ignore lint/a11y/useSemanticElements: a fieldset would add default border, padding and min-width to the styled stepper */}
         <div className="tcc-branch-stepper" role="group" aria-label={expandLabel}>
           <button
             type="button"

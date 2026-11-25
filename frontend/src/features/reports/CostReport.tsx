@@ -41,7 +41,7 @@ import {
   drillGroupKey,
   memberShade,
 } from "./costColors";
-import CostLegend from "./CostLegend";
+import CostLegend, { type CostLegendEntry } from "./CostLegend";
 import { CHART_OTHER, COST_UNSPECIFIED, EOL_WARNING_COLOR, RAG_COLORS, STATUS_COLORS } from "@/theme/tokens";
 import MetricCard from "./MetricCard";
 import FullscreenPanel from "./FullscreenPanel";
@@ -873,10 +873,10 @@ export default function CostReport() {
     refreshVersion,
   });
   // A drilled card: one tile per cost item (catalogue order), the first 8 coloured, the rest merged.
-  const cardItemTiles = useMemo<CostTreemapItem[] | null>(() => {
+  const cardItems = useMemo<{ tiles: CostTreemapItem[]; legend: CostLegendEntry[] } | null>(() => {
     if (drill.cardId === undefined || !breakdown) return null;
     const b = breakdown.get(drill.cardId);
-    if (!b) return [];
+    if (!b) return { tiles: [], legend: [] };
     const has = (k: string) => (b.items[k] ?? 0) > 0;
     const keys = [
       ...trendComponents.filter(has),
@@ -897,7 +897,12 @@ export default function CostReport() {
         index: MAX_GROUP_HUES,
         color: CHART_OTHER[chartTheme.mode],
       });
-    return tiles;
+    const legend: CostLegendEntry[] = tiles.map((tile, i) => ({
+      key: i < MAX_GROUP_HUES ? keys[i] : "__rest__",
+      label: tile.name,
+      color: tile.color,
+    }));
+    return { tiles, legend };
   }, [drill.cardId, breakdown, trendComponents, trendLabelOf, t, chartTheme.categorical, chartTheme.mode]);
   const trendSelection = useMemo<TrendSelection | undefined>(() => {
     if (drill.cardId !== undefined) return { kind: "card", id: drill.cardId };
@@ -1191,18 +1196,28 @@ export default function CostReport() {
         }))
       : undefined;
   const treemapItems =
-    cardItemTiles ??
+    cardItems?.tiles ??
     [...(groupDrilled ? applyDrill(items, drill, foldedKeys) : items)]
       .sort((x, y) => y.cost - x.cost)
       .map(treemapLeaf);
   const treemapTotal = cardDrilled ? (breakdown?.get(drill.cardId!)?.total ?? 0) : total;
+  const groupEntries: CostLegendEntry[] = colorPlan.groups.map((g) => ({
+    key: g.key,
+    label: groupDisplayLabel(g.key, g.label),
+    color: g.hue,
+  }));
+  // A Sankey card always hangs under a group node, so its drill carries the group.
+  const cardItemsLegend = cardDrilled && view !== "sankey";
+  const legendEntries = cardItemsLegend
+    ? (cardItems?.legend ?? [])
+    : drill.group === undefined
+      ? groupEntries
+      : groupEntries.filter((e) => e.key === drill.group);
   const legend = (
     <CostLegend
-      entries={colorPlan.groups.map((g) => ({
-        key: g.key,
-        label: groupDisplayLabel(g.key, g.label),
-        color: g.hue,
-      }))}
+      entries={legendEntries}
+      activeKey={cardItemsLegend ? undefined : drill.group}
+      onSelect={cardDrilled ? undefined : (k) => setDrill({ group: k })}
     />
   );
 
@@ -1503,7 +1518,7 @@ export default function CostReport() {
                 {(isFullscreen) => (
                   <>
                   {drillBar}
-                  {cardDrilled && cardItemTiles === null ? (
+                  {cardDrilled && cardItems === null ? (
                     <Box sx={{ display: "flex", justifyContent: "center", py: 8 }}><CircularProgress /></Box>
                   ) : (
                   <CostTreemapPanel
@@ -1517,10 +1532,10 @@ export default function CostReport() {
                     onTileDrill={handleTileDrill}
                   />
                   )}
+                  {legend}
                   </>
                 )}
               </FullscreenPanel>
-            {legend}
           </>
         )
       ) : view === "sankey" ? (
@@ -1545,10 +1560,10 @@ export default function CostReport() {
                   onNodeOpen={handleNodeOpen}
                   onNodeDrill={handleNodeDrill}
                 />
+                {legend}
                 </>
               )}
             </FullscreenPanel>
-            {legend}
           </>
         )
       ) : (
