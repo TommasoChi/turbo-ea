@@ -269,7 +269,6 @@ async def after_save(
     from app.services import document_history_service as history
 
     await history.record_save(db, doc_kind, doc, user=user, before=before)
-    return
 
 
 async def on_workflow(
