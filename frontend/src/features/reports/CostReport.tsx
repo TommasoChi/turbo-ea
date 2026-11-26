@@ -944,7 +944,8 @@ export default function CostReport() {
   // The table's item columns and a drilled card need the per-item breakdown; no costs.view, no request.
   const { breakdown } = useCostBreakdown({
     enabled:
-      canViewCostsGlobally && (view === "table" || (view === "chart" && drill.cardId !== undefined)),
+      canViewCostsGlobally &&
+      (view === "table" ? !byProvider : view === "chart" && drill.cardId !== undefined),
     typeParam: typeParam(cardTypeKey),
     fiscalYear: fiscalYearParam,
     cardFilters: cardFiltersParam,
@@ -1034,13 +1035,13 @@ export default function CostReport() {
     const recompute = !!closure || drillActive;
     const drilled = drillActive ? applyDrill(sankeyCards, drill, foldedKeys) : null;
     const drillIds = drilled && new Set(drilled.map((c) => c.id));
-    const drillShares = drilled && new Set(drilled.map(rowKeyOf));
+    // A card drill shows every share of the card; only a group drill narrows the group -> card links.
+    const drillShares = drilled && drill.cardId === undefined ? new Set(drilled.map(rowKeyOf)) : null;
     const isCard = (n: SankeyNode) => n.type !== "CostItem" && n.type !== "Group";
     const keep = sankeyData.nodes.map(
       (n) => !isCard(n) || ((!closure || closure.has(n.id)) && (!drillIds || drillIds.has(n.id))),
     );
-    // A group -> card link survives a drill only for the share the drill names: a card under two
-    // providers keeps its other provider's link out of a drilled provider's view.
+    // A group -> card link survives a group drill only for the shares that group holds.
     const live = (l: SankeyLink) => {
       const from = sankeyData.nodes[l.source];
       return !drillShares || from.type !== "Group" || drillShares.has(rowKeyOf({ id: sankeyData.nodes[l.target].id, group: rawGroup(from) }));
@@ -1353,7 +1354,11 @@ export default function CostReport() {
     if (activeSort === "name") return a.name.localeCompare(b.name) * d;
     return ((cellValue(a, activeSort) ?? 0) - (cellValue(b, activeSort) ?? 0)) * d;
   };
-  const tableItems = drillActive ? applyDrill(items, drill, foldedKeys) : items;
+  const tableItems = cardDrilled
+    ? items.filter((i) => i.id === drill.cardId)
+    : groupDrilled
+      ? applyDrill(items, drill, foldedKeys)
+      : items;
   const tableGroups =
     groups && !cardDrilled
       ? colorPlan.groups.filter((g) => !groupDrilled || g.key === drill.group)

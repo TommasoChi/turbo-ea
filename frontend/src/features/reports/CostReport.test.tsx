@@ -71,7 +71,9 @@ vi.mock("./CostTrendChart", () => ({
     cardFilters,
     scopeIds,
     refreshVersion,
+    selection,
   }: {
+    selection?: { kind: "card"; id: string } | { kind: "group"; keys: string[] };
     years: number[];
     currentFiscalYear: number;
     typeParam: string;
@@ -96,6 +98,7 @@ vi.mock("./CostTrendChart", () => ({
         data-card-filters={cardFilters ?? ""}
         data-components={components.join(",")}
         data-scope={scopeIds ? [...scopeIds].sort().join(",") : ""}
+        data-selection={selection ? (selection.kind === "card" ? `card:${selection.id}` : `group:${selection.keys.join("+")}`) : ""}
         data-labels={components.map((c) => labelOf?.(c) ?? c).join(",")}
       />
     );
@@ -2250,14 +2253,57 @@ describe("CostReport group by Provider", () => {
     expect(colour("erp")).toBe(memberShade(CHART_CATEGORICAL.light[0], 0, 2));
   });
 
-  it("Sankey: drilling a card that hangs under two providers keeps its larger share's group only", async () => {
+  it("Sankey: drilling a card that hangs under two providers keeps every share of it", async () => {
     consumedConfig = { view: "sankey", groupBy: "provider" };
     renderCost();
     await screen.findByTestId("cost-sankey-panel");
     await waitFor(() => expect(sankeyIds()).toContain("erp"));
     act(() => sankey().onContextMenu!({ dataType: "node", name: "erp" }));
-    await waitFor(() => expect(sankeyIds()).not.toContain("group:p2"));
-    expect(sankeyIds().sort()).toEqual(["erp", "group:p1", "item:licenses", "item:support"]);
+    await waitFor(() => expect(sankeyIds()).not.toContain("crm"));
+    expect(sankeyIds().sort()).toEqual(["erp", "group:p1", "group:p2", "item:licenses", "item:support"]);
+    expect(flowOf("group:p1", "erp")).toBe(300);
+    expect(flowOf("group:p2", "erp")).toBe(100);
+    expect(flowOf("item:licenses", "group:p1")).toBe(200);
+    expect(flowOf("item:licenses", "group:p2")).toBe(100);
+  });
+
+  it("a right click on one share's tile shows the whole card in the treemap, the table and the trend", async () => {
+    consumedConfig = { view: "chart", groupBy: "provider", fiscalYearParam: 2027 };
+    renderCost();
+    await screen.findByRole("img", { name: "Cost Analysis" });
+    act(() => treemap().onContextMenu!({ data: { id: "erp|p1", cardId: "erp" } }));
+    await waitFor(() =>
+      expect(echartState.byName("Cost Analysis").option.series[0].data.map((d: { value: number }) => d.value)).toEqual([300, 100]),
+    );
+    expect(await screen.findByTestId("cost-trend-chart")).toHaveAttribute("data-selection", "card:erp");
+    await userEvent.click(screen.getByRole("button", { name: /table view/i }));
+    await screen.findByRole("table");
+    const rows = screen.getAllByRole("row");
+    expect(texts(rows.at(-1)!).slice(1, 4)).toEqual(["$300", "$100", "$400"]);
+    expect(rows.filter((r) => within(r).queryByTestId("cost-row-name"))).toHaveLength(2);
+  });
+
+  it("a group drill still shows only that group's shares", async () => {
+    consumedConfig = { view: "chart", groupBy: "provider" };
+    renderCost();
+    await screen.findByRole("img", { name: "Cost Analysis" });
+    act(() => treemap().onContextMenu!({ data: { key: "p2" } }));
+    await userEvent.click(await screen.findByRole("button", { name: /table view/i }));
+    await screen.findByRole("table");
+    const rows = screen.getAllByRole("row");
+    expect(rows.filter((r) => within(r).queryByTestId("cost-row-name"))).toHaveLength(1);
+    expect(texts(rows.at(-1)!).slice(1, 4)).toEqual(["$100", "$0", "$100"]);
+  });
+
+  it("the table under Provider grouping makes no per-item breakdown request; without it, it does", async () => {
+    consumedConfig = { view: "table", groupBy: "provider" };
+    const { unmount } = renderCost();
+    await screen.findByTestId("cost-group-swatch-p1");
+    expect(shareCalls("/reports/cost-sankey")).toHaveLength(0);
+    unmount();
+    consumedConfig = { view: "table" };
+    renderCost();
+    await waitFor(() => expect(shareCalls("/reports/cost-sankey").length).toBeGreaterThan(0));
   });
 
   const flowOf = (from: string, to: string) =>
