@@ -201,6 +201,21 @@ class TestMutationBatchWrapper:
         )
 
     @pytest.mark.asyncio
+    async def test_a_failed_close_of_an_errored_batch_still_raises_the_original_error(self):
+        # The close is best effort: if it fails too, the caller still sees the first error.
+        async def post(self, path, json=None, **_kwargs):
+            if path.endswith("/commit"):
+                raise ConnectionError("backend gone")
+            return {"id": "b1", "confirm_token": None}
+
+        with (
+            patch.object(server.TurboEAClient, "post", post),
+            pytest.raises(RuntimeError, match="boom"),
+        ):
+            async with mutation_batch("t", tool_name="create_risks", row_count=3, dry_run=True):
+                raise RuntimeError("boom")
+
+    @pytest.mark.asyncio
     async def test_a_non_dict_open_response_yields_no_id_and_no_token(self):
         router, _calls = _wrapper_router(["not", "a", "dict"])
         with patch.object(server.TurboEAClient, "post", AsyncMock(side_effect=router)):

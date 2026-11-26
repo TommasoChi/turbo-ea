@@ -154,10 +154,9 @@ async def _remap_users(users_rows: list[dict[str, Any]], db_users: list[tuple[st
     )
     assert ctx.ids is ids
     # the Provider card ids (workspace costs keep only those), then the e-mail map
-    assert db.executed == [
-        "SELECT cards.id \nFROM cards \nWHERE cards.type = %(type_1)s",
-        "SELECT users.email, users.id \nFROM users",
-    ]
+    provider_query, users_query = db.executed  # the bind-parameter cast differs by driver
+    assert provider_query.startswith("SELECT cards.id \nFROM cards \nWHERE cards.type = ")
+    assert users_query == "SELECT users.email, users.id \nFROM users"
     return ids
 
 
