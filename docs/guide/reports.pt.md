@@ -172,7 +172,7 @@ Todas as vistas partilham a mesma barra de ferramentas, os mesmos filtros, o mes
 
 **Gráfico de tendência** — A tendência de custos (o ano atual, os quatro anteriores e, quando selecionada, a **Forecast**) é mostrada por cima do gráfico nas três vistas, e não apenas no treemap, e segue o tipo de custo selecionado.
 
-**Cores e legenda** — Cada grupo tem o seu próprio tom; dentro de um grupo, um tom mais escuro significa um cartão mais caro. Além dos oito grupos mais caros, os restantes ficam agrupados num único grupo **Outros**, e os cartões sem valor no campo de agrupamento vão para **Não especificado**. A legenda ao lado do gráfico lista os grupos com as suas cores; o Sankey e a tabela usam as mesmas cores.
+**Cores e legenda** — Cada grupo tem o seu próprio tom; dentro de um grupo, um tom mais escuro significa um cartão mais caro. Além dos oito grupos mais caros, os restantes ficam agrupados num único grupo **Outros**, e os cartões sem valor no campo de agrupamento vão para **Não especificado**. A legenda por baixo do treemap e do Sankey lista os grupos com as suas cores, também em ecrã inteiro; o Sankey e a tabela usam as mesmas cores. A legenda acompanha o detalhe: lista todos os grupos no nível superior, apenas o grupo atual quando está dentro dele e, dentro de um cartão, os itens de custo do cartão no treemap (o Sankey mantém o grupo do cartão). Clique num grupo da legenda para entrar nele; o caminho de navegação é atualizado. A tabela não tem legenda.
 
 **Detalhe** — Um **clique direito** num grupo ou num cartão aprofunda-o: o gráfico limita-se a esse grupo (ou cartão) e surge um caminho de navegação por cima. Clique em **Voltar**, ou em qualquer segmento do caminho, para subir um nível. Aprofundar **Outros** lista os grupos que nele foram agrupados. Um **clique esquerdo** num cartão abre antes o seu painel lateral (um clique esquerdo num grupo não faz nada). Uma indicação por cima do gráfico lembra ambos os gestos.
 
@@ -198,9 +198,14 @@ Só pode importar custos para Aplicações e Componentes de TI cujos custos poss
 **Agrupar por** está disponível no treemap, na tabela e no Sankey. Um cartão é agrupado por:
 
 - o valor de um **campo do cartão** (apenas campos de valor único; os campos de escolha múltipla não são oferecidos, pois colocariam um cartão em dois grupos), ou
-- um **cartão associado**, designado pelo nome desse cartão, através de uma relação em que cada cartão tem **no máximo um** cartão associado desse tipo. As relações de muitos para muitos nunca são oferecidas, pelo que um custo nunca pode cair em dois grupos.
+- um **cartão associado**, designado pelo nome desse cartão, através de uma relação em que cada cartão tem **no máximo um** cartão associado desse tipo. As relações de muitos para muitos nunca são oferecidas, pelo que um custo nunca pode cair em dois grupos, ou
+- o **fornecedor** de cada item de custo. Este agrupa itens, não cartões: o valor de cada item vai para o grupo do seu próprio fornecedor, pelo que um cartão cujos itens pertencem a dois fornecedores aparece uma vez por fornecedor, de cada vez com a parte desse fornecedor. Abrir um mosaico continua a abrir o cartão. Os itens sem fornecedor, e os fornecedores que não pode ler, vão para **Unspecified**; dois fornecedores com o mesmo nome continuam a ser dois grupos; os fornecedores arquivados mantêm o seu grupo. O total de todos os grupos é igual ao total sem agrupamento. Os itens registados antes de o campo Fornecedor existir não têm fornecedor, e nada é preenchido a partir dos fornecedores associados ao cartão.
 
 Os cartões sem valor, ou sem cartão associado, vão para o grupo **Unspecified**. Para a opção combinada **Aplicação + Componente de TI** só são oferecidos os campos que existem nos dois tipos; o seletor fica desativado quando não há nenhum. O agrupamento nunca conta um custo duas vezes nem descarta nenhum.
+
+### Filtros
+
+Por baixo dos botões de tipo de cartão, o relatório mostra um grupo de filtros por cada tipo selecionado (**Filtros de Aplicação**, **Filtros de Componente de TI**), com o mesmo esquema do filtro de iniciativas do PPM. **Relacionado por** restringe os cartões pelos cartões a que estão associados, incluindo **Fornecedor** (os cartões associados a esse fornecedor, distinto do fornecedor de um item de custo), com o interruptor **Incluir subcartões**; **Campos** restringe pelos campos de seleção única, de seleção múltipla e sim/não do tipo e pelo seu subtipo. Um filtro só se aplica enquanto o seu tipo está selecionado, pelo que, com ambos os tipos ativos, cada filtro restringe o seu próprio tipo. Os filtros combinam-se com o âmbito dos cartões e o ano fiscal, aplicam-se a todas as vistas e ao gráfico de tendência, e são guardados com o relatório. **Limpar tudo** esvazia um grupo.
 
 ### Ano fiscal
 

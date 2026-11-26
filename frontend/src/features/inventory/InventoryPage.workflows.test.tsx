@@ -1,3 +1,4 @@
+// biome-ignore-all lint/a11y/noStaticElementInteractions: test fixture: a plain wrapper stands in for the grid row, which the grid itself renders and makes clickable
 /**
  * Inventory page workflows: mass edit, archive / delete / restore, client-side
  * filtering, URL and preference handling, the column definitions the grid is
@@ -910,7 +911,7 @@ describe("InventoryPage indent children under parents", () => {
     const context = { getTreeInfo: (id: string) => (id === HR.id ? info : undefined), toggleParentCollapse: toggle };
     const rowClick = vi.fn();
     const { container } = mount(
-      <div onClick={rowClick}>{name.cellRenderer({ data: HR, value: HR.name, context })}</div>,
+      <div role="presentation" onClick={rowClick}>{name.cellRenderer({ data: HR, value: HR.name, context })}</div>,
     );
     const frame = container.querySelector<HTMLElement>("[style*='padding-inline-start']")!;
     expect(frame.style.paddingInlineStart).toBe("20px");
@@ -2033,7 +2034,7 @@ describe("InventoryPage column definitions", () => {
     expect(name.cellRenderer({ data: undefined, value: undefined })).toBe("");
 
     const rowClick = vi.fn();
-    mount(<div onClick={rowClick}>{name.cellRenderer({ data: ERP, value: ERP.name })}</div>);
+    mount(<div role="presentation" onClick={rowClick}>{name.cellRenderer({ data: ERP, value: ERP.name })}</div>);
     await user.click(screen.getByRole("button", { name: "Preview card" }));
     // The preview button neither bubbles to the row nor follows the link.
     expect(rowClick).not.toHaveBeenCalled();

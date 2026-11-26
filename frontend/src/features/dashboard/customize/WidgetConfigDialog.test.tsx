@@ -10,7 +10,7 @@ vi.mock("@/hooks/useBpmEnabled", () => import("@/test/hooks").then((m) => m.useB
 vi.mock("@/hooks/usePpmEnabled", () => import("@/test/hooks").then((m) => m.usePpmEnabledModule()));
 vi.mock("@/hooks/useGrcEnabled", () => import("@/test/hooks").then((m) => m.useGrcEnabledModule()));
 vi.mock("@/components/charts/EChart", () => ({
-  default: (props: { ariaLabel?: string }) => <div data-testid="echart" aria-label={props.ariaLabel} />,
+  default: (props: { ariaLabel?: string }) => <div data-testid="echart" role="img" aria-label={props.ariaLabel} />,
 }));
 
 import { mockApi } from "@/test/apiMock";

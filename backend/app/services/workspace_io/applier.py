@@ -1048,6 +1048,8 @@ async def _load_remap_context(
     ``source_id`` existed — builds the indexes the diagram name fallback reads.
     """
     ctx = rm.RemapContext(ids=id_map)
+    provider_ids = await db.scalars(select(Card.id).where(Card.type == "Provider"))
+    ctx.provider_card_ids = {str(card_id) for card_id in provider_ids.all()}
     if include_pml_live:
         ctx.live_card_ids = {str(card_id) for card_id in (await db.scalars(select(Card.id))).all()}
     card_rows = bundle.rows(schema.SHEET_CARDS)

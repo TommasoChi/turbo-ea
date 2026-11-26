@@ -33,11 +33,14 @@ The context manager guarantees:
 
 from __future__ import annotations
 
+import logging
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from typing import Any
 
 from turbo_ea_mcp.api_client import TurboEAClient
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -122,7 +125,7 @@ async def mutation_batch(
                 json={"summary": {"status": "errored", "error": str(exc)}},
             )
         except Exception:  # noqa: BLE001
-            pass
+            logger.debug("could not close the errored batch", exc_info=True)
         raise
     else:
         commit_body: dict[str, Any] = {"summary": ctx.summary or {"status": "ok"}}

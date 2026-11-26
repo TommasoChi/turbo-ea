@@ -10,8 +10,9 @@ live until next year, still has the cost that was (or will be) recorded for it.
 from __future__ import annotations
 
 import uuid
+from collections.abc import Mapping, Sequence
 
-from sqlalchemy import select
+from sqlalchemy import ColumnElement, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.card import Card
@@ -30,7 +31,8 @@ from app.services.card_costs import (
 from app.services.card_logo_service import logo_updated_map
 from app.services.card_read_scope import CardReadScope
 from app.services.cost_components import cost_components
-from app.services.cost_grouping import GroupBy, assign_groups
+from app.services.cost_grouping import OTHER_GROUP, GroupBy, assign_groups
+from app.services.cost_providers import parse_provider_id, provider_names
 from app.services.cost_value import cost_value
 from app.services.fiscal_year import current_fiscal_year
 from app.services.lifecycle import is_live_in_fiscal_year
@@ -95,6 +97,73 @@ async def item_costs_by_card(
     return out
 
 
+async def require_item_grouping(db: AsyncSession, type_keys: list[str], cost_field: str) -> None:
+    """Grouping by provider splits cost items: each type must own them and ``cost_field`` be one."""
+    for key in type_keys:
+        if not await is_item_field(db, key, cost_field):
+            raise ValueError(f"cannot group {key!r} / {cost_field!r} by provider: not a cost item")
+
+
+async def provider_splits(
+    db: AsyncSession,
+    read_scope: CardReadScope,
+    card_ids: list[uuid.UUID],
+    cost_field: str,
+    target_fy: int,
+    fy_start: int,
+) -> tuple[dict[uuid.UUID, dict[str, dict[str, float]]], dict[str, str]]:
+    """``{card: {provider id: {item key: amount}}}`` and ``{provider id: name}``.
+
+    A missing, deleted, unreadable or non-Provider id falls in ``OTHER_GROUP``; an archived
+    provider keeps its own group.
+    """
+    costs = await item_costs_by_card(db, card_ids, target_fy, fy_start)
+    lines: dict[uuid.UUID, list[tuple[str, float, uuid.UUID | None]]] = {}
+    for card_id in card_ids:
+        lines[card_id] = []
+        for line in costs[card_id].items:
+            if not line.amount or cost_field not in (DERIVED_KEY, line.key):
+                continue
+            lines[card_id].append((line.key, line.amount, parse_provider_id(line.provider_id)))
+    known = await provider_names(
+        db, read_scope, {pid for ls in lines.values() for _, _, pid in ls if pid}
+    )
+    splits: dict[uuid.UUID, dict[str, dict[str, float]]] = {}
+    for card_id, ls in lines.items():
+        groups = splits[card_id] = {}
+        for key, amount, pid in ls:
+            share = groups.setdefault(str(pid) if pid in known else OTHER_GROUP, {})
+            share[key] = share.get(key, 0) + amount
+    return splits, {str(i): n for i, n in known.items()}
+
+
+async def provider_treemap_items(
+    db: AsyncSession,
+    read_scope: CardReadScope,
+    items: list[dict],
+    cost_field: str,
+    target_fy: int,
+    fy_start: int,
+) -> tuple[list[dict], dict[str, str]]:
+    """One treemap item per (card, provider) share, biggest first, and the provider names.
+
+    ``cost`` is the selected item's share (the whole share for the item total); ``costs``
+    is everything that provider holds on the card.
+    """
+    held, names = await provider_splits(
+        db, read_scope, [uuid.UUID(i["id"]) for i in items], DERIVED_KEY, target_fy, fy_start
+    )
+    base = {i["id"]: i for i in items}
+    out: list[dict] = []
+    for card_id, shares in held.items():
+        for group, share in shares.items():
+            cost = sum(share.values()) if cost_field == DERIVED_KEY else share.get(cost_field)
+            if cost:
+                out.append({**base[str(card_id)], "cost": cost, "group": group, "costs": share})
+    out.sort(key=lambda i: i["cost"], reverse=True)
+    return out, {g: names[g] for g in {i["group"] for i in out} if g in names}
+
+
 async def _item_cards(
     db: AsyncSession,
     read_scope: CardReadScope,
@@ -103,6 +172,7 @@ async def _item_cards(
     current_fy: int,
     fy_start: int,
     line: str | None = None,
+    extra: Sequence[ColumnElement[bool]] = (),
 ) -> list[tuple[Card, float]]:
     """Live/readable cards of the type with their TCO, or with one item's amount (``line``)."""
     cards = (
@@ -112,6 +182,7 @@ async def _item_cards(
                     Card.type == type_key,
                     Card.status == "ACTIVE",
                     *read_scope.where(Card, mode="module"),
+                    *extra,
                 )
             )
         )
@@ -138,8 +209,12 @@ async def cards_with_cost(
     target_fy: int,
     current_fy: int,
     fy_start: int,
+    extra: Sequence[ColumnElement[bool]] = (),
 ) -> list[tuple[Card, float]]:
-    """The cards of ``type_key`` that count in ``target_fy``, each with its cost."""
+    """The cards of ``type_key`` that count in ``target_fy``, each with its cost.
+
+    ``extra`` are further where-clauses on ``Card`` (the report's card filters).
+    """
     if await is_item_field(db, type_key, cost_field):
         return await _item_cards(
             db,
@@ -149,6 +224,7 @@ async def cards_with_cost(
             current_fy,
             fy_start,
             None if cost_field == DERIVED_KEY else cost_field,
+            extra,
         )
     if target_fy == current_fy:
         result = await db.execute(
@@ -156,6 +232,7 @@ async def cards_with_cost(
                 Card.type == type_key,
                 Card.status == "ACTIVE",
                 *read_scope.where(Card, mode="module"),
+                *extra,
             )
         )
         costed = (
@@ -175,6 +252,7 @@ async def cards_with_cost(
             CardCostHistory.field_key == cost_field,
             CardCostHistory.value != 0,
             *read_scope.where(Card, mode="module"),
+            *extra,
         )
     )
     return [(card, value) for card, value in history.all()]
@@ -203,12 +281,23 @@ async def cards_with_cost_for_types(
     target_fy: int,
     current_fy: int,
     fy_start: int,
+    conditions: Mapping[str, Sequence[ColumnElement[bool]]] | None = None,
 ) -> list[tuple[Card, float]]:
-    """``cards_with_cost`` over several types, in the order of ``type_keys``."""
+    """``cards_with_cost`` over several types, in the order of ``type_keys``.
+
+    ``conditions`` maps a type key to its filter clauses (``cost_filters``).
+    """
     rows: list[tuple[Card, float]] = []
     for key in type_keys:
         rows += await cards_with_cost(
-            db, read_scope, key, cost_field, target_fy, current_fy, fy_start
+            db,
+            read_scope,
+            key,
+            cost_field,
+            target_fy,
+            current_fy,
+            fy_start,
+            (conditions or {}).get(key, ()),
         )
     return rows
 
@@ -223,6 +312,7 @@ async def build_cost_sankey(
     current_fy: int,
     fy_start: int,
     user: User,
+    conditions: Mapping[str, Sequence[ColumnElement[bool]]] | None = None,
 ) -> dict:
     """Cost items -> cards, or cost items -> groups -> cards when ``group_by`` is set.
 
@@ -239,7 +329,7 @@ async def build_cost_sankey(
     # every type sums cost items: the items are the components, nothing is left over
     item_mode = split and all(uses_items(k, cost_field) for k in type_keys)
     totals = await cards_with_cost_for_types(
-        db, read_scope, type_keys, cost_field, target_fy, current_fy, fy_start
+        db, read_scope, type_keys, cost_field, target_fy, current_fy, fy_start, conditions
     )
     allowed = await PermissionService.card_ids_with_cost_access(
         db, user, (card.id for card, _ in totals)
@@ -281,11 +371,17 @@ async def build_cost_sankey(
         if split and rest > 0:
             costs[OTHER_ITEM] = rest
     cards = sorted(per_card.values(), key=lambda cc: -cc[1])
-    groups = (
-        await assign_groups(db, read_scope, [c for c, _, _ in cards], group_by, type_keys)
-        if group_by
-        else {}
-    )
+    by_provider = group_by is not None and group_by.kind == "provider"
+    splits: dict[uuid.UUID, dict[str, dict[str, float]]] = {}
+    provider_label: dict[str, str] = {}
+    groups: dict[uuid.UUID, str] = {}
+    if by_provider:
+        await require_item_grouping(db, type_keys, cost_field)
+        splits, provider_label = await provider_splits(
+            db, read_scope, [c.id for c, _, _ in cards], cost_field, target_fy, fy_start
+        )
+    elif group_by:
+        groups = await assign_groups(db, read_scope, [c for c, _, _ in cards], group_by, type_keys)
 
     nodes: list[dict] = []
     index: dict[tuple[str, str], int] = {}
@@ -307,7 +403,6 @@ async def build_cost_sankey(
     total = 0.0
     for card, card_total, costs in cards:
         total += card_total
-        link_total = sum(costs.values())
         card_idx = node(
             "card",
             str(card.id),
@@ -323,11 +418,23 @@ async def build_cost_sankey(
                 for i, v in costs.items()
             ]
             continue
-        g = groups[card.id]
-        g_idx = node("group", g, g, "Group")
-        links.append({"source": g_idx, "target": card_idx, "value": link_total})
-        for i, v in costs.items():
-            flows[(i, g)] = flows.get((i, g), 0) + v
+        if by_provider:
+            fallback = OTHER_ITEM if split else cost_field
+            shares = {}
+            for g, share in splits[card.id].items():
+                merged: dict[str, float] = {}
+                for i, v in share.items():
+                    k = i if i in costs else fallback
+                    merged[k] = merged.get(k, 0) + v
+                shares[g] = merged
+        else:
+            shares = {groups[card.id]: costs}
+        for g, share in shares.items():
+            g_idx = node("group", g, provider_label.get(g, g), "Group")
+            link = {"source": g_idx, "target": card_idx, "value": sum(share.values())}
+            links.append({**link, "costs": dict(share)} if by_provider else link)
+            for i, v in share.items():
+                flows[(i, g)] = flows.get((i, g), 0) + v
     links += [
         {"source": index[("item", i)], "target": index[("group", g)], "value": v}
         for (i, g), v in flows.items()

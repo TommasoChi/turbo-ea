@@ -194,6 +194,8 @@ async def test_normal_relation_edit_and_pml_reuse_serialize_on_endpoints(test_en
 
     from app.models.card import Card
     from app.models.card_type import CardType
+    from app.models.event import Event
+    from app.models.mutation_batch import MutationBatch
     from app.models.relation_type import RelationType
     from app.models.role import Role
     from app.models.user import User
@@ -306,6 +308,10 @@ async def test_normal_relation_edit_and_pml_reuse_serialize_on_endpoints(test_en
             pml_task.cancel()
             await asyncio.gather(pml_task, return_exceptions=True)
         async with AsyncSession(test_engine) as cleanup:
+            await cleanup.execute(delete(Event).where(Event.user_id == user_id))
+            await cleanup.execute(
+                delete(MutationBatch).where(MutationBatch.actor_user_id == user_id)
+            )
             await cleanup.execute(delete(Card).where(Card.id.in_([initiative_id, organization_id])))
             await cleanup.execute(delete(RelationType).where(RelationType.key == relation_key))
             await cleanup.execute(delete(CardType).where(CardType.key == source_type))

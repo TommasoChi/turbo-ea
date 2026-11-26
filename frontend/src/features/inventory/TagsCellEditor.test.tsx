@@ -1,3 +1,4 @@
+// biome-ignore-all lint/a11y/noStaticElementInteractions: test fixture: a plain wrapper stands in for the grid cell, to prove the editor stops events reaching it
 /**
  * The inventory grid's Tags cell editor. It follows AG Grid's React editor
  * contract: `onValueChange` is called with the full `TagRef[]` on every
@@ -133,7 +134,7 @@ describe("TagsCellEditor", () => {
     const parentKeyDown = vi.fn();
     const gridStopEditing = vi.fn();
     render(
-      <div onMouseDown={parentMouseDown} onKeyDown={parentKeyDown}>
+      <div role="presentation" onMouseDown={parentMouseDown} onKeyDown={parentKeyDown}>
         <TagsCellEditor
           value={[onPremRef]}
           groups={TAG_GROUPS}

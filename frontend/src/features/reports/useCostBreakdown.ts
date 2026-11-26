@@ -20,9 +20,11 @@ export function useCostBreakdown(args: {
   enabled: boolean;
   typeParam: string;
   fiscalYear: number | null;
+  /** The `card_filters` query value of the report's field and relation filters. */
+  cardFilters?: string;
   refreshVersion?: number;
 }): { breakdown: Map<string, CardBreakdown> | null } {
-  const { enabled, typeParam, fiscalYear, refreshVersion } = args;
+  const { enabled, typeParam, fiscalYear, cardFilters, refreshVersion } = args;
   const [breakdown, setBreakdown] = useState<Map<string, CardBreakdown> | null>(null);
 
   useAbortableEffect(
@@ -31,6 +33,7 @@ export function useCostBreakdown(args: {
       if (!enabled) return;
       const p = new URLSearchParams({ type: typeParam, cost_field: "costTotalAnnual" });
       if (fiscalYear != null) p.set("fiscal_year", String(fiscalYear));
+      if (cardFilters) p.set("card_filters", cardFilters);
       let r: SankeyBreakdownResponse;
       try {
         r = await api.get<SankeyBreakdownResponse>(`/reports/cost-sankey?${p}`, { signal });
@@ -47,7 +50,7 @@ export function useCostBreakdown(args: {
       }
       setBreakdown(map);
     },
-    [enabled, typeParam, fiscalYear, refreshVersion],
+    [enabled, typeParam, fiscalYear, cardFilters, refreshVersion],
   );
 
   return { breakdown };

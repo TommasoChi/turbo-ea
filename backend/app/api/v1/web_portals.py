@@ -41,11 +41,10 @@ from app.services import (
 )
 from app.services import ppm_portfolio_service as ppm_portfolio
 from app.services import process_map_service as process_map
-from app.services.card_read_scope import CardReadScope
 from app.services.card_search import card_search_filter, card_search_rank
 from app.services.cost_field_filter import cost_field_keys_from_card_schema
 from app.services.permission_service import PermissionService
-from app.services.portfolio_payload import build_portfolio_payload
+from app.services.portfolio_payload import filter_options_payload
 from app.services.public_access import (
     PUBLIC_ACCESS_COOKIE,
     build_sso_gate_config,
@@ -574,18 +573,10 @@ async def get_portal_filter_options(
     related cards stay inside the admin's own read scope.
     """
     await PermissionService.require_permission(db, user, "web_portals.manage")
-    all_types = (await db.execute(select(CardType))).scalars().all()
-    target_type = next((t for t in all_types if t.key == type), None)
-    if target_type is None or target_type.is_hidden:
-        raise HTTPException(404, f"Card type '{type}' not found")
-    read_scope = await CardReadScope.load(db, user)
-    payload = await build_portfolio_payload(db, read_scope, target_type, all_types)
-    return {
-        "fields_schema": payload["fields_schema"],
-        "relation_types": payload["relation_types"],
-        "groupable_types": payload["groupable_types"],
-        "tag_groups": payload["tag_groups"],
-    }
+    try:
+        return await filter_options_payload(db, user, type)
+    except LookupError:
+        raise HTTPException(404, f"Card type '{type}' not found") from None
 
 
 @router.get("/{portal_id}")

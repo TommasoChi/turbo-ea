@@ -1,3 +1,4 @@
+// biome-ignore-all lint/a11y/noStaticElementInteractions: test fixture: a plain wrapper stands in for a clickable ancestor, to prove a link click does not reach it
 import { fireEvent, render, screen } from "@testing-library/react";
 import Typography from "@mui/material/Typography";
 import { describe, expect, it, vi } from "vitest";
@@ -54,7 +55,7 @@ describe("LinkifiedText", () => {
   it("does not let a click on the link reach a clickable host", () => {
     const onHostClick = vi.fn();
     render(
-      <div onClick={onHostClick}>
+      <div role="presentation" onClick={onHostClick}>
         <LinkifiedText text="open https://a.io now" />
       </div>,
     );

@@ -64,6 +64,18 @@ describe("CostTrendChart", () => {
     );
   });
 
+  it("sends card_filters on every request and refetches when it changes", async () => {
+    const filters = JSON.stringify({ Application: { attrFilters: { status: ["active"] } } });
+    const { rerender } = render(<CostTrendChart {...props({ cardFilters: filters })} />);
+    await waitFor(() => expect(api.get).toHaveBeenCalledTimes(4));
+    for (const [path] of vi.mocked(api.get).mock.calls) {
+      expect(new URLSearchParams(String(path).split("?")[1]).get("card_filters")).toBe(filters);
+    }
+    rerender(<CostTrendChart {...props({ cardFilters: undefined })} />);
+    await waitFor(() => expect(api.get).toHaveBeenCalledTimes(8));
+    expect(String(vi.mocked(api.get).mock.calls[7][0])).not.toContain("card_filters");
+  });
+
   it("draws one bar per component, keyed by the technical key, with distinct colours", async () => {
     render(<CostTrendChart {...props()} />);
     await waitFor(() => expect(barKeys()).toEqual(COMPONENTS));
@@ -188,6 +200,34 @@ describe("CostTrendChart selection and scope", () => {
     withItems();
     render(<CostTrendChart {...props({ components: ["licenseCost"], years: [2025] })} />);
     await waitFor(() => expect(rowsOf()).toEqual({ licenseCost: [999] }));
+  });
+});
+
+describe("CostTrendChart grouped by provider", () => {
+  // Card "a" is split over two providers: one entry per share, the same id.
+  const SHARES = [
+    { id: "a", cost: 70, group: "p1" },
+    { id: "a", cost: 30, group: "p2" },
+    { id: "b", cost: 5, group: "p2" },
+  ];
+  const withShares = () =>
+    vi.mocked(api.get).mockImplementation(() =>
+      Promise.resolve({ items: SHARES, total: 105 }) as never,
+    );
+  const provider = (over: Partial<React.ComponentProps<typeof CostTrendChart>>) =>
+    props({ components: ["licenseCost"], years: [2025], groupBy: "provider", ...over });
+
+  it("a drilled provider group shows that group's shares", async () => {
+    withShares();
+    render(<CostTrendChart {...provider({ selection: { kind: "group", keys: ["p2"] } })} />);
+    await waitFor(() => expect(rowsOf()).toEqual({ licenseCost: [35] }));
+    expect(String(vi.mocked(api.get).mock.calls[0][0])).toContain("group_by=provider");
+  });
+
+  it("a card split over two providers sums to its whole cost", async () => {
+    withShares();
+    render(<CostTrendChart {...provider({ selection: { kind: "card", id: "a" } })} />);
+    await waitFor(() => expect(rowsOf()).toEqual({ licenseCost: [100] }));
   });
 });
 

@@ -272,6 +272,7 @@ export function buildCostTreemapOption(items: CostTreemapItem[], o: CostTreemapO
       name: d.name,
       value: d.cost,
       id: d.id,
+      ...(d.cardId !== undefined && { cardId: d.cardId }),
       index: d.index,
       itemStyle: { color },
       ...(d.deltaPct !== undefined && { deltaPct: d.deltaPct }),

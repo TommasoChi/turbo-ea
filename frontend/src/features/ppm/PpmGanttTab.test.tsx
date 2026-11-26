@@ -57,7 +57,7 @@ vi.mock("@wamra/gantt-task-react", async (importOriginal) => {
             </thead>
           </table>
           <div data-testid="gantt">{props.tasks.map((t) => t.name).join("|")}
-            <svg><g className="gridBody"><g className="today"><rect data-testid="today-line" /></g></g></svg>
+            <svg aria-hidden="true"><g className="gridBody"><g className="today"><rect data-testid="today-line" /></g></g></svg>
           </div>
         </>
       );
@@ -72,7 +72,7 @@ import { mockApi } from "@/test/apiMock";
 import { installResizeObserver } from "@/test/dom";
 import { setViewportWidth } from "@/test/matchMedia";
 import type { PpmDependency, PpmTask, PpmWbs } from "@/types";
-import PpmGanttTab from "./PpmGanttTab";
+import PpmGanttTab, { DependencyArrowOverlay } from "./PpmGanttTab";
 import { ThemeProvider, alpha, createTheme } from "@mui/material/styles";
 
 const INIT = "init-1";
@@ -504,6 +504,61 @@ describe("PpmGanttTab — the title cell's expander", () => {
     view.rerender(<Cell data={cellData({ task, hasChildren: false, isClosed: true })} />);
     expect(view.container.querySelector(".material-symbols-outlined")).toBeNull();
     expect(view.container).toHaveTextContent("WBS w1");
+  });
+});
+
+describe("PpmGanttTab — keyboard", () => {
+  const cellData = (over: Record<string, unknown>) =>
+    ({
+      depth: 0,
+      hasChildren: false,
+      isClosed: false,
+      onExpanderClick: vi.fn(),
+      distances: { expandIconWidth: 20, nestedTaskNameOffset: 20 },
+      ...over,
+    }) as unknown as ColumnProps["data"];
+
+  it("toggles a parent row from its expander with Enter and Space", async () => {
+    serve([wbs("w1"), wbs("w2", { parent_id: "w1" })], []);
+    const user = await renderTab();
+    const Cell = gantt.props!.columns[0].Cell;
+    const task = row("wbs-w1");
+    const onExpanderClick = vi.fn();
+    render(<Cell data={cellData({ task, hasChildren: true, isClosed: true, onExpanderClick })} />);
+    const expander = screen.getByRole("button", { name: "Expand" });
+    expect(expander).toHaveAttribute("aria-expanded", "false");
+    expander.focus();
+    await user.keyboard("{Enter}");
+    await user.keyboard(" ");
+    expect(onExpanderClick).toHaveBeenCalledTimes(2);
+    expect(onExpanderClick).toHaveBeenCalledWith(task);
+  });
+
+  it("gives a leaf row no expander button", async () => {
+    serve([wbs("w1")], []);
+    await renderTab();
+    const Cell = gantt.props!.columns[0].Cell;
+    render(<Cell data={cellData({ task: row("wbs-w1"), hasChildren: false })} />);
+    expect(screen.queryByRole("button", { name: "Expand" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Collapse" })).toBeNull();
+  });
+
+  it("removes a dependency from its arrow with Enter", async () => {
+    const onClick = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <DependencyArrowOverlay
+        arrows={[{ id: "d1", fromX: 0, fromY: 0, toX: 40, toY: 40 }]}
+        buildPath={() => "M0 0 L40 40"}
+        onClick={onClick}
+        color="currentColor"
+        dangerColor="currentColor"
+      />,
+    );
+    const arrow = screen.getByRole("button", { name: "Delete dependency" });
+    arrow.focus();
+    await user.keyboard("{Enter}");
+    expect(onClick).toHaveBeenCalledWith("d1");
   });
 });
 

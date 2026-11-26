@@ -1484,6 +1484,7 @@ export default function DependencyReport() {
             >
               {/* SVG curves */}
               <svg
+                aria-hidden="true"
                 style={{
                   position: "absolute",
                   inset: 0,
@@ -1514,6 +1515,7 @@ export default function DependencyReport() {
                         style={{ transition: "stroke-opacity 0.2s, stroke-width 0.2s" }}
                       />
                       {/* Wider invisible hit area for hover */}
+                      {/* biome-ignore lint/a11y/noStaticElementInteractions: hover-only tooltip anchor with no action, inside an aria-hidden decorative SVG; there is nothing to activate by keyboard */}
                       <path
                         d={curvePath(c.x1, c.y1, c.x2, c.y2)}
                         fill="none"

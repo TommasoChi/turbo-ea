@@ -553,6 +553,7 @@
   "metamodel.stakeholderPanel.keyLength": "Должно быть от {{min}} до {{max}} символов",
   "metamodel.stakeholderPanel.failedToDelete": "Не удалось удалить роль",
   "metamodel.stakeholderPanel.translations": "Переводы",
+  "metamodel.graph.title": "Граф метамодели типов карточек и их связей",
   "metamodel.graph.noTypes": "Нет видимых типов для отображения. Сначала создайте типы карточек.",
   "tags.title": "Управление тегами",
   "tags.newGroup": "Новая группа тегов",

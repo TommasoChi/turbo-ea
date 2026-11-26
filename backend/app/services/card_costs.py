@@ -21,6 +21,7 @@ from app.models.card_cost import CardCost
 from app.models.card_type import CardType
 from app.models.cost_item_type import CostItemType
 from app.services import item_catalogue, yearly_rows
+from app.services.card_read_scope import CardReadScope
 from app.services.cost_value import cost_value
 from app.services.event_bus import event_bus
 from app.services.fiscal_year import (
@@ -39,8 +40,16 @@ DERIVED_KEY = "costTotalAnnual"
 COST_EVENT = "card.costs_updated"
 
 
+class _Unset:
+    """Type of ``UNSET``: the caller did not mention the provider."""
+
+
+UNSET = _Unset()
+
+
 class CostError(Exception):
-    """``code``: archived_item, unknown_item, invalid_amount, year_out_of_range."""
+    """``code``: archived_item, unknown_item, invalid_amount, year_out_of_range,
+    invalid_provider."""
 
     def __init__(self, code: str, message: str = "") -> None:
         super().__init__(message or code)
@@ -53,6 +62,7 @@ class CostLine:
     amount: float
     renewal_date: date | None
     archived: bool
+    provider_id: str | None = None
 
 
 @dataclass
@@ -64,6 +74,14 @@ class YearCosts:
     fallback_from: int | None
     items: list[CostLine] = field(default_factory=list)
     tco: float = 0.0
+
+
+def parse_provider_id(value: object) -> uuid.UUID | None:
+    """The stored provider id, or ``None`` for nothing or a malformed value."""
+    try:
+        return uuid.UUID(value) if isinstance(value, str) else None
+    except ValueError:
+        return None
 
 
 def _shift(iso: str | None, years: int) -> str | None:
@@ -82,7 +100,11 @@ def _shift(iso: str | None, years: int) -> str | None:
 
 def _shifted(items: dict, years: int) -> dict:
     return {
-        k: {"amount": v["amount"], "renewal_date": _shift(v.get("renewal_date"), years)}
+        k: {
+            "amount": v["amount"],
+            "renewal_date": _shift(v.get("renewal_date"), years),
+            **({"provider_id": v["provider_id"]} if v.get("provider_id") else {}),
+        }
         for k, v in items.items()
     }
 
@@ -108,6 +130,7 @@ def _lines(items: dict, archived: dict[str, bool]) -> list[CostLine]:
             amount=float(cost_value(v.get("amount"))),
             renewal_date=date.fromisoformat(v["renewal_date"]) if v.get("renewal_date") else None,
             archived=archived.get(k, False),
+            provider_id=str(pid) if (pid := parse_provider_id(v.get("provider_id"))) else None,
         )
         for k, v in items.items()
     ]
@@ -189,7 +212,13 @@ async def upsert_item(
     key: str,
     amount: float,
     renewal_date: date | None,
+    *,
+    provider_id: str | None | _Unset = UNSET,
+    read_scope: CardReadScope | None = None,
 ) -> None:
+    """``provider_id`` UNSET keeps the stored one; any other value needs ``read_scope``."""
+    if provider_id is not UNSET and read_scope is None:
+        raise ValueError("read_scope is required when a provider is given")
     sm = await get_fiscal_year_start(db)
     _check_window(fiscal_year, sm)
     if (
@@ -208,9 +237,24 @@ async def upsert_item(
     row = await _editable(db, card_id, fiscal_year, sm)
     if archived[key] and key not in (row.items or {}):
         raise CostError("archived_item", f"Cost item '{key}' is archived")
+    stored = ((row.items or {}).get(key) or {}).get("provider_id")
+    if provider_id is UNSET:
+        resolved = stored
+    else:
+        from app.services import cost_providers  # it imports CostError from here
+
+        assert read_scope is not None  # checked at the top; narrows the type for mypy
+        card_type = (await db.execute(select(Card.type).where(Card.id == card_id))).scalar_one()
+        resolved = await cost_providers.resolve_write(
+            db, read_scope, card_id, card_type, stored, provider_id
+        )
     row.items = {
         **(row.items or {}),
-        key: {"amount": amount, "renewal_date": renewal_date.isoformat() if renewal_date else None},
+        key: {
+            "amount": amount,
+            "renewal_date": renewal_date.isoformat() if renewal_date else None,
+            **({"provider_id": resolved} if resolved else {}),
+        },
     }
     await db.flush()
 
@@ -243,7 +287,12 @@ async def copy_to_forecast(db: AsyncSession, card_id: uuid.UUID, from_year: int,
     if src is None:  # an archived item is fine here: it already has an amount, not a new addition
         raise CostError("unknown_item", f"'{key}' has no amount in FY{from_year}")
     row = await _editable(db, card_id, forecast, sm)
-    row.items = {**(row.items or {}), key: _shifted({key: src}, forecast - from_year)[key]}
+    copied = _shifted({key: src}, forecast - from_year)[key]
+    if "provider_id" not in copied:  # a write never drops a link the caller cannot see
+        kept = ((row.items or {}).get(key) or {}).get("provider_id")
+        if kept:
+            copied["provider_id"] = kept
+    row.items = {**(row.items or {}), key: copied}
     await db.flush()
 
 

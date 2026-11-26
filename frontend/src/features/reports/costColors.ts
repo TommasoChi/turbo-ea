@@ -2,6 +2,8 @@ import { CHART_LABEL_ON_DARK, CHART_LABEL_ON_LIGHT } from "@/theme/tokens";
 
 export const MAX_GROUP_HUES = 8;
 export const OTHERS_KEY = "__others__";
+/** The server's group for a card with no value (and for an ungrouped report). */
+export const OTHER_GROUP = "__other__";
 
 const clamp = (n: number) => Math.max(0, Math.min(255, Math.round(n)));
 const toRgb = (hex: string) => {

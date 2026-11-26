@@ -30,18 +30,23 @@ import { buildCostSankeyOption, chartSankeyNodeHeight } from "./costSankeyOption
 import SaveReportDialog from "./SaveReportDialog";
 import CostTrendChart, { type TrendSelection } from "./CostTrendChart";
 import CostDrillBar from "./CostDrillBar";
+import CostFilters from "./CostFilters";
+import { restoreCardFilters } from "./cardFilters";
+import { costCardFiltersParam, type CostCardFilters } from "./costCardFilters";
 import CostImportDialog from "./CostImportDialog";
 import { applyDrill, crumbsOf, type Drill } from "./costDrill";
 import { useCostBreakdown } from "./useCostBreakdown";
 import {
   MAX_GROUP_HUES,
   OTHERS_KEY,
+  OTHER_GROUP,
   assignGroupColors,
   cardColor,
   drillGroupKey,
   memberShade,
 } from "./costColors";
 import CostLegend, { type CostLegendEntry } from "./CostLegend";
+import { costRowKey } from "./costRowKey";
 import { CHART_OTHER, COST_UNSPECIFIED, EOL_WARNING_COLOR, RAG_COLORS, STATUS_COLORS } from "@/theme/tokens";
 import MetricCard from "./MetricCard";
 import FullscreenPanel from "./FullscreenPanel";
@@ -86,17 +91,19 @@ import { useApiQuery } from "@/hooks/useApiQuery";
 import type { CostItemType, FieldDef, TranslationMap } from "@/types";
 
 const COST_REPORT_TYPE_KEYS = ["Application", "ITComponent"] as const;
-/** The server's group for a card with no value (and for an ungrouped report). */
-const OTHER_GROUP = "__other__";
 type CostView = "chart" | "sankey" | "table";
+/** A Sankey group node's id is `group:<raw group value>`. */
+const rawGroup = (n: { id: string }) => n.id.replace(/^group:/, "");
 
 interface CostItem {
   id: string;
   name: string;
   cost: number;
   attributes?: Record<string, unknown>;
-  /** Raw group value, present when the request grouped. */
+  /** Raw group value, present when the request grouped (a provider's card id when by provider). */
   group?: string;
+  /** Grouped by provider: this share's amount per cost item key. */
+  costs?: Record<string, number>;
   /** The card's type key. */
   type?: string;
   logo_updated_at?: string | null;
@@ -105,6 +112,8 @@ interface CostItem {
 interface CostTreemapResponse {
   items: CostItem[];
   total: number;
+  /** Grouped by provider: `{providerId: name}`. */
+  group_names?: Record<string, string>;
   /** Technical keys of the cost fields that add up to the total. */
   components?: string[];
   /** Catalogue cost items by key: the labels of the components that are cost items. */
@@ -140,6 +149,8 @@ interface SankeyLink {
   source: number;
   target: number;
   value: number;
+  /** Provider grouping, group -> card links: this share's amount per cost item key. */
+  costs?: Record<string, number>;
 }
 
 interface CostSankeyResponse {
@@ -386,6 +397,7 @@ export default function CostReport() {
   const [costField, setCostField] = useState("costTotalAnnual");
   const [groupBy, setGroupBy] = useState("");
   const [rawItems, setRawItems] = useState<CostItem[] | null>(null);
+  const [providerNames, setProviderNames] = useState<Record<string, string>>({});
   // The cost field keys that add up to the total, from the treemap response.
   // Tagged with the type and field they answer, so a stale list never meets a new selection.
   const [componentsFor, setComponentsFor] = useState<{ key: string; list: string[] }>({
@@ -480,6 +492,10 @@ export default function CostReport() {
     return raw.map((f) => ({ ...f, label: fieldLabel(f) }));
   }, [schemas, fieldLabel]);
   const [extraColumns, setExtraColumns] = useState<string[]>([]);
+  // Field and relation filters, one value per card type; a type that is toggled off keeps its own.
+  const [cardFilters, setCardFilters] = useState<CostCardFilters>({});
+  const [filtersCollapsed, setFiltersCollapsed] = useState(false);
+  const cardFiltersParam = useMemo(() => costCardFiltersParam(cardFilters, typeKeys), [cardFilters, typeKeys]);
 
   // Drop picked columns the current type no longer defines (card-type
   // switch) — mirrors the removed aggregateOptions pruning effect.
@@ -537,6 +553,14 @@ export default function CostReport() {
             (v): v is string => typeof v === "string",
           ),
         );
+      if (cfg.cardFilters && typeof cfg.cardFilters === "object" && !Array.isArray(cfg.cardFilters)) {
+        setCardFilters(
+          Object.fromEntries(
+            Object.entries(cfg.cardFilters).map(([k, v]) => [k, restoreCardFilters((v ?? {}) as Record<string, unknown>)]),
+          ),
+        );
+      }
+      if (cfg.filtersCollapsed != null) setFiltersCollapsed(!!cfg.filtersCollapsed);
       // Set for the restored type, so the scope is read as that type's from
       // the render the type lands on.
       if (Array.isArray(cfg.scopeIds)) {
@@ -559,12 +583,14 @@ export default function CostReport() {
     scopeIds: scope.loading || scope.error ? scopeIds : effectiveScopeIds,
     extraColumns,
     fiscalYearParam,
+    cardFilters,
+    filtersCollapsed,
   });
 
   // Auto-persist config to localStorage
   useEffect(() => {
     saved.persistConfig(getConfig());
-  }, [cardTypeKey, costField, groupBy, view, sortK, sortD, scopeIds, effectiveScopeIds, scope.loading, scope.error, extraColumns, fiscalYearParam]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [cardTypeKey, costField, groupBy, view, sortK, sortD, scopeIds, effectiveScopeIds, scope.loading, scope.error, extraColumns, fiscalYearParam, cardFilters, filtersCollapsed]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Reset all parameters to defaults
   const handleReset = useCallback(() => {
@@ -578,6 +604,8 @@ export default function CostReport() {
     clearScope();
     setExtraColumns([]);
     setFiscalYearParam(null);
+    setCardFilters({});
+    setFiltersCollapsed(false);
   }, [saved, clearScope]);
 
   // The table's group-by: single selects with options and yes/no fields (a
@@ -597,13 +625,15 @@ export default function CostReport() {
     );
   }, [schemas, fieldLabel, optLabel, t]);
 
-  // What the Group by selector offers: `field:<key>` and `rel:<key>` values.
+  // What the Group by selector offers: `field:<key>` and `rel:<key>` values, and `provider` (the
+  // provider of each cost item, so only for the cost-item types).
   const groupOptions = useMemo(
     () => [
       ...groupableFields.map((f) => ({ value: `field:${f.key}`, label: f.label })),
       ...relationGroupOptions(relationTypes, typeKeys, relLabel),
+      ...(allCostItemTypes ? [{ value: "provider", label: t("cost.groupByProvider") }] : []),
     ],
-    [groupableFields, relationTypes, typeKeys, relLabel],
+    [groupableFields, relationTypes, typeKeys, relLabel, allCostItemTypes, t],
   );
   // A saved bare field key becomes `field:<key>`; one that is not offered is dropped.
   const effectiveGroupBy = useMemo(() => {
@@ -614,6 +644,12 @@ export default function CostReport() {
   useEffect(() => {
     if (!ml && effectiveGroupBy !== groupBy) setGroupBy(effectiveGroupBy);
   }, [ml, effectiveGroupBy, groupBy]);
+  // Grouped by provider a card appears once per provider: every per-row map is keyed on card and group.
+  const byProvider = effectiveGroupBy === "provider";
+  const rowKeyOf = useCallback(
+    (it: { id: string; group?: string }) => costRowKey(it.id, it.group, byProvider),
+    [byProvider],
+  );
 
   useAbortableEffect(
     async ({ signal, isCurrent }) => {
@@ -630,6 +666,7 @@ export default function CostReport() {
         });
         if (effectiveGroupBy) p.set("group_by", effectiveGroupBy);
         if (fiscalYearParam != null) p.set("fiscal_year", String(fiscalYearParam));
+        if (cardFiltersParam) p.set("card_filters", cardFiltersParam);
         const r = await api.get<CostSankeyResponse>(
           `/reports/cost-sankey?${p}`,
           { signal },
@@ -647,12 +684,14 @@ export default function CostReport() {
         });
         if (effectiveGroupBy) p.set("group_by", effectiveGroupBy);
         if (fiscalYearParam != null) p.set("fiscal_year", String(fiscalYearParam));
+        if (cardFiltersParam) p.set("card_filters", cardFiltersParam);
         const r = await api.get<CostTreemapResponse>(
           `/reports/cost-treemap?${p}`,
           { signal },
         );
         if (!isCurrent()) return;
         setRawItems(r.items);
+        setProviderNames(r.group_names ?? {});
         setItemLabels(r.item_labels ?? {});
         setComponentsFor({ key: `${cardTypeKey}|${costField}`, list: r.components ?? [] });
         setSankeyData(null);
@@ -660,7 +699,7 @@ export default function CostReport() {
         adoptCurrentFiscalYear(r.current_fiscal_year);
       }
     },
-    [cardTypeKey, costField, effectiveGroupBy, view, canViewCostsGlobally, fiscalYearParam, refreshVersion],
+    [cardTypeKey, costField, effectiveGroupBy, view, canViewCostsGlobally, fiscalYearParam, cardFiltersParam, refreshVersion],
   );
 
   // Delta badge baseline: the current fiscal year's per-card costs, fetched
@@ -681,13 +720,15 @@ export default function CostReport() {
         type: typeParam(cardTypeKey),
         cost_field: costField,
       });
+      if (byProvider) p.set("group_by", "provider");
+      if (cardFiltersParam) p.set("card_filters", cardFiltersParam);
       const r = await api.get<CostTreemapResponse>(`/reports/cost-treemap?${p}`, {
         signal,
       });
       if (!isCurrent()) return;
-      setBaselineCosts(new Map(r.items.map((it) => [it.id, it.cost])));
+      setBaselineCosts(new Map(r.items.map((it) => [rowKeyOf(it), it.cost])));
     },
-    [cardTypeKey, costField, view, canViewCostsGlobally, fiscalYearParam, refreshVersion],
+    [cardTypeKey, costField, view, canViewCostsGlobally, fiscalYearParam, cardFiltersParam, refreshVersion, byProvider, rowKeyOf],
   );
 
   // The earliest year the picker itself offers — a selected year at or below
@@ -721,11 +762,13 @@ export default function CostReport() {
         cost_field: costField,
         fiscal_year: String(fiscalYearParam - 1),
       });
+      if (byProvider) p.set("group_by", "provider");
+      if (cardFiltersParam) p.set("card_filters", cardFiltersParam);
       const r = await api.get<CostTreemapResponse>(`/reports/cost-treemap?${p}`, {
         signal,
       });
       if (!isCurrent()) return;
-      setPriorYearCosts(new Map(r.items.map((it) => [it.id, it.cost])));
+      setPriorYearCosts(new Map(r.items.map((it) => [rowKeyOf(it), it.cost])));
     },
     [
       cardTypeKey,
@@ -734,7 +777,10 @@ export default function CostReport() {
       canViewCostsGlobally,
       fiscalYearParam,
       minFiscalYearOption,
+      cardFiltersParam,
       refreshVersion,
+      byProvider,
+      rowKeyOf,
     ],
   );
 
@@ -749,11 +795,25 @@ export default function CostReport() {
     [items],
   );
 
+  // A provider group's raw value is the provider's card id: the names come with the response (the
+  // treemap's `group_names`, the Sankey's group nodes), so two providers of one name stay two groups.
+  const providerNameOf = useMemo(
+    () =>
+      sankeyData
+        ? Object.fromEntries(
+            sankeyData.nodes
+              .filter((n) => n.type === "Group")
+              .map((n) => [rawGroup(n), n.name]),
+          )
+        : providerNames,
+    [sankeyData, providerNames],
+  );
   // The page names a group: the server sends the raw value (an option key,
-  // "true"/"false", a linked card's name, or "__other__").
+  // "true"/"false", a linked card's name, a provider's card id, or "__other__").
   const groupLabel = useCallback(
     (raw: string | undefined) => {
       if (!raw || raw === OTHER_GROUP) return t("cost.unspecified");
+      if (byProvider) return providerNameOf[raw] ?? raw;
       const key = effectiveGroupBy.startsWith("field:")
         ? effectiveGroupBy.slice(6)
         : null;
@@ -762,24 +822,32 @@ export default function CostReport() {
         ?.options?.find((o) => o.key === raw);
       return opt?.label ?? raw;
     },
-    [effectiveGroupBy, groupableFields, t],
+    [effectiveGroupBy, byProvider, providerNameOf, groupableFields, t],
   );
 
   // The Sankey view loads no treemap items: its scoped card nodes (with the group each hangs under)
   // stand in for them, so group order, fold and colours are read off the same numbers in every view.
+  // One entry per (card, group link): a card paid to two providers hangs under both, each with its share.
   const sankeyCards = useMemo<CostItem[]>(() => {
     if (!sankeyData) return [];
-    const groupOf = new Map<number, string>();
+    const groupsOf = new Map<number, { group: string; value: number }[]>();
     for (const l of sankeyData.links) {
       const src = sankeyData.nodes[l.source];
-      if (src?.type === "Group") groupOf.set(l.target, src.id.replace(/^group:/, ""));
+      if (src?.type === "Group")
+        groupsOf.set(l.target, [
+          ...(groupsOf.get(l.target) ?? []),
+          { group: rawGroup(src), value: l.value },
+        ]);
     }
-    return sankeyData.nodes.flatMap((n, i) =>
-      n.type === "CostItem" || n.type === "Group" || (scope.closure && !scope.closure.has(n.id))
-        ? []
-        : [{ id: n.id, name: n.name, type: n.type, cost: n.cost ?? 0, group: groupOf.get(i) }],
-    );
-  }, [sankeyData, scope.closure]);
+    return sankeyData.nodes.flatMap((n, i) => {
+      if (n.type === "CostItem" || n.type === "Group" || (scope.closure && !scope.closure.has(n.id)))
+        return [];
+      const base = { id: n.id, name: n.name, type: n.type };
+      const links = groupsOf.get(i);
+      if (!links) return [{ ...base, cost: n.cost ?? 0 }];
+      return links.map((g) => ({ ...base, cost: byProvider ? g.value : (n.cost ?? 0), group: g.group }));
+    });
+  }, [sankeyData, scope.closure, byProvider]);
   const colorItems = rawItems ? items : sankeyCards;
 
   const groups = useMemo(() => {
@@ -803,9 +871,17 @@ export default function CostReport() {
   // hue by scoped size, beyond the 8th they fold into Others, and a drill never changes it.
   const colorPlan = useMemo(() => {
     const cardColors = new Map<string, string>();
+    // A card split over providers is one node in the Sankey: it takes its larger share's colour.
+    const largestShare = new Map<string, CostItem>();
+    for (const it of colorItems) {
+      const best = largestShare.get(it.id);
+      if (!best || it.cost > best.cost) largestShare.set(it.id, it);
+    }
+    const cardNodeColors = new Map<string, string>();
     if (!groups) {
-      for (const it of colorItems) cardColors.set(it.id, cardColor(it.name, chartTheme.categorical));
-      return { cardColors, groupHues: new Map<string, string>(), groups: [], foldedKeys: new Set<string>() };
+      for (const it of colorItems) cardColors.set(rowKeyOf(it), cardColor(it.name, chartTheme.categorical));
+      for (const [id, it] of largestShare) cardNodeColors.set(id, cardColors.get(rowKeyOf(it))!);
+      return { cardColors, cardNodeColors, groupHues: new Map<string, string>(), groups: [], foldedKeys: new Set<string>() };
     }
     const { groups: coloured, foldedKeys } = assignGroupColors(groups, {
       categorical: chartTheme.categorical,
@@ -815,11 +891,12 @@ export default function CostReport() {
     });
     for (const g of coloured) {
       const ranked = [...g.items].sort((a, b) => b.cost - a.cost);
-      ranked.forEach((it, i) => cardColors.set(it.id, memberShade(g.hue, i, ranked.length)));
+      ranked.forEach((it, i) => cardColors.set(rowKeyOf(it), memberShade(g.hue, i, ranked.length)));
     }
+    for (const [id, it] of largestShare) cardNodeColors.set(id, cardColors.get(rowKeyOf(it))!);
     const groupHues = new Map(coloured.map((g) => [g.key, g.hue]));
-    return { cardColors, groupHues, groups: coloured, foldedKeys };
-  }, [groups, colorItems, chartTheme.categorical, chartTheme.mode]);
+    return { cardColors, cardNodeColors, groupHues, groups: coloured, foldedKeys };
+  }, [groups, colorItems, rowKeyOf, chartTheme.categorical, chartTheme.mode]);
   const { foldedKeys } = colorPlan;
   const groupDisplayLabel = (key: string, label: string) =>
     key === OTHERS_KEY ? t("cost.othersCount", { count: foldedKeys.size }) : label;
@@ -863,13 +940,15 @@ export default function CostReport() {
   // A drill names ids that exist only under the current selection.
   useEffect(() => {
     setDrill((d) => (d.group === undefined && d.cardId === undefined ? d : {}));
-  }, [cardTypeKey, costField, effectiveGroupBy, fiscalYearParam, scopeIds]);
+  }, [cardTypeKey, costField, effectiveGroupBy, fiscalYearParam, scopeIds, cardFiltersParam]);
   // The table's item columns and a drilled card need the per-item breakdown; no costs.view, no request.
   const { breakdown } = useCostBreakdown({
     enabled:
-      canViewCostsGlobally && (view === "table" || (view === "chart" && drill.cardId !== undefined)),
+      canViewCostsGlobally &&
+      (view === "table" ? !byProvider : view === "chart" && drill.cardId !== undefined),
     typeParam: typeParam(cardTypeKey),
     fiscalYear: fiscalYearParam,
+    cardFilters: cardFiltersParam,
     refreshVersion,
   });
   // A drilled card: one tile per cost item (catalogue order), the first 8 coloured, the rest merged.
@@ -932,6 +1011,7 @@ export default function CostReport() {
           years={trendYears}
           currentFiscalYear={currentFiscalYear}
           groupBy={effectiveGroupBy}
+          cardFilters={cardFiltersParam}
           selection={trendSelection}
           scopeIds={scope.closure}
           refreshVersion={refreshVersion}
@@ -953,18 +1033,27 @@ export default function CostReport() {
     if (!sankeyData) return null;
     const closure = scope.closure;
     const recompute = !!closure || drillActive;
-    const drillIds = drillActive ? new Set(applyDrill(sankeyCards, drill, foldedKeys).map((c) => c.id)) : null;
+    const drilled = drillActive ? applyDrill(sankeyCards, drill, foldedKeys) : null;
+    const drillIds = drilled && new Set(drilled.map((c) => c.id));
+    // A card drill shows every share of the card; only a group drill narrows the group -> card links.
+    const drillShares = drilled && drill.cardId === undefined ? new Set(drilled.map(rowKeyOf)) : null;
     const isCard = (n: SankeyNode) => n.type !== "CostItem" && n.type !== "Group";
     const keep = sankeyData.nodes.map(
       (n) => !isCard(n) || ((!closure || closure.has(n.id)) && (!drillIds || drillIds.has(n.id))),
     );
-    // Recomputed: an item -> group flow is the sum of the kept cards' own values for that item.
+    // A group -> card link survives a group drill only for the shares that group holds.
+    const live = (l: SankeyLink) => {
+      const from = sankeyData.nodes[l.source];
+      return !drillShares || from.type !== "Group" || drillShares.has(rowKeyOf({ id: sankeyData.nodes[l.target].id, group: rawGroup(from) }));
+    };
+    // Recomputed: an item -> group flow is the sum of the kept cards' own values for that item; a
+    // provider link carries its share's exact amounts, any other link falls back to the card's.
     const flowValue = (l: SankeyLink) => {
       if (!recompute || sankeyData.nodes[l.target]?.type !== "Group") return l.value;
       const item = sankeyData.nodes[l.source].id.replace(/^item:/, "");
       return sankeyData.links
-        .filter((c) => c.source === l.target && keep[c.target])
-        .reduce((n, c) => n + (sankeyData.nodes[c.target].costs?.[item] ?? 0), 0);
+        .filter((c) => c.source === l.target && keep[c.target] && live(c))
+        .reduce((n, c) => n + ((c.costs ?? sankeyData.nodes[c.target].costs)?.[item] ?? 0), 0);
     };
     const values = sankeyData.links.map(flowValue);
     if (recompute) {
@@ -973,11 +1062,10 @@ export default function CostReport() {
         sankeyData.nodes.forEach((n, i) => {
           if (!isCard(n))
             keep[i] = sankeyData.links.some(
-              (l, k) => l.source === i && keep[l.target] && values[k] > 0,
+              (l, k) => l.source === i && keep[l.target] && live(l) && values[k] > 0,
             );
         });
     }
-    const rawGroup = (n: SankeyNode) => n.id.replace(/^group:/, "");
     const isFolded = (n: SankeyNode) => n.type === "Group" && foldedKeys.has(rawGroup(n));
     const index = new Map<number, number>();
     const nodes: SankeyNode[] = [];
@@ -1003,13 +1091,13 @@ export default function CostReport() {
           ? { ...n, name: groupLabel(rawGroup(n)), color: colorPlan.groupHues.get(rawGroup(n)) }
           : n.type === "CostItem"
             ? { ...n, name: itemLabel(n.id.replace(/^item:/, ""), n.name) }
-            : { ...n, color: colorPlan.cardColors.get(n.id), typeLabel: typeLabelOf(n.type), typeIcon: types.find((tp) => tp.key === n.type)?.icon },
+            : { ...n, color: colorPlan.cardNodeColors.get(n.id), typeLabel: typeLabelOf(n.type), typeIcon: types.find((tp) => tp.key === n.type)?.icon },
       );
     });
     // Both ends are remapped, so the flows into and out of Others add up per (source, target).
     const merged = new Map<string, SankeyLink>();
     sankeyData.links.forEach((l, k) => {
-      if (!keep[l.source] || !keep[l.target] || (recompute && values[k] <= 0)) return;
+      if (!keep[l.source] || !keep[l.target] || !live(l) || (recompute && values[k] <= 0)) return;
       const source = index.get(l.source)!;
       const target = index.get(l.target)!;
       const key = `${source}>${target}`;
@@ -1017,7 +1105,7 @@ export default function CostReport() {
       merged.set(key, { source, target, value: (prev?.value ?? 0) + values[k] });
     });
     return { ...sankeyData, nodes, links: [...merged.values()] };
-  }, [sankeyData, sankeyCards, scope.closure, drill, drillActive, foldedKeys, colorPlan, groupLabel, itemLabel, typeLabelOf, t, types]);
+  }, [sankeyData, sankeyCards, scope.closure, drill, drillActive, foldedKeys, colorPlan, groupLabel, itemLabel, typeLabelOf, t, types, rowKeyOf]);
 
   const printParams = useMemo(() => {
     const params: { label: string; value: string }[] = [];
@@ -1070,13 +1158,14 @@ export default function CostReport() {
   // group frame into the group); a cost-item tile has neither id nor key and is inert.
   const handleTileDrill = useCallback(
     (p: EChartClickParams) => {
-      const d = p.data as { id?: string; key?: string } | undefined;
+      const d = p.data as { id?: string; cardId?: string; key?: string } | undefined;
       if (d?.id) {
-        const raw = effectiveGroupBy ? items.find((i) => i.id === d.id)?.group : undefined;
-        setDrill({ ...(raw !== undefined && { group: drillGroupKey(raw, foldedKeys) }), cardId: d.id });
+        // The tile names its own row: a card under two providers drills into the tile's provider.
+        const raw = effectiveGroupBy ? items.find((i) => rowKeyOf(i) === d.id)?.group : undefined;
+        setDrill({ ...(raw !== undefined && { group: drillGroupKey(raw, foldedKeys) }), cardId: d.cardId ?? d.id });
       } else if (d?.key) setDrill({ group: d.key });
     },
-    [items, effectiveGroupBy, foldedKeys],
+    [items, effectiveGroupBy, foldedKeys, rowKeyOf],
   );
   // Sankey nodes are named by id: `group:<key>`, `item:<key>`, or a card's id. Items and edges are inert.
   const handleNodeDrill = useCallback(
@@ -1087,7 +1176,10 @@ export default function CostReport() {
         setDrill({ group: drillGroupKey(name.slice("group:".length), foldedKeys) });
         return;
       }
-      const raw = effectiveGroupBy ? sankeyCards.find((c) => c.id === name)?.group : undefined;
+      // A card under two providers hangs under both: the drill takes its larger share's group.
+      const raw = effectiveGroupBy
+        ? sankeyCards.filter((c) => c.id === name).sort((a, b) => b.cost - a.cost)[0]?.group
+        : undefined;
       setDrill({ ...(raw !== undefined && { group: drillGroupKey(raw, foldedKeys) }), cardId: name });
     },
     [sankeyCards, effectiveGroupBy, foldedKeys],
@@ -1103,8 +1195,8 @@ export default function CostReport() {
   }, [openCard]);
   // Left click opens the card in the side panel; a group frame does nothing.
   const handleTileOpen = useCallback((p: EChartClickParams) => {
-    const d = p.data as { id?: string } | undefined;
-    if (d?.id) openCard(d.id);
+    const d = p.data as { id?: string; cardId?: string } | undefined;
+    if (d?.id) openCard(d.cardId ?? d.id);
   }, [openCard]);
 
   if (!canViewCostsGlobally) {
@@ -1153,7 +1245,14 @@ export default function CostReport() {
     );
 
   // Every view reads the scoped cards; the metric strip does not follow the drill.
-  const summaryCards = colorItems;
+  // A card paid to two providers is one card in the strip, with its shares added up.
+  const summaryCards = byProvider
+    ? [
+        ...colorItems
+          .reduce((m, c) => m.set(c.id, { ...c, cost: (m.get(c.id)?.cost ?? 0) + c.cost }), new Map<string, CostItem>())
+          .values(),
+      ]
+    : colorItems;
   const summaryTotal = summaryCards.reduce((sum, c) => sum + c.cost, 0);
   const topDriver = summaryCards.reduce<{ name: string; cost: number } | null>(
     (top, c) => (!top || c.cost > top.cost ? c : top),
@@ -1162,7 +1261,7 @@ export default function CostReport() {
   const avgCost = summaryCards.length > 0 ? summaryTotal / summaryCards.length : 0;
 
   const treemapLeaf = (d: CostItem, i: number): CostTreemapItem => {
-    const baseline = baselineCosts.get(d.id);
+    const baseline = baselineCosts.get(rowKeyOf(d));
     const deltaPct =
       fiscalYearParam == null
         ? undefined
@@ -1170,12 +1269,13 @@ export default function CostReport() {
           ? (d.cost - baseline) / baseline
           : null;
     return {
-      id: d.id,
+      id: rowKeyOf(d),
+      cardId: d.id,
       name: d.name,
       cost: d.cost,
       index: i,
       deltaPct,
-      color: colorPlan.cardColors.get(d.id) ?? cardColor(d.name, chartTheme.categorical),
+      color: colorPlan.cardColors.get(rowKeyOf(d)) ?? cardColor(d.name, chartTheme.categorical),
       typeLabel: typeLabelOf(d.type),
       typeIcon: types.find((tp) => tp.key === d.type)?.icon,
       logo_updated_at: d.logo_updated_at,
@@ -1234,6 +1334,11 @@ export default function CostReport() {
   // A cell: from the breakdown when it knows the card; the selected cost falls back to the row's own
   // figure; anything else is unknown (undefined, printed as a dash).
   const cellValue = (d: CostItem, key: string): number | undefined => {
+    // Grouped by provider a row is one share: its own amounts, not the card's whole breakdown.
+    if (byProvider) {
+      if (key !== TCO_KEY) return d.costs?.[key] ?? 0;
+      return costField === TCO_KEY ? d.cost : Object.values(d.costs ?? {}).reduce((n, v) => n + v, 0);
+    }
     const b = breakdown?.get(d.id);
     if (b) return key === TCO_KEY ? b.total : (b.items[key] ?? 0);
     return key === costField ? d.cost : undefined;
@@ -1267,13 +1372,13 @@ export default function CostReport() {
     const tp = types.find((x) => x.key === d.type);
     return (
     <TableRow
-      key={d.id}
+      key={rowKeyOf(d)}
       hover
       sx={{ cursor: "pointer" }}
       onClick={() => openCard(d.id)}
       onContextMenu={(e: React.MouseEvent) => {
         e.preventDefault();
-        handleTileDrill({ data: { id: d.id } });
+        handleTileDrill({ data: { id: rowKeyOf(d), cardId: d.id } });
       }}
     >
       <TableCell sx={{ fontWeight: 500, ...(indent && { pl: 4 }) }}>
@@ -1322,7 +1427,7 @@ export default function CostReport() {
       </TableCell>
     ));
   const yoyCell = (item: CostItem) => {
-    const prior = priorYearCosts.get(item.id);
+    const prior = priorYearCosts.get(rowKeyOf(item));
     const pct = prior && prior > 0 ? (item.cost - prior) / prior : null;
     return (
       <TableCell align="right">
@@ -1414,10 +1519,6 @@ export default function CostReport() {
             label={t("cost.groupBy")}
             value={effectiveGroupBy}
             onChange={(e) => setGroupBy(e.target.value)}
-            disabled={groupOptions.length === 0}
-            helperText={
-              groupOptions.length === 0 ? t("cost.groupByUnavailable") : undefined
-            }
             sx={{ minWidth: 150 }}
           >
             <MenuItem value="">{t("cost.groupByNone")}</MenuItem>
@@ -1457,6 +1558,14 @@ export default function CostReport() {
               ))}
             </TextField>
           )}
+
+          <CostFilters
+            typeKeys={typeKeys}
+            value={cardFilters}
+            onChange={setCardFilters}
+            collapsed={filtersCollapsed}
+            onToggle={() => setFiltersCollapsed((v) => !v)}
+          />
         </>
       }
     >

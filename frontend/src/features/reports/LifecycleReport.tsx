@@ -875,7 +875,7 @@ export default function LifecycleReport() {
                           {eolPct != null && (
                             <Tooltip title={`${t("lifecycle.phaseEndOfLife")}: ${fmtDate(item.lifecycle.endOfLife)}`}>
                               <Box sx={{ position: "absolute", left: `${eolPct}%`, top: -2, transform: "translateX(-50%)", zIndex: 2, lineHeight: 0 }}>
-                                <svg width="20" height="20" viewBox="0 0 20 20">
+                                <svg aria-hidden="true" width="20" height="20" viewBox="0 0 20 20">
                                   <circle cx="10" cy="10" r="9" fill={STATUS_COLORS.error} stroke={STATUS_CHIP_COLORS.error.text} strokeWidth="1" />
                                   <rect x="4" y="8" width="12" height="4" rx="1" fill={theme.palette.common.white} />
                                 </svg>

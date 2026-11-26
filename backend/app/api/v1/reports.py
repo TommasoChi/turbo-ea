@@ -8,7 +8,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import and_, case, func, not_, or_, select
+from sqlalchemy import ColumnElement, and_, case, func, not_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased, selectinload
 
@@ -29,6 +29,7 @@ from app.models.todo import Todo
 from app.models.user import User
 from app.models.user_favorite import UserFavorite
 from app.schemas.cost_report import (
+    CostFilterOptionsOut,
     CostSankeyResponse,
     CostScopeItem,
     CostScopeResponse,
@@ -62,6 +63,7 @@ from app.services.cost_attribution import SPLIT, parse_attribution, split_share
 from app.services.cost_components import cost_components
 from app.services.cost_event_redaction import redact_cost_events
 from app.services.cost_field_filter import cost_field_keys_from_card_schema
+from app.services.cost_filters import filter_conditions, parse_card_filters
 from app.services.cost_grouping import assign_groups, parse_group_by
 from app.services.cost_redaction import card_cost_redaction_map, redact_portfolio_costs
 from app.services.cost_report import (
@@ -70,6 +72,8 @@ from app.services.cost_report import (
     cards_with_cost_for_types,
     item_labels,
     parse_type_keys,
+    provider_treemap_items,
+    require_item_grouping,
 )
 from app.services.cost_value import cost_value
 from app.services.data_quality_bands import DQ_BAND_BOUNDS, band_of, dq_band_condition
@@ -97,6 +101,7 @@ from app.services.lifecycle import current_lifecycle_phase, is_live_in_fiscal_ye
 from app.services.permission_service import PermissionService
 from app.services.portfolio_payload import (
     build_portfolio_payload,
+    filter_options_payload,
     has_timeline_dates,
     roadmap_from_portfolio,
 )
@@ -1579,6 +1584,36 @@ async def _validated_cost_request(
     return type_keys, field_keys
 
 
+async def _card_filter_conditions(
+    db: AsyncSession, read_scope: CardReadScope, raw: str | None, type_keys: list[str]
+) -> dict[str, list[ColumnElement[bool]]]:
+    try:
+        filters = parse_card_filters(raw, type_keys)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    return await filter_conditions(db, read_scope, filters)
+
+
+@router.get("/cost-filter-options", response_model=CostFilterOptionsOut)
+async def cost_filter_options(
+    type: str = Query(...),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """What the cost report's card filters offer for Application or IT Component.
+
+    The portal dialog's payload (``filter_options_payload``) gated on ``costs.view``; the
+    related cards stay inside the caller's read scope.
+    """
+    await PermissionService.require_permission(db, user, "costs.view")
+    if type not in COST_ITEM_TYPES:
+        raise HTTPException(400, f"Card type {type!r} has no cost filters")
+    try:
+        return await filter_options_payload(db, user, type)
+    except LookupError:
+        raise HTTPException(404, f"Card type {type!r} not found") from None
+
+
 @router.get("/cost-treemap", response_model=CostTreemapResponse, response_model_exclude_unset=True)
 async def cost_treemap(
     db: AsyncSession = Depends(get_db),
@@ -1587,6 +1622,7 @@ async def cost_treemap(
     cost_field: str = Query("costTotalAnnual"),
     group_by: str | None = Query(None),
     fiscal_year: int | None = Query(None, ge=MIN_FISCAL_YEAR, le=MAX_FISCAL_YEAR),
+    card_filters: str | None = Query(None),
 ):
     """Cost treemap over one or several card types, optionally grouped.
 
@@ -1597,6 +1633,8 @@ async def cost_treemap(
     when it has none) and ``groups`` sums them. A bare field key is read as
     ``field:<key>``; any other value is ignored. A refused grouping is 400.
     ``components`` lists the cost fields concurring to ``cost_field``.
+    ``card_filters`` is a JSON ``{type key: filter}`` that narrows each selected type's
+    cards (``services/cost_filters.py``); a malformed value is 400.
 
     Takes an optional ``fiscal_year``: the current year is served from live
     attributes for the cards live in it (full annual cost, no pro-rating, see
@@ -1614,8 +1652,9 @@ async def cost_treemap(
     fy = current_fiscal_year(fy_start)
     read_scope = await CardReadScope.load(db, user)
     target_fy = fiscal_year if fiscal_year is not None else fy
+    conditions = await _card_filter_conditions(db, read_scope, card_filters, type_keys)
     sheets = await cards_with_cost_for_types(
-        db, read_scope, type_keys, cost_field, target_fy, fy, fy_start
+        db, read_scope, type_keys, cost_field, target_fy, fy, fy_start, conditions
     )
     allowed = await PermissionService.card_ids_with_cost_access(
         db, user, (card.id for card, _ in sheets)
@@ -1639,17 +1678,28 @@ async def cost_treemap(
     items.sort(key=lambda x: x["cost"], reverse=True)
 
     groups = None
-    grouping = parse_group_by(group_by, field_keys)
-    if grouping:
+    group_names = None
+    grouping = parse_group_by(group_by, field_keys, allow_provider=True)
+    if grouping and grouping.kind == "provider":
+        try:
+            await require_item_grouping(db, type_keys, cost_field)
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        items, group_names = await provider_treemap_items(
+            db, read_scope, items, cost_field, target_fy, fy_start
+        )
+    elif grouping:
         try:
             assigned = await assign_groups(
                 db, read_scope, [c for c, _ in sheets], grouping, type_keys
             )
         except ValueError as exc:
             raise HTTPException(400, str(exc)) from exc
-        groups_dict: dict[str, float] = {}
         for item in items:
             item["group"] = assigned[uuid.UUID(item["id"])]
+    if grouping:
+        groups_dict: dict[str, float] = {}
+        for item in items:
             groups_dict[item["group"]] = groups_dict.get(item["group"], 0) + item["cost"]
         groups = [
             {"name": k, "cost": v} for k, v in sorted(groups_dict.items(), key=lambda x: -x[1])
@@ -1659,6 +1709,7 @@ async def cost_treemap(
         "items": items,
         "total": total,
         "groups": groups,
+        **({"group_names": group_names} if group_names is not None else {}),
         "components": await cost_components(db, type_keys, cost_field),
         "item_labels": await item_labels(db),
         "fiscal_year": target_fy,
@@ -1725,6 +1776,7 @@ async def cost_sankey(
     cost_field: str = Query("costTotalAnnual"),
     group_by: str | None = Query(None),
     fiscal_year: int | None = Query(None, ge=MIN_FISCAL_YEAR, le=MAX_FISCAL_YEAR),
+    card_filters: str | None = Query(None),
 ):
     """Cost flow: cost items -> cards, with groups in the middle when ``group_by`` is set.
 
@@ -1737,17 +1789,19 @@ async def cost_sankey(
     fy = current_fiscal_year(fy_start)
     target_fy = fiscal_year if fiscal_year is not None else fy
     read_scope = await CardReadScope.load(db, user)
+    conditions = await _card_filter_conditions(db, read_scope, card_filters, type_keys)
     try:
         flow = await build_cost_sankey(
             db,
             read_scope,
             type_keys,
             cost_field,
-            parse_group_by(group_by, field_keys),
+            parse_group_by(group_by, field_keys, allow_provider=True),
             target_fy,
             fy,
             fy_start,
             user,
+            conditions,
         )
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc

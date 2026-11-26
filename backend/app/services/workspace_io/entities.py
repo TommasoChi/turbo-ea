@@ -782,6 +782,8 @@ async def apply_entity_section(
         if current is None and nk:
             match = existing_by_nk.get(tuple(kwargs.get(c) for c in nk))
             if match is not None:
+                if rewrite is not None and remap is not None:
+                    sr.note_references(rewrite(kwargs, remap))
                 changed = False
                 for col in value_cols:
                     if col not in pk_cols and getattr(match, col) != kwargs[col]:

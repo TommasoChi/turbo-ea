@@ -95,7 +95,6 @@ ID_FREE_COLUMNS: dict[tuple[str, str], str] = {
     ("Surveys", "target_roles"): KEYS,
     ("Surveys", "fields"): KEYS,
     ("CardCostHistory", "field_key"): "a cost field key of the card type, never an id",
-    ("CardCosts", "items"): "amounts and renewal dates keyed by cost-item key, no ids",
     ("CardLicenses", "items"): "license counts keyed by metric and license type key, no ids",
 }
 
@@ -148,6 +147,7 @@ def test_the_sections_that_hold_ids_are_the_known_ones():
         "PpmBudgetLines": ("field_values",),
         "PpmCostLines": ("field_values",),
         "PpmInvoices": ("field_values",),
+        "CardCosts": ("items",),
         "Todos": ("link",),
         "Diagrams": ("data",),
         "ProcessDiagrams": ("bpmn_xml",),

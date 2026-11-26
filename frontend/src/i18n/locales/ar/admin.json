@@ -569,6 +569,7 @@
   "metamodel.stakeholderPanel.keyLength": "يجب أن يتراوح طوله بين {{min}} و {{max}} حرفًا",
   "metamodel.stakeholderPanel.failedToDelete": "تعذر حذف الدور",
   "metamodel.stakeholderPanel.translations": "الترجمات",
+  "metamodel.graph.title": "مخطط النموذج الفوقي لأنواع البطاقات وعلاقاتها",
   "metamodel.graph.noTypes": "لا توجد أنواع مرئية للعرض. أنشئ بعض أنواع البطاقات أولاً.",
   "tags.title": "إدارة الوسوم",
   "tags.newGroup": "مجموعة وسوم جديدة",

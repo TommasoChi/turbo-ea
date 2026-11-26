@@ -126,7 +126,8 @@ Applikationer og IT-komponenter registrerer deres omkostninger som en liste af *
 - **TCO** — Årets samlede ejeromkostninger er summen af dets poster. De indtastes aldrig i hånden.
 - **Diagram og felter** — Felterne viser kun det valgte år. Hver post har et felt med sit **årlige beløb** og sin **fornyelsesdato**; en fornyelse inden for 90 dage vises med orange. Omkostninger er altid årlige.
 - **Tilføjelse og redigering** — En post tilføjes, redigeres eller slettes i en dialog. Posterne kommer fra kataloget, som en administrator vedligeholder under [Metamodel → Omkostningsposter](../admin/metamodel.md#omkostningsposter).
-- **Kopiér til Forecast** — Kopierer posterne fra det år, du ser på, til Forecast-året, så du kan begynde en plan ud fra de nuværende tal.
+- **Udbyder** — Dialogen har et valgfrit felt **Udbyder**: den leverandør, som denne post betales til, én pr. post. Listen viser de aktive udbydere, du kan læse, som er knyttet til dette kort, til et af dets overordnede kort eller til et af dets underkort. Vælg **Ingen** for at rydde feltet. En udbyder, der senere blev arkiveret eller frakoblet, bliver på posten, indtil du ændrer den, og du kan stadig gemme et beløb på posten. En udbyder, du ikke kan læse, vises ikke, og lagring fjerner den aldrig. Omkostningsrapporten kan gruppere efter dette felt.
+- **Kopiér til Forecast** — Kopierer posterne fra det år, du ser på, til Forecast-året, så du kan begynde en plan ud fra de nuværende tal. Udbyderen følger med posten.
 
 **Et nyt regnskabsår.** Når regnskabsåret skifter, og et kort endnu ikke har omkostninger for det nye nuværende år, viser sektionen det forrige års poster markeret som **ikke bekræftet**, med fornyelsesdatoerne rykket frem. De forbliver sådan, indtil nogen bekræfter dem eller redigerer et beløb. Forecast og tidligere år falder aldrig tilbage på et andet år.
 

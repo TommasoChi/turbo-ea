@@ -283,3 +283,15 @@ async def test_relation_to_hidden_card_type_is_refused(db):
         await assign_groups(
             db, CardReadScope.everything(), [a], GroupBy("relation", "app_org"), ["Application"]
         )
+
+
+def test_parse_group_by_provider_only_when_allowed():
+    assert parse_group_by("provider", set(), allow_provider=True) == GroupBy("provider", "")
+    assert parse_group_by("provider", set()) is None
+    assert parse_group_by("provider", {"provider"}) == GroupBy("field", "provider")
+
+
+async def test_assign_groups_refuses_provider(db):
+    a = await create_card(db, name="a")
+    with pytest.raises(ValueError):
+        await assign_groups(db, CardReadScope.everything(), [a], GroupBy("provider", ""))

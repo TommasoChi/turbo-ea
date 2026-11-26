@@ -537,6 +537,7 @@
   "metamodel.stakeholderPanel.keyLength": "Debe tener entre {{min}} y {{max}} caracteres",
   "metamodel.stakeholderPanel.failedToDelete": "No se pudo eliminar el rol",
   "metamodel.stakeholderPanel.translations": "Traducciones",
+  "metamodel.graph.title": "Grafo del metamodelo de los tipos de tarjeta y sus relaciones",
   "metamodel.graph.noTypes": "No hay tipos visibles para mostrar. Cree algunos tipos de ficha primero.",
   "tags.title": "Gestión de etiquetas",
   "tags.newGroup": "Nuevo grupo de etiquetas",

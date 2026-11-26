@@ -781,7 +781,7 @@ export const LdvNode = memo(({ data }: NodeProps<Node<LdvNodeData>>) => {
             pointerEvents: "none",
           }}
         >
-          <svg width={40} height={40} viewBox="0 0 40 40">
+          <svg aria-hidden="true" width={40} height={40} viewBox="0 0 40 40">
             <circle
               cx={20}
               cy={20}
@@ -1097,6 +1097,7 @@ const LdvEdgeComponent = memo(
             rather than a MUI Tooltip — this is inside React Flow's SVG layer,
             where a portalled popper would be positioned against the wrong
             coordinate space. */}
+        {/* biome-ignore lint/a11y/noStaticElementInteractions: hover-only hit area with no action; its description is exposed to assistive tech by the <title> child */}
         <path
           d={path}
           fill="none"

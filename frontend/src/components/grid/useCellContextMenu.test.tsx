@@ -254,6 +254,7 @@ describe("useCellContextMenu — right-click", () => {
   it("renders extraItems above the filter items", async () => {
     const { container } = await renderGrid({
       extraItems: (ctx, close) => [
+        // biome-ignore lint/a11y/useKeyWithClickEvents: mock extra item; the test only checks that the menu closes on click
         <li key="x" role="menuitem" onClick={close} data-testid="extra-item">
           Open {ctx.data.name}
         </li>,

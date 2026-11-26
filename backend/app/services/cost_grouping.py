@@ -24,14 +24,19 @@ OTHER_GROUP = "__other__"
 
 @dataclass(frozen=True)
 class GroupBy:
-    kind: Literal["field", "relation"]
+    kind: Literal["field", "relation", "provider"]
     key: str
 
 
-def parse_group_by(raw: str | None, field_keys: set[str]) -> GroupBy | None:
-    """``field:<key>`` / ``rel:<key>``; a bare known field key is a saved report's old grouping."""
+def parse_group_by(
+    raw: str | None, field_keys: set[str], *, allow_provider: bool = False
+) -> GroupBy | None:
+    """``field:<key>`` / ``rel:<key>`` / ``provider`` (cost endpoints only); a bare known field
+    key is a saved report's old grouping."""
     if not raw:
         return None
+    if raw == "provider" and allow_provider:
+        return GroupBy("provider", "")
     if raw.startswith("field:"):
         return GroupBy("field", raw[6:]) if raw[6:] else None
     if raw.startswith("rel:"):
@@ -50,6 +55,8 @@ async def assign_groups(
     against the cards found, so it is refused the same way in a year with no cards."""
     if group_by is None:
         return {c.id: OTHER_GROUP for c in cards}
+    if group_by.kind == "provider":
+        raise ValueError("provider splits items, not cards: use cost_report.provider_splits")
     keys = set(type_keys) if type_keys is not None else {c.type for c in cards}
     if group_by.kind == "field":
         return await _by_field(db, cards, group_by.key, keys)

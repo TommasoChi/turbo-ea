@@ -134,6 +134,15 @@ describe("buildCostTreemapOption", () => {
     ]);
   });
 
+  it("carries the row key as the datum id and the card id apart, and reads the card's logo by the card id", () => {
+    const share = { id: "erp|p1", cardId: "erp", name: "ERP", cost: 5, index: 0, color: P[0], typeIcon: "apps", logo_updated_at: "2026-01-01T00:00:00Z" };
+    const option = build([share, { ...share, id: "erp|p2" }]);
+    const [a, b] = seriesOf(option).data;
+    expect([a.id, a.cardId, b.id, b.cardId]).toEqual(["erp|p1", "erp", "erp|p2", "erp"]);
+    expect(a.label.rich.cardIdentity.backgroundColor.image).toContain("/api/v1/cards/erp/logo?v=");
+    expect(option.tooltip.formatter({ data: a })).toContain("/api/v1/cards/erp/logo?v=");
+  });
+
   it("fills a tile with the colour it is given", () => {
     const series = seriesOf(build([{ id: "x", name: "X", cost: 1, index: 10, color: P[2] }]));
     expect(series.data[0].itemStyle.color).toBe(P[2]);

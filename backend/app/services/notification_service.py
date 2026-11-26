@@ -202,7 +202,8 @@ async def create_notification(
                 notif.is_emailed = True
                 await db.flush()
         except Exception:
-            pass  # Email failure shouldn't block the notification
+            # Email failure shouldn't block the notification
+            logger.debug("Notification email failed", exc_info=True)
 
     if channels:
         # Enqueue-only: dispatch does no I/O and never awaits, so this is

@@ -322,6 +322,35 @@ def _clear_permission_cache():
 
 
 @pytest.fixture(autouse=True)
+def _real_commits_are_cleaned_up(request):
+    """A test that commits through ``test_engine`` instead of the rolled-back ``db``
+    fixture must leave every table empty.
+
+    Whatever it leaves is committed state the later tests of the same process
+    inherit: mutmut runs the suite in one process, so a stray ``app_settings`` row
+    broke every test that inserts the singleton, far from the test that left it.
+    """
+    names = request.fixturenames
+    engine = request.getfixturevalue("test_engine") if "test_engine" in names else None
+    yield
+    if engine is None or "db" in names:
+        return
+
+    async def _tables_with_rows():
+        from sqlalchemy import literal, select
+
+        async with engine.connect() as conn:
+            return [
+                table.name
+                for table in Base.metadata.sorted_tables
+                if (await conn.execute(select(literal(1)).select_from(table).limit(1))).first()
+            ]
+
+    left = asyncio.run(_tables_with_rows())
+    assert not left, f"{request.node.nodeid} committed rows it did not delete, in: {left}"
+
+
+@pytest.fixture(autouse=True)
 def _disable_rate_limiter():
     """Disable slowapi rate limiting during tests to avoid 429 responses."""
     from app.core.rate_limit import limiter

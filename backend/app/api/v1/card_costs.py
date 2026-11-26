@@ -19,13 +19,21 @@ from app.schemas.cost_items import (
     CostImportResultOut,
     CostItemTypeOut,
     CostItemWrite,
+    ProviderCandidateOut,
     YearCostsDetailOut,
     YearCostsOut,
 )
-from app.services import audit_log, card_costs, cost_import, cost_import_template, cost_item_types
+from app.services import (
+    audit_log,
+    card_costs,
+    cost_import,
+    cost_import_template,
+    cost_item_types,
+    cost_providers,
+)
 from app.services.attachment_upload import read_validated_upload
-from app.services.card_costs import COST_ITEM_TYPES, CostError, YearCosts
-from app.services.card_read_scope import require_card_readable
+from app.services.card_costs import COST_ITEM_TYPES, UNSET, CostError, YearCosts, _Unset
+from app.services.card_read_scope import CardReadScope, require_card_readable
 from app.services.event_bus import event_bus
 from app.services.fiscal_year import MAX_FISCAL_YEAR, MIN_FISCAL_YEAR, get_fiscal_year_start
 from app.services.permission_service import PermissionService
@@ -34,7 +42,7 @@ router = APIRouter(tags=["card-costs"])
 
 _KEY = Path(pattern=KEY_PATTERN)
 _FY = Path(ge=MIN_FISCAL_YEAR, le=MAX_FISCAL_YEAR)
-_STATUS = {"archived_item": 409}
+_STATUS = {"archived_item": 409, "invalid_provider": 400}
 
 
 @router.post("/costs/import", response_model=CostImportResultOut)
@@ -135,8 +143,24 @@ async def _load_for_read(db: AsyncSession, user: User, card_id: str) -> uuid.UUI
     return card_uuid
 
 
-def _out(yc: YearCosts) -> YearCostsOut:
-    return YearCostsOut.model_validate(yc, from_attributes=True)
+async def _outs(db: AsyncSession, user: User, years: list[YearCosts]) -> list[YearCostsOut]:
+    """Shape the years; a provider the reader cannot see is shown as no provider."""
+    outs = [YearCostsOut.model_validate(y, from_attributes=True) for y in years]
+    ids = {
+        pid
+        for o in outs
+        for i in o.items
+        if (pid := cost_providers.parse_provider_id(i.provider_id))
+    }
+    names = await cost_providers.provider_names(db, await CardReadScope.load(db, user), ids)
+    for out in outs:
+        for item in out.items:
+            pid = cost_providers.parse_provider_id(item.provider_id)
+            name = names.get(pid) if pid else None
+            item.provider_name = name
+            if name is None:
+                item.provider_id = None
+    return outs
 
 
 async def _write(
@@ -152,7 +176,7 @@ async def _write(
     except CostError as e:
         raise HTTPException(_STATUS.get(e.code, 422), e.code) from e
     await db.commit()
-    return _out(new)
+    return (await _outs(db, user, [new]))[0]
 
 
 @router.get("/cards/{card_id}/costs", response_model=CardCostsOut)
@@ -165,12 +189,24 @@ async def get_card_costs(
     years = await card_costs.get_window(db, card_uuid, await get_fiscal_year_start(db))
     return CardCostsOut(
         can_edit=await PermissionService.can_edit_costs(db, user, card_uuid),
-        years=[_out(y) for y in years],
+        years=await _outs(db, user, years),
         catalogue=[
             CostItemTypeOut(**cost_item_types.serialize(r))
             for r in await cost_item_types.list_items(db)
         ],
     )
+
+
+@router.get("/cards/{card_id}/cost-providers", response_model=list[ProviderCandidateOut])
+async def get_cost_provider_candidates(
+    card_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    card = await _load_for_edit(db, user, card_id)
+    scope = await CardReadScope.load(db, user)
+    found = await cost_providers.candidate_providers(db, scope, card.id, card.type)
+    return [ProviderCandidateOut(id=str(i), name=n) for i, n in found]
 
 
 @router.get("/cards/{card_id}/costs/{fiscal_year}", response_model=YearCostsDetailOut)
@@ -183,7 +219,7 @@ async def get_card_costs_year(
     card_uuid = await _load_for_read(db, user, card_id)
     row = await card_costs.get_year_row(db, card_uuid, fiscal_year, await get_fiscal_year_start(db))
     return YearCostsDetailOut(
-        **_out(row).model_dump(),
+        **(await _outs(db, user, [row]))[0].model_dump(),
         can_edit=await PermissionService.can_edit_costs(db, user, card_uuid),
     )
 
@@ -197,15 +233,24 @@ async def put_card_cost_item(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    return await _write(
-        db,
-        user,
-        card_id,
-        fiscal_year,
-        lambda cid: card_costs.upsert_item(
-            db, cid, fiscal_year, key, body.amount, body.renewal_date
-        ),
-    )
+    provider: str | None | _Unset = UNSET
+    if "provider_id" in body.model_fields_set:
+        provider = None if body.provider_id is None else str(body.provider_id)
+
+    async def op(cid: uuid.UUID) -> None:
+        scope = None if provider is UNSET else await CardReadScope.load(db, user)
+        await card_costs.upsert_item(
+            db,
+            cid,
+            fiscal_year,
+            key,
+            body.amount,
+            body.renewal_date,
+            provider_id=provider,
+            read_scope=scope,
+        )
+
+    return await _write(db, user, card_id, fiscal_year, op)
 
 
 @router.delete("/cards/{card_id}/costs/{fiscal_year}/items/{key}", status_code=204)

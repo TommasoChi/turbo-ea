@@ -170,6 +170,7 @@ class RemapContext:
     legacy: bool = False
     cards_by_type_name: dict[tuple[str, str], list[str]] = field(default_factory=dict)
     live_card_ids: set[str] = field(default_factory=set)
+    provider_card_ids: set[str] = field(default_factory=set)
     relations_by_ends: dict[tuple[str, str, str], str] = field(default_factory=dict)
     diagram_card_hints: dict[str, set[str]] = field(default_factory=dict)
     card_types: dict[str, str] = field(default_factory=dict)
@@ -265,6 +266,39 @@ def rewrite_pml_row(kwargs: dict[str, Any], ctx: RemapContext) -> RewriteTally:
         if definition.get("kind") == "card_reference" and key in updated:
             updated[key] = pml_card_id(updated[key], ctx, tally)
     kwargs["field_values"] = updated
+    return tally
+
+
+def _provider_target(raw: Any, ctx: RemapContext) -> str | None:
+    """The target's Provider card id a stored ``provider_id`` stands for, or ``None``."""
+    source = canonical_uuid(raw) if isinstance(raw, str) else None
+    if source is None:
+        return None
+    target = ctx.ids.lookup(CARDS, source) or source
+    return target if target in ctx.provider_card_ids else None
+
+
+def rewrite_card_costs_row(kwargs: dict[str, Any], ctx: RemapContext) -> RewriteTally:
+    """Translate each item's ``provider_id``; one that is unusable, has no counterpart or
+    does not end on a Provider card of the target is dropped (the item keeps its amount).
+    The card-to-provider relation is not checked here: relations arrive in the same bundle."""
+    tally = RewriteTally()
+    items = kwargs.get("items")
+    if not isinstance(items, dict):
+        return tally
+    rewritten: dict[str, Any] = {}
+    for key, item in items.items():
+        if isinstance(item, dict) and "provider_id" in item:
+            raw = item["provider_id"]
+            item = {k: v for k, v in item.items() if k != "provider_id"}
+            target = _provider_target(raw, ctx)
+            if target is not None:
+                item["provider_id"] = target
+                tally.bump(REMAPPED)
+            elif raw not in (None, ""):
+                tally.bump(UNRESOLVED)
+        rewritten[key] = item
+    kwargs["items"] = rewritten
     return tally
 
 

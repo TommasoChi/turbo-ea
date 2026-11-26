@@ -6974,6 +6974,36 @@
         "title": "ConnectionUpdate",
         "type": "object"
       },
+      "CostFilterOptionsOut": {
+        "description": "What the cost report's relation filters offer; the page reads nothing else.",
+        "properties": {
+          "groupable_types": {
+            "additionalProperties": {
+              "items": {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              "type": "array"
+            },
+            "title": "Groupable Types",
+            "type": "object"
+          },
+          "relation_types": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Relation Types",
+            "type": "array"
+          }
+        },
+        "required": [
+          "relation_types",
+          "groupable_types"
+        ],
+        "title": "CostFilterOptionsOut",
+        "type": "object"
+      },
       "CostHistoryList": {
         "properties": {
           "rows": {
@@ -7206,6 +7236,18 @@
             "title": "Amount",
             "type": "number"
           },
+          "provider_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider Id"
+          },
           "renewal_date": {
             "anyOf": [
               {
@@ -7240,6 +7282,28 @@
             "title": "Key",
             "type": "string"
           },
+          "provider_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider Id"
+          },
+          "provider_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider Name"
+          },
           "renewal_date": {
             "anyOf": [
               {
@@ -7263,6 +7327,20 @@
       "CostReportNode": {
         "additionalProperties": true,
         "properties": {
+          "costs": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "number"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Costs"
+          },
           "logo_updated_at": {
             "anyOf": [
               {
@@ -7368,6 +7446,20 @@
       "CostTreemapResponse": {
         "additionalProperties": true,
         "properties": {
+          "group_names": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Group Names"
+          },
           "items": {
             "items": {
               "$ref": "#/components/schemas/CostReportNode"
@@ -17741,6 +17833,24 @@
           "keep_existing"
         ],
         "title": "ProtectedFieldMarker",
+        "type": "object"
+      },
+      "ProviderCandidateOut": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "ProviderCandidateOut",
         "type": "object"
       },
       "RecalcCalculationReport": {
@@ -32931,6 +33041,52 @@
         ]
       }
     },
+    "/api/v1/cards/{card_id}/cost-providers": {
+      "get": {
+        "operationId": "get_cost_provider_candidates_api_v1_cards__card_id__cost_providers_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "card_id",
+            "required": true,
+            "schema": {
+              "title": "Card Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ProviderCandidateOut"
+                  },
+                  "title": "Response Get Cost Provider Candidates Api V1 Cards  Card Id  Cost Providers Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Cost Provider Candidates",
+        "tags": [
+          "card-costs"
+        ]
+      }
+    },
     "/api/v1/cards/{card_id}/costs": {
       "get": {
         "operationId": "get_card_costs_api_v1_cards__card_id__costs_get",
@@ -46693,6 +46849,49 @@
         ]
       }
     },
+    "/api/v1/reports/cost-filter-options": {
+      "get": {
+        "description": "What the cost report's card filters offer for Application or IT Component.\n\nThe portal dialog's payload (``filter_options_payload``) gated on ``costs.view``; the\nrelated cards stay inside the caller's read scope.",
+        "operationId": "cost_filter_options_api_v1_reports_cost_filter_options_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "type",
+            "required": true,
+            "schema": {
+              "title": "Type",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CostFilterOptionsOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Cost Filter Options",
+        "tags": [
+          "reports"
+        ]
+      }
+    },
     "/api/v1/reports/cost-sankey": {
       "get": {
         "description": "Cost flow: cost items -> cards, with groups in the middle when ``group_by`` is set.\n\nTakes the treemap's parameters and validation (see ``cost_treemap``); the flow is\nbuilt by ``services/cost_report.py::build_cost_sankey``.",
@@ -46750,6 +46949,22 @@
                 }
               ],
               "title": "Fiscal Year"
+            }
+          },
+          {
+            "in": "query",
+            "name": "card_filters",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Card Filters"
             }
           }
         ],
@@ -46865,7 +47080,7 @@
     },
     "/api/v1/reports/cost-treemap": {
       "get": {
-        "description": "Cost treemap over one or several card types, optionally grouped.\n\n``type`` is one card type key or a comma-separated list; each must exist and\ncarry a cost field. ``group_by`` is ``field:<key>`` (a single-valued field of\nthe type(s)) or ``rel:<relationTypeKey>`` (the one card linked through an\nat-most-one relation); every item then carries a ``group`` (``__other__``\nwhen it has none) and ``groups`` sums them. A bare field key is read as\n``field:<key>``; any other value is ignored. A refused grouping is 400.\n``components`` lists the cost fields concurring to ``cost_field``.\n\nTakes an optional ``fiscal_year``: the current year is served from live\nattributes for the cards live in it (full annual cost, no pro-rating, see\n``is_live_in_fiscal_year``); any other year lists the cards with a cost\nrecorded for it (``app/services/cost_report.py::cards_with_cost``). The\nresponse names the requested ``fiscal_year``, the ``current_fiscal_year``\nand the workspace's start month (``fiscal_year_start``).",
+        "description": "Cost treemap over one or several card types, optionally grouped.\n\n``type`` is one card type key or a comma-separated list; each must exist and\ncarry a cost field. ``group_by`` is ``field:<key>`` (a single-valued field of\nthe type(s)) or ``rel:<relationTypeKey>`` (the one card linked through an\nat-most-one relation); every item then carries a ``group`` (``__other__``\nwhen it has none) and ``groups`` sums them. A bare field key is read as\n``field:<key>``; any other value is ignored. A refused grouping is 400.\n``components`` lists the cost fields concurring to ``cost_field``.\n``card_filters`` is a JSON ``{type key: filter}`` that narrows each selected type's\ncards (``services/cost_filters.py``); a malformed value is 400.\n\nTakes an optional ``fiscal_year``: the current year is served from live\nattributes for the cards live in it (full annual cost, no pro-rating, see\n``is_live_in_fiscal_year``); any other year lists the cards with a cost\nrecorded for it (``app/services/cost_report.py::cards_with_cost``). The\nresponse names the requested ``fiscal_year``, the ``current_fiscal_year``\nand the workspace's start month (``fiscal_year_start``).",
         "operationId": "cost_treemap_api_v1_reports_cost_treemap_get",
         "parameters": [
           {
@@ -46920,6 +47135,22 @@
                 }
               ],
               "title": "Fiscal Year"
+            }
+          },
+          {
+            "in": "query",
+            "name": "card_filters",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Card Filters"
             }
           }
         ],

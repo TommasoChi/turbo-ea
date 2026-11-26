@@ -78,7 +78,7 @@ Read the rule file of the area before you change it; each loads on its own when 
 - **Built-in metamodel default changes need a migration too** — a guarded `UPDATE` that only rewrites rows still carrying the drifted-from value (`072_restore_business_process_color.py`). **A migration that creates a `created_at` / `updated_at` column must declare `server_default=sa.func.now()`.** → `.claude/rules/settings-and-seed.md`
 - **An upload is what its bytes say, not what the client calls it** (`attachment_validation.py`; the 20 MB cap is mirrored in three other places) → `.claude/rules/uploads.md`
 - Sensitive values (SSO secrets, SMTP passwords) must use `encrypt_value()`/`decrypt_value()` from `backend/app/core/encryption.py`
-- Ruff linting: line length 100, rules E/F/I/N/W plus RET501. Run `ruff check .` and `ruff format .`
+- Ruff linting: line length 100, rules E/F/I/N/W plus RET501, S110, S112 and S107. Run `ruff check .` and `ruff format .`
 - **Before every commit**, run `cd backend && ruff format . && ruff check .` to ensure CI won't fail on formatting or lint errors. This is mandatory — do not skip it
 - **Public API surface is auto-documented** (`docs/api/openapi.json`, version-agnostic, regenerated via `scripts/dump_openapi.py`) → `.claude/rules/api-contracts.md`
 - **Boot-time public settings belong in `/api/v1/settings/bootstrap`** When you add a new small public setting that the frontend reads at boot (a feature toggle, a display preference, an enabled-list, etc.), add it to the response of `GET /settings/bootstrap` in `backend/app/api/v1/settings.py` instead of (or in addition to) creating a per-setting `GET` endpoint. The frontend calls bootstrap once after auth and primes hook caches from the result, so anything that lands here costs zero round-trips on subsequent navigations. Per-endpoint reads remain the right choice for selective refresh after admin edits
@@ -94,6 +94,7 @@ Read the rule file of the area before you change it; each loads on its own when 
 - **Filter-driven GETs go through the request hooks** (`useApiQuery`, `useAbortableEffect`, `useLatestRequest`) — never a bare `api.get` in a `useEffect`; guard every `setState` with `isCurrent()`. **Boot-time singleton hooks use the inflight-promise pattern**, and a new boot-time setting goes into `/settings/bootstrap` + `primeBootstrap()`. → `.claude/rules/frontend-patterns.md`
 - All TypeScript interfaces live in `src/types/index.ts`.
 - Use MUI 6 components — do not introduce other UI libraries.
+- Biome checks accessibility only (`npm run lint:biome`, also in CI): `a11y/useSemanticElements`, `noStaticElementInteractions`, `noSvgWithoutTitle`, `useKeyWithClickEvents` and `useAriaPropsSupportedByRole`. `frontend/biome.json` and the `lint:biome` script carry the same list.
 - **Field labels are static — the theme owns label placement**; never pin `shrink` / `notched` on a field (`staticLabels.test.tsx`). → `.claude/rules/frontend-patterns.md`
 - Icons use Google Material Symbols via the `MaterialSymbol` component.
 - **Free text is rendered through `LinkifiedText`; stored HTML through `sanitizeRichHtml`.** → `.claude/rules/frontend-patterns.md`

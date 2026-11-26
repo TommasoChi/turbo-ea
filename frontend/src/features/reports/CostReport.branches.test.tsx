@@ -866,7 +866,7 @@ describe("CostReport type, cost field and group by selectors", () => {
     expect(lastParams(treemapCalls()).get("group_by")).toBeNull();
   });
 
-  it("group by is disabled with no common option", async () => {
+  it("group by offers only Provider with no common field or relation", async () => {
     withMetamodel(
       [
         APP_G,
@@ -881,11 +881,11 @@ describe("CostReport type, cost field and group by selectors", () => {
     saved.config = { cardTypeKey: "Application+ITComponent", view: "table" };
     renderCost();
     await screen.findByRole("table");
-    expect(screen.getByRole("combobox", { name: /group by/i })).toHaveAttribute(
-      "aria-disabled",
-      "true",
-    );
-    expect(screen.getByText("No field or relation to group by.")).toBeInTheDocument();
+    const select = screen.getByRole("combobox", { name: /group by/i });
+    expect(select).not.toHaveAttribute("aria-disabled", "true");
+    expect(screen.queryByText("No field or relation to group by.")).not.toBeInTheDocument();
+    fireEvent.mouseDown(select);
+    expect((await screen.findAllByRole("option")).map((o) => o.textContent)).toEqual(["None", "Provider"]);
   });
 
   it("combined shows scope filter and hides extra columns", async () => {

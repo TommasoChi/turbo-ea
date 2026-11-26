@@ -232,6 +232,7 @@ def relation_condition(
     ids: Iterable[str],
     *,
     relation_type_keys: Iterable[str],
+    related_end_where: Sequence[ColumnElement[bool]] = (),
 ) -> ColumnElement[bool] | None:
     """A card related to a picked card (``matchesStaticFilters``' relation
     block).
@@ -239,7 +240,8 @@ def relation_condition(
     ``key`` is a relation type (bare: either side; ``__out`` / ``__in``: one
     side of a self-referencing type) when it names one the card type has,
     otherwise a card type — "related to an Organization at all". "(empty)" is
-    a card with no such relation.
+    a card with no such relation. ``related_end_where`` further restricts the far-end
+    cards every test sees (the cost report passes its read scope on ``_OTHER``).
     """
     real, want_empty = _split(ids)
     picked = uuids(real)
@@ -252,6 +254,7 @@ def relation_condition(
     else:
         kind = [_OTHER.type == key]
         sides = (True, False)
+    kind = [*kind, *related_end_where]
 
     clauses: list[ColumnElement[bool]] = []
     if picked:
@@ -268,6 +271,7 @@ def relation_subtype_condition(
     values: Iterable[str],
     *,
     relation_type_keys: Iterable[str],
+    related_end_where: Sequence[ColumnElement[bool]] = (),
 ) -> ColumnElement[bool] | None:
     """A card with a relation of the type whose attribute holds a picked value;
     "(empty)" a relation of that type with no value — not a card without the
@@ -287,7 +291,7 @@ def relation_subtype_condition(
         value_clauses.append(col.astext.in_(real))
     if want_empty:
         value_clauses.append(_absent(col))
-    where = [Relation.type == rel_key, or_(*value_clauses)]
+    where = [Relation.type == rel_key, or_(*value_clauses), *related_end_where]
     return or_(_related(outgoing=True, where=where), _related(outgoing=False, where=where))
 
 
@@ -358,7 +362,10 @@ def field_types(fields_schema: object) -> dict[str, str]:
 
 
 async def _card_filter_conditions(
-    db: AsyncSession, card_type: str, card_filters: Mapping[str, Any]
+    db: AsyncSession,
+    card_type: str,
+    card_filters: Mapping[str, Any],
+    related_end_where: Sequence[ColumnElement[bool]] = (),
 ) -> list[ColumnElement[bool]]:
     conditions: list[ColumnElement[bool] | None] = [
         subtype_condition(card_filters["subtypeFilters"])
@@ -383,11 +390,15 @@ async def _card_filter_conditions(
         if card_filters["includeDescendants"]:
             relation_filters = await _widen_relation_filters(db, relation_filters)
         conditions.extend(
-            relation_condition(key, ids, relation_type_keys=rel_keys)
+            relation_condition(
+                key, ids, relation_type_keys=rel_keys, related_end_where=related_end_where
+            )
             for key, ids in sorted(relation_filters.items())
         )
         conditions.extend(
-            relation_subtype_condition(composite, vals, relation_type_keys=rel_keys)
+            relation_subtype_condition(
+                composite, vals, relation_type_keys=rel_keys, related_end_where=related_end_where
+            )
             for composite, vals in sorted(card_filters["relSubtypeFilters"].items())
         )
 
@@ -427,13 +438,17 @@ def _legacy_conditions(filters: Mapping[str, Any]) -> list[ColumnElement[bool]]:
 
 
 async def preset_conditions(
-    db: AsyncSession, card_type: str, filters: object
+    db: AsyncSession,
+    card_type: str,
+    filters: object,
+    related_end_where: Sequence[ColumnElement[bool]] = (),
 ) -> list[ColumnElement[bool]]:
     """The where-clauses a card-list portal's ``filters`` impose on ``Card``.
 
     ``card_filters`` when they narrow anything (a portal saved by this
     dialog), the legacy ``subtypes`` / ``tag_ids`` otherwise;
-    ``approval_statuses`` in both cases.
+    ``approval_statuses`` in both cases. ``related_end_where`` restricts the far-end
+    cards the relation filters consider (written on ``_OTHER``); none for a portal.
     """
     if not isinstance(filters, dict):
         return []
@@ -443,7 +458,9 @@ async def preset_conditions(
         conditions.append(Card.approval_status.in_(approval))
     card_filters = normalise_card_filters(filters.get("card_filters"))
     if card_filters is not None and has_active_card_filters(card_filters):
-        conditions.extend(await _card_filter_conditions(db, card_type, card_filters))
+        conditions.extend(
+            await _card_filter_conditions(db, card_type, card_filters, related_end_where)
+        )
     else:
         # No card filters, or ones that narrow nothing: the legacy keys (which
         # the dialog never writes beside card filters) are what is left.

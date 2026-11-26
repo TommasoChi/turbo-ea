@@ -128,7 +128,8 @@ As Aplicações e os Componentes de TI registam o seu custo como uma lista de **
 - **TCO** — O custo total de propriedade do ano é a soma dos seus itens. Nunca é digitado à mão.
 - **Gráfico e blocos** — Os blocos mostram apenas o ano selecionado. Cada item tem um bloco com o seu **montante anual** e a **data de renovação**; uma renovação nos próximos 90 dias é mostrada a laranja. Os custos são sempre anuais.
 - **Adicionar e editar** — Um item é adicionado, editado ou eliminado numa caixa de diálogo. Os itens vêm do catálogo que um administrador gere em [Metamodelo → Itens de custo](../admin/metamodel.md#itens-de-custo).
-- **Copiar para Forecast** — Copia os itens do ano que está a ver para o ano Forecast, para iniciar um plano a partir dos valores atuais.
+- **Fornecedor** — A caixa de diálogo tem um campo opcional **Fornecedor**: o fornecedor a quem este item é pago, um por item. A lista oferece os fornecedores ativos que pode ler e que estão associados a este cartão, a qualquer um dos seus cartões-pai ou a qualquer um dos seus subcartões. Escolha **Nenhum** para o limpar. Um fornecedor arquivado ou desassociado mais tarde permanece no item até o alterar, e continua a poder guardar um valor nesse item. Um fornecedor que não pode ler não é mostrado, e guardar nunca o remove. O Relatório de custos pode agrupar por este campo.
+- **Copiar para Forecast** — Copia os itens do ano que está a ver para o ano Forecast, para iniciar um plano a partir dos valores atuais. O fornecedor acompanha o item.
 
 **Um novo ano fiscal.** Quando o ano fiscal muda e um card ainda não tem custos para o novo ano atual, a seção mostra os itens do ano anterior marcados como **não confirmados**, com as datas de renovação avançadas. Ficam assim até alguém os confirmar ou editar um montante. O Forecast e os anos passados nunca recorrem a outro ano.
 

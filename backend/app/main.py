@@ -802,7 +802,8 @@ async def _ensure_ollama_model() -> None:
                     logger.info("[ai] Provider type is '%s' — skipping Ollama model pull", pt)
                     return
     except Exception:
-        pass  # Proceed with pull attempt if DB check fails
+        # Proceed with pull attempt if DB check fails
+        logger.debug("[ai] Provider type check failed", exc_info=True)
 
     tags_url = f"{provider_url.rstrip('/')}/api/tags"
     pull_url = f"{provider_url.rstrip('/')}/api/pull"

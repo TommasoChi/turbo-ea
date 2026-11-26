@@ -153,7 +153,10 @@ async def _remap_users(users_rows: list[dict[str, Any]], db_users: list[tuple[st
         db, _bundle(Users=users_rows), ids, _NoResolver(), [SimpleNamespace(sheet="Adrs")]
     )
     assert ctx.ids is ids
-    assert db.executed == ["SELECT users.email, users.id \nFROM users"]
+    # the Provider card ids (workspace costs keep only those), then the e-mail map
+    provider_query, users_query = db.executed  # the bind-parameter cast differs by driver
+    assert provider_query.startswith("SELECT cards.id \nFROM cards \nWHERE cards.type = ")
+    assert users_query == "SELECT users.email, users.id \nFROM users"
     return ids
 
 

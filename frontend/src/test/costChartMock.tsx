@@ -1,3 +1,4 @@
+// biome-ignore-all lint/a11y/noStaticElementInteractions: test fixture: a stand-in for an ECharts treemap node, which the chart library itself renders
 /**
  * The test double for `@/components/charts/EChart` on the Cost report's page
  * tests. jsdom has no canvas, so the page's charts are drawn as plain DOM read
@@ -53,7 +54,7 @@ function MockCostChart({ option, onClick, onContextMenu }: Props) {
     const tooltip = leaves[0] ? option.tooltip.formatter({ data: leaves[0] }) : "";
     return (
       <div data-testid="treemap">
-        <svg>
+        <svg aria-hidden="true">
           {groups.map((g) => (
             <text key={`group:${g.name}`}>{g.name}</text>
           ))}
@@ -69,6 +70,7 @@ function MockCostChart({ option, onClick, onContextMenu }: Props) {
             return (
               <g
                 key={d.id ?? d.name}
+                role="presentation"
                 onClick={() => onClick?.({ data: d, name: d.name })}
                 onContextMenu={() => onContextMenu?.({ data: d, name: d.name })}
               >

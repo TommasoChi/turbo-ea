@@ -710,6 +710,10 @@ jobs:
         working-directory: frontend
       - run: npm run lint
         working-directory: frontend
+      # Biome enforces only the accessibility rules the code already meets
+      # (frontend/biome.json carries the same list); a rule joins both together.
+      - run: npm run lint:biome
+        working-directory: frontend
       - run: npm run knip
         working-directory: frontend
       # Last steps, reached only when every step above passed: tell later

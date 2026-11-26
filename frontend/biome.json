@@ -21,7 +21,11 @@
     "rules": {
       "preset": "none",
       "a11y": {
-        "useSemanticElements": "error"
+        "useSemanticElements": "error",
+        "noStaticElementInteractions": "error",
+        "noSvgWithoutTitle": "error",
+        "useKeyWithClickEvents": "error",
+        "useAriaPropsSupportedByRole": "error"
       },
       "complexity": {
         "noExcessiveCognitiveComplexity": {

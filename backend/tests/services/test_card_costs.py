@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import uuid
 from datetime import date
 
 import pytest
@@ -612,3 +613,74 @@ async def test_apply_write_publishes_keys_only_with_card_and_user(db, monkeypatc
         },
     }
     assert kw["card_id"] == card.id and kw["user_id"] == uid and kw["db"] is db
+
+
+async def _provider_env(db):
+    from app.services.card_read_scope import CardReadScope
+
+    card = await _setup(db)
+    await create_card_type(db, key="Provider", label="Provider")
+    return card, CardReadScope.everything()
+
+
+async def test_upsert_item_without_provider_argument_keeps_stored_provider(db):
+    card = await _setup(db)
+    await _row(db, card, CUR, {"lic": {**_it(10), "provider_id": "p-1"}})
+    await svc.upsert_item(db, card.id, CUR, "lic", 20, None)
+    row = await svc._row(db, card.id, CUR)
+    assert row.items["lic"] == {"amount": 20, "renewal_date": None, "provider_id": "p-1"}
+
+
+async def test_upsert_item_with_provider_stores_and_clears_it(db):
+    from tests.conftest import create_card as mk
+
+    card, scope = await _provider_env(db)
+    prov = await mk(db, card_type="Provider", name="P")
+    await mk(db, card_type="Provider", name="Q")
+    from tests.conftest import create_relation, create_relation_type
+
+    await create_relation_type(
+        db, key="relProviderToApp", source_type_key="Provider", target_type_key="Application"
+    )
+    await create_relation(db, type_key="relProviderToApp", source_id=prov.id, target_id=card.id)
+    await svc.upsert_item(
+        db, card.id, CUR, "lic", 5, None, provider_id=str(prov.id), read_scope=scope
+    )
+    assert (await svc._row(db, card.id, CUR)).items["lic"]["provider_id"] == str(prov.id)
+    await svc.upsert_item(db, card.id, CUR, "lic", 5, None, provider_id=None, read_scope=scope)
+    assert "provider_id" not in (await svc._row(db, card.id, CUR)).items["lic"]
+
+
+async def test_upsert_item_with_provider_requires_a_read_scope(db):
+    card = await _setup(db)
+    with pytest.raises(ValueError):
+        await svc.upsert_item(db, card.id, CUR, "lic", 5, None, provider_id=None)
+
+
+async def test_shifted_and_copy_to_forecast_carry_provider_id(db):
+    card = await _setup(db)
+    shifted = svc._shifted(
+        {"lic": {**_it(1, "2026-01-31"), "provider_id": "p-1"}, "ams": _it(2)}, 1
+    )
+    assert shifted["lic"]["provider_id"] == "p-1"
+    assert "provider_id" not in shifted["ams"]
+    await _row(db, card, CUR, {"lic": {**_it(10), "provider_id": "p-1"}})
+    await svc.copy_to_forecast(db, card.id, CUR, "lic")
+    assert (await svc._row(db, card.id, CUR + 1)).items["lic"]["provider_id"] == "p-1"
+
+
+async def test_copy_to_forecast_without_source_provider_keeps_the_forecast_one(db):
+    card = await _setup(db)
+    await _row(db, card, CUR, {"lic": _it(10)})
+    await _row(db, card, CUR + 1, {"lic": {**_it(1), "provider_id": "hidden"}})
+    await svc.copy_to_forecast(db, card.id, CUR, "lic")
+    item = (await svc._row(db, card.id, CUR + 1)).items["lic"]
+    assert item["amount"] == 10 and item["provider_id"] == "hidden"
+
+
+async def test_cost_lines_expose_provider_id(db):
+    card = await _setup(db)
+    pid = str(uuid.uuid4())
+    await _row(db, card, CUR, {"lic": {**_it(10), "provider_id": pid}, "ams": _it(1)})
+    yc = await svc.get_year_row(db, card.id, CUR, SM)
+    assert {line.key: line.provider_id for line in yc.items} == {"lic": pid, "ams": None}

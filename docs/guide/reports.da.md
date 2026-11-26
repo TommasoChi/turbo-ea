@@ -172,7 +172,7 @@ Alle visninger deler samme værktøjslinje, filtre, regnskabsår og omkostningst
 
 **Tendensdiagram** — Omkostningstendensen (det nuværende år, de fire før det og, når den er valgt, **Forecast**) vises over diagrammet i alle tre visninger, ikke kun i trækortet, og følger den valgte omkostningstype.
 
-**Farver og forklaring** — Hver gruppe har sin egen farvetone; inden for en gruppe betyder en mørkere nuance et dyrere kort. Ud over de otte dyreste grupper foldes resten sammen i én gruppe **Andre**, og kort uden værdi i grupperingsfeltet havner i **Uspecificeret**. Forklaringen ved siden af diagrammet viser grupperne med deres farver; Sankey og tabellen bruger de samme farver.
+**Farver og forklaring** — Hver gruppe har sin egen farvetone; inden for en gruppe betyder en mørkere nuance et dyrere kort. Ud over de otte dyreste grupper foldes resten sammen i én gruppe **Andre**, og kort uden værdi i grupperingsfeltet havner i **Uspecificeret**. Forklaringen under treemap'et og Sankey viser grupperne med deres farver, også i fuldskærm; Sankey og tabellen bruger de samme farver. Forklaringen følger drill-down: øverst viser den alle grupper, inde i en gruppe kun den aktuelle gruppe og inde i et kort i treemap'et kortets omkostningsposter (Sankey beholder kortets gruppe). Klik på en gruppe i forklaringen for at gå ind i den; brødkrummestien opdateres. Tabellen har ingen forklaring.
 
 **Drill-down** — Et **højreklik** på en gruppe eller et kort borer ned i det: diagrammet indsnævres til den gruppe (eller det kort), og en brødkrumme vises over det. Klik på **Tilbage**, eller på et vilkårligt segment i brødkrummen, for at gå et niveau op. Drill-down i **Andre** viser de grupper, der blev foldet ind i den. Et **venstreklik** på et kort åbner i stedet dets sidepanel (et venstreklik på en gruppe gør ingenting). Et tip over diagrammet minder om begge handlinger.
 
@@ -198,9 +198,14 @@ Du kan kun importere omkostninger for Applications og IT Components, hvis omkost
 **Gruppér efter** er tilgængelig i treemap'et, tabellen og Sankey. Et kort grupperes enten efter:
 
 - værdien af et **felt på kortet** (kun felter med én værdi; felter med flervalg tilbydes ikke, da de ville placere et kort i to grupper), eller
-- et **tilknyttet kort**, navngivet efter det tilknyttede korts navn, via en relation hvor hvert kort har **højst ét** tilknyttet kort af den type. Mange-til-mange-relationer tilbydes aldrig, så en omkostning aldrig kan havne i to grupper.
+- et **tilknyttet kort**, navngivet efter det tilknyttede korts navn, via en relation hvor hvert kort har **højst ét** tilknyttet kort af den type. Mange-til-mange-relationer tilbydes aldrig, så en omkostning aldrig kan havne i to grupper, eller
+- **udbyderen** af hver omkostningspost. Her grupperes poster, ikke kort: hver posts beløb går til gruppen for dens egen udbyder, så et kort, hvis poster hører til to udbydere, optræder én gang pr. udbyder, hver gang med den udbyders andel. Et klik på en flise åbner stadig kortet. Poster uden udbyder og udbydere, du ikke kan læse, kommer i **Unspecified**; to udbydere med samme navn forbliver to grupper; arkiverede udbydere beholder deres gruppe. Summen af alle grupper svarer til totalen uden gruppering. Poster registreret, før feltet Udbyder fandtes, har ingen udbyder, og intet udfyldes fra kortets tilknyttede udbydere.
 
 Kort uden værdi eller uden tilknyttet kort kommer i gruppen **Unspecified**. For den kombinerede mulighed **Application + IT Component** tilbydes kun de felter, der findes i begge typer; vælgeren er deaktiveret, når der ingen er. Grupperingen tæller aldrig en omkostning to gange og taber aldrig nogen.
+
+### Filtre
+
+Under korttypeknapperne viser rapporten én filtergruppe pr. valgt type (**Application-filtre**, **IT Component-filtre**) i samme layout som PPM's initiativfilter. **Relateret via** begrænser kortene efter de kort, de er knyttet til, herunder **Udbyder** (de kort, der er knyttet til den udbyder, hvilket er noget andet end udbyderen på en enkelt omkostningspost), med kontakten **Medtag underkort**; **Felter** begrænser efter typens felter med enkeltvalg, flervalg og ja/nej og efter dens undertype. Et filter gælder kun, mens dets type er valgt, så med begge typer slået til begrænser hvert filter sin egen type. Filtre kombineres med kortomfanget og regnskabsåret, gælder for alle visninger og for tendensdiagrammet og gemmes sammen med rapporten. **Ryd alle** tømmer én gruppe.
 
 ### Regnskabsår
 

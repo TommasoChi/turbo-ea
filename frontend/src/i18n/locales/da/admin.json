@@ -537,6 +537,7 @@
   "metamodel.stakeholderPanel.keyLength": "Skal være {{min}}-{{max}} tegn",
   "metamodel.stakeholderPanel.failedToDelete": "Rollen kunne ikke slettes",
   "metamodel.stakeholderPanel.translations": "Oversættelser",
+  "metamodel.graph.title": "Metamodelgraf over korttyper og deres relationer",
   "metamodel.graph.noTypes": "Ingen synlige typer at vise. Opret nogle korttyper først.",
   "tags.title": "Tag-administration",
   "tags.newGroup": "Ny tag-gruppe",

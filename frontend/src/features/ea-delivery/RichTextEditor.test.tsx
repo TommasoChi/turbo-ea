@@ -1,3 +1,4 @@
+// biome-ignore-all lint/a11y/noStaticElementInteractions: test fixture: a plain wrapper stands in for a key-handling ancestor, to prove the editor stops the event reaching it
 /**
  * Mount smoke test for the SoAW / ADR rich-text editor.
  *
@@ -570,7 +571,7 @@ describe("RichTextEditor '@' popup lifetime", () => {
   it("stops Escape at the popup: it closes the popup and nothing around the editor", async () => {
     const outer = vi.fn();
     const { container } = render(
-      <div onKeyDown={(e) => outer(e.key)}>
+      <div role="presentation" onKeyDown={(e) => outer(e.key)}>
         <RichTextEditor content="<p>see</p>" onChange={() => {}} mentions={["card"]} />
       </div>,
     );

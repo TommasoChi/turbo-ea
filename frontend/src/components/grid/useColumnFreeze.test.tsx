@@ -1,3 +1,4 @@
+// biome-ignore-all lint/a11y/noStaticElementInteractions: test fixture: a stand-in for an AG Grid header cell, which the grid itself renders
 import { describe, it, expect, vi } from "vitest";
 import { render } from "@testing-library/react";
 import { useRef } from "react";
@@ -71,6 +72,7 @@ function Harness({
       .map((c) => (
         <div
           key={c.colId}
+          role="presentation"
           className="ag-header-cell"
           col-id={c.colId}
           data-testid={`cell-${c.colId}`}
