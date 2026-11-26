@@ -243,6 +243,7 @@ async def upsert_item(
     else:
         from app.services import cost_providers  # it imports CostError from here
 
+        assert read_scope is not None  # checked at the top; narrows the type for mypy
         card_type = (await db.execute(select(Card.type).where(Card.id == card_id))).scalar_one()
         resolved = await cost_providers.resolve_write(
             db, read_scope, card_id, card_type, stored, provider_id

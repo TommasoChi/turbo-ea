@@ -95,7 +95,8 @@ async def _children_below(
     rows = await db.execute(select(Card.parent_id, Card.id).where(Card.id.in_(select(below))))
     children: dict[uuid.UUID, list[uuid.UUID]] = {}
     for parent_id, card_id in rows.all():
-        children.setdefault(parent_id, []).append(card_id)
+        if parent_id is not None:  # every card below a root has a parent; this narrows the type
+            children.setdefault(parent_id, []).append(card_id)
     return children
 
 

@@ -32,7 +32,7 @@ from app.services import (
     cost_providers,
 )
 from app.services.attachment_upload import read_validated_upload
-from app.services.card_costs import COST_ITEM_TYPES, UNSET, CostError, YearCosts
+from app.services.card_costs import COST_ITEM_TYPES, UNSET, CostError, YearCosts, _Unset
 from app.services.card_read_scope import CardReadScope, require_card_readable
 from app.services.event_bus import event_bus
 from app.services.fiscal_year import MAX_FISCAL_YEAR, MIN_FISCAL_YEAR, get_fiscal_year_start
@@ -155,7 +155,8 @@ async def _outs(db: AsyncSession, user: User, years: list[YearCosts]) -> list[Ye
     names = await cost_providers.provider_names(db, await CardReadScope.load(db, user), ids)
     for out in outs:
         for item in out.items:
-            name = names.get(cost_providers.parse_provider_id(item.provider_id))
+            pid = cost_providers.parse_provider_id(item.provider_id)
+            name = names.get(pid) if pid else None
             item.provider_name = name
             if name is None:
                 item.provider_id = None
@@ -232,7 +233,7 @@ async def put_card_cost_item(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    provider = UNSET
+    provider: str | None | _Unset = UNSET
     if "provider_id" in body.model_fields_set:
         provider = None if body.provider_id is None else str(body.provider_id)
 
