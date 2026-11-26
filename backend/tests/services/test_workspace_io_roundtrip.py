@@ -303,6 +303,8 @@ async def test_diagram_import_waits_for_save_and_keeps_saved_positions(test_engi
                 delete(MutationBatch).where(MutationBatch.actor_user_id == actor.id)
             )
             await cleanup.execute(delete(Diagram).where(Diagram.id == BO_RELATIONSHIP_DIAGRAM_ID))
+            # The import creates the settings singleton when it is absent.
+            await cleanup.execute(delete(AppSettings))
             await cleanup.execute(delete(Card).where(Card.id == card.id))
             await cleanup.execute(delete(CardType).where(CardType.id == bo_type.id))
             await cleanup.execute(delete(User).where(User.id == actor.id))
