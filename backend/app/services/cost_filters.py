@@ -32,12 +32,12 @@ MAX_IDS_TOTAL = 500
 _NO_CARD = str(uuid.UUID(int=0))
 
 
-def _check_relation_caps(type_key: str, relation_filters: Mapping[str, list[str]]) -> None:
-    sizes = [len(ids) for ids in relation_filters.values()]
+def _check_caps(type_key: str, name: str, filters: Mapping[str, list[str]]) -> None:
+    sizes = [len(ids) for ids in filters.values()]
     if len(sizes) > MAX_RELATION_KEYS or max(sizes, default=0) > MAX_IDS_PER_KEY:
-        raise ValueError(f"card_filters[{type_key!r}] has too many relation filters")
+        raise ValueError(f"card_filters[{type_key!r}] has too many {name}")
     if sum(sizes) > MAX_IDS_TOTAL:
-        raise ValueError(f"card_filters[{type_key!r}] picks too many cards")
+        raise ValueError(f"card_filters[{type_key!r}] picks too many values in {name}")
 
 
 def parse_card_filters(raw: str | None, type_keys: list[str]) -> dict[str, dict]:
@@ -59,7 +59,8 @@ def parse_card_filters(raw: str | None, type_keys: list[str]) -> dict[str, dict]
         value = pcf.normalise_card_filters(parsed[key])
         if value is None:
             raise ValueError(f"card_filters[{key!r}] must be an object")
-        _check_relation_caps(key, value["relationFilters"])
+        for name in ("relationFilters", "relSubtypeFilters", "attrFilters"):
+            _check_caps(key, name, value[name])
         value["tagFilterIds"] = []  # the cost report offers no tag groups
         if pcf.has_active_card_filters(value):
             out[key] = value

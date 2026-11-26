@@ -174,6 +174,26 @@ def test_parse_accepts_relation_filters_at_the_caps():
     assert parse_card_filters(_picks(1, MAX_IDS_PER_KEY), ["Application"])
 
 
+@pytest.mark.parametrize("field", ["relSubtypeFilters", "attrFilters"])
+def test_parse_caps_field_and_subtype_filters_like_relation_filters(field):
+    def raw(keys: int, values_per_key: int) -> str:
+        return _dump(
+            Application={
+                field: {f"k{k}::f": [f"v{i}" for i in range(values_per_key)] for k in range(keys)}
+            }
+        )
+
+    for over in (
+        raw(MAX_RELATION_KEYS + 1, 1),
+        raw(1, MAX_IDS_PER_KEY + 1),
+        raw(4, MAX_IDS_TOTAL // 4 + 1),
+    ):
+        with pytest.raises(ValueError):
+            parse_card_filters(over, ["Application"])
+    assert parse_card_filters(raw(MAX_RELATION_KEYS, 1), ["Application"])
+    assert parse_card_filters(raw(1, MAX_IDS_PER_KEY), ["Application"])
+
+
 async def test_a_relation_key_naming_neither_a_relation_nor_a_card_type_is_ignored(db):
     admin, acme, _, _ = await _world(db)
     scope = await CardReadScope.load(db, admin)

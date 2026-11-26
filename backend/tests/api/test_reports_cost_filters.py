@@ -273,6 +273,20 @@ async def test_relation_filters_over_the_caps_are_400(client, env, report, relat
     await _get(client, env["admin"], report, 400, type="Application", card_filters=raw)
 
 
+@pytest.mark.parametrize("report", ["cost-treemap", "cost-sankey"])
+@pytest.mark.parametrize("field", ["relSubtypeFilters", "attrFilters"])
+async def test_field_and_subtype_filters_over_the_key_cap_are_400(client, env, report, field):
+    raw = _filters(Application={field: {f"k{k}::f": ["x"] for k in range(21)}})
+    await _get(client, env["admin"], report, 400, type="Application", card_filters=raw)
+
+
+@pytest.mark.parametrize("report", ["cost-treemap", "cost-sankey"])
+@pytest.mark.parametrize("field", ["relSubtypeFilters", "attrFilters"])
+async def test_field_and_subtype_filters_at_the_key_cap_are_accepted(client, env, report, field):
+    raw = _filters(Application={field: {f"k{k}::f": ["x"] for k in range(20)}})
+    await _get(client, env["admin"], report, 200, type="Application", card_filters=raw)
+
+
 async def test_a_filter_for_a_type_that_is_not_selected_is_ignored(client, env):
     data = await _get(
         client,
