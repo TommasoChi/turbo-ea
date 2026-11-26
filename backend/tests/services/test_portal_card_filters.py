@@ -318,6 +318,35 @@ class TestRelations:
         assert await _names(db, _cf(relationFilters={"Organization": ["nope"]})) == ALL
 
 
+class TestRelatedEndWhere:
+    """``related_end_where`` narrows which far-end cards the relation tests may see."""
+
+    async def _names_where(self, db, filters, where) -> set[str]:
+        conditions = await preset_conditions(db, "Application", filters, related_end_where=where)
+        rows = await db.execute(
+            select(Card.name).where(
+                Card.type == "Application", Card.status == "ACTIVE", *conditions
+            )
+        )
+        return set(rows.scalars().all())
+
+    async def test_empty_ignores_a_far_end_the_clause_excludes(self, db, land):
+        filters = _cf(relationFilters={"orgOwnsApp": [EMPTY_KEY]})
+        assert await _names(db, filters) == {"Beta", "Gamma", "Delta", "Epsilon"}
+        where = [pcf._OTHER.id != land.corp.id]
+        assert await self._names_where(db, filters, where) == ALL
+
+    async def test_relation_subtype_ignores_a_far_end_the_clause_excludes(self, db, land):
+        filters = _cf(relSubtypeFilters={"orgUsesApp::usage": ["daily"]})
+        assert await _names(db, filters) == {"Beta"}
+        where = [pcf._OTHER.id != land.team.id]
+        assert await self._names_where(db, filters, where) == set()
+
+    async def test_no_clause_is_the_portal_behaviour(self, db, land):
+        filters = _cf(relationFilters={"orgOwnsApp": [EMPTY_KEY]})
+        assert await self._names_where(db, filters, ()) == await _names(db, filters)
+
+
 class TestRelationSubtypes:
     async def test_only_the_bo_master_field_is_excluded_from_public_filters(self, db, land):
         await create_card_type(db, key="DataObject")

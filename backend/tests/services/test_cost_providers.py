@@ -110,6 +110,26 @@ async def test_resolve_write_accepts_the_stored_id_even_if_no_longer_a_candidate
     assert got == sid
 
 
+async def test_resolve_write_rejects_the_stored_id_of_an_unreadable_provider(db, env):
+    hid = await provider(db, "Hid", env["app"])
+    sid = str(hid.id)
+    with pytest.raises(CostError) as exc:
+        await cp.resolve_write(db, NO_PROVIDERS, env["app"].id, "Application", sid, sid)
+    assert exc.value.code == "invalid_provider"
+
+
+async def test_resolve_write_accepts_the_stored_id_of_an_archived_readable_provider(db, env):
+    old = await provider(db, "Old", status="ARCHIVED")
+    sid = str(old.id)
+    assert await cp.resolve_write(db, EVERYTHING, env["app"].id, "Application", sid, sid) == sid
+
+
+async def test_resolve_write_accepts_the_stored_id_of_a_deleted_provider(db, env):
+    gone = str(uuid.uuid4())
+    got = await cp.resolve_write(db, NO_PROVIDERS, env["app"].id, "Application", gone, gone)
+    assert got == gone
+
+
 async def test_resolve_write_rejects_a_new_non_candidate(db, env):
     other = await provider(db, "Other")
     with pytest.raises(CostError) as exc:

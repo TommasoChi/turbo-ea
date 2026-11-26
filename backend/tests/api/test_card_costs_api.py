@@ -385,6 +385,29 @@ async def test_api_re_sending_the_stored_provider_id_of_an_archived_provider_sav
     assert line(r)["provider_name"] == "Linked"
 
 
+async def test_re_sending_the_stored_id_of_a_provider_the_caller_cannot_read_is_400(
+    client, db, env, prov
+):
+    await put_provider(client, env, str(prov["linked"].id))
+    ct = (await db.execute(select(CardType).where(CardType.key == "Provider"))).scalar_one()
+    ct.role_permissions = {"editor": {"inventory.view": False}}
+    await create_role(
+        db,
+        key="editor",
+        label="Editor",
+        permissions={"inventory.view": True, "costs.view": True, "costs.edit": True},
+    )
+    editor = await create_user(db, email="e@costs-api.com", role="editor")
+    await db.flush()
+    PermissionService.invalidate_type_permission_cache()
+    r = await client.put(
+        url(env["card"], f"/{CUR}/items/lic"),
+        json={"amount": 10, "renewal_date": None, "provider_id": str(prov["linked"].id)},
+        headers=auth_headers(editor),
+    )
+    assert r.status_code == 400 and r.json()["detail"] == "invalid_provider"
+
+
 async def test_get_costs_returns_provider_name_for_a_readable_provider_and_omits_an_unreadable_one(
     client, db, env, prov
 ):

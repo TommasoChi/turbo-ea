@@ -35,6 +35,7 @@ TIER = {
     ],
 }
 REL = "relProviderToApp"
+EMPTY_KEY = "__empty__"
 GOLD = {"attrFilters": {"tier": ["gold"]}}
 
 
@@ -195,6 +196,28 @@ async def test_relation_filter_on_a_hidden_provider_equals_an_unknown_id(client,
     assert hidden_pick["items"] == []
 
 
+async def test_empty_relation_filter_ignores_a_hidden_provider(client, db, env):
+    hidden = await create_card(db, card_type="Provider", name="Hid", subtype="secret")
+    await create_relation(db, type_key=REL, source_id=hidden.id, target_id=env["tin"].id)
+    await _hide_provider_subtype(db)
+    value = {"relationFilters": {REL: [EMPTY_KEY]}}
+    params = {"type": "Application", "card_filters": _filters(Application=value)}
+    assert _names(await _get(client, env["admin"], "cost-treemap", **params)) == set()
+    assert _names(await _get(client, env["reader"], "cost-treemap", **params)) == {"TinApp"}
+
+
+async def test_relation_subtype_filter_does_not_match_through_a_hidden_provider(client, db, env):
+    hidden = await create_card(db, card_type="Provider", name="Hid", subtype="secret")
+    await create_relation(
+        db, type_key=REL, source_id=hidden.id, target_id=env["tin"].id, attributes={"k": "x"}
+    )
+    await _hide_provider_subtype(db)
+    value = {"relSubtypeFilters": {f"{REL}::k": ["x"]}}
+    params = {"type": "Application", "card_filters": _filters(Application=value)}
+    assert _names(await _get(client, env["admin"], "cost-treemap", **params)) == {"TinApp"}
+    assert _names(await _get(client, env["reader"], "cost-treemap", **params)) == set()
+
+
 async def test_include_sub_cards_does_not_reach_a_hidden_descendant(client, db, env):
     parent = await create_card(db, card_type="Provider", name="Parent")
     visible = await create_card(db, card_type="Provider", name="Kid", parent_id=parent.id)
@@ -254,7 +277,7 @@ async def test_cost_filter_options_requires_costs_view(client, db, env):
 
 async def test_cost_filter_options_returns_the_filter_vocabulary(client, env):
     data = await _get(client, env["reader"], "cost-filter-options", type="Application")
-    assert set(data) == {"fields_schema", "relation_types", "groupable_types", "tag_groups"}
+    assert set(data) == {"relation_types", "groupable_types"}
     assert [rt["key"] for rt in data["relation_types"]] == [REL]
     assert {m["name"] for m in data["groupable_types"]["Provider"]} == {"Acme"}
 

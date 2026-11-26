@@ -13,7 +13,6 @@ from __future__ import annotations
 import json
 import uuid
 from collections.abc import Mapping
-from typing import Any
 
 from sqlalchemy import ColumnElement, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -53,7 +52,9 @@ def parse_card_filters(raw: str | None, type_keys: list[str]) -> dict[str, dict]
     return out
 
 
-async def _readable(db: AsyncSession, read_scope: CardReadScope, ids: set[uuid.UUID]) -> set[Any]:
+async def _readable(
+    db: AsyncSession, read_scope: CardReadScope, ids: set[uuid.UUID]
+) -> set[uuid.UUID]:
     if not ids:
         return set()
     rows = await db.execute(
@@ -97,5 +98,10 @@ async def filter_conditions(
             ),
             "includeDescendants": False,
         }
-        out[type_key] = await pcf.preset_conditions(db, type_key, {"card_filters": scoped})
+        out[type_key] = await pcf.preset_conditions(
+            db,
+            type_key,
+            {"card_filters": scoped},
+            related_end_where=read_scope.where(pcf._OTHER, mode="module"),
+        )
     return out

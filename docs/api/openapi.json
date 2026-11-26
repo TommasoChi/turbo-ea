@@ -6975,16 +6975,8 @@
         "type": "object"
       },
       "CostFilterOptionsOut": {
-        "description": "The vocabulary of the cost report's card filters (shared with the web portals).",
+        "description": "What the cost report's relation filters offer; the page reads nothing else.",
         "properties": {
-          "fields_schema": {
-            "items": {
-              "additionalProperties": true,
-              "type": "object"
-            },
-            "title": "Fields Schema",
-            "type": "array"
-          },
           "groupable_types": {
             "additionalProperties": {
               "items": {
@@ -7003,21 +6995,11 @@
             },
             "title": "Relation Types",
             "type": "array"
-          },
-          "tag_groups": {
-            "items": {
-              "additionalProperties": true,
-              "type": "object"
-            },
-            "title": "Tag Groups",
-            "type": "array"
           }
         },
         "required": [
-          "fields_schema",
           "relation_types",
-          "groupable_types",
-          "tag_groups"
+          "groupable_types"
         ],
         "title": "CostFilterOptionsOut",
         "type": "object"

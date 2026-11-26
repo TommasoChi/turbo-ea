@@ -299,3 +299,71 @@ async def test_require_item_grouping_refuses_other_types_and_plain_fields(db):
     for types, field in ((["Initiative"], "costTotalAnnual"), (["Application"], "plainField")):
         with pytest.raises(ValueError):
             await require_item_grouping(db, types, field)
+
+
+async def _provider_sankey(db):
+    from app.services.cost_grouping import GroupBy
+    from app.services.cost_report import build_cost_sankey
+
+    await create_role(db, key="admin", permissions={"*": True})
+    user = await create_user(db, email="sankey@test.com", role="admin")
+    scope = await CardReadScope.load(db, user)
+    return await build_cost_sankey(
+        db, scope, ["Application"], FIELD, GroupBy("provider", ""), FY, FY, 1, user
+    )
+
+
+def _card_inflow(sankey, card_name):
+    idx = next(i for i, n in enumerate(sankey["nodes"]) if n["name"] == card_name)
+    return sum(link["value"] for link in sankey["links"] if link["target"] == idx)
+
+
+async def test_provider_sankey_sums_items_outside_the_catalogue_into_other(db):
+    app = await _provider_env(db)
+    p = await create_card(db, card_type="Provider", name="P")
+    await _costs(db, app, lic=_line(10, p.id), x1=_line(3, p.id), x2=_line(4, p.id))
+    sankey = await _provider_sankey(db)
+    node = next(n for n in sankey["nodes"] if n["name"] == "ERP")
+    assert node["costs"] == {"lic": 10.0, "__other__": 7.0}
+    assert _card_inflow(sankey, "ERP") == node["cost"] == 17.0
+
+
+async def test_provider_sankey_with_an_empty_catalogue_keeps_the_total(db):
+    await create_card_type(db, key="Application")
+    await create_card_type(db, key="Provider")
+    app = await create_card(db, card_type="Application", name="ERP")
+    p = await create_card(db, card_type="Provider", name="P")
+    await _costs(db, app, lic=_line(10, p.id), sup=_line(5, p.id))
+    sankey = await _provider_sankey(db)
+    assert _card_inflow(sankey, "ERP") == 15.0
+    assert sankey["total"] == 15.0
+
+
+async def _treemap_items(db, card, cost_field):
+    from app.services.cost_report import provider_treemap_items
+
+    items = [{"id": str(card.id), "name": card.name, "cost": 0}]
+    return await provider_treemap_items(db, CardReadScope.everything(), items, cost_field, FY, 1)
+
+
+async def test_provider_treemap_items_single_item_shares_carry_the_whole_group_in_costs(db):
+    app = await _provider_env(db)
+    p1 = await create_card(db, card_type="Provider", name="P1")
+    p2 = await create_card(db, card_type="Provider", name="P2")
+    await _costs(db, app, lic=_line(10, p1.id), sup=_line(5, p1.id), x=_line(3, p2.id))
+    items, names = await _treemap_items(db, app, "lic")
+    assert [(i["group"], i["cost"], i["costs"]) for i in items] == [
+        (str(p1.id), 10.0, {"lic": 10.0, "sup": 5.0})
+    ]
+    assert names == {str(p1.id): "P1"}
+
+
+async def test_provider_treemap_items_total_lists_every_share_biggest_first(db):
+    from app.services.cost_grouping import OTHER_GROUP
+
+    app = await _provider_env(db)
+    p = await create_card(db, card_type="Provider", name="P")
+    await _costs(db, app, lic=_line(2, p.id), sup=_line(5))
+    items, names = await _treemap_items(db, app, "costTotalAnnual")
+    assert [(i["group"], i["cost"]) for i in items] == [(OTHER_GROUP, 5.0), (str(p.id), 2.0)]
+    assert names == {str(p.id): "P"}

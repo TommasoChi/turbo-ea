@@ -8,7 +8,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import and_, case, func, not_, or_, select
+from sqlalchemy import ColumnElement, and_, case, func, not_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased, selectinload
 
@@ -72,7 +72,7 @@ from app.services.cost_report import (
     cards_with_cost_for_types,
     item_labels,
     parse_type_keys,
-    provider_splits,
+    provider_treemap_items,
     require_item_grouping,
 )
 from app.services.cost_value import cost_value
@@ -1586,7 +1586,7 @@ async def _validated_cost_request(
 
 async def _card_filter_conditions(
     db: AsyncSession, read_scope: CardReadScope, raw: str | None, type_keys: list[str]
-) -> dict:
+) -> dict[str, list[ColumnElement[bool]]]:
     try:
         filters = parse_card_filters(raw, type_keys)
     except ValueError as exc:
@@ -1685,30 +1685,9 @@ async def cost_treemap(
             await require_item_grouping(db, type_keys, cost_field)
         except ValueError as exc:
             raise HTTPException(400, str(exc)) from exc
-        card_ids = [c.id for c, _ in sheets]
-        splits, group_names = await provider_splits(
-            db, read_scope, card_ids, cost_field, target_fy, fy_start
+        items, group_names = await provider_treemap_items(
+            db, read_scope, items, cost_field, target_fy, fy_start
         )
-        # `cost` is the selected item's share; `costs` is everything the provider holds
-        held = (
-            splits
-            if cost_field == DERIVED_KEY
-            else (
-                await provider_splits(db, read_scope, card_ids, DERIVED_KEY, target_fy, fy_start)
-            )[0]
-        )
-        base = {i["id"]: i for i in items}
-        items = [
-            {
-                **base[str(card_id)],
-                "cost": sum(share.values()),
-                "group": g,
-                "costs": held[card_id][g],
-            }
-            for card_id, shares in splits.items()
-            for g, share in shares.items()
-        ]
-        items.sort(key=lambda x: x["cost"], reverse=True)
     elif grouping:
         try:
             assigned = await assign_groups(

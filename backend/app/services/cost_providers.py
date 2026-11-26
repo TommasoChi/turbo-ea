@@ -72,6 +72,13 @@ async def provider_names(
     return {i: n for i, n in rows.all()}
 
 
+async def _hidden(db: AsyncSession, read_scope: CardReadScope, provider_id: uuid.UUID) -> bool:
+    """The card exists but the caller cannot read it (a deleted card is not hidden)."""
+    if provider_id in await provider_names(db, read_scope, [provider_id]):
+        return False
+    return (await db.execute(select(Card.id).where(Card.id == provider_id))).first() is not None
+
+
 async def resolve_write(
     db: AsyncSession,
     read_scope: CardReadScope,
@@ -81,16 +88,14 @@ async def resolve_write(
     requested: str | None | _Unset,
 ) -> str | None:
     """The provider id to store; never drops a link the caller cannot see."""
-    if requested is UNSET or requested == stored:
+    if requested is UNSET:
+        return stored
+    if requested == stored and (
+        stored is None or not await _hidden(db, read_scope, uuid.UUID(stored))
+    ):
         return stored
     if requested is None:
-        if stored is None:
-            return None
-        stored_id = uuid.UUID(stored)
-        if stored_id in await provider_names(db, read_scope, [stored_id]):
-            return None
-        exists = (await db.execute(select(Card.id).where(Card.id == stored_id))).first()
-        return stored if exists else None  # a deleted card is not a hidden one
+        return stored if await _hidden(db, read_scope, uuid.UUID(stored)) else None
     allowed = {str(i) for i, _ in await candidate_providers(db, read_scope, card_id, card_type)}
     if requested not in allowed:
         raise CostError("invalid_provider", "Provider is not linked to this card")

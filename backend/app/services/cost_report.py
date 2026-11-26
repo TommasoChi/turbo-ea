@@ -141,6 +141,33 @@ async def provider_splits(
     return splits, {str(i): n for i, n in known.items()}
 
 
+async def provider_treemap_items(
+    db: AsyncSession,
+    read_scope: CardReadScope,
+    items: list[dict],
+    cost_field: str,
+    target_fy: int,
+    fy_start: int,
+) -> tuple[list[dict], dict[str, str]]:
+    """One treemap item per (card, provider) share, biggest first, and the provider names.
+
+    ``cost`` is the selected item's share (the whole share for the item total); ``costs``
+    is everything that provider holds on the card.
+    """
+    held, names = await provider_splits(
+        db, read_scope, [uuid.UUID(i["id"]) for i in items], DERIVED_KEY, target_fy, fy_start
+    )
+    base = {i["id"]: i for i in items}
+    out: list[dict] = []
+    for card_id, shares in held.items():
+        for group, share in shares.items():
+            cost = sum(share.values()) if cost_field == DERIVED_KEY else share.get(cost_field)
+            if cost:
+                out.append({**base[str(card_id)], "cost": cost, "group": group, "costs": share})
+    out.sort(key=lambda i: i["cost"], reverse=True)
+    return out, {g: names[g] for g in {i["group"] for i in out} if g in names}
+
+
 async def _item_cards(
     db: AsyncSession,
     read_scope: CardReadScope,
@@ -396,10 +423,14 @@ async def build_cost_sankey(
             ]
             continue
         if by_provider:
-            shares = {
-                g: {(i if i in costs else OTHER_ITEM): v for i, v in share.items()}
-                for g, share in splits[card.id].items()
-            }
+            fallback = OTHER_ITEM if split else cost_field
+            shares = {}
+            for g, share in splits[card.id].items():
+                merged: dict[str, float] = {}
+                for i, v in share.items():
+                    k = i if i in costs else fallback
+                    merged[k] = merged.get(k, 0) + v
+                shares[g] = merged
         else:
             shares = {groups[card.id]: costs}
         for g, share in shares.items():

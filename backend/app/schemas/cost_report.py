@@ -12,12 +12,10 @@ class CostScopeItem(BaseModel):
 
 
 class CostFilterOptionsOut(BaseModel):
-    """The vocabulary of the cost report's card filters (shared with the web portals)."""
+    """What the cost report's relation filters offer; the page reads nothing else."""
 
-    fields_schema: list[dict]
     relation_types: list[dict]
     groupable_types: dict[str, list[dict]]
-    tag_groups: list[dict]
 
 
 class CostScopeResponse(BaseModel):
