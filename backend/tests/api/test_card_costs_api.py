@@ -455,3 +455,84 @@ async def test_copy_to_forecast_keeps_the_provider(client, env, prov):
         headers=auth_headers(env["admin"]),
     )
     assert line(r)["provider_id"] == str(prov["linked"].id)
+
+
+async def _editor_denied(db, type_key):
+    ct = (await db.execute(select(CardType).where(CardType.key == type_key))).scalar_one()
+    ct.role_permissions = {"editor": {"inventory.view": False}}
+    await create_role(
+        db,
+        key="editor",
+        label="Editor",
+        permissions={"inventory.view": True, "costs.view": True, "costs.edit": True},
+    )
+    editor = await create_user(db, email="e2@costs-api.com", role="editor")
+    await db.flush()
+    PermissionService.invalidate_type_permission_cache()
+    return editor
+
+
+async def test_a_provider_linked_only_to_a_hidden_ancestor_is_not_offered_or_accepted(
+    client, db, env, prov
+):
+    from tests.conftest import create_relation
+
+    await create_card_type(db, key="Hidden")
+    hidden_parent = await create_card(db, card_type="Hidden", name="HiddenParent")
+    env["card"].parent_id = hidden_parent.id
+    behind = await create_card(db, card_type="Provider", name="Behind")
+    await create_relation(
+        db, type_key="relProviderToApp", source_id=behind.id, target_id=hidden_parent.id
+    )
+    editor = await _editor_denied(db, "Hidden")
+    r = await client.get(
+        f"/api/v1/cards/{env['card'].id}/cost-providers", headers=auth_headers(editor)
+    )
+    assert r.json() == [{"id": str(prov["linked"].id), "name": "Linked"}]
+    r = await client.put(
+        url(env["card"], f"/{CUR}/items/lic"),
+        json={"amount": 10, "renewal_date": None, "provider_id": str(behind.id)},
+        headers=auth_headers(editor),
+    )
+    assert r.status_code == 400 and r.json()["detail"] == "invalid_provider"
+
+
+async def test_a_non_provider_stored_id_can_be_cleared_and_reads_as_no_provider(
+    client, db, env, prov
+):
+    db.add(
+        CardCost(
+            card_id=env["card"].id,
+            fiscal_year=CUR,
+            items={"lic": {"amount": 5, "renewal_date": None, "provider_id": str(env["card"].id)}},
+        )
+    )
+    await db.flush()
+    r = await client.get(url(env["card"], f"/{CUR}"), headers=auth_headers(env["admin"]))
+    assert line(r)["provider_id"] is None
+    r = await put_provider(client, env, None)
+    assert r.status_code == 200 and line(r)["provider_id"] is None
+    row = (
+        await db.execute(select(CardCost).where(CardCost.card_id == env["card"].id))
+    ).scalar_one()
+    assert "provider_id" not in row.items["lic"] or row.items["lic"]["provider_id"] is None
+
+
+async def test_a_malformed_stored_provider_id_reads_as_no_provider(client, db, env, prov):
+    db.add(
+        CardCost(
+            card_id=env["card"].id,
+            fiscal_year=CUR,
+            items={"lic": {"amount": 5, "renewal_date": None, "provider_id": "p-1"}},
+        )
+    )
+    await db.flush()
+    admin = auth_headers(env["admin"])
+    r = await client.get(url(env["card"]), headers=admin)
+    assert r.status_code == 200
+    r = await client.get(url(env["card"], f"/{CUR}"), headers=admin)
+    assert r.status_code == 200 and line(r)["provider_id"] is None
+    r = await put(client, env, amount=9)
+    assert r.status_code == 200 and line(r)["amount"] == 9 and line(r)["provider_id"] is None
+    r = await put_provider(client, env, None)
+    assert r.status_code == 200 and line(r)["provider_id"] is None

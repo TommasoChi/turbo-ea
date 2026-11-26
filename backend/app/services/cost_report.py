@@ -32,7 +32,7 @@ from app.services.card_logo_service import logo_updated_map
 from app.services.card_read_scope import CardReadScope
 from app.services.cost_components import cost_components
 from app.services.cost_grouping import OTHER_GROUP, GroupBy, assign_groups
-from app.services.cost_providers import provider_names
+from app.services.cost_providers import parse_provider_id, provider_names
 from app.services.cost_value import cost_value
 from app.services.fiscal_year import current_fiscal_year
 from app.services.lifecycle import is_live_in_fiscal_year
@@ -124,11 +124,7 @@ async def provider_splits(
         for line in costs[card_id].items:
             if not line.amount or cost_field not in (DERIVED_KEY, line.key):
                 continue
-            try:
-                pid = uuid.UUID(line.provider_id) if line.provider_id else None
-            except ValueError:
-                pid = None
-            lines[card_id].append((line.key, line.amount, pid))
+            lines[card_id].append((line.key, line.amount, parse_provider_id(line.provider_id)))
     known = await provider_names(
         db, read_scope, {pid for ls in lines.values() for _, _, pid in ls if pid}
     )

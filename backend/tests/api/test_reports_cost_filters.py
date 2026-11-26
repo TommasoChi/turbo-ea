@@ -258,6 +258,21 @@ async def test_bad_card_filters_is_400(client, env, report, raw):
     await _get(client, env["admin"], report, 400, type="Application", card_filters=raw)
 
 
+@pytest.mark.parametrize("report", ["cost-treemap", "cost-sankey"])
+@pytest.mark.parametrize(
+    "relation_filters",
+    [
+        {f"rel{k}": ["x"] for k in range(21)},
+        {REL: [f"id{i}" for i in range(201)]},
+        {f"rel{k}": [f"id{i}" for i in range(126)] for k in range(4)},
+    ],
+    ids=["keys", "ids-per-key", "ids-total"],
+)
+async def test_relation_filters_over_the_caps_are_400(client, env, report, relation_filters):
+    raw = _filters(Application={"relationFilters": relation_filters})
+    await _get(client, env["admin"], report, 400, type="Application", card_filters=raw)
+
+
 async def test_a_filter_for_a_type_that_is_not_selected_is_ignored(client, env):
     data = await _get(
         client,

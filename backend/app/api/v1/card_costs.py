@@ -146,11 +146,16 @@ async def _load_for_read(db: AsyncSession, user: User, card_id: str) -> uuid.UUI
 async def _outs(db: AsyncSession, user: User, years: list[YearCosts]) -> list[YearCostsOut]:
     """Shape the years; a provider the reader cannot see is shown as no provider."""
     outs = [YearCostsOut.model_validate(y, from_attributes=True) for y in years]
-    ids = {uuid.UUID(i.provider_id) for o in outs for i in o.items if i.provider_id}
+    ids = {
+        pid
+        for o in outs
+        for i in o.items
+        if (pid := cost_providers.parse_provider_id(i.provider_id))
+    }
     names = await cost_providers.provider_names(db, await CardReadScope.load(db, user), ids)
     for out in outs:
         for item in out.items:
-            name = names.get(uuid.UUID(item.provider_id)) if item.provider_id else None
+            name = names.get(cost_providers.parse_provider_id(item.provider_id))
             item.provider_name = name
             if name is None:
                 item.provider_id = None

@@ -30,8 +30,10 @@ import pytest
 from sqlalchemy import select
 
 from app.core.permissions import ALL_APP_PERMISSION_KEYS
+from app.models.card_cost import CardCost
 from app.models.card_type import CardType
 from app.models.turbolens import TurboLensVendorAnalysis
+from app.services.fiscal_year import current_fiscal_year
 from app.services.permission_service import PermissionService
 from tests.conftest import (
     auth_headers,
@@ -142,7 +144,9 @@ async def world(db, client):
     await create_role(db, key="admin", label="Admin", permissions={"*": True})
     restricted_perms = {k: True for k in ALL_APP_PERMISSION_KEYS if not k.startswith("admin.")}
     await create_role(db, key="restricted", label="Restricted", permissions=restricted_perms)
-    await create_card_type(db, key="Application", label="Application")
+    cost_field = {"section": "Cost", "fields": [{"key": "costTotalAnnual", "type": "cost"}]}
+    await create_card_type(db, key="Application", label="Application", fields_schema=[cost_field])
+    await create_card_type(db, key="Provider", label="Provider")
     await create_card_type(db, key="Initiative", label="Initiative")
     await create_card_type(db, key="Secret", label="Secret")
     await create_relation_type(
@@ -151,6 +155,13 @@ async def world(db, client):
         label="uses",
         source_type_key="Application",
         target_type_key="Secret",
+    )
+    await create_relation_type(
+        db,
+        key="relProviderToApp",
+        label="provides",
+        source_type_key="Provider",
+        target_type_key="Application",
     )
     await create_stakeholder_role_def(
         db, card_type_key="Secret", key="responsible", permissions={"card.view": True}
@@ -183,6 +194,19 @@ async def world(db, client):
     await post(
         f"/api/v1/cards/{held['id']}/stakeholders",
         {"user_id": str(reader.id), "role": "responsible"},
+    )
+    # A hidden Provider, linked to the anchor and named by one of its cost items.
+    provider = await post("/api/v1/cards", {"type": "Provider", "name": SENTINEL})
+    await post(
+        "/api/v1/relations",
+        {"type": "relProviderToApp", "source_id": provider["id"], "target_id": anchor["id"]},
+    )
+    db.add(
+        CardCost(
+            card_id=anchor["id"],
+            fiscal_year=current_fiscal_year(1),
+            items={"lic": {"amount": 5, "renewal_date": None, "provider_id": provider["id"]}},
+        )
     )
     # A mention of the sentinel in the decision's text and in a SoAW section:
     # each reader gets it resolved for them, a restricted one as a bare token.
@@ -247,8 +271,9 @@ async def world(db, client):
         )
     )
 
-    ct = (await db.execute(select(CardType).where(CardType.key == "Secret"))).scalar_one()
-    ct.role_permissions = {"restricted": {"inventory.view": False}}
+    for key in ("Secret", "Provider"):
+        ct = (await db.execute(select(CardType).where(CardType.key == key))).scalar_one()
+        ct.role_permissions = {"restricted": {"inventory.view": False}}
     await db.commit()
     PermissionService.invalidate_type_permission_cache()
 
@@ -274,6 +299,7 @@ async def world(db, client):
             "image_id": image["id"],
         },
         "sentinel_id": sentinel["id"],
+        "provider_id": provider["id"],
         "held_id": held["id"],
     }
 
@@ -334,9 +360,8 @@ async def _sweep(app, client, db, user, ids) -> tuple[dict[str, str], list[str]]
 
 async def test_no_get_route_leaks_a_hidden_card(app, client, db, world):
     bodies, errors = await _sweep(app, client, db, world["reader"], world["ids"])
-    leaks = sorted(
-        path for path, body in bodies.items() if SENTINEL in body or world["sentinel_id"] in body
-    )
+    hidden = (SENTINEL, world["sentinel_id"], world["provider_id"])
+    leaks = sorted(path for path, body in bodies.items() if any(h in body for h in hidden))
     assert not leaks, f"Hidden card leaked by: {leaks}"
     assert not errors, errors
 
@@ -354,6 +379,9 @@ async def test_the_sweep_is_not_vacuous(app, client, db, world):
     bodies, _ = await _sweep(app, client, db, world["admin"], world["ids"])
     seen = [path for path, body in bodies.items() if SENTINEL in body]
     assert len(seen) >= 20, seen
+    # The hidden Provider shows in the cost routes (the item's name, the filter's options).
+    for path in ("/api/v1/cards/{card_id}/costs", "/api/v1/reports/cost-filter-options"):
+        assert SENTINEL in bodies[path], path
 
 
 async def test_a_saved_version_reads_the_mention_restricted(client, world):

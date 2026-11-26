@@ -188,3 +188,32 @@ async def test_provider_names_hide_unreadable_and_non_provider_cards(db, env):
     ids = [prov.id, archived.id, env["app"].id]
     assert await cp.provider_names(db, EVERYTHING, ids) == {prov.id: "Prov", archived.id: "Old"}
     assert await cp.provider_names(db, NO_PROVIDERS, ids) == {}
+
+
+@pytest.mark.parametrize("value", [None, "", "p-1", 5])
+def test_parse_provider_id_is_none_for_nothing_or_a_malformed_value(value):
+    assert cp.parse_provider_id(value) is None
+
+
+def test_parse_provider_id_reads_a_uuid():
+    pid = uuid.uuid4()
+    assert cp.parse_provider_id(str(pid)) == pid
+
+
+async def test_a_link_on_an_unreadable_ancestor_is_not_a_candidate(db, env):
+    await create_card_type(db, key="Hidden")
+    mid = await create_card(db, card_type="Hidden", name="Mid", parent_id=env["parent"].id)
+    leaf = await create_card(db, name="Leaf", parent_id=mid.id)
+    await provider(db, "OnHidden", mid)
+    scope = CardReadScope(
+        role_key="x",
+        wildcard=False,
+        base_view=True,
+        denied_types=frozenset({"Hidden"}),
+        allowed_types=frozenset(),
+        stakeholder_card_ids=frozenset(),
+    )
+    assert await cp.candidate_providers(db, scope, leaf.id, "Application") == []
+    assert [n for _, n in await cp.candidate_providers(db, EVERYTHING, leaf.id, "Application")] == [
+        "OnHidden"
+    ]

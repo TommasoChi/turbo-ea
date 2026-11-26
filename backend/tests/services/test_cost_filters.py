@@ -11,7 +11,14 @@ from sqlalchemy import select
 from app.models.card import Card
 from app.services import portal_card_filters
 from app.services.card_read_scope import CardReadScope
-from app.services.cost_filters import MAX_FILTER_CHARS, filter_conditions, parse_card_filters
+from app.services.cost_filters import (
+    MAX_FILTER_CHARS,
+    MAX_IDS_PER_KEY,
+    MAX_IDS_TOTAL,
+    MAX_RELATION_KEYS,
+    filter_conditions,
+    parse_card_filters,
+)
 from tests.conftest import (
     create_card,
     create_card_type,
@@ -141,3 +148,70 @@ async def test_conditions_for_no_filters_is_empty(db):
     admin, *_ = await _world(db)
     scope = await CardReadScope.load(db, admin)
     assert await filter_conditions(db, scope, {}) == {}
+
+
+def _picks(keys: int, ids_per_key: int) -> str:
+    relation_filters = {f"rel{k}": [f"{k}-{i}" for i in range(ids_per_key)] for k in range(keys)}
+    return _dump(Application={"relationFilters": relation_filters})
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        _picks(MAX_RELATION_KEYS + 1, 1),
+        _picks(1, MAX_IDS_PER_KEY + 1),
+        _picks(4, MAX_IDS_TOTAL // 4 + 1),
+    ],
+    ids=["keys", "ids-per-key", "ids-total"],
+)
+def test_parse_rejects_relation_filters_over_the_caps(raw):
+    with pytest.raises(ValueError):
+        parse_card_filters(raw, ["Application"])
+
+
+def test_parse_accepts_relation_filters_at_the_caps():
+    assert parse_card_filters(_picks(MAX_RELATION_KEYS, 1), ["Application"])
+    assert parse_card_filters(_picks(1, MAX_IDS_PER_KEY), ["Application"])
+
+
+async def test_a_relation_key_naming_neither_a_relation_nor_a_card_type_is_ignored(db):
+    admin, acme, _, _ = await _world(db)
+    scope = await CardReadScope.load(db, admin)
+    value = {"relationFilters": {"nope": [str(acme.id)], "relProviderToApp": [str(acme.id)]}}
+    parsed = parse_card_filters(_dump(Application=value), ["Application"])
+    got = await filter_conditions(db, scope, parsed)
+    assert await _names(db, got["Application"]) == {"Gold"}
+    only_unknown = parse_card_filters(
+        _dump(Application={"relationFilters": {"nope": [str(acme.id)]}}), ["Application"]
+    )
+    got = await filter_conditions(db, scope, only_unknown)
+    assert await _names(db, got["Application"]) == {"Gold", "Tin"}
+
+
+async def test_include_sub_cards_widens_each_key_by_its_own_picks(db):
+    admin, acme, _, _ = await _world(db)
+    await create_card_type(db, key="Org", has_hierarchy=True)
+    await create_relation_type(
+        db, key="relOrgToApp", source_type_key="Org", target_type_key="Application"
+    )
+    top1 = await create_card(db, card_type="Org", name="Top1")
+    kid1 = await create_card(db, card_type="Org", name="Kid1", parent_id=top1.id)
+    top2 = await create_card(db, card_type="Org", name="Top2")
+    kid2 = await create_card(db, card_type="Org", name="Kid2", parent_id=top2.id)
+    a1 = await create_card(db, card_type="Application", name="OfKid1")
+    a2 = await create_card(db, card_type="Application", name="OfKid2")
+    await create_relation(db, type_key="relOrgToApp", source_id=kid1.id, target_id=a1.id)
+    await create_relation(db, type_key="relProviderToApp", source_id=kid2.id, target_id=a2.id)
+    await create_relation(db, type_key="relOrgToApp", source_id=kid2.id, target_id=a2.id)
+    scope = await CardReadScope.load(db, admin)
+    value = {
+        "includeDescendants": True,
+        "relationFilters": {"relOrgToApp": [str(top1.id)], "relProviderToApp": [str(top2.id)]},
+    }
+    parsed = parse_card_filters(_dump(Application=value), ["Application"])
+    got = await filter_conditions(db, scope, parsed)
+    assert await _names(db, got["Application"]) == set()
+    value["relationFilters"] = {"relOrgToApp": [str(top1.id)]}
+    parsed = parse_card_filters(_dump(Application=value), ["Application"])
+    got = await filter_conditions(db, scope, parsed)
+    assert await _names(db, got["Application"]) == {"OfKid1"}
