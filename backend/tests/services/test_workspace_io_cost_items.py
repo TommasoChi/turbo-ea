@@ -111,6 +111,38 @@ async def test_cardcosts_only_import_recomputes_the_derived_total(db):
     assert stored["costTotalAnnual"] == 5
 
 
+async def test_cardcosts_only_import_drops_a_live_card_that_is_not_a_provider(db):
+    from app.services.workspace_io import apply_selected
+
+    user = await create_user(db, email="cost-ws5@test.com", role="admin")
+    await create_card_type(db, key="Application", label="Application")
+    card = await create_card(db, card_type="Application", name="Billing", user_id=user.id)
+    other = await create_card(db, card_type="Application", name="Payroll", user_id=user.id)
+    card_id = card.id
+    db.add_all(
+        [
+            CostItemType(key="licences", label="Licences"),
+            CardCost(
+                card_id=card_id,
+                fiscal_year=2026,
+                items={"licences": {"amount": 5, "provider_id": str(other.id)}},
+            ),
+        ]
+    )
+    await db.flush()
+    raw = await build_bundle(db)
+    await db.execute(delete(CardCost))
+    await db.flush()
+
+    bundle = parse_bundle(raw)
+    bundle.sheets["Cards"] = []  # nothing maps: only the live-card check is left
+    result = await apply_selected(db, bundle, user, sheets={"CardCosts"}, dry_run=False)
+    assert result.total_failed == 0, result.as_dict()
+    db.expire_all()
+    row = (await db.execute(select(CardCost).where(CardCost.card_id == card_id))).scalar_one()
+    assert row.items == {"licences": {"amount": 5}}
+
+
 async def test_cardcosts_only_import_keeps_a_live_provider_and_drops_a_missing_one(db):
     import uuid
 

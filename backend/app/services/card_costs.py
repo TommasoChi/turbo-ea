@@ -76,6 +76,14 @@ class YearCosts:
     tco: float = 0.0
 
 
+def parse_provider_id(value: object) -> uuid.UUID | None:
+    """The stored provider id, or ``None`` for nothing or a malformed value."""
+    try:
+        return uuid.UUID(value) if isinstance(value, str) else None
+    except ValueError:
+        return None
+
+
 def _shift(iso: str | None, years: int) -> str | None:
     if not iso:
         return None
@@ -122,7 +130,7 @@ def _lines(items: dict, archived: dict[str, bool]) -> list[CostLine]:
             amount=float(cost_value(v.get("amount"))),
             renewal_date=date.fromisoformat(v["renewal_date"]) if v.get("renewal_date") else None,
             archived=archived.get(k, False),
-            provider_id=v.get("provider_id"),
+            provider_id=str(pid) if (pid := parse_provider_id(v.get("provider_id"))) else None,
         )
         for k, v in items.items()
     ]

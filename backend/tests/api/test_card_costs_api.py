@@ -59,6 +59,24 @@ async def events(db, card):
     return (await db.execute(q)).scalars().all()
 
 
+async def test_a_stored_non_string_provider_id_reads_as_no_provider(client, db, env):
+    items = {
+        "lic": {"amount": 1, "provider_id": 0},
+        "old": {"amount": 2, "provider_id": 7},
+        "x": {"amount": 3, "provider_id": []},
+    }
+    db.add(CardCost(card_id=env["card"].id, fiscal_year=CUR, items=items))
+    await db.flush()
+    r = await client.get(url(env["card"]), headers=auth_headers(env["admin"]))
+    assert r.status_code == 200
+    year = next(y for y in r.json()["years"] if y["fiscal_year"] == CUR)
+    assert {i["key"]: i["provider_id"] for i in year["items"]} == {
+        "lic": None,
+        "old": None,
+        "x": None,
+    }
+
+
 async def test_get_six_years_and_catalogue(client, env):
     r = await client.get(url(env["card"]), headers=auth_headers(env["admin"]))
     assert r.status_code == 200

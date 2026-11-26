@@ -14,19 +14,11 @@ from sqlalchemy.orm import aliased
 
 from app.models.card import Card
 from app.models.relation import Relation
-from app.services.card_costs import UNSET, CostError, _Unset
+from app.services.card_costs import UNSET, CostError, _Unset, parse_provider_id
 from app.services.card_read_scope import CardReadScope
 from app.services.portal_card_filters import descendant_ids
 
 PROVIDER_RELATIONS = {"Application": "relProviderToApp", "ITComponent": "relProviderToITC"}
-
-
-def parse_provider_id(value: object) -> uuid.UUID | None:
-    """The stored provider id, or ``None`` for nothing or a malformed value."""
-    try:
-        return uuid.UUID(value) if isinstance(value, str) else None
-    except ValueError:
-        return None
 
 
 async def _ancestor_ids(db: AsyncSession, card_id: uuid.UUID) -> set[uuid.UUID]:

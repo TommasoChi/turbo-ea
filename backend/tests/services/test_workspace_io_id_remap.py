@@ -2036,6 +2036,52 @@ async def test_card_costs_provider_absent_on_target_is_dropped_but_the_amount_st
     assert _section(result, "CardCosts").references == {"unresolved": 1}
 
 
+async def test_card_costs_unusable_provider_values_are_dropped_and_the_amounts_stay(db):
+    from app.models.card_cost import CardCost
+    from app.models.cost_item_type import CostItemType
+
+    user = await create_user(db, email="cc-junk@test.com", role="admin")
+    await create_card_type(db, key="Application", label="Application")
+    await create_card_type(db, key="Provider", label="Provider")
+    app_card = await create_card(db, name="Billing", user_id=user.id)
+    junk = {"zero": 0, "false": False, "list": [], "text": "p-1"}
+    db.add_all([CostItemType(key=k, label=k) for k in junk])
+    items = {
+        k: {"amount": 3, "renewal_date": "2027-01-31", "provider_id": v} for k, v in junk.items()
+    }
+    db.add(CardCost(card_id=app_card.id, fiscal_year=2026, items=items))
+    await db.flush()
+
+    raw = await build_bundle(db)
+    await _wipe(db)
+    result = await apply_bundle(db, parse_bundle(raw), user)
+    assert result.total_failed == 0, result.as_dict()
+
+    row = (await db.execute(select(CardCost))).scalar_one()
+    assert row.items == {k: {"amount": 3, "renewal_date": "2027-01-31"} for k in junk}
+    assert _section(result, "CardCosts").references == {"unresolved": 4}
+
+
+async def test_card_costs_provider_id_of_a_non_provider_card_is_dropped(db):
+    from app.models.card_cost import CardCost
+
+    user = await create_user(db, email="cc-nonprov@test.com", role="admin")
+    app_card, _ = await _costed_application(db, user)
+    other = await create_card(db, name="Payroll", user_id=user.id)
+    row = (await db.execute(select(CardCost))).scalar_one()
+    row.items = {"licences": {**row.items["licences"], "provider_id": str(other.id)}}
+    await db.flush()
+
+    raw = await build_bundle(db)
+    await _wipe(db)
+    result = await apply_bundle(db, parse_bundle(raw), user)
+    assert result.total_failed == 0, result.as_dict()
+
+    row = (await db.execute(select(CardCost))).scalar_one()
+    assert row.items["licences"] == {"amount": 120.5, "renewal_date": "2027-01-31"}
+    assert _section(result, "CardCosts").references == {"unresolved": 1}
+
+
 async def test_import_over_an_existing_cost_row_under_another_pk_still_remaps_the_provider(db):
     """The natural-key match branch used to copy the bundle's kwargs before the
     rewrite ran, writing the source's provider id over the target's row."""

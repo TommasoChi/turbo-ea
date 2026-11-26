@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import uuid
 from datetime import date
 
 import pytest
@@ -679,6 +680,7 @@ async def test_copy_to_forecast_without_source_provider_keeps_the_forecast_one(d
 
 async def test_cost_lines_expose_provider_id(db):
     card = await _setup(db)
-    await _row(db, card, CUR, {"lic": {**_it(10), "provider_id": "p-1"}, "ams": _it(1)})
+    pid = str(uuid.uuid4())
+    await _row(db, card, CUR, {"lic": {**_it(10), "provider_id": pid}, "ams": _it(1)})
     yc = await svc.get_year_row(db, card.id, CUR, SM)
-    assert {line.key: line.provider_id for line in yc.items} == {"lic": "p-1", "ams": None}
+    assert {line.key: line.provider_id for line in yc.items} == {"lic": pid, "ams": None}
