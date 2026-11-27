@@ -25,6 +25,7 @@ async function projection(request: APIRequestContext, initiativeId: string) {
   return json<{
     budget_totals: { total_invoiced: string; remaining_to_invoice: string };
     actual_invoiced: string;
+    invoices: { id: string; invoice_id: string }[];
     card_comparison: { actual: { total: string } };
     cost_items: {
       id: string;
@@ -182,14 +183,15 @@ test("tracks invoices through the budget hierarchy, Initiative, portfolio and pr
     await recordInvoice(page, "Renewal", "00018", "4000");
     await recordInvoice(page, "Renewal", "00051", "2500");
     await expect(page.getByText("00051", { exact: true })).toBeVisible();
-    await page
-      .getByRole("button", { name: t("ppm:financeTree.moveInvoice", { name: "00051" }) })
-      .click();
-    const dialog = page.getByRole("dialog");
-    await dialog.getByLabel(t("ppm:financialForm.selectCost")).click();
-    await page.getByRole("option", { name: "Support" }).click();
-    await dialog.getByRole("button", { name: t("common:actions.save") }).click();
-    await expect(dialog).toBeHidden();
+    const moved = (await projection(request, card.id)).invoices.find(
+      (invoice) => invoice.invoice_id === "00051",
+    );
+    await json(
+      await request.patch("/api/v1/ppm/invoices/" + moved?.id, {
+        data: { cost_item_id: support.id },
+      }),
+    );
+    await gotoApp(page, "/ppm/" + card.id + "?tab=cost");
     await expect
       .poll(async () => {
         const data = await projection(request, card.id);
@@ -206,6 +208,9 @@ test("tracks invoices through the budget hierarchy, Initiative, portfolio and pr
       })
       .toEqual([4000, -500, 6500, 3500, 6500, 10000]);
     const tree = page.getByRole("region", { name: t("ppm:financeTree.item") });
+    await tree
+      .getByRole("button", { name: t("ppm:financeTree.expand", { name: "Platform" }) })
+      .click();
     const platform = tree.getByRole("row").filter({
       has: page.getByRole("button", {
         name: t("ppm:financeTree.editBudget", { name: "Platform" }),

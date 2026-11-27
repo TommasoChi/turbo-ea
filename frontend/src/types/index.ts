@@ -2691,6 +2691,8 @@ export interface PmlFieldDefinition {
 export interface PmlSectionConfig {
   fields: PmlFieldDefinition[];
   visible_columns: string[];
+  /** Budget section only: the field that carries the Provider link. */
+  provider_field_key?: string;
 }
 
 export interface PmlProviderChoicePage {
