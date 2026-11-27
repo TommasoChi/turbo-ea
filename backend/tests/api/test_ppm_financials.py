@@ -293,8 +293,9 @@ async def test_invoice_access_requires_module_and_cost_permissions(client, db, p
     assert response.status_code == 200
     data = response.json()
     assert data["invoice_access"] is False
-    assert Decimal(data["budget_lines"][0]["remaining_budget"]) == Decimal("11900")
-    assert Decimal(data["budget_totals"]["remaining_budget"]) == Decimal("11900")
+    # Without cost access the amounts are withheld, remaining budget included.
+    assert "remaining_budget" not in data["budget_lines"][0]
+    assert "budget_totals" not in data
     assert "invoices" not in data
     assert "actual_invoiced" not in data
     assert "card_comparison" not in data

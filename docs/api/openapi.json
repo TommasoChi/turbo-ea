@@ -13573,8 +13573,15 @@
       "PpmBudgetLineOut": {
         "properties": {
           "amount": {
-            "title": "Amount",
-            "type": "number"
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Amount"
           },
           "calculated_values": {
             "additionalProperties": true,
@@ -13634,7 +13641,6 @@
           "initiative_id",
           "fiscal_year",
           "category",
-          "amount",
           "created_at",
           "updated_at"
         ],
@@ -13779,8 +13785,15 @@
       "PpmCostLineOut": {
         "properties": {
           "actual": {
-            "title": "Actual",
-            "type": "number"
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actual"
           },
           "budget_line_id": {
             "anyOf": [
@@ -13838,8 +13851,15 @@
             "type": "string"
           },
           "planned": {
-            "title": "Planned",
-            "type": "number"
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Planned"
           },
           "provider": {
             "anyOf": [
@@ -13886,8 +13906,6 @@
           "initiative_id",
           "description",
           "category",
-          "planned",
-          "actual",
           "created_at",
           "updated_at"
         ],
@@ -14112,8 +14130,15 @@
       "PpmFinancialBudgetOut": {
         "properties": {
           "amount": {
-            "title": "Amount",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Amount"
           },
           "calculated_values": {
             "additionalProperties": true,
@@ -14171,8 +14196,15 @@
             "type": "object"
           },
           "remaining_budget": {
-            "title": "Remaining Budget",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Remaining Budget"
           },
           "remaining_to_invoice": {
             "anyOf": [
@@ -14186,8 +14218,15 @@
             "title": "Remaining To Invoice"
           },
           "total_cost_items": {
-            "title": "Total Cost Items",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Cost Items"
           },
           "total_invoiced": {
             "anyOf": [
@@ -14205,10 +14244,7 @@
           "id",
           "fiscal_year",
           "category",
-          "description",
-          "amount",
-          "total_cost_items",
-          "remaining_budget"
+          "description"
         ],
         "title": "PpmFinancialBudgetOut",
         "type": "object"
@@ -14260,8 +14296,15 @@
       "PpmFinancialCostOut": {
         "properties": {
           "actual": {
-            "title": "Actual",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actual"
           },
           "budget_line_id": {
             "anyOf": [
@@ -14309,8 +14352,15 @@
             "type": "string"
           },
           "planned": {
-            "title": "Planned",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Planned"
           },
           "provider": {
             "anyOf": [
@@ -14374,8 +14424,6 @@
           "budget_line_id",
           "description",
           "category",
-          "planned",
-          "actual",
           "date"
         ],
         "title": "PpmFinancialCostOut",
@@ -14384,8 +14432,15 @@
       "PpmFinancialSubtotalOut": {
         "properties": {
           "amount": {
-            "title": "Amount",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Amount"
           },
           "category": {
             "title": "Category",
@@ -14396,8 +14451,15 @@
             "type": "integer"
           },
           "remaining_budget": {
-            "title": "Remaining Budget",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Remaining Budget"
           },
           "remaining_to_invoice": {
             "anyOf": [
@@ -14411,8 +14473,15 @@
             "title": "Remaining To Invoice"
           },
           "total_cost_items": {
-            "title": "Total Cost Items",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Cost Items"
           },
           "total_invoiced": {
             "anyOf": [
@@ -14427,9 +14496,6 @@
           }
         },
         "required": [
-          "amount",
-          "total_cost_items",
-          "remaining_budget",
           "fiscal_year",
           "category"
         ],
@@ -14439,12 +14505,26 @@
       "PpmFinancialTotalsOut": {
         "properties": {
           "amount": {
-            "title": "Amount",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Amount"
           },
           "remaining_budget": {
-            "title": "Remaining Budget",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Remaining Budget"
           },
           "remaining_to_invoice": {
             "anyOf": [
@@ -14458,8 +14538,15 @@
             "title": "Remaining To Invoice"
           },
           "total_cost_items": {
-            "title": "Total Cost Items",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Cost Items"
           },
           "total_invoiced": {
             "anyOf": [
@@ -14473,11 +14560,6 @@
             "title": "Total Invoiced"
           }
         },
-        "required": [
-          "amount",
-          "total_cost_items",
-          "remaining_budget"
-        ],
         "title": "PpmFinancialTotalsOut",
         "type": "object"
       },
@@ -14509,7 +14591,14 @@
             "type": "array"
           },
           "budget_totals": {
-            "$ref": "#/components/schemas/PpmFinancialTotalsOut"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PpmFinancialTotalsOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "card_comparison": {
             "anyOf": [
@@ -14560,7 +14649,6 @@
           "initiative_id",
           "budget_lines",
           "budget_subtotals",
-          "budget_totals",
           "cost_items",
           "invoice_access"
         ],
@@ -14898,6 +14986,7 @@
                 "type": "number"
               },
               {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
                 "type": "string"
               }
             ],
@@ -14936,6 +15025,7 @@
       "PpmInvoiceOut": {
         "properties": {
           "amount": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
             "title": "Amount",
             "type": "string"
           },
@@ -15000,6 +15090,7 @@
                 "type": "number"
               },
               {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
                 "type": "string"
               },
               {
@@ -15993,14 +16084,26 @@
             "type": "array"
           },
           "capex_actual": {
-            "default": 0,
-            "title": "Capex Actual",
-            "type": "number"
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Capex Actual"
           },
           "capex_planned": {
-            "default": 0,
-            "title": "Capex Planned",
-            "type": "number"
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Capex Planned"
           },
           "descendant_count": {
             "title": "Descendant Count",
@@ -16028,14 +16131,26 @@
             "type": "boolean"
           },
           "opex_actual": {
-            "default": 0,
-            "title": "Opex Actual",
-            "type": "number"
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Opex Actual"
           },
           "opex_planned": {
-            "default": 0,
-            "title": "Opex Planned",
-            "type": "number"
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Opex Planned"
           },
           "start_date": {
             "anyOf": [
@@ -16049,14 +16164,26 @@
             "title": "Start Date"
           },
           "total_actual": {
-            "default": 0,
-            "title": "Total Actual",
-            "type": "number"
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Actual"
           },
           "total_planned": {
-            "default": 0,
-            "title": "Total Planned",
-            "type": "number"
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Planned"
           }
         },
         "required": [

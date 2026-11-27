@@ -145,8 +145,9 @@ class PpmCostLineOut(BaseModel):
     initiative_id: str
     description: str
     category: str
-    planned: float
-    actual: float
+    # Amounts are omitted (not zeroed) for a reader without cost access.
+    planned: float | None = None
+    actual: float | None = None
     date: date_type | None = None
     created_at: datetime
     updated_at: datetime
@@ -213,7 +214,7 @@ class PpmBudgetLineOut(BaseModel):
     fiscal_year: int
     category: str
     description: str | None = None
-    amount: float
+    amount: float | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -280,8 +281,8 @@ class PpmFinancialCostOut(BaseModel):
     budget_line_id: str | None
     description: str
     category: str
-    planned: str
-    actual: str
+    planned: str | None = None
+    actual: str | None = None
     date: date_type | None
     total_invoiced: str | None = None
     remaining_to_invoice: str | None = None
@@ -297,17 +298,17 @@ class PpmFinancialBudgetOut(BaseModel):
     fiscal_year: int
     category: str
     description: str | None
-    amount: str
-    total_cost_items: str
-    remaining_budget: str
+    amount: str | None = None
+    total_cost_items: str | None = None
+    remaining_budget: str | None = None
     total_invoiced: str | None = None
     remaining_to_invoice: str | None = None
 
 
 class PpmFinancialTotalsOut(BaseModel):
-    amount: str
-    total_cost_items: str
-    remaining_budget: str
+    amount: str | None = None
+    total_cost_items: str | None = None
+    remaining_budget: str | None = None
     total_invoiced: str | None = None
     remaining_to_invoice: str | None = None
 
@@ -334,7 +335,7 @@ class PpmFinancialsOut(BaseModel):
     initiative_id: str
     budget_lines: list[PpmFinancialBudgetOut]
     budget_subtotals: list[PpmFinancialSubtotalOut]
-    budget_totals: PpmFinancialTotalsOut
+    budget_totals: PpmFinancialTotalsOut | None = None
     cost_items: list[PpmFinancialCostOut]
     invoice_access: bool
     invoices: list[PpmInvoiceOut] | None = None
@@ -591,12 +592,12 @@ class PpmRollupOut(BaseModel):
     """
 
     descendant_count: int
-    capex_planned: float = 0
-    capex_actual: float = 0
-    opex_planned: float = 0
-    opex_actual: float = 0
-    total_planned: float = 0
-    total_actual: float = 0
+    capex_planned: float | None = None
+    capex_actual: float | None = None
+    opex_planned: float | None = None
+    opex_actual: float | None = None
+    total_planned: float | None = None
+    total_actual: float | None = None
     start_date: str | None = None
     end_date: str | None = None
     has_budget_lines: bool = False

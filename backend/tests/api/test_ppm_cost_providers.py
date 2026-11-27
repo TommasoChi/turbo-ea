@@ -352,7 +352,8 @@ async def test_provider_formula_context_is_redacted_for_hidden_parent(client, db
         assert str(env["child"].id) not in response.text
         rows = response.json() if key is None else response.json()[key]
         assert rows[0]["provider"] == {"status": "UNAVAILABLE"}
-        assert "provider_match" not in rows[0]["calculated_values"]
+        # No cost access for this viewer: calculated_values is withheld whole.
+        assert "calculated_values" not in rows[0]
 
 
 async def test_move_cost_with_child_to_different_budget_requires_clear(client, provider_setup):

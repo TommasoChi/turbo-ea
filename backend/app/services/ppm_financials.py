@@ -270,10 +270,10 @@ async def load_financials(db: AsyncSession, card: Card, user: User) -> tuple[dic
                 "budget_line_id": str(cost.budget_line_id) if cost.budget_line_id else None,
                 "description": cost.description,
                 "category": cost.category,
-                "planned": str(cost.planned),
                 "date": cost.date,
-                "actual": str(amount),
             }
+            if can_view:
+                row.update(planned=str(cost.planned), actual=str(amount))
             if cost.budget_line_id in budget_values:
                 dest = budget_values[cost.budget_line_id]
                 dest["total_cost_items"] += amount
@@ -294,13 +294,13 @@ async def load_financials(db: AsyncSession, card: Card, user: User) -> tuple[dic
                 "fiscal_year": budget.fiscal_year,
                 "category": budget.category,
                 "description": budget.description,
-                "amount": str(budget.amount),
             }
-            budget_row["total_cost_items"] = str(vals["total_cost_items"])
-            budget_row["remaining_budget"] = str(
-                Decimal(str(budget.amount)) - vals["total_cost_items"]
-            )
             if can_view:
+                budget_row.update(
+                    amount=str(budget.amount),
+                    total_cost_items=str(vals["total_cost_items"]),
+                    remaining_budget=str(Decimal(str(budget.amount)) - vals["total_cost_items"]),
+                )
                 budget_row.update(
                     {k: str(vals[k]) for k in ("total_invoiced", "remaining_to_invoice")}
                 )
@@ -313,32 +313,31 @@ async def load_financials(db: AsyncSession, card: Card, user: User) -> tuple[dic
             subtotal_result: dict[str, Any] = {
                 "fiscal_year": year,
                 "category": category,
-                "amount": str(values["amount"]),
-                "total_cost_items": str(values["total_cost_items"]),
-                "remaining_budget": str(values["amount"] - values["total_cost_items"]),
             }
             if can_view:
+                subtotal_result.update(
+                    amount=str(values["amount"]),
+                    total_cost_items=str(values["total_cost_items"]),
+                    remaining_budget=str(values["amount"] - values["total_cost_items"]),
+                )
                 subtotal_result.update(
                     {k: str(values[k]) for k in ("total_invoiced", "remaining_to_invoice")}
                 )
             subtotals.append(subtotal_result)
-        grand_result = {
-            "amount": str(grand["amount"]),
-            "total_cost_items": str(grand["total_cost_items"]),
-            "remaining_budget": str(grand["amount"] - grand["total_cost_items"]),
-        }
         result: dict[str, Any] = {
             "initiative_id": str(card.id),
             "budget_lines": budget_rows,
             "budget_subtotals": subtotals,
-            "budget_totals": grand_result,
             "cost_items": cost_rows,
             "invoice_access": can_view,
         }
         if can_view:
-            grand_result.update(
-                {k: str(grand[k]) for k in ("total_invoiced", "remaining_to_invoice")}
-            )
+            result["budget_totals"] = {
+                "amount": str(grand["amount"]),
+                "total_cost_items": str(grand["total_cost_items"]),
+                "remaining_budget": str(grand["amount"] - grand["total_cost_items"]),
+                **{k: str(grand[k]) for k in ("total_invoiced", "remaining_to_invoice")},
+            }
             result["invoices"] = [
                 PpmInvoiceOut.model_validate(i).model_dump(mode="json") for i in invoices
             ]

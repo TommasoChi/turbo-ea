@@ -553,29 +553,43 @@ async def _cost_line_out(
 
 
 def _cost_line_out_projected(
-    cl: PpmCostLine, visible: dict, calculated: dict, references: dict, provider: dict
+    cl: PpmCostLine,
+    visible: dict,
+    calculated: dict,
+    references: dict,
+    provider: dict,
+    *,
+    withheld: bool = False,
 ) -> PpmCostLineOut:
+    # Unset fields are omitted by the route's ``response_model_exclude_unset``.
+    amounts = (
+        {}
+        if withheld
+        else {"calculated_values": calculated, "planned": cl.planned, "actual": cl.actual}
+    )
     return PpmCostLineOut(
         provider=provider["provider"],
         provider_child_id=provider["provider_child_id"],
         provider_child_enabled=provider["provider_child_enabled"],
         field_values=visible,
-        calculated_values=calculated,
         reference_display=references,
         id=str(cl.id),
         initiative_id=str(cl.initiative_id),
         budget_line_id=cl.budget_line_id,
         description=cl.description,
         category=cl.category,
-        planned=cl.planned,
-        actual=cl.actual,
         date=cl.date,
         created_at=cl.created_at,
         updated_at=cl.updated_at,
+        **amounts,
     )
 
 
-@router.get("/initiatives/{initiative_id}/costs", response_model=list[PpmCostLineOut])
+@router.get(
+    "/initiatives/{initiative_id}/costs",
+    response_model=list[PpmCostLineOut],
+    response_model_exclude_unset=True,
+)
 async def list_cost_lines(
     initiative_id: str,
     db: AsyncSession = Depends(get_db),
@@ -589,6 +603,7 @@ async def list_cost_lines(
         .order_by(PpmCostLine.created_at)
     )
     rows = list(result.scalars().all())
+    withheld = not await PermissionService.can_view_costs(db, user, card.id)
     config = await load_section(db, "cost_item")
     providers = await _provider_projection(db, user, config, rows, initiative=card)
     values = await ppm_field_values.project_many(
@@ -607,9 +622,10 @@ async def list_cost_lines(
             )
             for row in rows
         ],
+        withhold_amounts=withheld,
     )
     return [
-        _cost_line_out_projected(row, *projection, providers[row.id])
+        _cost_line_out_projected(row, *projection, providers[row.id], withheld=withheld)
         for row, projection in zip(rows, values, strict=True)
     ]
 
@@ -842,26 +858,27 @@ async def _budget_line_out(db: AsyncSession, user: User, bl: PpmBudgetLine) -> P
 
 
 def _budget_line_out_projected(
-    bl: PpmBudgetLine, visible: dict, calculated: dict, references: dict
+    bl: PpmBudgetLine, visible: dict, calculated: dict, references: dict, *, withheld: bool = False
 ) -> PpmBudgetLineOut:
+    amounts = {} if withheld else {"calculated_values": calculated, "amount": bl.amount}
     return PpmBudgetLineOut(
         field_values=visible,
-        calculated_values=calculated,
         reference_display=references,
         id=str(bl.id),
         initiative_id=str(bl.initiative_id),
         fiscal_year=bl.fiscal_year,
         category=bl.category,
         description=bl.description,
-        amount=bl.amount,
         created_at=bl.created_at,
         updated_at=bl.updated_at,
+        **amounts,
     )
 
 
 @router.get(
     "/initiatives/{initiative_id}/budgets",
     response_model=list[PpmBudgetLineOut],
+    response_model_exclude_unset=True,
 )
 async def list_budget_lines(
     initiative_id: str,
@@ -869,7 +886,8 @@ async def list_budget_lines(
     user: User = Depends(get_current_user),
 ):
     await PermissionService.require_permission(db, user, "ppm.view")
-    await _get_initiative_or_404(db, initiative_id, user)
+    card = await _get_initiative_or_404(db, initiative_id, user)
+    withheld = not await PermissionService.can_view_costs(db, user, card.id)
     result = await db.execute(
         select(PpmBudgetLine)
         .where(PpmBudgetLine.initiative_id == initiative_id)
@@ -885,10 +903,14 @@ async def list_budget_lines(
     rows = list(result.scalars().all())
     config = await load_section(db, "budget")
     values = await ppm_field_values.project_many(
-        db, user, config, [(row.field_values or {}, _financial_standard(row)) for row in rows]
+        db,
+        user,
+        config,
+        [(row.field_values or {}, _financial_standard(row)) for row in rows],
+        withhold_amounts=withheld,
     )
     return [
-        _budget_line_out_projected(row, *projection)
+        _budget_line_out_projected(row, *projection, withheld=withheld)
         for row, projection in zip(rows, values, strict=True)
     ]
 
@@ -1116,6 +1138,7 @@ async def get_financials(
     await PermissionService.require_permission(db, user, "ppm.view")
     card = await _get_initiative_or_404(db, initiative_id, user)
     result, source_rows = await ppm_financials.load_financials(db, card, user)
+    withheld = not result["invoice_access"]
     sections: list[tuple[Any, str]] = [
         ("budget", "budget_lines"),
         ("cost_item", "cost_items"),
@@ -1166,7 +1189,12 @@ async def get_financials(
                 )
             projections.append((source.field_values or {}, standard))
         projected = await ppm_field_values.project_many(
-            db, user, config, projections + [(defaults, {})], protected=protected
+            db,
+            user,
+            config,
+            projections + [(defaults, {})],
+            protected=protected,
+            withhold_amounts=withheld,
         )
         _default_values, _default_calculated, default_references = projected.pop()
         definitions[section] = {
@@ -1183,7 +1211,9 @@ async def get_financials(
                     "result_type": field.calculation.result_type if field.calculation else None,
                     **(
                         {"default": field.default}
-                        if field.key not in protected and field.kind != "calculated"
+                        if field.key not in protected
+                        and field.kind != "calculated"
+                        and not (withheld and field.kind == "number")
                         else {}
                     ),
                     **(
@@ -1198,7 +1228,8 @@ async def get_financials(
         }
         for item, (visible, calculated, references) in zip(rows, projected, strict=True):
             item["field_values"] = visible
-            item["calculated_values"] = calculated
+            if not withheld:
+                item["calculated_values"] = calculated
             item["reference_display"] = references
             if section == "budget":
                 item.update(budget_providers[uuid.UUID(str(item["id"]))])
@@ -1319,7 +1350,11 @@ async def has_costs(
 # ── Roll-up of the initiatives beneath one (Overview tab) ──
 
 
-@router.get("/initiatives/{initiative_id}/rollup", response_model=PpmRollupOut)
+@router.get(
+    "/initiatives/{initiative_id}/rollup",
+    response_model=PpmRollupOut,
+    response_model_exclude_unset=True,
+)
 async def initiative_rollup(
     initiative_id: str,
     db: AsyncSession = Depends(get_db),

@@ -242,13 +242,12 @@ async def test_hidden_card_constants_and_transitive_results_are_not_disclosed(cl
     entry = listing.json()[0]
     assert "org" not in entry["field_values"]
     assert entry["reference_display"]["org"] == {"status": "UNAVAILABLE"}
-    assert "classification" not in entry["calculated_values"]
-    assert "derived" not in entry["calculated_values"]
+    # The scoped reader has no cost access: calculated_values is withheld whole.
+    assert "calculated_values" not in entry
     financials = await client.get(f"{base}/financials", headers=scoped_headers)
     assert financials.status_code == 200
     assert str(hidden.id) not in financials.text
-    assert "classification" not in financials.json()["cost_items"][0]["calculated_values"]
-    assert "derived" not in financials.json()["cost_items"][0]["calculated_values"]
+    assert "calculated_values" not in financials.json()["cost_items"][0]
 
     preview = await client.post(
         f"{SETTINGS}/cost_item/preview",
