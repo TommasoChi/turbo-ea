@@ -642,6 +642,7 @@ async def create_status_report(
     schedule_health="onTrack",
     cost_health="onTrack",
     scope_health="onTrack",
+    summary=None,
 ):
     """Insert a PPM status report row."""
     from app.models.ppm_status_report import PpmStatusReport
@@ -652,6 +653,7 @@ async def create_status_report(
         schedule_health=schedule_health,
         cost_health=cost_health,
         scope_health=scope_health,
+        summary=summary,
     )
     db.add(report)
     await db.flush()
