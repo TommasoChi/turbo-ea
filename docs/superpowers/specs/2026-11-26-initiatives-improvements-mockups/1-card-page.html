@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Mockup 1 - Initiative card page</title><style>
+/* Shared look of the initiatives-improvements mockups. Static, no scripts needed except the legend toggles. */
+:root{--bg:#f4f5f7;--card:#fff;--ink:#1f2933;--muted:#6b7785;--line:#e2e6ea;--accent:#e35205;--navy:#16213e;
+  --good:#2e9e5b;--warn:#e0a100;--bad:#d64545;--c1:#2f6fed;--c2:#e35205;--c3:#16a085;--c4:#8e44ad;--c5:#e0a100;--c6:#7f8c8d;--other:#b8c0c8}
+@media (prefers-color-scheme:dark){:root{--bg:#14181d;--card:#1d232a;--ink:#e8ecef;--muted:#98a3ad;--line:#2c343c;--other:#56626d}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 system-ui,Segoe UI,Roboto,sans-serif;padding:16px}
+h1{font-size:18px;margin:0 0 4px}h2{font-size:15px;margin:0 0 8px}h3{font-size:13px;margin:0 0 2px}
+.note{background:#fff8e1;border:1px dashed #e0a100;color:#5c4400;padding:6px 10px;border-radius:6px;font-size:12px;margin:8px 0}
+@media (prefers-color-scheme:dark){.note{background:#2b2410;color:#e8d9a6}}
+.tag{display:inline-block;background:var(--accent);color:#fff;border-radius:4px;font-size:11px;padding:0 6px;margin-right:4px;font-weight:600}
+.page{max-width:1180px;margin:0 auto}
+.crumb{color:var(--muted);font-size:12px;margin-bottom:6px}
+.paper{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px;margin-bottom:12px}
+.row{display:flex;gap:12px;flex-wrap:wrap}.row>*{flex:1 1 0;min-width:240px}
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin-bottom:12px;flex-wrap:wrap}
+.tabs span{padding:8px 12px;color:var(--muted);font-size:13px}.tabs .on{color:var(--accent);border-bottom:2px solid var(--accent);font-weight:600}
+.btn{display:inline-block;border:1px solid var(--line);border-radius:6px;padding:3px 10px;font-size:12px;background:var(--card)}
+.btn.p{background:var(--accent);border-color:var(--accent);color:#fff}
+.dot{display:inline-block;width:11px;height:11px;border-radius:50%;margin-right:4px;vertical-align:-1px}
+.g{background:var(--good)}.a{background:var(--warn)}.r{background:var(--bad)}
+.field{font-size:12px;color:var(--muted)}.val{font-size:14px;color:var(--ink)}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-bottom:12px}
+.kpi{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+.kpi b{display:block;font-size:20px;line-height:1.2}.kpi small{color:var(--muted);font-size:11px}
+.kpi .pos{color:var(--good)}.kpi .neg{color:var(--warn)}
+.i{display:inline-block;width:14px;height:14px;line-height:14px;text-align:center;border:1px solid var(--muted);border-radius:50%;font-size:10px;color:var(--muted);margin-left:4px;font-style:normal}
+.box{border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:13px;min-height:80px}
+.box h3{color:var(--muted);font-weight:600;display:flex;justify-content:space-between}
+.cnt{font-weight:400;font-size:11px}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{padding:6px 10px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}
+th{color:var(--muted);font-weight:600;font-size:12px}td.n,th.n{text-align:right}
+.scroll{overflow-x:auto}
+.legend{display:flex;gap:10px;flex-wrap:wrap;font-size:12px;margin-top:6px}
+.legend label{cursor:pointer;user-select:none;display:inline-flex;align-items:center;gap:4px}
+.legend i{width:10px;height:10px;border-radius:2px;display:inline-block}
+.legend input{display:none}.legend input:not(:checked)+span{opacity:.35;text-decoration:line-through}
+.sw{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px}
+.bar{height:18px;background:var(--line);border-radius:4px;position:relative;overflow:hidden}
+.bar>i{position:absolute;left:0;top:0;bottom:0}
+.toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px}
+.chip{border:1px solid var(--line);border-radius:14px;padding:2px 10px;font-size:12px;background:var(--card)}
+.chip.on{border-color:var(--accent);color:var(--accent)}
+.mm{font-size:12px;color:var(--muted);margin-top:4px}
+.cap{font-size:11px;color:var(--muted);margin:-2px 0 6px}
+svg text{fill:var(--ink);font-size:11px}svg .m{fill:var(--muted)}
+</style></head><body><div class="page">
+<h1>Mockup 1 &middot; Initiative card page <span class="field">/cards/&lt;id&gt;</span></h1>
+<div class="note">Static mockup, illustrative figures. Requirements: <span class="tag">R1</span> Budget/Actual Cost 50% columns, <span class="tag">R2</span> dates left + Completion right, <span class="tag">R3</span> Health Summary with report date and 3 boxes, <span class="tag">R4</span> 250-character counter, <span class="tag">R5</span> Risk Management, <span class="tag">R6</span> cost visual = Overview BudgetBar. Manage buttons need <code>ppm.manage</code> and <code>card.edit</code> (R22); the Cost Controller sees them disabled.</div>
+
+<div class="paper"><div class="crumb">Inventory / Initiative</div>
+<h1>Digital Workplace Renewal <span class="chip">Initiative</span> <span class="chip">Active</span></h1>
+<div class="tabs"><span class="on">Details</span><span>Relations</span><span>Risks</span><span>Comments</span><span>History</span></div>
+
+<div class="paper"><h2>Description</h2><div class="val">Renewal of the digital workplace: devices, collaboration suite and the migration of the legacy file shares. Sponsored by IT Governance.</div><div class="cap">Hidden when empty.</div></div>
+
+<div class="row">
+ <div class="paper"><h2>Timeline <span class="tag">R2</span></h2>
+  <div class="row" style="gap:20px">
+   <div>
+    <div class="field">Start Date</div><div class="val">01 Feb 2026</div>
+    <div class="field" style="margin-top:6px">Actual Start</div><div class="val">09 Feb 2026</div>
+    <div class="field" style="margin-top:6px">End Date</div><div class="val">30 Nov 2026</div>
+    <div class="field" style="margin-top:6px">Actual End</div><div class="val">&ndash;</div>
+   </div>
+   <div style="text-align:center"><div class="field">Completion</div>
+    <svg width="110" height="110" viewBox="0 0 110 110" role="img" aria-label="Completion 62 percent"><circle cx="55" cy="55" r="42" fill="none" stroke="var(--line)" stroke-width="10"/><circle cx="55" cy="55" r="42" fill="none" stroke="var(--c1)" stroke-width="10" stroke-dasharray="163.6 264" transform="rotate(-90 55 55)" stroke-linecap="round"/><text x="55" y="61" text-anchor="middle" style="font-size:20px;font-weight:700">62%</text></svg></div>
+  </div></div>
+
+ <div class="paper"><h2>Cost <span class="tag">R1</span><span class="tag">R6</span></h2>
+  <div class="row" style="gap:10px"><div><div class="field">Budget <span class="btn">calc</span></div><div class="val">&euro; 1,200,000</div></div>
+  <div><div class="field">Actual Cost <span class="btn">calc</span></div><div class="val">&euro; 980,000</div></div></div>
+  <div style="margin-top:10px" class="field">Total Budget vs Total Cost (same BudgetBar as the PPM Overview)</div>
+  <div class="bar" style="height:22px"><i style="width:100%;background:var(--other)"></i><i style="width:81.7%;background:var(--c1);opacity:.9"></i></div>
+  <div class="mm">Total Cost 81.7% of Total Budget</div></div>
+</div>
+
+<div class="paper"><h2>Health Summary <span class="tag">R3</span><span class="tag">R4</span> <span style="float:right"><span class="btn">Manage</span></span></h2>
+ <div class="field"><span class="dot g"></span>Schedule &nbsp;<span class="dot a"></span>Cost &nbsp;<span class="dot g"></span>Scope &nbsp;&middot;&nbsp; Report date <b>23 Nov 2026</b></div>
+ <div class="row" style="margin-top:8px">
+  <div class="box"><h3>Summary <span class="cnt">120/250</span></h3>Rollout of the new laptops is complete in two of three sites; the collaboration suite migration is on plan.</div>
+  <div class="box"><h3>Accomplishments <span class="cnt">98/250</span></h3>Pilot closed with 94% satisfaction. File share migration phase 1 done.</div>
+  <div class="box"><h3>Next Steps <span class="cnt">74/250</span></h3>Start site C rollout. Close the supplier negotiation by 12 Dec.</div>
+ </div>
+ <div class="cap">Read-only boxes show the latest report; with no report: "No status reports yet". Counters apply in the editor (limit 250).</div></div>
+
+<div class="paper"><h2>Risk Management <span class="tag">R5</span> <span style="float:right"><span class="btn">Manage</span></span></h2>
+ <div class="kpis" style="grid-template-columns:repeat(3,1fr)"><div class="kpi"><small>Total</small><b>12</b></div><div class="kpi"><small>Open</small><b>9</b></div><div class="kpi"><small>High open</small><b style="color:var(--bad)">2</b></div></div>
+ <div class="row">
+  <div><h3>How exposed are we? (open risks by band)</h3>
+   <svg width="170" height="150" viewBox="0 0 170 150" role="img" aria-label="Open risks by band"><g transform="translate(85,75) rotate(-90)"><circle r="46" fill="none" stroke="var(--bad)" stroke-width="18" stroke-dasharray="64.2 289"/><circle r="46" fill="none" stroke="var(--warn)" stroke-width="18" stroke-dasharray="128.4 289" stroke-dashoffset="-64.2"/><circle r="46" fill="none" stroke="var(--good)" stroke-width="18" stroke-dasharray="96.3 289" stroke-dashoffset="-192.6"/></g><text x="85" y="80" text-anchor="middle" style="font-size:20px;font-weight:700">9</text></svg>
+   <div class="legend"><label><input type="checkbox" checked><span><i style="background:var(--bad)"></i> High 2</span></label><label><input type="checkbox" checked><span><i style="background:var(--warn)"></i> Medium 4</span></label><label><input type="checkbox" checked><span><i style="background:var(--good)"></i> Low 3</span></label></div></div>
+  <div><h3>Where are they in the workflow? (by status)</h3>
+   <svg width="100%" height="150" viewBox="0 0 260 150"><g class="m"><text x="0" y="22">Open</text><text x="0" y="48">Mitigating</text><text x="0" y="74">Mitigated</text><text x="0" y="100">Closed</text><text x="0" y="126">Accepted</text></g>
+   <rect x="74" y="10" width="140" height="16" rx="3" fill="var(--c1)"/><text x="220" y="22">5</text>
+   <rect x="74" y="36" width="112" height="16" rx="3" fill="var(--c1)"/><text x="192" y="48">4</text>
+   <rect x="74" y="62" width="56" height="16" rx="3" fill="var(--c1)"/><text x="136" y="74">2</text>
+   <rect x="74" y="88" width="28" height="16" rx="3" fill="var(--c1)"/><text x="108" y="100">1</text>
+   <rect x="74" y="114" width="0" height="16"/><text x="80" y="126">0</text></svg></div>
+  <div><h3>Probability &times; impact</h3>
+   <svg width="190" height="160" viewBox="0 0 190 160" role="img" aria-label="Heat map">
+   <g id="hm"></g><text x="95" y="156" text-anchor="middle" class="m">Impact &rarr;</text></svg></div>
+ </div></div>
+</div>
+<script>
+// 5x5 matrix: score = probability x impact; colour by band (high>=15, medium>=6, low).
+const hm=document.getElementById('hm'),counts={'5,4':1,'4,4':1,'3,3':2,'2,3':1,'3,2':1,'2,2':2,'1,2':1};
+let s='';for(let p=5;p>=1;p--)for(let i=1;i<=5;i++){const sc=p*i,col=sc>=15?'var(--bad)':sc>=6?'var(--warn)':'var(--good)',c=counts[p+','+i];
+s+=`<rect x="${20+(i-1)*34}" y="${(5-p)*28}" width="32" height="26" rx="3" fill="${col}" opacity="${c?1:.28}"/>`+(c?`<text x="${36+(i-1)*34}" y="${18+(5-p)*28}" text-anchor="middle" style="fill:#fff;font-weight:700">${c}</text>`:'');}
+hm.innerHTML=s;
+</script></body></html>
