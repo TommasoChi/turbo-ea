@@ -170,7 +170,7 @@ describe("PpmFinancialRowForm", () => {
       "provider_child_id",
     );
   });
-  it("refreshes the parent after a stale destination while displaying the error", async () => {
+  it("refreshes the parent after a stale 409 on edit while displaying the error", async () => {
     const user = userEvent.setup();
     const onStale = vi.fn();
     mockApi.fail("patch", "/ppm/costs/c1", 409, "Budget Provider changed; retry");
