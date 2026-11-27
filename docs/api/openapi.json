@@ -14682,14 +14682,26 @@
             "title": "Actual Start Date"
           },
           "capex_actual": {
-            "default": 0,
-            "title": "Capex Actual",
-            "type": "number"
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Capex Actual"
           },
           "capex_planned": {
-            "default": 0,
-            "title": "Capex Planned",
-            "type": "number"
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Capex Planned"
           },
           "cost_actual": {
             "anyOf": [
@@ -14781,14 +14793,26 @@
             "type": "string"
           },
           "opex_actual": {
-            "default": 0,
-            "title": "Opex Actual",
-            "type": "number"
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Opex Actual"
           },
           "opex_planned": {
-            "default": 0,
-            "title": "Opex Planned",
-            "type": "number"
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Opex Planned"
           },
           "parent_id": {
             "anyOf": [

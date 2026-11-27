@@ -2005,3 +2005,45 @@ class TestPermissions:
             headers=auth_headers(ppm_env["viewer"]),
         )
         assert resp.status_code == 403
+
+
+class TestRowDeletedDuringUpdate:
+    """A row deleted between the first read and the locked refresh answers 404, not 500."""
+
+    @pytest.mark.parametrize(
+        ("path", "model_name", "create_body"),
+        [
+            ("costs", "PpmCostLine", {"category": "capex", "description": "C", "planned": 1}),
+            ("budgets", "PpmBudgetLine", {"fiscal_year": 2026, "category": "capex", "amount": 1}),
+        ],
+    )
+    async def test_patch_answers_404(
+        self, client, ppm_env, monkeypatch, path, model_name, create_body, ppm_budget
+    ):
+        from sqlalchemy.exc import InvalidRequestError
+        from sqlalchemy.ext.asyncio import AsyncSession
+
+        from app.models import ppm_cost_line
+
+        headers = auth_headers(ppm_env["admin"])
+        init_id = str(ppm_env["initiative"].id)
+        if path == "costs":
+            create_body = {**create_body, "budget_line_id": ppm_budget}
+        created = await client.post(
+            f"{BASE}/initiatives/{init_id}/{path}", json=create_body, headers=headers
+        )
+        assert created.status_code == 200, created.text
+        row_id = created.json()["id"]
+        model = getattr(ppm_cost_line, model_name)
+        real_refresh = AsyncSession.refresh
+
+        async def refresh(self, instance, *args, **kwargs):
+            if isinstance(instance, model):
+                raise InvalidRequestError("Could not refresh instance")
+            return await real_refresh(self, instance, *args, **kwargs)
+
+        monkeypatch.setattr(AsyncSession, "refresh", refresh)
+
+        resp = await client.patch(f"{BASE}/{path}/{row_id}", json={}, headers=headers)
+
+        assert resp.status_code == 404

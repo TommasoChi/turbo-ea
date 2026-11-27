@@ -8,7 +8,7 @@ from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, select
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, InvalidRequestError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, get_db
@@ -701,6 +701,14 @@ async def create_cost_line(
     return await _cost_line_out(db, user, cl, card)
 
 
+async def _refresh_or_404(db: AsyncSession, row: object, detail: str) -> None:
+    """Reload ``row`` under the settings lock; a row deleted meanwhile is a 404."""
+    try:
+        await db.refresh(row)
+    except InvalidRequestError as exc:
+        raise HTTPException(status_code=404, detail=detail) from exc
+
+
 @router.patch("/costs/{cost_id}", response_model=PpmCostLineOut)
 async def update_cost_line(
     cost_id: str,
@@ -716,7 +724,7 @@ async def update_cost_line(
     initiative_id = str(cl.initiative_id)
     card = await _require_cost_write(db, user, initiative_id)
     await lock_field_settings(db)
-    await db.refresh(cl)
+    await _refresh_or_404(db, cl, "Cost line not found")
     config = await load_section(db, "cost_item")
     old_values = dict(cl.field_values or {})
     submitted = body.model_dump(exclude_unset=True).get("field_values", {})
@@ -985,7 +993,7 @@ async def update_budget_line(
     initiative_id = str(bl.initiative_id)
     card = await _require_cost_write(db, user, initiative_id)
     await lock_field_settings(db)
-    await db.refresh(bl)
+    await _refresh_or_404(db, bl, "Budget line not found")
     config = await load_section(db, "budget")
     cost_config = await load_section(db, "cost_item")
     old_values = dict(bl.field_values or {})
@@ -1280,7 +1288,7 @@ async def update_invoice(
     row = await ppm_financials.invoice_for_user(db, user, invoice_id)
     card = await _require_cost_write(db, user, str(row.initiative_id))
     await lock_field_settings(db)
-    await db.refresh(row)
+    await _refresh_or_404(db, row, "Invoice not found")
     config = await load_section(db, "invoice")
     old_values = dict(row.field_values or {})
     submitted = body.model_dump(exclude_unset=True).get("field_values", {})

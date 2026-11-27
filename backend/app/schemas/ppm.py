@@ -615,10 +615,10 @@ class PpmGanttItem(BaseModel):
     end_date: str | None = None
     cost_budget: float | None
     cost_actual: float | None
-    capex_planned: float = 0
-    capex_actual: float = 0
-    opex_planned: float = 0
-    opex_actual: float = 0
+    capex_planned: float | None = None
+    capex_actual: float | None = None
+    opex_planned: float | None = None
+    opex_actual: float | None = None
     group_id: str | None = None
     group_name: str | None = None
     # Under a ``subtype:<key>`` grouping, True on the initiative that names its
