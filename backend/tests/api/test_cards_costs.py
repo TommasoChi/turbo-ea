@@ -33,7 +33,7 @@ from tests.conftest import (
 @pytest.fixture
 async def cost_env(db):
     await create_role(db, key="admin", permissions={"*": True})
-    await create_role(db, key="member", permissions=MEMBER_PERMISSIONS)
+    await create_role(db, key="member", permissions={**MEMBER_PERMISSIONS, "costs.view": True})
     await create_role(db, key="viewer", permissions=VIEWER_PERMISSIONS)
     await create_card_type(
         db,
@@ -83,7 +83,7 @@ class TestGetCardCostStripping:
         assert r.json()["attributes"].get("costTotalAnnual") == 1234
 
     async def test_member_sees_cost_via_app_perm(self, client, db, cost_env):
-        # MEMBER_PERMISSIONS grants costs.view by default in this release.
+        # The cost_env member role is granted costs.view explicitly.
         r = await client.get(
             f"/api/v1/cards/{cost_env['card'].id}",
             headers=auth_headers(cost_env["member"]),

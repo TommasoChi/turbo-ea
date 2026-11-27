@@ -277,7 +277,12 @@ async def test_hidden_card_and_stakeholder_edit_permission(client, db, env):
         db,
         key="cost_owner",
         label="Owner",
-        permissions={"card.view": True, "card.edit": True, "card.view_costs": True},
+        permissions={
+            "card.view": True,
+            "card.edit": True,
+            "card.view_costs": True,
+            "card.edit_costs": True,
+        },
     )
     stakeholder = Stakeholder(card_id=card.id, user_id=editor.id, role="cost_owner")
     db.add(stakeholder)

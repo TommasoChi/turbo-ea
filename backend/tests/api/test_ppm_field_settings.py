@@ -556,7 +556,13 @@ async def test_provider_relation_denial_and_reuse_for_ppm_editor(client, ppm_env
     await create_role(
         db,
         key="pml_editor",
-        permissions={"inventory.view": True, "ppm.view": True, "ppm.manage": True},
+        permissions={
+            "inventory.view": True,
+            "ppm.view": True,
+            "ppm.manage": True,
+            "costs.view": True,
+            "costs.edit": True,
+        },
     )
     editor = auth_headers(await create_user(db, email="pml-editor@test.com", role="pml_editor"))
     budget_config = _config(
@@ -837,6 +843,7 @@ async def test_hidden_saved_reference_cannot_be_cleared_or_replaced(client, db, 
             "ppm.view": True,
             "inventory.view": True,
             "costs.view": True,
+            "costs.edit": True,
         },
     )
     await create_card_type(
@@ -935,7 +942,12 @@ async def test_report_history_masks_cost_health_without_cost_visibility(client, 
     await create_role(
         db,
         key="pml_report_editor",
-        permissions={"inventory.view": True, "ppm.view": True, "ppm.manage": True},
+        permissions={
+            "inventory.view": True,
+            "inventory.edit": True,
+            "ppm.view": True,
+            "ppm.manage": True,
+        },
     )
     editor = await create_user(db, role="pml_report_editor", email="report-editor@example.test")
     admin_headers = auth_headers(ppm_env["admin"])
@@ -983,6 +995,8 @@ async def test_provider_constants_preview_and_visibility(client, db, ppm_env):
             "inventory.view": True,
             "ppm.view": True,
             "ppm.manage": True,
+            "costs.view": True,
+            "costs.edit": True,
         },
     )
     await create_card_type(

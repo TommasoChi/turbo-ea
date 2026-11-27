@@ -834,7 +834,7 @@ class TestTaskComments:
             db,
             key="member",
             label="Member",
-            permissions={"ppm.view": True, "ppm.manage": True},
+            permissions={"ppm.view": True, "ppm.manage": True, "inventory.edit": True},
         )
         member = await create_user(db, email="member@test.com", role="member")
         task_id = await self._create_task(client, ppm_env)
@@ -860,7 +860,7 @@ class TestTaskComments:
             db,
             key="member",
             label="Member",
-            permissions={"ppm.view": True, "ppm.manage": True},
+            permissions={"ppm.view": True, "ppm.manage": True, "inventory.edit": True},
         )
         member = await create_user(db, email="member@test.com", role="member")
         task_id = await self._create_task(client, ppm_env)

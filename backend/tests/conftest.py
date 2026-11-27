@@ -947,6 +947,21 @@ async def viewer_user(db, viewer_role):
     return await create_user(db, email="viewer@test.com", role="viewer")
 
 
+async def create_ppm_manager_user(db, *, email="ppm-manager@test.com"):
+    """A user holding the ``ppm_manager`` application role (Viewer's rights +
+    ``ppm.manage``). The role is created on first use."""
+    from sqlalchemy import select
+
+    from app.core.permissions import PPM_MANAGER_APP_PERMISSIONS
+    from app.models.role import Role
+
+    if await db.scalar(select(Role.key).where(Role.key == "ppm_manager")) is None:
+        await create_role(
+            db, key="ppm_manager", label="PPM Manager", permissions=PPM_MANAGER_APP_PERMISSIONS
+        )
+    return await create_user(db, email=email, role="ppm_manager")
+
+
 @pytest.fixture
 async def app_card_type(db):
     return await create_card_type(

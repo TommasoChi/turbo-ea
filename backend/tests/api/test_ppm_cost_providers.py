@@ -446,7 +446,13 @@ async def test_editor_cannot_replace_invisible_provider_child(client, db, provid
     await create_role(
         db,
         key="pml_provider_editor",
-        permissions={"inventory.view": True, "ppm.view": True, "ppm.manage": True},
+        permissions={
+            "inventory.view": True,
+            "ppm.view": True,
+            "ppm.manage": True,
+            "costs.view": True,
+            "costs.edit": True,
+        },
     )
     env["provider_type"].role_permissions = {"pml_provider_editor": {"inventory.view": False}}
     editor = await create_user(db, role="pml_provider_editor", email="provider-editor@example.test")

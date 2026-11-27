@@ -30,7 +30,9 @@ BASE = "/api/v1/ppm"
 @pytest.fixture
 async def env(db):
     await create_role(db, key="admin", label="Admin", permissions={"*": True})
-    await create_role(db, key="member", label="Member", permissions=MEMBER_PERMISSIONS)
+    await create_role(
+        db, key="member", label="Member", permissions={**MEMBER_PERMISSIONS, "ppm.manage": True}
+    )
     await create_role(db, key="viewer", label="Viewer", permissions={**VIEWER_PERMISSIONS})
     await create_card_type(db, key="Initiative", label="Initiative")
     admin = await create_user(db, email="admin@test.com", role="admin")

@@ -46,7 +46,12 @@ async def env(db):
             db,
             key=key,
             label=key,
-            permissions={"card.view": True, "card.edit": edit, "card.view_costs": edit},
+            permissions={
+                "card.view": True,
+                "card.edit": edit,
+                "card.view_costs": edit,
+                "card.edit_costs": edit,
+            },
         )
     card = await create_card(db, card_type="Application", name="ERP", user_id=users["admin"].id)
     db.add(Stakeholder(card_id=card.id, user_id=users["resp"].id, role="responsible"))
@@ -130,13 +135,13 @@ async def test_history_redacts_attribute_diff(client, db, env):
     assert r.json()[0]["data"]["changes"]["attributes"]["new"]["costTotalAnnual"] == 22
 
 
-async def _member(db, env, email="m@cp.com"):
-    await create_role(db, key="member", label="Member", permissions=MEMBER_PERMISSIONS)
+async def _member(db, env, email="m@cp.com", **extra):
+    await create_role(db, key="member", label="Member", permissions={**MEMBER_PERMISSIONS, **extra})
     return await create_user(db, email=email, role="member")
 
 
 async def test_default_member_cannot_edit_costs_without_stakeholder_role(client, db, env):
-    env["member"] = await _member(db, env)
+    env["member"] = await _member(db, env, **{"costs.view": True})
     assert (await put(client, env, "member")).status_code == 403
     r = await client.get(url(env), headers=auth_headers(env["member"]))
     assert r.status_code == 200 and r.json()["can_edit"] is False
