@@ -868,7 +868,7 @@ async def flag_env(db):
 
 
 def only(*flags: str) -> dict:
-    return {flag: flag in flags for flag in ALL_FLAGS}
+    return {flag: flag in flags for flag in [*ALL_FLAGS, "can_edit_costs"]}
 
 
 class TestEffectiveFlagsOneGrantAtATime:
@@ -937,7 +937,7 @@ class TestEffectiveFlagsOneGrantAtATime:
         )
         user = await create_user(db, email="wild@test.com", role="wild")
         result = await PermissionService.get_effective_card_permissions(db, user, flag_env.id)
-        assert result["effective"] == only(*ALL_FLAGS)
+        assert result["effective"] == only(*ALL_FLAGS, "can_edit_costs")
         assert result["app_level"] == {"*": True}
 
     async def test_a_type_cell_overrides_the_role_grant(self, db, flag_env):

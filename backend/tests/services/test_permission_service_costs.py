@@ -315,7 +315,12 @@ class TestCanEditCosts:
                 db,
                 key=key,
                 label=key,
-                permissions={"card.view": True, "card.edit": edit, "card.view_costs": edit},
+                permissions={
+                    "card.view": True,
+                    "card.edit": edit,
+                    "card.view_costs": edit,
+                    "card.edit_costs": edit,
+                },
             )
 
     async def test_admin_and_app_level_grant(self, db, app_card_type):
