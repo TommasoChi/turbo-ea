@@ -305,7 +305,7 @@ Quando o PML está ativado, os cards de **Iniciativa** exibem uma aba **PML** co
 
 Por outro lado, a aba **Detalhes do Card** dentro da visualização detalhada PML da iniciativa mostra as seções padrão do card sem a aba PML, evitando navegação circular.
 
-## Permissões
+## Permissões { #permissions }
 
 | Permissão | Descrição |
 |-----------|-----------|

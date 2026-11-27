@@ -318,7 +318,7 @@ Når PML er aktiveret, viser **Initiative**-kort en **PML**-fane som den sidste 
 
 Omvendt viser **Card Details**-fanen inden i PML Initiativ-detaljevisningen standardkortdetaljesektionerne uden PML-fanen, hvilket undgår cirkulær navigation.
 
-## Tilladelser
+## Tilladelser { #permissions }
 
 | Tilladelse | Beskrivelse |
 |------------|-------------|

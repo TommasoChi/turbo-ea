@@ -141,7 +141,7 @@ Quando nenhum subtipo é selecionado num card (ou o tipo não possui subtipos), 
 
 Uma relação marcada como obrigatória no tipo de card aplica-se a todos os cartões desse tipo. Quando não se adequa a um subtipo — por exemplo, uma aplicação SaaS sem componente de TI que a aloje —, abra o diálogo **Modelo de subtipo** e marque-a em **Relações não obrigatórias para este subtipo**. A lista mostra apenas as relações obrigatórias do tipo, cada uma designada pelo seu verbo tal como se lê a partir deste tipo de card. Nos cartões desse subtipo a relação deixa de bloquear a aprovação, deixa de penalizar a pontuação de qualidade dos dados e o detalhe do cartão deixa de a marcar como **Obrigatório**; continua visível se o tipo de relação estiver configurado como visível. Os cartões de outros subtipos, e os que não têm subtipo, continuam a precisar dela. Ao guardar, os cartões existentes do tipo são pontuados de novo de imediato.
 
-#### Papéis de Partes Interessadas
+#### Papéis de Partes Interessadas { #stakeholder-roles }
 
 Defina papéis personalizados para este tipo (ex.: "Proprietário da Aplicação", "Proprietário Técnico"). Cada papel carrega **permissões em nível de card** que são combinadas com o papel em nível de aplicação do usuário ao acessar um card. Veja [Usuários e Papéis](users.md) para mais informações sobre o modelo de permissões.
 

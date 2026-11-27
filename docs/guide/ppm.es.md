@@ -305,7 +305,7 @@ Cuando PML está activado, las fichas de **Iniciativa** muestran una pestaña **
 
 A la inversa, la pestaña **Detalles de la ficha** dentro de la vista detallada PML de la iniciativa muestra las secciones estándar de la ficha sin la pestaña PML, evitando la navegación circular.
 
-## Permisos
+## Permisos { #permissions }
 
 | Permiso | Descripción |
 |---------|-------------|

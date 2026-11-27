@@ -140,7 +140,7 @@ Wenn bei einer Karte kein Subtyp ausgewählt ist (oder der Typ keine Subtypen ha
 
 Eine am Kartentyp als Pflicht markierte Beziehung gilt für jede Karte dieses Typs. Passt sie zu einem Subtyp nicht — etwa eine SaaS-Anwendung ohne hostende IT-Komponente —, öffnen Sie den Dialog **Subtyp-Vorlage** und aktivieren Sie sie unter **Für diesen Subtyp nicht erforderliche Beziehungen**. Die Liste zeigt nur die Pflichtbeziehungen des Typs, jeweils mit ihrem Verb aus Sicht dieses Kartentyps. Für Karten dieses Subtyps blockiert die Beziehung die Freigabe nicht mehr, zählt nicht mehr gegen die Datenqualitätsbewertung, und die Kartendetailansicht kennzeichnet sie nicht mehr als **Pflicht**; sie wird weiterhin angezeigt, wenn der Beziehungstyp sichtbar geschaltet ist. Karten anderer Subtypen und Karten ohne Subtyp benötigen sie weiterhin. Beim Speichern werden die vorhandenen Karten des Typs sofort neu bewertet.
 
-#### Stakeholder-Rollen
+#### Stakeholder-Rollen { #stakeholder-roles }
 
 Definieren Sie benutzerdefinierte Rollen für diesen Typ (z.B. «Anwendungseigner», «Technischer Eigner»). Jede Rolle hat **kartenebene Berechtigungen**, die beim Zugriff auf eine Karte mit der anwendungsweiten Rolle des Benutzers kombiniert werden. Siehe [Benutzer & Rollen](users.md) für mehr zum Berechtigungsmodell.
 

@@ -305,7 +305,7 @@ Quando il PML è attivato, le card **Iniziativa** mostrano una scheda **PML** co
 
 Al contrario, la scheda **Dettagli della card** all'interno della vista dettagliata PML dell'iniziativa mostra le sezioni standard senza la scheda PML, evitando la navigazione circolare.
 
-## Permessi
+## Permessi { #permissions }
 
 | Permesso | Descrizione |
 |----------|-------------|

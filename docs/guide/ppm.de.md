@@ -305,7 +305,7 @@ Wenn PML aktiviert ist, zeigen **Initiativ**-Karten einen **PML**-Tab als letzte
 
 Umgekehrt zeigt der **Kartendetails**-Tab innerhalb der PML-Initiativ-Detailansicht die Standardabschnitte der Kartendetails ohne den PML-Tab, um zirkuläre Navigation zu vermeiden.
 
-## Berechtigungen
+## Berechtigungen { #permissions }
 
 | Berechtigung | Beschreibung |
 |-------------|--------------|
