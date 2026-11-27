@@ -3,7 +3,7 @@
  * shown, but the chart is handed nothing to drag, resize, link or edit.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { act, cleanup, render, screen, within } from "@testing-library/react";
 import type { TaskOrEmpty } from "@wamra/gantt-task-react";
 
 vi.mock("@/api/client", () => import("@/test/apiMock").then((m) => m.apiClientModule()));
@@ -11,7 +11,7 @@ vi.mock("@/api/client", () => import("@/test/apiMock").then((m) => m.apiClientMo
 interface GanttProps {
   tasks: TaskOrEmpty[];
   canMoveTasks?: boolean;
-  onDoubleClick?: unknown;
+  onDoubleClick?: (task: TaskOrEmpty) => void;
   onDateChange?: unknown;
   contextMenuOptions?: unknown[];
   onProgressChange?: unknown;
@@ -38,11 +38,14 @@ import PpmGanttTab from "./PpmGanttTab";
 
 const base = "/ppm/initiatives/i1";
 const WBS = [{ id: "w1", initiative_id: "i1", parent_id: null, title: "Phase 1", start_date: "2026-01-01", end_date: "2026-02-01", completion: 0, is_milestone: false, sort_order: 0 }];
+const TASKS = [{ id: "t1", initiative_id: "i1", wbs_id: "w1", title: "Ship it", description: "Why it matters", status: "todo", priority: "high", assignee_id: null, assignee_name: null, start_date: "2026-01-05", due_date: "2026-01-10", sort_order: 0, tags: [], comment_count: 0, created_at: "2026-01-01T00:00:00Z", updated_at: "2026-01-01T00:00:00Z" }];
 
 beforeEach(() => {
   mockApi.reset();
   mockApi.on("get", `${base}/wbs`, WBS);
-  mockApi.on("get", `${base}/tasks`, []);
+  mockApi.on("get", `${base}/tasks`, TASKS);
+  mockApi.on("get", "/users*", []);
+  mockApi.on("get", /\/comments$/, []);
   mockApi.on("get", `${base}/dependencies`, []);
 });
 
@@ -69,7 +72,7 @@ describe("PpmGanttTab write access", () => {
     expect(screen.queryByRole("button", { name: /Create Task$/ })).not.toBeInTheDocument();
     const props = gantt.props!;
     expect(props.canMoveTasks).toBe(false);
-    expect(props.onDoubleClick).toBeUndefined();
+    expect(props.onDoubleClick).toBeTypeOf("function");
     expect(props.contextMenuOptions).toEqual([]);
     for (const h of ["onDateChange", "onProgressChange", "onRelationChange", "onMoveTaskBefore", "onMoveTaskAfter", "onMoveTaskInside"] as const) {
       expect(props[h], h).toBeUndefined();
@@ -77,5 +80,23 @@ describe("PpmGanttTab write access", () => {
     expect(props.tasks.some((t) => t.type === "empty")).toBe(false);
     expect(props.tasks.every((t) => (t as { isDisabled?: boolean }).isDisabled)).toBe(true);
     expect(screen.getByTestId("gantt")).toHaveTextContent("Phase 1");
+  });
+
+  it("opens a task read-only on double-click without canEdit, editable with it", async () => {
+    const open = async (canEdit: boolean) => {
+      render(<PpmGanttTab initiativeId="i1" canEdit={canEdit} />);
+      await screen.findByTestId("gantt");
+      const task = gantt.props!.tasks.find((t) => t.id === "task-t1")!;
+      act(() => gantt.props!.onDoubleClick!(task));
+      return screen.findByRole("dialog");
+    };
+    let dialog = await open(false);
+    expect(within(dialog).getByLabelText("Description")).toHaveValue("Why it matters");
+    expect(within(dialog).getByLabelText("Description")).toBeDisabled();
+    expect(within(dialog).queryByRole("button", { name: /^Save$/ })).not.toBeInTheDocument();
+    cleanup();
+    dialog = await open(true);
+    expect(within(dialog).getByLabelText("Description")).toBeEnabled();
+    expect(within(dialog).getByRole("button", { name: /^Save$/ })).toBeInTheDocument();
   });
 });

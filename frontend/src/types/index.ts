@@ -2647,8 +2647,8 @@ export interface PpmCostLine {
   initiative_id: string;
   description: string;
   category: "capex" | "opex";
-  planned: number;
-  actual: number;
+  planned?: number;
+  actual?: number;
   date: string | null;
   created_at: string;
   updated_at: string;
@@ -2660,7 +2660,7 @@ export interface PpmBudgetLine {
   fiscal_year: number;
   category: "capex" | "opex";
   description: string | null;
-  amount: number;
+  amount?: number;
   created_at: string;
   updated_at: string;
 }
@@ -2742,7 +2742,7 @@ export interface PpmInvoice extends PmlRowFields {
   cost_item_id: string;
   invoice_date: string;
   invoice_id: string;
-  amount?: string;
+  amount: string;
 }
 
 export interface PpmFinancialSubtotal extends PpmFinancialTotals {

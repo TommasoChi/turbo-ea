@@ -915,7 +915,7 @@ export default function PpmGanttTab({ initiativeId, card, canEdit }: Props) {
           setEmptyRowMenuAnchor(e.currentTarget);
           return;
         }
-        if (canEdit) openDialogForId(task.id);
+        openDialogForId(task.id);
       };
       return (
         <div
@@ -970,7 +970,7 @@ export default function PpmGanttTab({ initiativeId, card, canEdit }: Props) {
     };
     Cell.displayName = "NameCell";
     return Cell;
-  }, [openDialogForId, canEdit]);
+  }, [openDialogForId]);
 
   /** Custom column: completion % chip — click to edit with slider popover.
    *  Parent WBS items (with children) show a read-only calculated value. */
@@ -1842,7 +1842,7 @@ export default function PpmGanttTab({ initiativeId, card, canEdit }: Props) {
             viewDate={viewDate}
             columns={ganttColumns}
             canResizeColumns
-            onDoubleClick={canEdit ? handleDoubleClick : undefined}
+            onDoubleClick={handleDoubleClick}
             onDateChange={canEdit ? handleDateChange : undefined}
             onProgressChange={canEdit ? handleProgressChange : undefined}
             onChangeExpandState={handleExpanderClick}
@@ -1993,6 +1993,7 @@ export default function PpmGanttTab({ initiativeId, card, canEdit }: Props) {
       {/* WBS Dialog */}
       {wbsDialogOpen && (
         <PpmWbsDialog
+          readOnly={!canEdit}
           initiativeId={initiativeId}
           wbs={editingWbs}
           wbsList={wbsList}
@@ -2043,6 +2044,7 @@ export default function PpmGanttTab({ initiativeId, card, canEdit }: Props) {
       {/* Task Dialog */}
       {taskDialogOpen && (
         <PpmTaskDialog
+          readOnly={!canEdit}
           initiativeId={initiativeId}
           task={editingTask}
           wbsList={wbsList}

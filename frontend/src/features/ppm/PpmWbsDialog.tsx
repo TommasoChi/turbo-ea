@@ -37,6 +37,8 @@ interface Props {
   hasTasks?: boolean;
   defaultMilestone?: boolean;
   defaultStartDate?: string;
+  /** Details only: every field disabled, no Save or Delete. */
+  readOnly?: boolean;
   onClose: () => void;
   onSaved: () => void;
 }
@@ -64,6 +66,7 @@ export default function PpmWbsDialog({
   hasTasks,
   defaultMilestone,
   defaultStartDate,
+  readOnly,
   onClose,
   onSaved,
 }: Props) {
@@ -173,7 +176,8 @@ export default function PpmWbsDialog({
             onChange={(e) => setTitle(e.target.value)}
             fullWidth
             required
-            autoFocus={!fullScreen}
+            autoFocus={!fullScreen && !readOnly}
+            disabled={readOnly}
           />
           <TextField
             label={t("wbsDescription")}
@@ -182,10 +186,12 @@ export default function PpmWbsDialog({
             fullWidth
             multiline
             rows={3}
+            disabled={readOnly}
           />
           <FormControl fullWidth size="small">
             <InputLabel>{t("wbsParent")}</InputLabel>
             <Select
+              disabled={readOnly}
               value={parentId}
               label={t("wbsParent")}
               onChange={(e) => setParentId(e.target.value)}
@@ -200,6 +206,7 @@ export default function PpmWbsDialog({
           </FormControl>
           <Autocomplete
             options={users}
+            disabled={readOnly}
             getOptionLabel={(opt) => opt.display_name}
             value={users.find((u) => u.id === assigneeId) || null}
             onChange={(_e, val) => setAssigneeId(val?.id || "")}
@@ -217,6 +224,7 @@ export default function PpmWbsDialog({
             control={
               <Switch
                 checked={isMilestone}
+                disabled={readOnly}
                 onChange={(e) => setIsMilestone(e.target.checked)}
               />
             }
@@ -233,6 +241,7 @@ export default function PpmWbsDialog({
               onChange={(v) => setStartDate(v)}
               fullWidth
               size="small"
+              disabled={readOnly}
             />
             {!isMilestone && (
               <DateField
@@ -241,6 +250,7 @@ export default function PpmWbsDialog({
                 onChange={(v) => setEndDate(v)}
                 fullWidth
                 size="small"
+                disabled={readOnly}
               />
             )}
           </Box>
@@ -254,7 +264,7 @@ export default function PpmWbsDialog({
               min={0}
               max={100}
               step={5}
-              disabled={hasChildren}
+              disabled={hasChildren || readOnly}
               valueLabelDisplay="auto"
               valueLabelFormat={(v) => `${v}%`}
             />
@@ -289,7 +299,7 @@ export default function PpmWbsDialog({
         </Alert>
       )}
       <DialogActions>
-        {isEdit && (
+        {isEdit && !readOnly && (
           <Button
             color="error"
             onClick={() => setConfirmDelete(true)}
@@ -299,6 +309,7 @@ export default function PpmWbsDialog({
           </Button>
         )}
         <Button onClick={onClose}>{t("common:actions.cancel", "Cancel")}</Button>
+        {!readOnly && (
         <Button
           variant="contained"
           onClick={handleSave}
@@ -307,6 +318,7 @@ export default function PpmWbsDialog({
         >
           {submitLabel}
         </Button>
+        )}
       </DialogActions>
     </Dialog>
   );

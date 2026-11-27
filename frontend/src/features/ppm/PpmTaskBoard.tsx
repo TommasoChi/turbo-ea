@@ -732,8 +732,9 @@ export default function PpmTaskBoard({ initiativeId, canEdit }: Props) {
 
       {loading ? null : view === "kanban" ? renderKanban() : renderList()}
 
-      {canEdit && taskDialog.open && (
+      {taskDialog.open && (
         <PpmTaskDialog
+          readOnly={!canEdit}
           initiativeId={initiativeId}
           task={taskDialog.task}
           wbsList={wbsList}

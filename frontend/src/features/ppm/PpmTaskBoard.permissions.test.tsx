@@ -29,8 +29,9 @@ vi.mock("@/api/client", () => ({
 }));
 
 const ME = { id: "u1", email: "me@example.com", display_name: "Me", role: "member", is_active: true } as User;
-const base = { initiative_id: "i1", description: null, assignee_id: null, assignee_name: null, start_date: null, due_date: null, sort_order: 0, tags: [], created_at: "2026-01-01T00:00:00Z", updated_at: "2026-01-01T00:00:00Z" };
+const base = { initiative_id: "i1", description: "Why it matters", assignee_id: null, assignee_name: null, start_date: null, due_date: null, sort_order: 0, tags: [], created_at: "2026-01-01T00:00:00Z", updated_at: "2026-01-01T00:00:00Z" };
 const TASKS = [{ ...base, id: "t1", title: "Ship it", status: "todo", priority: "high", wbs_id: "w1", comment_count: 0 }] as PpmTask[];
+const COMMENTS = [{ id: "c1", task_id: "t1", user_id: "u2", user_display_name: "Ann Lee", content: "First comment", created_at: "2026-01-02T00:00:00Z" }];
 const WBS = [{ id: "w1", initiative_id: "i1", title: "Phase 1", parent_id: null, is_milestone: false } as PpmWbs];
 
 const renderBoard = (canEdit: boolean, entry = "/ppm/i1") =>
@@ -45,7 +46,7 @@ const renderBoard = (canEdit: boolean, entry = "/ppm/i1") =>
 beforeEach(() => {
   sortable.length = 0;
   get.mockImplementation((path: string) =>
-    Promise.resolve(path.endsWith("/tasks") ? TASKS : path.endsWith("/wbs") ? WBS : []),
+    Promise.resolve(path.endsWith("/comments") ? COMMENTS : path.endsWith("/tasks") ? TASKS : path.endsWith("/wbs") ? WBS : []),
   );
 });
 
@@ -65,11 +66,27 @@ describe("PpmTaskBoard write access", () => {
     expect(screen.queryByRole("button", { name: /Add Task/ })).not.toBeInTheDocument();
   });
 
-  it("opens no edit dialog from a card without canEdit", async () => {
+  it("opens the task read-only from a card without canEdit", async () => {
     const user = userEvent.setup();
     renderBoard(false);
     await user.click(await screen.findByText("Ship it"));
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    const dialog = await screen.findByRole("dialog");
+    expect(await within(dialog).findByText("First comment")).toBeInTheDocument();
+    expect(within(dialog).getByLabelText("Description")).toHaveValue("Why it matters");
+    expect(within(dialog).getByLabelText("Description")).toBeDisabled();
+    expect(within(dialog).queryByRole("button", { name: /^Save$/ })).not.toBeInTheDocument();
+    expect(within(dialog).queryByRole("button", { name: /^Delete$/ })).not.toBeInTheDocument();
+    expect(within(dialog).queryByPlaceholderText("Add a comment...")).not.toBeInTheDocument();
+  });
+
+  it("opens the task editable from a card with canEdit", async () => {
+    const user = userEvent.setup();
+    renderBoard(true);
+    await user.click(await screen.findByText("Ship it"));
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByLabelText("Description")).toBeEnabled();
+    expect(within(dialog).getByRole("button", { name: /^Save$/ })).toBeInTheDocument();
+    expect(await within(dialog).findByPlaceholderText("Add a comment...")).toBeInTheDocument();
   });
 
   it("offers no complete, edit or delete in the list without canEdit", async () => {

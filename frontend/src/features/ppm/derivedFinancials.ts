@@ -62,7 +62,7 @@ export function derivedYearGroups(
  */
 export function ownTotals<T>(
   lines: readonly T[],
-  amountOf: (line: T) => number,
+  amountOf: (line: T) => number | undefined,
   categoryOf: (line: T) => string,
 ): BudgetTotals {
   const totals: BudgetTotals = { capex: 0, opex: 0, total: 0 };
