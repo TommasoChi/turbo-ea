@@ -186,27 +186,26 @@ class TestStatusReports:
         assert resp.json()[field] == "x" * 250
 
     @pytest.mark.parametrize("field", ["summary", "accomplishments", "next_steps"])
-    async def test_patch_report_rejects_a_changed_text_over_250(self, client, ppm_env, field):
-        created = await client.post(
-            f"{BASE}/initiatives/{ppm_env['initiative'].id}/reports",
-            json={"report_date": "2026-03-01"},
-            headers=auth_headers(ppm_env["admin"]),
+    async def test_patch_report_rejects_a_changed_text_over_250(self, client, db, ppm_env, field):
+        report = await create_status_report(
+            db, initiative_id=ppm_env["initiative"].id, report_date=date(2026, 3, 1)
         )
         resp = await client.patch(
-            f"{BASE}/reports/{created.json()['id']}",
+            f"{BASE}/reports/{report.id}",
             json={field: "x" * 251},
             headers=auth_headers(ppm_env["admin"]),
         )
         assert resp.status_code == 422
 
+    @pytest.mark.parametrize("field", ["summary", "accomplishments", "next_steps"])
     async def test_patch_report_without_texts_keeps_a_stored_text_over_250(
-        self, client, db, ppm_env
+        self, client, db, ppm_env, field
     ):
         report = await create_status_report(
             db,
             initiative_id=ppm_env["initiative"].id,
             report_date=date(2026, 3, 1),
-            summary="y" * 400,
+            **{field: "y" * 400},
         )
         resp = await client.patch(
             f"{BASE}/reports/{report.id}",
@@ -215,7 +214,7 @@ class TestStatusReports:
         )
         assert resp.status_code == 200
         assert resp.json()["report_date"] == "2026-03-02"
-        assert resp.json()["summary"] == "y" * 400
+        assert resp.json()[field] == "y" * 400
 
 
 # ── Cost Lines ────────────────────────────────────────────────────
