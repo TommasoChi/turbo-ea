@@ -214,9 +214,9 @@ export function initiativeSummaryGroups(section: SectionDef, cost: string, timel
     if (INITIATIVE_DATE_FIELDS.includes(field.key)) return { ...field, group: timeline };
     return field;
   });
-  // Timeline first whatever the seed order: the cost fields close the section.
-  const isCost = (field: { key: string }) => INITIATIVE_COST_FIELDS.includes(field.key);
-  return { ...section, fields: [...fields.filter((f) => !isCost(f)), ...fields.filter(isCost)] };
+  // Timeline, then Cost, whatever the seed order: the dates lead, the rest keeps its order.
+  const isDate = (field: { key: string }) => INITIATIVE_DATE_FIELDS.includes(field.key);
+  return { ...section, fields: [...fields.filter(isDate), ...fields.filter((f) => !isDate(f))] };
 }
 
 export function initiativeSummaryAnchors(sections: SectionDef[], hidden: Set<string>) {

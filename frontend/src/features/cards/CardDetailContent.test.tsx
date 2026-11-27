@@ -24,6 +24,7 @@ vi.mock("@/hooks/useCurrency", () => ({
 }));
 const pml = vi.hoisted(() => ({ enabled: false, canView: true, canManage: true }));
 const completionReply = vi.hoisted(() => ({ value: { completion: 40, wbs_count: 3 } as unknown }));
+const comparisonReply = vi.hoisted(() => ({ value: undefined as unknown }));
 vi.mock("@/hooks/usePpmEnabled", () => ({ usePpmEnabled: () => ({ ppmEnabled: pml.enabled }) }));
 vi.mock("@/hooks/useGrcEnabled", () => ({ useGrcEnabled: () => ({ grcEnabled: false }) }));
 vi.mock("@/hooks/useCardTabActivity", () => ({
@@ -144,6 +145,7 @@ beforeEach(() => {
   pml.canView = true;
   pml.canManage = true;
   completionReply.value = { completion: 40, wbs_count: 3 };
+  comparisonReply.value = undefined;
   vi.mocked(api.get).mockReset().mockResolvedValue([]);
   vi.mocked(useMetamodel).mockReturnValue({
     types: [APP_TYPE],
@@ -313,7 +315,7 @@ describe("CardDetailContent Initiative summaries", () => {
     vi.mocked(api.get).mockImplementation(async (path) => path.endsWith("/financials")
       ? {
         initiative_id: card.id,
-        card_comparison: {
+        card_comparison: comparisonReply.value ?? {
           budget: { capex: "60", opex: "40", total: "100", derived: false },
           actual: { capex: "30", opex: "40", total: "70", derived: false },
         },
@@ -452,7 +454,7 @@ describe("CardDetailContent Initiative summaries", () => {
     initiative();
     expect(screen.getByText("Actual Cost")).toBeInTheDocument();
     expect(screen.getByText("Actual Start")).toBeInTheDocument();
-    expect(api.get).not.toHaveBeenCalledWith(expect.stringMatching(/\/(financials|schedule)$/), expect.anything());
+    expect(api.get).not.toHaveBeenCalledWith(expect.stringMatching(/\/(financials|schedule|completion)$/), expect.anything());
     expect(screen.queryByText("Total", { exact: true })).not.toBeInTheDocument();
     expect(screen.queryByTestId("initiative-timeline")).not.toBeInTheDocument();
   });
@@ -460,11 +462,11 @@ describe("CardDetailContent Initiative summaries", () => {
   it("does not mount private requests on hidden sections or without PML access", () => {
     pml.enabled = true;
     const view = initiative({ "custom:0": { hidden: true } });
-    expect(api.get).not.toHaveBeenCalledWith(expect.stringMatching(/\/(financials|schedule)$/), expect.anything());
+    expect(api.get).not.toHaveBeenCalledWith(expect.stringMatching(/\/(financials|schedule|completion)$/), expect.anything());
     view.unmount();
     pml.canView = false;
     initiative();
-    expect(api.get).not.toHaveBeenCalledWith(expect.stringMatching(/\/(financials|schedule)$/), expect.anything());
+    expect(api.get).not.toHaveBeenCalledWith(expect.stringMatching(/\/(financials|schedule|completion)$/), expect.anything());
   });
 
   it("refreshes the same Initiative schedule after saving the date without requesting financials for restricted readers", async () => {
@@ -497,6 +499,22 @@ describe("CardDetailContent Initiative summaries", () => {
     expect(screen.queryByText("OpEx")).not.toBeInTheDocument();
     expect(within(group).getByText("Budget")).toBeInTheDocument();
     expect(within(group).getByText("Actual Cost")).toBeInTheDocument();
+  });
+
+  it("feeds the Total bar from card_comparison: the amounts, the ratio and each derived flag", async () => {
+    pml.enabled = true;
+    comparisonReply.value = {
+      budget: { capex: "0", opex: "0", total: "100", derived: true },
+      actual: { capex: "0", opex: "0", total: "70", derived: false },
+    };
+    initiative();
+    await screen.findByText("Total", { exact: true });
+    const group = screen.getByText("Cost", { exact: true }).parentElement?.parentElement as HTMLElement;
+    const bar = within(group).getByRole("progressbar");
+    expect(bar).toHaveAttribute("aria-valuenow", "70");
+    expect(bar).toHaveAttribute("data-derived-budget", "true");
+    expect(bar).not.toHaveAttribute("data-derived-actual");
+    expect(screen.getByText(/\(70%\)/)).toBeInTheDocument();
   });
 
   it("shows no bar and keeps the lock placeholders without cost view", async () => {

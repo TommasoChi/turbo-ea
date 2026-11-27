@@ -514,6 +514,7 @@ describe("Initiative summary layout", () => {
       fields: [
         { key: "costBudget", type: "cost", label: "Budget" },
         { key: "costActual", type: "cost", label: "Actual Cost" },
+        { key: "owner", type: "text", label: "Owner" },
         { key: "startDate", type: "date", label: "Start Date" },
         { key: "actualStart", type: "date", label: "Actual Start" },
         { key: "endDate", type: "date", label: "End Date" },
@@ -522,10 +523,10 @@ describe("Initiative summary layout", () => {
     };
     const grouped = initiativeSummaryGroups(costFirst, "Cost", "Timeline");
     expect(grouped.fields.map((field) => field.key)).toEqual([
-      "startDate", "actualStart", "endDate", "actualEnd", "costBudget", "costActual",
+      "startDate", "actualStart", "endDate", "actualEnd", "costBudget", "costActual", "owner",
     ]);
     expect(grouped.fields.map((field) => field.group)).toEqual([
-      "Timeline", "Timeline", "Timeline", "Timeline", "Cost", "Cost",
+      "Timeline", "Timeline", "Timeline", "Timeline", "Cost", "Cost", undefined,
     ]);
   });
 });

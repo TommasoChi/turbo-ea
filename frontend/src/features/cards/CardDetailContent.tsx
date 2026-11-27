@@ -8,9 +8,6 @@ import Tab from "@mui/material/Tab";
 import Badge from "@mui/material/Badge";
 import Button from "@mui/material/Button";
 import Alert from "@mui/material/Alert";
-import LinearProgress from "@mui/material/LinearProgress";
-import Typography from "@mui/material/Typography";
-import { useTheme } from "@mui/material/styles";
 import { useTranslation } from "react-i18next";
 import { missingRequiredFields } from "@/features/cards/sections/cardDetailUtils";
 import { useFieldLabel } from "@/hooks/useResolveLabel";
@@ -25,7 +22,7 @@ import { usePpmEnabled } from "@/hooks/usePpmEnabled";
 import { useGrcEnabled } from "@/hooks/useGrcEnabled";
 import { useCardTabActivity } from "@/hooks/useCardTabActivity";
 import { api } from "@/api/client";
-import { usePpmCompletion, usePpmFinancials, usePpmSchedule } from "@/features/ppm/usePpmFinancials";
+import { usePpmSchedule } from "@/features/ppm/usePpmFinancials";
 import {
   DescriptionSection,
   LifecycleSection,
@@ -634,14 +631,14 @@ export default function CardDetailContent({
             ) : undefined}
             renderGroupAside={summaryAnchors ? (keys) => (
               summaryAnchors.schedule && keys.includes(summaryAnchors.schedule)
-                ? <InitiativeCompletion initiativeId={card.id} revision={scheduleRevision} />
+                ? <Suspense fallback={null}><InitiativeCompletion initiativeId={card.id} revision={scheduleRevision} /></Suspense>
                 : null
             ) : undefined}
             renderAfterFields={summaryAnchors ? (keys) => (
               <>
                 {perms.can_view_costs && summaryAnchors.financial && keys.includes(summaryAnchors.financial) && (
                   <Box key="financial-summary">
-                    <InitiativeFinancialSummary initiativeId={card.id} revision={scheduleRevision} />
+                    <Suspense fallback={null}><InitiativeFinancialSummary initiativeId={card.id} revision={scheduleRevision} /></Suspense>
                   </Box>
                 )}
                 {summaryAnchors.schedule && keys.includes(summaryAnchors.schedule) && (
@@ -967,54 +964,12 @@ export default function CardDetailContent({
 }
 
 
-const BudgetBar = lazy(() => import("@/features/ppm/ppmVisuals").then((m) => ({ default: m.BudgetBar })));
-const CompletionRing = lazy(() => import("@/features/ppm/ppmVisuals").then((m) => ({ default: m.CompletionRing })));
+const InitiativeFinancialSummary = lazy(() => import("@/features/ppm/InitiativeFinancialSummary"));
+const InitiativeCompletion = lazy(() => import("@/features/ppm/InitiativeCompletion"));
 const PpmInitiativeTimeline = lazy(() => import("@/features/ppm/PpmInitiativeTimeline"));
 
 const PpmHealthSummary = lazy(() => import("@/features/ppm/PpmHealthSummary"));
 const PpmManageDialog = lazy(() => import("@/features/ppm/PpmManageDialog"));
-
-function InitiativeFinancialSummary({ initiativeId, revision }: { initiativeId: string; revision: number }) {
-  const { t } = useTranslation("ppm");
-  const theme = useTheme();
-  const { currency } = useCurrency();
-  const { data } = usePpmFinancials(initiativeId, revision);
-  const comparison = data?.card_comparison;
-  if (!comparison) return null;
-  return (
-    <Suspense fallback={null}>
-      <BudgetBar
-        label={t("budgetBarTotal")}
-        budget={Number(comparison.budget.total)}
-        actual={Number(comparison.actual.total)}
-        currency={currency}
-        barColor={theme.palette.primary.main}
-        overColor={theme.palette.error.dark}
-        derivedBudget={comparison.budget.derived}
-        derivedActual={comparison.actual.derived}
-      />
-    </Suspense>
-  );
-}
-
-function InitiativeCompletion({ initiativeId, revision }: { initiativeId: string; revision: number }) {
-  const { t } = useTranslation("ppm");
-  const { data, error } = usePpmCompletion(initiativeId, revision);
-  return (
-    <Box sx={{ minWidth: 96 }}>
-      <Typography variant="caption" color="text.secondary">{t("completion")}</Typography>
-      {error ? (
-        <Alert severity="error">{error.message || t("common:errors.generic")}</Alert>
-      ) : !data ? (
-        <LinearProgress />
-      ) : data.wbs_count === 0 ? (
-        <Typography variant="body2" color="text.secondary">{t("noWbsItems")}</Typography>
-      ) : (
-        <Suspense fallback={null}><CompletionRing value={data.completion} /></Suspense>
-      )}
-    </Box>
-  );
-}
 
 function InitiativeTimelineSummary({ card, revision, onManage }: { card: Card; revision: number; onManage?: () => void }) {
   const { data } = usePpmSchedule(card.id, revision);

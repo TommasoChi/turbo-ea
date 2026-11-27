@@ -7,10 +7,9 @@ import LinearProgress from "@mui/material/LinearProgress";
 import { useTranslation } from "react-i18next";
 import { useTheme } from "@mui/material/styles";
 import { useCurrency } from "@/hooks/useCurrency";
-import { useApiQuery } from "@/hooks/useApiQuery";
 import { useDateFormat } from "@/hooks/useDateFormat";
 import PpmInitiativeTimeline from "./PpmInitiativeTimeline";
-import { usePpmSchedule } from "./usePpmFinancials";
+import { usePpmCompletion, usePpmSchedule } from "./usePpmFinancials";
 import { KPI_VALUE_SX } from "./ppmStyles";
 import DerivedValue from "./DerivedValue";
 import { financialTotals } from "./derivedFinancials";
@@ -59,10 +58,7 @@ export default function PpmOverviewTab({
 
   // Initiative completion. Ordered per initiative, and never the previous
   // initiative's figure while the next one loads.
-  const { data: completion, error: completionError } = useApiQuery<{
-    completion: number;
-    wbs_count: number;
-  }>(`/ppm/initiatives/${card.id}/completion`, { keepPreviousData: false });
+  const { data: completion, error: completionError } = usePpmCompletion(card.id);
   const completionPct = completion?.completion;
   // Stryker disable next-line ConditionalExpression,LogicalOperator: completionPct is read off completion, so the two are undefined together
   const completionLoading = completion === undefined || completionPct === undefined;
