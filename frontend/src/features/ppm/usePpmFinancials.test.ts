@@ -83,13 +83,30 @@ describe("usePpmLatestReport", () => {
     expect(result.current.data).toBeNull();
   });
 
+  it("orders same-date reports by created_at, then id, newest first", async () => {
+    const r = (id: string, created_at: string) => ({ id, report_date: "2026-03-01", created_at });
+    get.mockResolvedValueOnce([
+      r("a", "2026-03-01T08:00:00"),
+      r("b", "2026-03-01T09:00:00"),
+      r("z", "2026-03-01T07:00:00"),
+    ]);
+    const first = renderHook(() => usePpmLatestReport("i1"));
+    await waitFor(() => expect(first.result.current.data?.id).toBe("b"));
+    get.mockResolvedValueOnce([r("a", "2026-03-01T08:00:00"), r("c", "2026-03-01T08:00:00")]);
+    const second = renderHook(() => usePpmLatestReport("i1"));
+    await waitFor(() => expect(second.result.current.data?.id).toBe("c"));
+  });
+
   it("reloads when refetchKey changes", async () => {
-    get.mockResolvedValue([]);
-    const { rerender } = renderHook(({ key }) => usePpmLatestReport("i1", key), {
+    get.mockResolvedValueOnce([{ id: "old", report_date: "2026-01-01", created_at: "x" }]);
+    get.mockResolvedValueOnce([{ id: "new", report_date: "2026-02-01", created_at: "x" }]);
+    const { result, rerender } = renderHook(({ key }) => usePpmLatestReport("i1", key), {
       initialProps: { key: 0 },
     });
-    await waitFor(() => expect(get).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(result.current.data?.id).toBe("old"));
     rerender({ key: 1 });
-    await waitFor(() => expect(get).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(result.current.data?.id).toBe("new"));
+    expect(get).toHaveBeenCalledTimes(2);
+    expect(get.mock.calls[1][0]).toBe(get.mock.calls[0][0]);
   });
 });

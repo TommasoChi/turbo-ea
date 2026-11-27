@@ -28,6 +28,17 @@ export function usePpmSchedule(initiativeId: string | null | undefined, refetchK
   return useInitiativeQuery<PmlInitiativeSchedule>(initiativeId, "schedule", refetchKey);
 }
 
+// The portfolio's "latest": report_date, then created_at, then id, all descending.
+function isNewerReport(a: PpmStatusReport, b: PpmStatusReport): boolean {
+  return (
+    a.report_date !== b.report_date
+      ? a.report_date > b.report_date
+      : a.created_at !== b.created_at
+        ? a.created_at > b.created_at
+        : a.id > b.id
+  );
+}
+
 export function usePpmLatestReport(
   initiativeId: string | null | undefined,
   refetchKey?: number,
@@ -39,7 +50,7 @@ export function usePpmLatestReport(
   const latest = useMemo(
     () =>
       data?.reduce<PpmStatusReport | null>(
-        (best, r) => (!best || r.report_date > best.report_date ? r : best),
+        (best, r) => (!best || isNewerReport(r, best) ? r : best),
         null,
       ) ?? null,
     [data],

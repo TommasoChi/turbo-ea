@@ -22,7 +22,7 @@ describe("PpmHealthSummary", () => {
       />,
     );
     expect(screen.getByText("Health Summary")).toBeInTheDocument();
-    expect(screen.getByText(/2026/)).toBeInTheDocument();
+    expect(screen.getAllByText("2026-09-01")).toHaveLength(1);
     expect(screen.getByText("Summary")).toBeInTheDocument();
     expect(screen.getByText("Accomplishments")).toBeInTheDocument();
     expect(screen.getByText("Next Steps")).toBeInTheDocument();
@@ -30,6 +30,11 @@ describe("PpmHealthSummary", () => {
     expect(screen.getByText("Ship it")).toBeInTheDocument();
     expect(screen.getAllByText("—")).toHaveLength(1);
     expect(screen.getByText("Cost")).toBeInTheDocument();
+  });
+
+  it("shows no date without report_date", () => {
+    render(<PpmHealthSummary report={base} />);
+    expect(screen.queryByText(/\d{4}-\d{2}-\d{2}/)).not.toBeInTheDocument();
   });
 
   it("omits the Cost dot without costHealth", () => {
