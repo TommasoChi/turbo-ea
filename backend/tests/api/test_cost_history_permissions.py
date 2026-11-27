@@ -100,6 +100,8 @@ async def test_hidden_initiative_is_404_for_the_cost_controller(client, db, env)
     headers = auth_headers(env["controller"])
     assert (await client.get(url, headers=headers)).status_code == 404
     assert (await client.put(url, json=BODY, headers=headers)).status_code == 404
+    delete_url = f"{url}/{YEAR}/{BODY['field_key']}"
+    assert (await client.delete(delete_url, headers=headers)).status_code == 404
 
 
 @pytest.mark.parametrize("card_type", ["Application", "ITComponent"])

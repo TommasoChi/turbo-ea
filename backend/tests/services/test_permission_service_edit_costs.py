@@ -40,7 +40,7 @@ PROFILES = [
     ),
     (
         "observer",
-        _VIEW,
+        _VIEW | {"costs.view": True},
         {"card.view": True, "card.view_costs": False, "card.edit_costs": False},
         False,
     ),

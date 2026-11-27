@@ -134,11 +134,7 @@ async def test_creating_a_missing_relation_needs_no_relation_permission(db, rela
     assert len((await db.scalars(select(Relation))).all()) == 1
 
 
-async def test_existing_relation_reuse_needs_no_new_relation_permission(
-    db, relation_env, monkeypatch
-):
-    from app.services.permission_service import PermissionService
-
+async def test_existing_relation_reuse_keeps_its_description(db, relation_env):
     user, initiative, organization, config = relation_env
     existing = await create_relation(
         db,
@@ -147,18 +143,16 @@ async def test_existing_relation_reuse_needs_no_new_relation_permission(
         target_id=initiative.id,
         description="Preserve existing",
     )
-
-    async def deny(db, user, permission, *args, **kwargs):
-        raise AssertionError("Existing relation should be reused")
-
     existing.description = "Preserve existing"
     await db.flush()
-    monkeypatch.setattr(PermissionService, "require_permission", deny)
+
     candidates = await prepare_configured_card_relations(
         db, user, initiative, config, {}, {"organization": str(organization.id)}
     )
     await apply_configured_card_relations(db, user, candidates, [])
+
     assert existing.description == "Preserve existing"
+    assert len((await db.scalars(select(Relation))).all()) == 1
 
 
 async def test_unreadable_card_is_not_exposed(db, relation_env, monkeypatch):

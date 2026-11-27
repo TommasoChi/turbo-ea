@@ -126,3 +126,19 @@ async def test_a_bundle_at_the_current_version_gets_no_grant_when_the_key_is_mis
         db, roles, app_version="2.215.0", fork=True, keep_edit_costs=True
     )
     assert stored == roles
+
+
+async def test_updating_an_existing_role_from_a_current_bundle_adds_no_edit_costs_key(db):
+    roles = {"responsible": {"card.view": True, "card.edit": True}}
+    stored = await reimported_role_permissions(
+        db, roles, app_version="2.215.0", fork=True, wipe=False, keep_edit_costs=True
+    )
+    assert stored == roles
+
+
+async def test_updating_an_existing_role_from_an_older_fork_bundle_grants_edit_costs(db):
+    roles = {"responsible": {"card.view": True, "card.edit": True}}
+    stored = await reimported_role_permissions(
+        db, roles, app_version="2.214.0", fork=True, wipe=False, keep_edit_costs=True
+    )
+    assert stored["responsible"] == {"card.view": True, "card.edit": True, "card.edit_costs": True}
