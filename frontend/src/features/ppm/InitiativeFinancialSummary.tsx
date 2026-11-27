@@ -1,4 +1,3 @@
-import Box from "@mui/material/Box";
 import { useTheme } from "@mui/material/styles";
 import { useTranslation } from "react-i18next";
 import { useCurrency } from "@/hooks/useCurrency";
@@ -14,17 +13,15 @@ export default function InitiativeFinancialSummary({ initiativeId, revision }: {
   const comparison = data?.card_comparison;
   if (!comparison) return null;
   return (
-    <Box>
-      <BudgetBar
-        label={t("budgetBarTotal")}
-        budget={Number(comparison.budget.total)}
-        actual={Number(comparison.actual.total)}
-        currency={currency}
-        barColor={theme.palette.primary.main}
-        overColor={theme.palette.error.dark}
-        derivedBudget={comparison.budget.derived}
-        derivedActual={comparison.actual.derived}
-      />
-    </Box>
+    <BudgetBar
+      label={t("budgetBarTotal")}
+      budget={Number(comparison.budget.total)}
+      actual={Number(comparison.actual.total)}
+      currency={currency}
+      barColor={theme.palette.primary.main}
+      overColor={theme.palette.error.dark}
+      derivedBudget={comparison.budget.derived}
+      derivedActual={comparison.actual.derived}
+    />
   );
 }
