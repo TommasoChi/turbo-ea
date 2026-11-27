@@ -426,17 +426,22 @@ it("keeps expansion controls for a read-only viewer without editing actions", ()
   ).not.toBeInTheDocument();
 });
 
-it("expands the legacy group and offers an explicit assignment to a budget", () => {
+it("expands the legacy group, whose cost items offer edit and delete only", () => {
   render(<PpmFinanceTree data={data} rollup={null} onChanged={vi.fn()} />);
   expect(screen.queryByText("Legacy")).not.toBeInTheDocument();
   fireEvent.click(
     screen.getByRole("button", { name: /expand costs without a budget/i }),
   );
-  expect(screen.getByText("Legacy")).toBeInTheDocument();
-  fireEvent.click(
-    screen.getByRole("button", { name: /assign legacy to budget/i }),
-  );
-  expect(screen.getByTestId("row-form")).toHaveTextContent("cost:move:");
+  const row = screen.getByText("Legacy").closest("tr")!;
+  expect(
+    within(row).getByRole("button", { name: /edit cost item legacy/i }),
+  ).toBeInTheDocument();
+  expect(
+    within(row).getByRole("button", { name: /delete cost item legacy/i }),
+  ).toBeInTheDocument();
+  expect(
+    within(row).queryByRole("button", { name: /assign|move/i }),
+  ).not.toBeInTheDocument();
 });
 
 it("the budget table shows FY, Category and Provider columns", () => {
@@ -513,7 +518,7 @@ it("the custom field block skips the Provider field named by provider_field_key"
   ).not.toBeInTheDocument();
 });
 
-it("assigned cost items and invoices have no move action", () => {
+it("no cost item or invoice has a move or assign action anywhere in the tree", () => {
   render(<PpmFinanceTree data={data} rollup={null} onChanged={vi.fn()} />);
   fireEvent.click(screen.getByRole("button", { name: /expand software/i }));
   fireEvent.click(screen.getByRole("button", { name: /expand renewal/i }));
@@ -532,9 +537,10 @@ it("assigned cost items and invoices have no move action", () => {
   fireEvent.click(
     screen.getByRole("button", { name: /expand costs without a budget/i }),
   );
-  expect(screen.getByText("Legacy").closest("tr")).toHaveTextContent(
+  expect(screen.getByText("Legacy").closest("tr")).not.toHaveTextContent(
     "drive_file_move",
   );
+  expect(document.body).not.toHaveTextContent("drive_file_move");
 });
 
 it.each([
@@ -557,17 +563,6 @@ it.each([
     .filter((span) => span > 4);
   expect(spans).toHaveLength(3);
   expect(new Set(spans)).toEqual(new Set([columns]));
-});
-
-it("an unassigned cost item can still be assigned to a budget", () => {
-  render(<PpmFinanceTree data={data} rollup={null} onChanged={vi.fn()} />);
-  fireEvent.click(
-    screen.getByRole("button", { name: /expand costs without a budget/i }),
-  );
-  fireEvent.click(
-    screen.getByRole("button", { name: /assign legacy to budget/i }),
-  );
-  expect(screen.getByTestId("row-form")).toHaveTextContent("cost:move:");
 });
 
 it("has no Initiative total invoiced line", () => {

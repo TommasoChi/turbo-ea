@@ -36,7 +36,7 @@ import { usePpmFinancialAmount } from "./usePpmFinancials";
 type FinancialRow = PpmFinancialBudget | PpmFinancialCost | PpmInvoice;
 type FormState = {
   kind: "budget" | "cost" | "invoice";
-  mode: "create" | "edit" | "move";
+  mode: "create" | "edit";
   parentId?: string;
   row?: FinancialRow;
 };
@@ -281,12 +281,6 @@ export default function PpmFinanceTree({
                           cost.budget_line_id ?? undefined,
                         ),
                     )}
-                    {!cost.budget_line_id &&
-                      action(
-                        t("financeTree.assignCost", { name: cost.description }),
-                        "drive_file_move",
-                        () => show("cost", "move", cost),
-                      )}
                     {data.invoice_access &&
                       action(
                         t("financeTree.recordInvoice", {
@@ -590,22 +584,7 @@ export default function PpmFinanceTree({
             onChanged();
           }}
           onClose={() => setForm(null)}
-          onSaved={(destinationId) => {
-            if (destinationId) {
-              const destinationCost = data.cost_items.find(
-                (cost) => cost.id === destinationId,
-              );
-              setExpanded(
-                (previous) =>
-                  new Set([
-                    ...previous,
-                    destinationId,
-                    ...(destinationCost?.budget_line_id
-                      ? [destinationCost.budget_line_id]
-                      : []),
-                  ]),
-              );
-            }
+          onSaved={() => {
             setForm(null);
             onChanged();
           }}

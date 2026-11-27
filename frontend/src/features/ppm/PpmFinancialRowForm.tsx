@@ -35,12 +35,11 @@ interface Props {
   initiativeId: string;
   data: PpmFinancials;
   kind: "budget" | "cost" | "invoice";
-  /** `move` assigns a cost item (kind "cost") to a budget. */
-  mode: "create" | "edit" | "move";
+  mode: "create" | "edit";
   parentId?: string;
   row?: FinancialRow;
   onClose: () => void;
-  onSaved: (destinationId?: string) => void;
+  onSaved: () => void;
   onStale?: () => void;
 }
 const isBudget = (row: FinancialRow | undefined): row is PpmFinancialBudget =>
@@ -81,9 +80,6 @@ export default function PpmFinancialRowForm({
       (cost ? (cost.date ?? "") : kind === "cost" && mode === "create" ? todayIsoDate() : ""),
   );
   const [invoiceId, setInvoiceId] = useState(invoice?.invoice_id ?? "");
-  const [destination, setDestination] = useState(
-    cost?.budget_line_id ?? parentId ?? "",
-  );
   const [fieldValues, setFieldValues] = useState<Record<string, Value>>(
     (row?.field_values ?? {}) as Record<string, Value>,
   );
@@ -97,7 +93,7 @@ export default function PpmFinancialRowForm({
   const [error, setError] = useState<string | null>(null);
   const section = kind === "cost" ? "cost_item" : kind;
   const definitions = data.field_definitions?.[section]?.fields ?? [];
-  const currentBudgetId = mode === "move" ? destination : (cost?.budget_line_id ?? parentId);
+  const currentBudgetId = cost?.budget_line_id ?? parentId;
   const parentBudget = data.budget_lines.find((item) => item.id === currentBudgetId);
   const childEnabled = kind === "cost" && !!parentBudget?.provider_child_enabled;
   const searchChildren = useCallback(
@@ -150,11 +146,7 @@ export default function PpmFinancialRowForm({
     }
     let path: string;
     let body: Record<string, unknown>;
-    if (mode === "move") {
-      path = "/ppm/costs/" + cost?.id;
-      body = { budget_line_id: destination };
-      if (providerChanged) body.provider_child_id = provider?.id ?? null;
-    } else if (kind === "budget") {
+    if (kind === "budget") {
       path =
         mode === "create"
           ? "/ppm/initiatives/" + initiativeId + "/budgets"
@@ -193,7 +185,7 @@ export default function PpmFinancialRowForm({
       await submit.run(async () => {
         if (mode === "create") await api.post(path, body);
         else await api.patch(path, body);
-        onSaved(mode === "move" ? destination : undefined);
+        onSaved();
       });
     } catch (err) {
       const detail = err instanceof ApiError ? err.detail : null;
@@ -227,20 +219,17 @@ export default function PpmFinancialRowForm({
       }
     }
   };
-  const title =
-    mode === "move"
-      ? t("financialForm.assignCost")
-      : t(
-          kind === "budget"
-            ? mode === "create"
-              ? "addBudgetLine"
-              : "editBudgetLine"
-            : kind === "cost"
-              ? mode === "create"
-                ? "addCostItem"
-                : "editCostLine"
-              : "financialForm.titleInvoice",
-        );
+  const title = t(
+    kind === "budget"
+      ? mode === "create"
+        ? "addBudgetLine"
+        : "editBudgetLine"
+      : kind === "cost"
+        ? mode === "create"
+          ? "addCostItem"
+          : "editCostLine"
+        : "financialForm.titleInvoice",
+  );
 
   return (
     <Dialog
@@ -259,136 +248,114 @@ export default function PpmFinancialRowForm({
           </Alert>
         )}
         <Box sx={{ display: "flex", flexDirection: "column", gap: 2, pt: 1 }}>
-          {mode === "move" ? (
-            <TextField
-              select
-              label={t("financialForm.selectBudget")}
-              value={destination}
-              onChange={(event) => {
-                setDestination(event.target.value);
-                setProvider(null);
-                setProviderChanged(false);
-              }}
-              fullWidth
-            >
-              {data.budget_lines.map((item) => (
-                <MenuItem key={item.id} value={item.id}>
-                  {item.description || item.id.slice(0, 8)}
-                </MenuItem>
-              ))}
-            </TextField>
-          ) : (
+          {kind !== "invoice" && (
             <>
-              {kind !== "invoice" && (
-                <>
-                  <TextField
-                    label={t("common:labels.description")}
-                    value={description}
-                    onChange={(event) => setDescription(event.target.value)}
-                    required={kind === "cost"}
-                    fullWidth
-                  />
-                  <TextField
-                    select
-                    label={t("category")}
-                    value={category}
-                    onChange={(event) => setCategory(event.target.value)}
-                    fullWidth
-                  >
-                    <MenuItem value="capex">{t("capex")}</MenuItem>
-                    <MenuItem value="opex">{t("opex")}</MenuItem>
-                  </TextField>
-                </>
-              )}
-              {kind === "budget" && (
-                <>
-                  <TextField
-                    label={t("fiscalYear")}
-                    type="number"
-                    value={year}
-                    onChange={(event) => setYear(event.target.value)}
-                    required
-                    fullWidth
-                  />
-                  <TextField
-                    label={t("financialForm.amount")}
-                    type="number"
-                    value={amount}
-                    onChange={(event) => setAmount(event.target.value)}
-                    fullWidth
-                  />
-                </>
-              )}
-              {kind === "cost" && (
-                <>
-                  <TextField
-                    label={t("planned")}
-                    type="number"
-                    value={planned}
-                    onChange={(event) => setPlanned(event.target.value)}
-                    fullWidth
-                  />
-                  <TextField
-                    label={t("actual")}
-                    type="number"
-                    value={actual}
-                    onChange={(event) => setActual(event.target.value)}
-                    fullWidth
-                  />
-                  <DateField label={t("date")} value={date} onChange={setDate} fullWidth />
-                </>
-              )}
-              {kind === "invoice" && (
-                <>
-                  <DateField
-                    label={t("financialForm.invoiceDate")}
-                    value={date}
-                    onChange={setDate}
-                    required
-                    fullWidth
-                  />
-                  <TextField
-                    label={t("financialForm.invoiceId")}
-                    value={invoiceId}
-                    onChange={(event) => setInvoiceId(event.target.value)}
-                    required
-                    fullWidth
-                  />
-                  <TextField
-                    label={t("financialForm.amount")}
-                    value={amount}
-                    onChange={(event) => setAmount(event.target.value)}
-                    required
-                    fullWidth
-                  />
-                </>
-              )}
-              {definitions
-                .filter(
-                  (field) =>
-                    field.kind !== "calculated" && !("protected" in field && field.protected),
-                )
-                .map((field) => (
-                  <CustomField
-                    key={field.key}
-                    field={field}
-                    value={
-                      Object.prototype.hasOwnProperty.call(fieldValues, field.key)
-                        ? fieldValues[field.key]
-                        : mode === "create"
-                          ? (field.default ?? null)
-                          : null
-                    }
-                    display={
-                      mode === "create"
-                        ? field.default_display
-                        : row?.reference_display?.[field.key]
-                    }
-                    onChange={(value) => setCustom(field.key, value)}
-                  />
-                ))}
+              <TextField
+                label={t("common:labels.description")}
+                value={description}
+                onChange={(event) => setDescription(event.target.value)}
+                required={kind === "cost"}
+                fullWidth
+              />
+              <TextField
+                select
+                label={t("category")}
+                value={category}
+                onChange={(event) => setCategory(event.target.value)}
+                fullWidth
+              >
+                <MenuItem value="capex">{t("capex")}</MenuItem>
+                <MenuItem value="opex">{t("opex")}</MenuItem>
+              </TextField>
             </>
           )}
+          {kind === "budget" && (
+            <>
+              <TextField
+                label={t("fiscalYear")}
+                type="number"
+                value={year}
+                onChange={(event) => setYear(event.target.value)}
+                required
+                fullWidth
+              />
+              <TextField
+                label={t("financialForm.amount")}
+                type="number"
+                value={amount}
+                onChange={(event) => setAmount(event.target.value)}
+                fullWidth
+              />
+            </>
+          )}
+          {kind === "cost" && (
+            <>
+              <TextField
+                label={t("planned")}
+                type="number"
+                value={planned}
+                onChange={(event) => setPlanned(event.target.value)}
+                fullWidth
+              />
+              <TextField
+                label={t("actual")}
+                type="number"
+                value={actual}
+                onChange={(event) => setActual(event.target.value)}
+                fullWidth
+              />
+              <DateField label={t("date")} value={date} onChange={setDate} fullWidth />
+            </>
+          )}
+          {kind === "invoice" && (
+            <>
+              <DateField
+                label={t("financialForm.invoiceDate")}
+                value={date}
+                onChange={setDate}
+                required
+                fullWidth
+              />
+              <TextField
+                label={t("financialForm.invoiceId")}
+                value={invoiceId}
+                onChange={(event) => setInvoiceId(event.target.value)}
+                required
+                fullWidth
+              />
+              <TextField
+                label={t("financialForm.amount")}
+                value={amount}
+                onChange={(event) => setAmount(event.target.value)}
+                required
+                fullWidth
+              />
+            </>
+          )}
+          {definitions
+            .filter(
+              (field) =>
+                field.kind !== "calculated" && !("protected" in field && field.protected),
+            )
+            .map((field) => (
+              <CustomField
+                key={field.key}
+                field={field}
+                value={
+                  Object.prototype.hasOwnProperty.call(fieldValues, field.key)
+                    ? fieldValues[field.key]
+                    : mode === "create"
+                      ? (field.default ?? null)
+                      : null
+                }
+                display={
+                  mode === "create"
+                    ? field.default_display
+                    : row?.reference_display?.[field.key]
+                }
+                onChange={(value) => setCustom(field.key, value)}
+              />
+            ))}
           {childEnabled && kind === "cost" && (
             <CardPicker
               types="Provider"
@@ -421,7 +388,7 @@ export default function PpmFinancialRowForm({
         </Button>
         <Button
           onClick={submitForm}
-          disabled={submit.busy || (mode === "move" && !destination)}
+          disabled={submit.busy}
           variant="contained"
         >
           {t("common:actions.save")}
