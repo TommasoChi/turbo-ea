@@ -28,6 +28,8 @@ interface Props {
   onSaved: () => void;
 }
 
+export const STATUS_TEXT_LIMIT = 250;
+
 const HEALTH_FILL: Record<PpmHealthValue, string> = {
   onTrack: RAG_COLORS.green,
   atRisk: RAG_COLORS.amber,
@@ -119,6 +121,25 @@ export default function StatusReportDialog({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Edit sends only the texts the user changed, so a stored text over the limit never blocks a save.
+  const texts = {
+    summary: { value: summary, stored: report?.summary },
+    accomplishments: { value: accomplishments, stored: report?.accomplishments },
+    next_steps: { value: nextSteps, stored: report?.next_steps },
+  };
+  const sentTexts = Object.entries(texts).filter(
+    ([, { value, stored }]) => !isEdit || value !== (stored ?? ""),
+  );
+  const tooLong = sentTexts.some(([, { value }]) => value.length > STATUS_TEXT_LIMIT);
+  const counted = (label: string, value: string) => ({
+    label: t("statusReportCounter", { label, count: value.length }),
+    error: value.length > STATUS_TEXT_LIMIT,
+    helperText:
+      value.length > STATUS_TEXT_LIMIT
+        ? t("statusReportTooLong", { limit: STATUS_TEXT_LIMIT })
+        : undefined,
+  });
+
   const handleSave = async () => {
     setSaving(true);
     try {
@@ -127,9 +148,7 @@ export default function StatusReportDialog({
         schedule_health: scheduleHealth,
         ...(!canShowCost || costHealth === null ? {} : { cost_health: costHealth }),
         scope_health: scopeHealth,
-        summary: summary || null,
-        accomplishments: accomplishments || null,
-        next_steps: nextSteps || null,
+        ...Object.fromEntries(sentTexts.map(([key, { value }]) => [key, value || null])),
       };
       if (isEdit) {
         await api.patch(`/ppm/reports/${report.id}`, payload);
@@ -196,7 +215,7 @@ export default function StatusReportDialog({
           </Box>
 
           <TextField
-            label={t("summary")}
+            {...counted(t("summary"), summary)}
             value={summary}
             onChange={(e) => setSummary(e.target.value)}
             multiline
@@ -205,7 +224,7 @@ export default function StatusReportDialog({
           />
 
           <TextField
-            label={t("accomplishments")}
+            {...counted(t("accomplishments"), accomplishments)}
             value={accomplishments}
             onChange={(e) => setAccomplishments(e.target.value)}
             multiline
@@ -214,7 +233,7 @@ export default function StatusReportDialog({
           />
 
           <TextField
-            label={t("nextSteps")}
+            {...counted(t("nextSteps"), nextSteps)}
             value={nextSteps}
             onChange={(e) => setNextSteps(e.target.value)}
             multiline
@@ -228,7 +247,7 @@ export default function StatusReportDialog({
         <Button
           variant="contained"
           onClick={handleSave}
-          disabled={saving}
+          disabled={saving || tooLong}
           startIcon={saving ? <CircularProgress size={16} /> : undefined}
         >
           {isEdit ? t("common:actions.save", "Save") : t("addReport")}

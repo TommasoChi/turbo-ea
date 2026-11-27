@@ -23,7 +23,7 @@ import { mockApi } from "@/test/apiMock";
 import { todayIsoDate } from "@/lib/dates";
 import { RAG_COLORS } from "@/theme/tokens";
 import i18n from "@/i18n";
-import StatusReportDialog from "./StatusReportDialog";
+import StatusReportDialog, { STATUS_TEXT_LIMIT } from "./StatusReportDialog";
 
 const REPORT: PpmStatusReport = {
   id: "rep1",
@@ -103,8 +103,8 @@ describe("StatusReportDialog — new report", () => {
     fireEvent.change(date, { target: { value: "2026-05-15" } });
     fireEvent.blur(date);
 
-    await user.type(within(dialog).getByRole("textbox", { name: "Summary" }), "On plan");
-    await user.type(within(dialog).getByRole("textbox", { name: "Accomplishments" }), "Shipped v1");
+    await user.type(within(dialog).getByRole("textbox", { name: /^Summary/ }), "On plan");
+    await user.type(within(dialog).getByRole("textbox", { name: /^Accomplishments/ }), "Shipped v1");
 
     await user.click(within(dialog).getByRole("button", { name: "Add Report" }));
 
@@ -218,11 +218,11 @@ describe("StatusReportDialog — editing", () => {
     expect(pressed("Schedule")).toEqual(["At Risk"]);
     expect(pressed("Cost")).toEqual(["Off Track"]);
     expect(pressed("Scope")).toEqual(["On Track"]);
-    expect(within(dialog).getByRole("textbox", { name: "Summary" })).toHaveValue("Slipping by two weeks");
-    expect(within(dialog).getByRole("textbox", { name: "Accomplishments" })).toHaveValue("");
+    expect(within(dialog).getByRole("textbox", { name: /^Summary/ })).toHaveValue("Slipping by two weeks");
+    expect(within(dialog).getByRole("textbox", { name: /^Accomplishments/ })).toHaveValue("");
 
     await user.click(within(group("Cost")).getByRole("button", { name: "At Risk" }));
-    await user.clear(within(dialog).getByRole("textbox", { name: "Next Steps" }));
+    await user.clear(within(dialog).getByRole("textbox", { name: /^Next Steps/ }));
     await user.click(within(dialog).getByRole("button", { name: "Save" }));
 
     await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1));
@@ -231,8 +231,6 @@ describe("StatusReportDialog — editing", () => {
       schedule_health: "atRisk",
       cost_health: "atRisk",
       scope_health: "onTrack",
-      summary: "Slipping by two weeks",
-      accomplishments: null,
       next_steps: null,
     });
     expect(mockApi.callsOf("post")).toHaveLength(0);
@@ -259,8 +257,8 @@ describe("StatusReportDialog — pre-filled texts and translated buttons", () =>
   it("pre-fills accomplishments and next steps when the report has them", () => {
     renderDialog({ ...REPORT, accomplishments: "Closed epic 4" });
     const dialog = screen.getByRole("dialog");
-    expect(within(dialog).getByRole("textbox", { name: "Accomplishments" })).toHaveValue("Closed epic 4");
-    expect(within(dialog).getByRole("textbox", { name: "Next Steps" })).toHaveValue("Re-plan sprint 7");
+    expect(within(dialog).getByRole("textbox", { name: /^Accomplishments/ })).toHaveValue("Closed epic 4");
+    expect(within(dialog).getByRole("textbox", { name: /^Next Steps/ })).toHaveValue("Re-plan sprint 7");
   });
 
   it("translates Cancel and Save through the shared common keys", async () => {
@@ -302,4 +300,78 @@ it("omits cost health when the current card does not grant cost visibility", asy
   await waitFor(() => expect(onSaved).toHaveBeenCalledOnce());
   const body = mockApi.callsOf("post", createPath)[0].body as Record<string, unknown>;
   expect(body).not.toHaveProperty("cost_health");
+});
+
+describe("StatusReportDialog — 250 character limit", () => {
+  const long = "x".repeat(STATUS_TEXT_LIMIT + 1);
+  const box = (name: RegExp) => within(screen.getByRole("dialog")).getByRole("textbox", { name });
+
+  it("exports the limit", () => {
+    expect(STATUS_TEXT_LIMIT).toBe(250);
+  });
+
+  it("shows the counter in each label", () => {
+    renderDialog(REPORT);
+    expect(box(/^Summary 21\/250$/)).toBeInTheDocument();
+    expect(box(/^Accomplishments 0\/250$/)).toBeInTheDocument();
+    expect(box(/^Next Steps 16\/250$/)).toBeInTheDocument();
+  });
+
+  it("disables Save when a changed text exceeds 250, without blocking typing", async () => {
+    const { user } = renderDialog(REPORT);
+    const field = box(/^Accomplishments/);
+    await user.click(field);
+    await user.paste(long);
+    expect(field).toHaveValue(long);
+    expect(box(/^Accomplishments 251\/250$/)).toBeInvalid();
+    expect(within(screen.getByRole("dialog")).getByRole("button", { name: "Save" })).toBeDisabled();
+  });
+
+  it("disables Add Report when a new text exceeds 250", async () => {
+    const { user } = renderDialog();
+    await user.click(box(/^Summary/));
+    await user.paste(long);
+    expect(within(screen.getByRole("dialog")).getByRole("button", { name: "Add Report" })).toBeDisabled();
+  });
+
+  it("an untouched stored text over 250 does not block saving a new date and is not sent", async () => {
+    const { user, onSaved } = renderDialog({ ...REPORT, summary: long });
+    const dialog = screen.getByRole("dialog");
+    const date = within(dialog).getByLabelText("Report Date");
+    fireEvent.focus(date);
+    fireEvent.change(date, { target: { value: "2026-05-15" } });
+    fireEvent.blur(date);
+    const save = within(dialog).getByRole("button", { name: "Save" });
+    expect(save).toBeEnabled();
+    await user.click(save);
+    await waitFor(() => expect(onSaved).toHaveBeenCalledOnce());
+    const body = mockApi.callsOf("patch", "/ppm/reports/rep1")[0].body as Record<string, unknown>;
+    expect(body.report_date).toBe("2026-05-15");
+    expect(body).not.toHaveProperty("summary");
+  });
+
+  it("sends only the changed fields in a PATCH", async () => {
+    const { user, onSaved } = renderDialog(REPORT);
+    const field = box(/^Accomplishments/);
+    await user.type(field, "Done");
+    await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(onSaved).toHaveBeenCalledOnce());
+    const body = mockApi.callsOf("patch", "/ppm/reports/rep1")[0].body as Record<string, unknown>;
+    expect(body.accomplishments).toBe("Done");
+    expect(body).not.toHaveProperty("summary");
+    expect(body).not.toHaveProperty("next_steps");
+  });
+
+  it("create sends all non-empty texts", async () => {
+    const { user, onSaved } = renderDialog();
+    await user.type(box(/^Summary/), "S");
+    await user.type(box(/^Next Steps/), "N");
+    await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Add Report" }));
+    await waitFor(() => expect(onSaved).toHaveBeenCalledOnce());
+    expect(mockApi.callsOf("post", createPath)[0].body).toMatchObject({
+      summary: "S",
+      accomplishments: null,
+      next_steps: "N",
+    });
+  });
 });

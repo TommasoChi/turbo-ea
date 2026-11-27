@@ -96,6 +96,8 @@
   "deleteReport": "Delete Report",
   "reportDate": "Report Date",
   "summary": "Summary",
+  "statusReportCounter": "{{label}} {{count}}/250",
+  "statusReportTooLong": "Keep this text to {{limit}} characters or fewer.",
   "risks": "Risks",
   "addRisk": "Add Risk",
   "noReportsYet": "No status reports yet",
