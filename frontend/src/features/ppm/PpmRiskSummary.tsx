@@ -1,0 +1,194 @@
+/**
+ * The Risk Management summary the card page and the initiative Overview both
+ * draw: three tiles, the exposure donut, the status bars and a compact heat
+ * map, all over the ACTIVE risks (open or mitigating) except Total and Status.
+ */
+import { useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
+import Box from "@mui/material/Box";
+import Button from "@mui/material/Button";
+import Paper from "@mui/material/Paper";
+import Stack from "@mui/material/Stack";
+import Typography from "@mui/material/Typography";
+import { useTheme } from "@mui/material/styles";
+import EChart from "@/components/charts/EChart";
+import { useEChartsTheme } from "@/components/charts/echartsTheme";
+import { legend, tooltip } from "@/components/charts/chrome";
+import type { PpmRisk } from "@/types";
+import PpmRiskMatrix from "./PpmRiskMatrix";
+import {
+  RISK_SCORE_BANDS,
+  activeRiskSummary,
+  bandColor,
+  isActiveRisk,
+  paletteColor,
+  riskBandCounts,
+  riskStatusCounts,
+  riskStatusLabel,
+  riskStatusPaletteColor,
+  scoreBandLabel,
+} from "./ppmRiskModel";
+
+const CHART_HEIGHT = 200;
+
+export default function PpmRiskSummary({
+  risks,
+  onManage,
+}: {
+  risks: readonly PpmRisk[] | null | undefined;
+  onManage?: () => void;
+}) {
+  const { t } = useTranslation("ppm");
+  const theme = useTheme();
+  const chartTheme = useEChartsTheme();
+  const [selected, setSelected] = useState<Record<string, boolean>>({});
+
+  const model = useMemo(() => {
+    if (!risks) return null;
+    const active = risks.filter(isActiveRisk);
+    return {
+      active,
+      summary: activeRiskSummary(risks),
+      bands: riskBandCounts(active),
+      statuses: riskStatusCounts(risks),
+    };
+  }, [risks]);
+
+  const header = (
+    <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
+      <Typography variant="h6">{t("riskManagement")}</Typography>
+      {onManage && (
+        <Button size="small" onClick={onManage}>
+          {t("manage")}
+        </Button>
+      )}
+    </Stack>
+  );
+
+  if (!model) {
+    return (
+      <Box>
+        {header}
+        <Typography color="text.secondary">{t("riskSummaryLoading")}</Typography>
+      </Box>
+    );
+  }
+  if (!risks || risks.length === 0) {
+    return (
+      <Box>
+        {header}
+        <Typography color="text.secondary">{t("noRisks")}</Typography>
+      </Box>
+    );
+  }
+
+  const ctx = { theme: chartTheme, isRtl: chartTheme.isRtl };
+  const bandNames = RISK_SCORE_BANDS.map((b) => scoreBandLabel(b, t));
+  const visibleTotal = RISK_SCORE_BANDS.reduce(
+    (sum, b) => sum + (selected[scoreBandLabel(b, t)] === false ? 0 : model.bands[b]),
+    0,
+  );
+
+  const donutOption = {
+    tooltip: tooltip(ctx, { trigger: "item" }),
+    legend: legend(ctx, bandNames, { selected }),
+    title: {
+      text: String(visibleTotal),
+      left: "center",
+      top: "center",
+      textStyle: { color: chartTheme.textPrimary, fontSize: 24, fontFamily: chartTheme.fontFamily },
+    },
+    series: [
+      {
+        type: "pie",
+        radius: ["50%", "72%"],
+        center: ["50%", "45%"],
+        label: { show: false },
+        data: RISK_SCORE_BANDS.map((b) => ({
+          name: scoreBandLabel(b, t),
+          value: model.bands[b],
+          itemStyle: { color: bandColor(b) },
+        })),
+      },
+    ],
+  };
+
+  const statusNames = model.statuses.map((s) => riskStatusLabel(s.status, t));
+  const statusOption = {
+    tooltip: tooltip(ctx, { trigger: "axis", axisPointer: { type: "shadow" } }),
+    grid: { left: 8, right: 24, top: 8, bottom: 8, containLabel: true },
+    xAxis: { type: "value", minInterval: 1, splitLine: { lineStyle: { color: chartTheme.divider } } },
+    yAxis: {
+      type: "category",
+      inverse: true,
+      data: statusNames,
+      axisLabel: { color: chartTheme.textPrimary },
+    },
+    series: [
+      {
+        type: "bar",
+        barMaxWidth: 20,
+        label: { show: true, position: "right", color: chartTheme.textPrimary },
+        data: model.statuses.map((s) => ({
+          value: s.count,
+          itemStyle: {
+            color: paletteColor(theme.palette, riskStatusPaletteColor(s.status)),
+          },
+        })),
+      },
+    ],
+  };
+
+  const tiles: [string, number][] = [
+    [t("riskSummaryTotal"), model.summary.total],
+    [t("riskSummaryOpen"), model.summary.open],
+    [t("riskSummaryHighOpen"), model.summary.highOpen],
+  ];
+
+  return (
+    <Box>
+      {header}
+      <Stack direction="row" spacing={2} sx={{ mb: 2 }}>
+        {tiles.map(([label, value]) => (
+          <Paper key={label} variant="outlined" sx={{ px: 2, py: 1, minWidth: 96 }}>
+            <Typography variant="caption" color="text.secondary" component="div">
+              {label}
+            </Typography>
+            <Typography variant="h5" component="div">
+              {value}
+            </Typography>
+          </Paper>
+        ))}
+      </Stack>
+      <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
+        <Box sx={{ flex: 1, minWidth: 0 }}>
+          <Typography variant="subtitle2" sx={{ mb: 1 }}>
+            {t("riskSummaryExposure")}
+          </Typography>
+          <EChart
+            option={donutOption}
+            ariaLabel={t("riskSummaryExposure")}
+            style={{ height: CHART_HEIGHT }}
+            onLegendSelectChanged={(p) => setSelected(p.selected)}
+          />
+        </Box>
+        <Box sx={{ flex: 1, minWidth: 0 }}>
+          <Typography variant="subtitle2" sx={{ mb: 1 }}>
+            {t("riskSummaryStatus")}
+          </Typography>
+          <EChart
+            option={statusOption}
+            ariaLabel={t("riskSummaryStatus")}
+            style={{ height: CHART_HEIGHT }}
+          />
+        </Box>
+        <Box sx={{ flex: 1, minWidth: 0 }}>
+          <Typography variant="subtitle2" sx={{ mb: 1 }}>
+            {t("riskSummaryHeatMap")}
+          </Typography>
+          <PpmRiskMatrix risks={model.active} size="compact" />
+        </Box>
+      </Stack>
+    </Box>
+  );
+}

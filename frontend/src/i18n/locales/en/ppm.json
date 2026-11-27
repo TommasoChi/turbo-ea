@@ -346,5 +346,12 @@
   "reportBackToInitiative": "Back to the initiative",
   "reportPrinted": "Printed",
   "reportNoSections": "No section is shown. Choose one or more sections above.",
-  "reportLatestOn": "Latest report: {{date}}"
+  "reportLatestOn": "Latest report: {{date}}",
+  "riskSummaryExposure": "How exposed are we?",
+  "riskSummaryStatus": "Where do the risks stand?",
+  "riskSummaryHeatMap": "Where do the risks sit?",
+  "riskSummaryTotal": "Total",
+  "riskSummaryOpen": "Open",
+  "riskSummaryHighOpen": "High open",
+  "riskSummaryLoading": "Loading risks…"
 }
