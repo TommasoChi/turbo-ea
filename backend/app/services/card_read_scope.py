@@ -61,7 +61,6 @@ from sqlalchemy.orm import aliased
 from app.core.permissions import VIEW_PERMISSION, resolve_cell
 from app.models.card import Card
 from app.models.event import Event
-from app.models.stakeholder import Stakeholder
 from app.models.user import User
 from app.services.permission_service import PermissionService, effective_role_key
 
@@ -367,11 +366,7 @@ async def _stakeholder_readable_ids(
     same cached map as ``PermissionService.has_card_permission`` so archived
     roles and truthiness behave identically.
     """
-    q = (
-        select(Stakeholder.card_id, Card.type, Stakeholder.role)
-        .join(Card)
-        .where(Stakeholder.user_id == user.id)
-    )
+    q = PermissionService.direct_stakeholder_card_roles(user.id)
     if base_view:
         q = q.where(
             or_(
@@ -385,11 +380,13 @@ async def _stakeholder_readable_ids(
     elif allowed:
         q = q.where(Card.type.not_in(allowed))
     out: set[uuid.UUID] = set()
-    for card_id, type_key, role in (await db.execute(q)).all():
-        if card_id in out:
-            continue
-        perms = await PermissionService.stakeholder_role_permissions(db, type_key, role)
-        if perms and perms.get("card.view"):
+    rows = (
+        (card_id, type_key, role)
+        for card_id, type_key, role in await db.execute(q)
+        if card_id not in out
+    )
+    async for card_id, _, perms in PermissionService.iter_stakeholder_grants(db, rows):
+        if perms.get("card.view"):
             out.add(card_id)
     return frozenset(out)
 
