@@ -40,25 +40,25 @@
 **Interfaces:**
 - Produces: `StatusText = Annotated[str | None, Field(max_length=250)]` in `schemas/ppm.py`, used by the three text fields of Create and Update. POST and PATCH answer 422 over 250; a field absent from a PATCH is not validated.
 
-- [ ] **Step 1: Write the failing tests** in `test_ppm.py`: `test_create_report_rejects_a_text_over_250`, `test_create_report_accepts_exactly_250` (each of the three fields), `test_patch_report_rejects_a_changed_text_over_250`, `test_patch_report_without_texts_keeps_a_stored_text_over_250` (insert a report row with a 400-character `summary` through the factory, PATCH only `report_date`, assert 200 and the stored `summary` unchanged).
+- [ ] **Step 1: Write the failing tests** in `test_ppm.py` (next to the existing report tests; `test_ppm_reports.py` has more): `test_create_report_rejects_a_text_over_250`, `test_create_report_accepts_exactly_250` (each of the three fields), `test_patch_report_rejects_a_changed_text_over_250`, `test_patch_report_without_texts_keeps_a_stored_text_over_250` (insert a report row with a 400-character `summary` through the factory, PATCH only `report_date`, assert 200 and the stored `summary` unchanged).
 - [ ] **Step 2: Run** `./scripts/test.sh tests/api/test_ppm.py -k report`; expect the first and third to FAIL (200 instead of 422).
 - [ ] **Step 3: Implement** `StatusText` and apply it to `summary`, `accomplishments`, `next_steps` of both schemas (`Annotated[str | None, Field(max_length=250)] = None`).
 - [ ] **Step 4: Run** the same command; expect PASS, plus `tests/api/test_ppm_permission_matrix.py`.
-- [ ] **Step 5: Regenerate OpenAPI** from `backend/`: `python scripts/dump_openapi.py ../docs/api/openapi.json`. The diff must contain only the `maxLength: 250` additions of these fields; if your local pydantic also adds `"pattern"` lines to Decimal fields, delete them (CI's pydantic does not emit them and its check fails otherwise).
+- [ ] **Step 5: Regenerate OpenAPI** from the repo root with the backend venv active: `python scripts/dump_openapi.py` (it writes `docs/api/openapi.json`). The diff must contain only the `maxLength: 250` additions of these fields; if your local pydantic also adds `"pattern"` lines to Decimal fields, delete them (CI's pydantic does not emit them and its check fails otherwise).
 - [ ] **Step 6: Commit** `feat(ppm): status report texts are limited to 250 characters`.
 
 ### Task 2: Budget `field_definitions` names the Provider field (backend)
 
 **Files:**
 - Modify: `backend/app/api/v1/ppm.py` (the `definitions[section]` builder, ~line 1213)
-- Test: the existing API test file that asserts `field_definitions` (grep `field_definitions` under `backend/tests/api/`)
+- Test: `backend/tests/api/test_ppm_cost_providers.py` (`test_ppm_amounts_withheld.py` also asserts `field_definitions`: keep it green)
 
 **Interfaces:**
-- Produces: for `section == "budget"` the dict gains `"provider_field_key": str` (= `config.provider_source.budget_field_key`); the key is **omitted** when `provider_source` is `None`. Consumed by Task 11.
+- Produces: for `section == "budget"` the dict gains `"provider_field_key": str` (= `cost_config.provider_source.budget_field_key`, where `cost_config` is the `cost_item` section config the function already loads; the budget section's own config has no `provider_source`); the key is **omitted** when `provider_source` is `None`. Consumed by Task 11.
 
-- [ ] **Step 1: Write the failing tests**: `test_budget_field_definitions_name_the_provider_field` (config with `provider_source`, assert the key equals the configured `budget_field_key`) and `test_budget_field_definitions_omit_the_key_without_a_provider_source`.
+- [ ] **Step 1: Write the failing tests**: `test_budget_field_definitions_name_the_provider_field` (the `cost_item` section configured with a `provider_source`; assert the key equals its `budget_field_key`) and `test_budget_field_definitions_omit_the_key_without_a_provider_source`.
 - [ ] **Step 2: Run** the file with `-k provider_field`; expect FAIL.
-- [ ] **Step 3: Implement** in the builder, next to `"visible_columns"`; the cost_item section is unchanged.
+- [ ] **Step 3: Implement** in the builder (`definitions[section]`), for `section == "budget"` only, reading `cost_config.provider_source`; the cost_item and invoice sections are unchanged.
 - [ ] **Step 4: Run** it plus `tests/api/test_ppm_financials.py`; expect PASS. `field_definitions` is a free dict, so OpenAPI does not change.
 - [ ] **Step 5: Commit** `feat(ppm): the budget field definitions name the Provider field`.
 
@@ -81,17 +81,17 @@
 ### Task 4: Active-risk helpers, matrix size, legend event (frontend)
 
 **Files:**
-- Modify: `frontend/src/features/ppm/ppmRiskModel.ts`, `frontend/src/features/ppm/PpmRiskMatrix.tsx`, `frontend/src/components/charts/EChart.tsx`
-- Test: `ppmRiskModel.test.ts`, `PpmRiskMatrix.test.tsx`, `frontend/src/components/charts/EChart.test.tsx`
+- Modify: `frontend/src/features/ppm/ppmRiskModel.ts`, `frontend/src/features/ppm/PpmRiskMatrix.tsx`, `frontend/src/features/grc/risk/RiskMatrix.tsx` (the shared matrix `PpmRiskMatrix` wraps), `frontend/src/components/charts/EChart.tsx`
+- Test: `ppmRiskModel.test.ts`, `PpmRiskMatrix.test.tsx`, the test file of `RiskMatrix.tsx`, `frontend/src/components/charts/EChart.test.tsx`
 
 **Interfaces:**
 - Produces in `ppmRiskModel.ts`: `isActiveRisk(r: PpmRisk): boolean` (status `open` or `mitigating`); `activeRiskSummary(risks: readonly PpmRisk[]): { total: number; open: number; highOpen: number }` (`total` all risks, `open` active ones, `highOpen` active with `scoreBand === "high"`); `riskBandCounts(risks: readonly PpmRisk[]): Record<RiskScoreBand, number>` over the risks it is given; `riskStatusCounts(risks): { status: string; count: number }[]` for the five known statuses in order, zeros included. `riskSummary` is **not** changed.
-- Produces: `PpmRiskMatrix` prop `size?: "default" | "compact"`; `EChart` prop `onLegendSelectChanged?: (params: { name: string; selected: Record<string, boolean> }) => void`, forwarded from ECharts' `legendselectchanged`.
+- Produces: `size?: "default" | "compact"` on the shared `RiskMatrix` (GRC uses it too; its default look is unchanged) and on `PpmRiskMatrix`, which passes it through; `EChart` prop `onLegendSelectChanged?: (params: { name: string; selected: Record<string, boolean> }) => void`, forwarded from ECharts' `legendselectchanged`.
 
-- [ ] **Step 1: Write failing tests**: `activeRiskSummary counts open and mitigating, High open only among them`, `riskBandCounts and riskStatusCounts on an empty list are all zero`, `riskSummary still counts High in every status` (regression), `PpmRiskMatrix compact renders smaller cells`, `EChart forwards legendselectchanged to onLegendSelectChanged`.
-- [ ] **Step 2: Run** the three files; expect FAIL.
+- [ ] **Step 1: Write failing tests**: `activeRiskSummary counts open and mitigating, High open only among them`, `riskBandCounts and riskStatusCounts on an empty list are all zero`, `riskSummary still counts High in every status` (regression), `RiskMatrix compact renders smaller cells and the default is unchanged`, `PpmRiskMatrix passes size through`, `EChart forwards legendselectchanged to onLegendSelectChanged`.
+- [ ] **Step 2: Run** the four test files; expect FAIL.
 - [ ] **Step 3: Implement** the helpers, the size prop (a smaller cell size, same colours) and the handler binding in the chart's event map.
-- [ ] **Step 4: Run** the three files; expect PASS.
+- [ ] **Step 4: Run** the four test files and the GRC tests that render `RiskMatrix`; expect PASS.
 - [ ] **Step 5: Commit** `feat(ppm): active-risk helpers, compact risk matrix, chart legend event`.
 
 ### Task 5: `PpmRiskSummary` component (frontend)
@@ -117,8 +117,8 @@
 - Test: `frontend/src/features/ppm/PpmHealthSummary.test.tsx` (new), `usePpmFinancials.test.ts`
 
 **Interfaces:**
-- Produces: `PpmHealthSummary({ report, costHealth, onManage }: { report: PpmStatusReport | null | undefined; costHealth?: string | null; onManage?: () => void })` showing: the three dots (Cost only when `costHealth` is non-null), the report date in the user's format (`useDateFormat().formatDate`), three read-only boxes Summary, Accomplishments, Next Steps (a box with no text shows an em dash), and a Manage button only when `onManage` is given. No report: the existing "No status reports yet" plus the Manage button.
-- Produces: `usePpmLatestReport(initiativeId: string | null | undefined, refetchKey?: number)` in `usePpmFinancials.ts`: `GET /ppm/initiatives/{id}/reports`, returns `{ data: PpmStatusReport | null, loading, error }` with the report of the greatest `report_date`; same stale-id guard as `useInitiativeQuery`.
+- Produces: `PpmHealthSummary({ report, costHealth, onManage }: { report: HealthReport | null | undefined; costHealth?: string | null; onManage?: () => void })` with `type HealthReport = Pick<PmlInitiativeSchedule, "schedule_health" | "scope_health"> & Partial<Pick<PpmStatusReport, "report_date" | "summary" | "accomplishments" | "next_steps">>` (a full `PpmStatusReport` fits, and the card page's current call with schedule data keeps compiling until Task 9). The component draws its **own header** (title "Health Summary" and the Manage button only when `onManage` is given), the three dots (Cost only when `costHealth` is non-null), the report date in the user's format (`useDateFormat().formatDate`) and three read-only boxes Summary, Accomplishments, Next Steps through `LinkifiedText` (a box with no text shows an em dash). No report: the existing "No status reports yet" under the header. Hosts stop drawing the Health Summary title: the Overview's Paper title and the card page's header row go in Tasks 9 and 10.
+- Produces: `usePpmLatestReport(initiativeId: string | null | undefined, refetchKey?: number)` in `usePpmFinancials.ts`: `GET /ppm/initiatives/{id}/reports`, returns `{ data: PpmStatusReport | null, loading, error }` with the report of the greatest `report_date`. Build it on `useApiQuery(url, { keepPreviousData: false })` and reload when `refetchKey` changes (not on `useInitiativeQuery`, which needs an `initiative_id` in the answer); `usePpmRisks` (Task 9) and `usePpmCompletion` (Task 8) follow the same pattern.
 
 - [ ] **Step 1: Write failing tests**: `shows the report date and the three texts`, `omits the Cost dot without costHealth`, `shows the empty state and Manage with no report`, `Manage is absent without onManage`, `usePpmLatestReport returns the most recent report and ignores a previous initiative's answer`.
 - [ ] **Step 2: Run** the two files; expect FAIL.
@@ -149,13 +149,14 @@
 - Test: `AttributeSection` test file (grep `AttributeSection.test`), `CardDetailContent.test.tsx`
 
 **Interfaces:**
-- Produces on `AttributeSection`: `sideBySideGroups?: readonly string[]` (read mode: the fields of a listed group sit in two 50% columns, label above value; edit mode unchanged) and `renderGroupAside?: (fieldKeys: string[]) => ReactNode` (read mode: the group body becomes two columns, the fields stacked on the left, the returned node on the right).
+- Produces on `AttributeSection`, each called once per group with that group's field keys (the pattern of `renderGroupAction`): `groupLayout?: (fieldKeys: string[]) => "sideBySide" | undefined` (read mode: a group answering `"sideBySide"` lays its fields in two 50% columns, label above value; edit mode unchanged) and `renderGroupAside?: (fieldKeys: string[]) => ReactNode` (read mode: a group whose aside is non-null becomes two columns, the fields stacked on the left, the node on the right). Groups are identified by their field keys, never by their translated name (an admin may have set another group name).
+- Produces: `initiativeSummaryGroups` (`sectionConfig.ts`) also orders the section's fields so the four date fields come before `costBudget` and `costActual`, giving the group order Timeline then Cost whatever the seed order.
 - Produces: `usePpmCompletion(initiativeId, refetchKey?)` in `usePpmFinancials.ts`: `GET /ppm/initiatives/{id}/completion` returning `{ data: { completion: number; wbs_count: number } | undefined, loading, error }`.
-- Consumes: `BudgetBar` from `ppmVisuals.tsx`; `card_comparison.derived` from `usePpmFinancials`.
+- Consumes: `BudgetBar` from `ppmVisuals.tsx`; `card_comparison.budget` and `.actual` from `usePpmFinancials`, each `{ capex, opex, total: string, derived: boolean }` (amounts are `Number(side.total)`, the flag feeds `derivedBudget` / `derivedActual`).
 
-- [ ] **Step 1: Write failing tests**: `a side-by-side group puts Budget and Actual Cost in two columns`, `a group aside renders on the right of the dates`, `edit mode keeps the standard grid`, in `CardDetailContent`: `the Cost group shows one Total budget bar for a user with cost view`, `shows no bar and keeps the lock placeholders without cost view`, `Completion shows next to the dates (the ring, or "no work packages")`.
+- [ ] **Step 1: Write failing tests**: `a side-by-side group puts Budget and Actual Cost in two columns`, `a group aside renders on the right of the dates`, `edit mode keeps the standard grid`, `initiativeSummaryGroups puts the Timeline group before the Cost group`, in `CardDetailContent`: `the Cost group shows one Total budget bar for a user with cost view`, `shows no bar and keeps the lock placeholders without cost view`, `Completion shows next to the dates (the ring, or "no work packages")`.
 - [ ] **Step 2: Run** the two files; expect FAIL.
-- [ ] **Step 3: Implement** the two props; in `CardDetailContent` pass `sideBySideGroups={[t("ppm:summaryCost")]}` and a `renderGroupAside` for the Timeline group rendering `CompletionRing` (loading bar, error alert and the no-WBS text as the Overview does); replace `InitiativeFinancialSummary` with one `BudgetBar` Total (labels as today, the Overview's colours `theme.palette.primary.main` and `error.dark`, `derivedBudget`/`derivedActual` from `card_comparison`), rendered only with `perms.can_view_costs`; the `PpmInitiativeTimeline` bar stays under the dates; delete `PpmInitiativeFinancials` and its imports.
+- [ ] **Step 3: Implement** the two props; in `CardDetailContent` pass a `groupLayout` returning `"sideBySide"` for the group that contains `costBudget`, and a `renderGroupAside` that returns `CompletionRing` only for the group that contains `summaryAnchors.schedule` (null for the others), rendering (loading bar, error alert and the no-WBS text as the Overview does); replace `InitiativeFinancialSummary` with one `BudgetBar` Total (labels as today, the Overview's colours `theme.palette.primary.main` and `error.dark`, `derivedBudget`/`derivedActual` from `card_comparison`), rendered only with `perms.can_view_costs`; the `PpmInitiativeTimeline` bar stays under the dates; delete `PpmInitiativeFinancials` and its imports.
 - [ ] **Step 4: Run** the two files, `PpmOverviewTab.test.tsx` and `tsc`; expect PASS.
 - [ ] **Step 5: Commit** `feat(cards): Initiative card page shows Budget and Cost side by side, Completion by the dates, one cost bar`.
 
@@ -166,7 +167,7 @@
 - Test: `CardDetailContent.test.tsx`, `CardDetail.test.tsx`
 
 **Interfaces:**
-- Produces: `CardDetailContent` prop `showPpmSummary?: boolean` (default `false`); `CardDetail.tsx` (the full card page) passes `true`; the side panel and the PPM Card Details tab do not. When true and `showInitiativeSummaries`, after the Cost group the content renders a **Health Summary** section (`PpmHealthSummary` with `usePpmLatestReport`, `costHealth` from `usePpmSchedule`, `onManage` only when `canManageCard`, opening `StatusReportDialog` for `initiativeId = card.id` in create mode) and a **Risk Management** section (`PpmRiskSummary` with a `usePpmRisks(card.id, revision)` fetch of `/ppm/initiatives/{id}/risks`, `onManage` only when `canManageCard`, opening `PpmManageDialog` with `tab: "risks"`). Health Summary leaves `InitiativeTimelineSummary`. All three fetches follow `scheduleRevision`; saving a report or closing the popup bumps it.
+- Produces: `CardDetailContent` prop `showPpmSummary?: boolean` (default `false`); `CardDetail.tsx` (the full card page) passes `true`; the side panel and the PPM Card Details tab do not. When true and `showInitiativeSummaries`, right after the `Cost & Timeline` section's `AttributeSection` (a sibling element that `renderSection` returns for that section, not something inside it) the content renders a **Health Summary** section (`PpmHealthSummary` with `usePpmLatestReport`, `costHealth` from `usePpmSchedule`, `onManage` only when `canManageCard`, opening `StatusReportDialog` for `initiativeId = card.id` in create mode) and a **Risk Management** section (`PpmRiskSummary` with a `usePpmRisks(card.id, revision)` fetch of `/ppm/initiatives/{id}/risks`, `onManage` only when `canManageCard`, opening `PpmManageDialog` with `tab: "risks"`). Health Summary leaves `InitiativeTimelineSummary`. All three fetches follow `scheduleRevision`; saving a report or closing the popup bumps it.
 
 - [ ] **Step 1: Write failing tests**: `the full card page shows Health Summary and Risk Management for an Initiative`, `the side panel does not`, `Manage in Health Summary opens the status report editor and a save refreshes the summary`, `Manage in Risk Management opens the popup on the risks tab`, `both Manage buttons are absent without ppm.manage and can_edit`, `Risk Management renders for a user without cost view`.
 - [ ] **Step 2: Run** the two files; expect FAIL.
@@ -181,9 +182,9 @@
 - Test: `PpmOverviewTab.test.tsx`, `PpmProjectDetail.permissions.test.tsx`, `PpmProjectDetail.fixes.test.tsx`
 
 **Interfaces:**
-- Produces: `PpmOverviewTab` props `canEdit: boolean` and `onRefresh: () => void`. Single full-width column in the order Description (hidden when empty), Timeline with Completion to the right of the dates, Health Summary (`PpmHealthSummary` with `latestReport`, `onManage` only when `canEdit`, opening `StatusReportDialog`, `onRefresh` after save), Risk Management (`PpmRiskSummary` fed by the risks the page already loads, `onManage` only when `canEdit`, opening `PpmManageDialog` `risks`), then Financials as today (still hidden without `canViewCosts`). `PpmProjectDetail` passes `canEdit` (its own gate) and `onRefresh={loadData}` and sends the back arrow to `/ppm?tab=portfolio`.
+- Produces: `PpmOverviewTab` props `canEdit: boolean`, `onRefresh: () => void` and `risks: PpmRisk[]`. Single full-width column in the order Description (hidden when empty), Timeline with Completion to the right of the dates, Health Summary (`PpmHealthSummary` with `latestReport`, `onManage` only when `canEdit`, opening `StatusReportDialog`, `onRefresh` after save), Risk Management (`PpmRiskSummary` fed by the new `risks` prop, which `PpmProjectDetail` passes from its own `risks` state, `onManage` only when `canEdit`, opening `PpmManageDialog` `risks`), then Financials as today (still hidden without `canViewCosts`); the Overview's own "Health Summary" Paper title goes, the component draws it. `PpmProjectDetail` passes `canEdit` (its own gate), `onRefresh={loadData}` and `risks`, and sends **both** back arrows (the header one and the one in the error state) to `/ppm?tab=portfolio`.
 
-- [ ] **Step 1: Write failing tests**: `the Overview renders Description, Timeline, Health Summary, Risk Management, Financials in that order`, `Manage buttons are absent when canEdit is false`, `saving a report calls onRefresh`, `the back arrow goes to /ppm?tab=portfolio`, `the Financials block is absent without cost view while Risk Management stays`.
+- [ ] **Step 1: Write failing tests**: `the Overview renders Description, Timeline, Health Summary, Risk Management, Financials in that order`, `Manage buttons are absent when canEdit is false`, `saving a report calls onRefresh`, `both back arrows go to /ppm?tab=portfolio`, `the Financials block is absent without cost view while Risk Management stays`.
 - [ ] **Step 2: Run** the three files; expect FAIL.
 - [ ] **Step 3: Implement.**
 - [ ] **Step 4: Run** the three files plus `PpmMobileLayout.test.tsx` and `tsc`; expect PASS.
@@ -199,10 +200,10 @@
 - Consumes: Task 2's `provider_field_key`; `budget.provider` (id, name, status) already in the payload.
 - Produces: the budget table columns Item (label as today), FY, Category, Provider, Planned Budget, Cost Items, Remaining Budget, Invoiced, Remaining to invoice; Provider cell empty when `budget.provider` is null; the custom-field block skips the field named by `provider_field_key`; no `drive_file_move` on assigned cost items or invoices; the "Unassigned" cost items keep "Assign to budget" (`financeTree.assignCost`) through the `move` form; the "Initiative total invoiced" line is removed; `tableLayout` is no longer `fixed` and there is no `minWidth: 900`; the container scrolls horizontally (`overflowX: auto`), and with `expandAll` (print) it has no scroll container and the cells wrap.
 
-- [ ] **Step 1: Write failing tests**: `the budget table shows FY, Category and Provider columns`, `the Provider cell is empty for a budget without a readable Provider`, `the custom field block skips the Provider field named by provider_field_key`, `assigned cost items and invoices have no move action`, `an unassigned cost item can still be assigned to a budget`, `no Initiative total invoiced line`, `expandAll renders without a scroll container`.
+- [ ] **Step 1: Write failing tests**: `the budget table shows FY, Category and Provider columns`, `the Provider cell is empty for a budget without a readable Provider`, `the custom field block skips the Provider field named by provider_field_key`, `assigned cost items and invoices have no move action`, `an unassigned cost item can still be assigned to a budget`, `no Initiative total invoiced line`, `the Planned Budget totals are unchanged by the new columns`, `expandAll renders without a scroll container`.
 - [ ] **Step 2: Run** `npx vitest run src/features/ppm/PpmFinanceTree.test.tsx`; expect FAIL.
-- [ ] **Step 3: Implement.**
-- [ ] **Step 4: Update `frontend/e2e/pml-financials.spec.ts`**: the scenario that clicks `moveInvoice` moves the invoice through the API instead; keep its total assertions; scope row assertions to the owning table (the `financeTree.item` region). Do not run the e2e suite; run it only on an isolated demo stack if the owner asks.
+- [ ] **Step 3: Implement**, adding the keys `financeTree.colFiscalYear`, `financeTree.colCategory` and `financeTree.colProvider` to `en/ppm.json`.
+- [ ] **Step 4: Update `frontend/e2e/pml-financials.spec.ts`**: the scenario that clicks `moveInvoice` moves the invoice through the API instead; keep its total assertions; scope row assertions to the owning table (the `financeTree.item` region). Then run it on an isolated demo stack as `.claude/rules/ppm.md` requires (`E2E_BASE_URL` set to that stack, `E2E_PML_DISPOSABLE=1` for the scenario that writes data); never against the owner's instance on 8920.
 - [ ] **Step 5: Run** the Vitest file, `PpmProjectReport.test.tsx`, `PpmCostTab.test.tsx` and `tsc`; expect PASS.
 - [ ] **Step 6: Commit** `feat(ppm): Plan Budget table with FY, Category and Provider columns`.
 
@@ -221,3 +222,6 @@
 - [ ] **Step 4: Run `/translate`**, then `scripts/docs/docker-docs.sh all` (the `docs-keeper` agent); expect exit 0 and 0 problems.
 - [ ] **Step 5: Tests of the diff**: the touched backend files and the frontend files named in Tasks 1-11, one run at a time; then the review chain of `CLAUDE.md` (`code-simplifier`, `code-reviewer`, `security-reviewer`; VAPT not required: no route or table).
 - [ ] **Step 6: Commit** `docs: Initiative pages manual, changelog and version`.
+- [ ] **Step 7: Rules follow the code**: a fresh agent compares the branch diff with the `.claude/rules/*.md` whose `paths:` it touches (at least `ppm.md`: the `risks` tab of `PpmManageDialog`, the Overview layout, `PpmRiskSummary`, the 250-character limit, the Plan Budget columns); the session shows the drafts one file at a time and edits a rule only after the owner's yes for that file.
+- [ ] **Step 8: Learnings**: before the PR, propose to the owner, one at a time with title and text, only what the code and the diff cannot tell the next person; save with `trail note` only after a yes.
+- [ ] **Step 9: Before the PR**: merge or rebase the updated `main` locally and resolve conflicts there; open the PR with `.github/pull_request_template.md`. In its Test Plan put the mutation score and every survivor read from the CI jobs `Backend`, `Frontend` and `MCP Mutation Tests` (never run locally), the owner's count of status reports longer than 250 characters, and the known limits.
