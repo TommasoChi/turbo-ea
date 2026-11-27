@@ -81,6 +81,8 @@ interface Props {
   onClick?: (params: EChartClickParams) => void;
   /** Right click on a datum; the native context menu is suppressed. */
   onContextMenu?: (params: EChartClickParams) => void;
+  /** A legend entry was toggled; `selected` maps every series name to its visibility. */
+  onLegendSelectChanged?: (params: { name: string; selected: Record<string, boolean> }) => void;
   style?: CSSProperties;
   ariaLabel?: string;
   /** Id of the element that names the chart (its visible title). */
@@ -104,6 +106,7 @@ export default function EChart({
   option,
   onClick,
   onContextMenu,
+  onLegendSelectChanged,
   style,
   ariaLabel,
   labelledBy,
@@ -116,6 +119,8 @@ export default function EChart({
   clickRef.current = onClick;
   const contextRef = useRef(onContextMenu);
   contextRef.current = onContextMenu;
+  const legendRef = useRef(onLegendSelectChanged);
+  legendRef.current = onLegendSelectChanged;
   const dprRef = useRef(devicePixelRatio);
   // Read at init only: a new callback identity never re-creates the chart.
   const initRef = useRef(onInit);
@@ -142,6 +147,9 @@ export default function EChart({
       contextRef.current?.(p);
     };
     chart.on("contextmenu", handleContext);
+    const handleLegend = (params: unknown) =>
+      legendRef.current?.(params as Parameters<NonNullable<Props["onLegendSelectChanged"]>>[0]);
+    chart.on("legendselectchanged", handleLegend);
 
     let observer: ResizeObserver | null = null;
     if (typeof ResizeObserver !== "undefined") {
@@ -175,6 +183,7 @@ export default function EChart({
       removePrintCopy(el);
       chart.off("click", handleClick);
       chart.off("contextmenu", handleContext);
+      chart.off("legendselectchanged", handleLegend);
       chart.dispose();
       chartRef.current = null;
     };

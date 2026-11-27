@@ -49,6 +49,16 @@ describe("PpmRiskMatrix", () => {
     expect(cellAt(container, 2, 2)).toHaveTextContent("1");
   });
 
+  it("passes size through: compact cells are shorter than the default", () => {
+    const pad = (size?: "compact") => {
+      const { container, unmount } = render(<PpmRiskMatrix risks={[]} size={size} />);
+      const value = parseFloat(getComputedStyle(cellAt(container, 5, 5)).paddingTop);
+      unmount();
+      return value;
+    };
+    expect(pad("compact")).toBeLessThan(pad());
+  });
+
   it("closes with the three score bands, highest first, and is read-only", () => {
     const { container } = render(<PpmRiskMatrix risks={[risk(3, 3)]} />);
     const items = [...container.querySelectorAll("[data-legend-item]")];

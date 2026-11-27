@@ -90,6 +90,20 @@ describe("EChart", () => {
     expect(onContextMenu).toHaveBeenCalledWith(params);
   });
 
+  it("forwards legendselectchanged to the latest onLegendSelectChanged", () => {
+    const first = vi.fn();
+    const second = vi.fn();
+    const { rerender } = render(<EChart option={{}} onLegendSelectChanged={first} />);
+    const handler = chart.on.mock.calls.find((c) => c[0] === "legendselectchanged")?.[1] as (
+      p: unknown,
+    ) => void;
+    rerender(<EChart option={{}} onLegendSelectChanged={second} />);
+    const params = { name: "open", selected: { open: false, closed: true } };
+    handler(params);
+    expect(first).not.toHaveBeenCalled();
+    expect(second).toHaveBeenCalledWith(params);
+  });
+
   it("leaves the native menu alone without the prop", () => {
     render(<EChart option={{}} />);
     const handler = chart.on.mock.calls.find((c) => c[0] === "contextmenu")?.[1] as (

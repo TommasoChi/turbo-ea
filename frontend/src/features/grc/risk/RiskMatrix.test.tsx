@@ -182,6 +182,22 @@ describe("RiskMatrix — default GRC axes, in detail", () => {
   });
 });
 
+describe("RiskMatrix — size", () => {
+  const padding = (size?: "default" | "compact") => {
+    const { container, unmount } = render(<RiskMatrix matrix={sample} size={size} />);
+    const cell = container.querySelector("[data-row]") as HTMLElement;
+    const value = parseFloat(getComputedStyle(cell).paddingTop);
+    unmount();
+    return value;
+  };
+
+  it("compact renders smaller cells and the default is unchanged", () => {
+    expect(padding()).toBe(10);
+    expect(padding("default")).toBe(10);
+    expect(padding("compact")).toBeLessThan(10);
+  });
+});
+
 describe("RiskMatrix — custom axes", () => {
   const rows = [
     { key: "r1", label: "Row one" },

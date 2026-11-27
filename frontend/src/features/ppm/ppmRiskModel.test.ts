@@ -19,7 +19,11 @@ import {
   SIDEBAR_MAX_WIDTH,
   SIDEBAR_MIN_WIDTH,
   activeRiskFilterCount,
+  activeRiskSummary,
   bandColor,
+  isActiveRisk,
+  riskBandCounts,
+  riskStatusCounts,
   defaultRiskGridPrefs,
   filterRisks,
   loadRiskGridPrefs,
@@ -162,6 +166,57 @@ describe("riskSummary", () => {
     ];
     expect(riskSummary(risks)).toEqual({ total: 4, open: 2, high: 2 });
     expect(riskSummary([])).toEqual({ total: 0, open: 0, high: 0 });
+  });
+
+  it("still counts High in every status, not only the active ones", () => {
+    const risks = [
+      risk({ id: "a", status: "closed", risk_score: 20 }),
+      risk({ id: "b", status: "mitigated", risk_score: 16 }),
+    ];
+    expect(riskSummary(risks)).toEqual({ total: 2, open: 0, high: 2 });
+  });
+});
+
+describe("active risks", () => {
+  it("isActiveRisk is true for open and mitigating only", () => {
+    const actives = RISK_STATUSES.filter((status) => isActiveRisk(risk({ id: "x", status })));
+    expect(actives).toEqual(["open", "mitigating"]);
+  });
+
+  it("activeRiskSummary counts open and mitigating, High open only among them", () => {
+    const risks = [
+      risk({ id: "a", status: "open", risk_score: 15 }),
+      risk({ id: "b", status: "mitigating", risk_score: 20 }),
+      risk({ id: "c", status: "mitigating", risk_score: 14 }),
+      risk({ id: "d", status: "closed", risk_score: 25 }),
+      risk({ id: "e", status: "accepted", risk_score: 16 }),
+    ];
+    expect(activeRiskSummary(risks)).toEqual({ total: 5, open: 3, highOpen: 2 });
+    expect(activeRiskSummary([])).toEqual({ total: 0, open: 0, highOpen: 0 });
+  });
+});
+
+describe("riskBandCounts and riskStatusCounts", () => {
+  it("are all zero on an empty list, the statuses in their known order", () => {
+    expect(riskBandCounts([])).toEqual({ high: 0, medium: 0, low: 0 });
+    expect(riskStatusCounts([])).toEqual([
+      { status: "open", count: 0 },
+      { status: "mitigating", count: 0 },
+      { status: "mitigated", count: 0 },
+      { status: "closed", count: 0 },
+      { status: "accepted", count: 0 },
+    ]);
+  });
+
+  it("count the risks they are given", () => {
+    const risks = [
+      risk({ id: "a", status: "open", risk_score: 15 }),
+      risk({ id: "b", status: "open", risk_score: 6 }),
+      risk({ id: "c", status: "closed", risk_score: 5 }),
+      risk({ id: "d", status: "closed", risk_score: 1 }),
+    ];
+    expect(riskBandCounts(risks)).toEqual({ high: 1, medium: 1, low: 2 });
+    expect(riskStatusCounts(risks).map((s) => s.count)).toEqual([2, 0, 0, 2, 0]);
   });
 });
 
