@@ -9,15 +9,16 @@ import DialogTitle from "@mui/material/DialogTitle";
 import { lazy, Suspense } from "react";
 import { useTranslation } from "react-i18next";
 import { useApiQuery } from "@/hooks/useApiQuery";
-import type { Card, PpmRollupOut, PpmStatusReport } from "@/types";
+import type { Card, PpmRisk, PpmRollupOut, PpmStatusReport } from "@/types";
 
 const PpmCostTab = lazy(() => import("./PpmCostTab"));
 const PpmGanttTab = lazy(() => import("./PpmGanttTab"));
 const PpmReportsTab = lazy(() => import("./PpmReportsTab"));
+const PpmRiskTab = lazy(() => import("./PpmRiskTab"));
 
 interface Props {
   card: Card;
-  tab: "cost" | "gantt" | "reports";
+  tab: "cost" | "gantt" | "reports" | "risks";
   onClose: () => void;
   onChanged: () => void;
 }
@@ -32,7 +33,18 @@ export default function PpmManageDialog({ card, tab, onClose, onChanged }: Props
     tab === "reports" ? "/ppm/initiatives/" + encodeURIComponent(card.id) + "/reports" : null,
     { keepPreviousData: false },
   );
-  const title = tab === "cost" ? t("budgetAndCosts") : tab === "reports" ? t("statusReports") : t("gantt");
+  const risks = useApiQuery<PpmRisk[]>(
+    tab === "risks" ? "/ppm/initiatives/" + encodeURIComponent(card.id) + "/risks" : null,
+    { keepPreviousData: false },
+  );
+  const title =
+    tab === "cost"
+      ? t("budgetAndCosts")
+      : tab === "reports"
+        ? t("statusReports")
+        : tab === "risks"
+          ? t("riskManagement")
+          : t("gantt");
 
   return (
     <Dialog
@@ -47,6 +59,7 @@ export default function PpmManageDialog({ card, tab, onClose, onChanged }: Props
       <DialogContent dividers>
         {rollup.error && <Alert severity="error">{rollup.error.message}</Alert>}
         {reports.error && <Alert severity="error">{reports.error.message}</Alert>}
+        {risks.error && <Alert severity="error">{risks.error.message}</Alert>}
         <Suspense
           fallback={
             <Box display="flex" justifyContent="center">
@@ -74,6 +87,21 @@ export default function PpmManageDialog({ card, tab, onClose, onChanged }: Props
                 }}
               />
             ) : reports.loading ? (
+              <CircularProgress />
+            ) : null
+          ) : tab === "risks" ? (
+            risks.data ? (
+              <PpmRiskTab
+                initiativeId={card.id}
+                risks={risks.data}
+                canEdit
+                initiativeName={card.name}
+                onRefresh={() => {
+                  risks.refetch();
+                  onChanged();
+                }}
+              />
+            ) : risks.loading ? (
               <CircularProgress />
             ) : null
           ) : (
