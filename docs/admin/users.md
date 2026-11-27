@@ -119,6 +119,9 @@ The **Roles** tab allows managing application-level roles. Each role defines a s
 | **BPM Admin** | Full BPM permissions plus inventory access, no admin settings |
 | **Member** | Create, edit, and manage cards, relations, and comments. No admin access |
 | **Viewer** | Read-only access across all areas |
+| **PPM Manager** | The Viewer's read-only rights plus `ppm.manage`. The profile of Project Managers and Cost Controllers: what they may do on a card comes from their stakeholder role on it |
+
+**Member** and **BPM Admin** do not hold `ppm.manage` or `costs.view` (they keep `ppm.view`), on new installs and, after the upgrade, on existing ones. Custom roles are not changed. A Project Manager who held a Member role needs the **PPM Manager** role to keep managing initiatives, and a user who needs the cost report needs `costs.view` or a stakeholder role that shows costs. No default role holds `costs.edit`; cost editing comes from a stakeholder role with **card.edit_costs** (see [Metamodel](metamodel.md#stakeholder-roles)).
 
 Custom roles can be created with granular permission control over inventory, relations, stakeholders, comments, documents, diagrams, BPM, reports, and more. The BPM group includes a read-only permission, **View the value chain and value stream maps**, for the [Value Chain and Value Stream Map](../guide/value-chain.md) pages.
 

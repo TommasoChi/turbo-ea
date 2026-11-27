@@ -93,6 +93,7 @@ One pull request, **E**: permission, roles, migration, the PPM write gates, the 
 - Viewers lose the amounts they see today in the initiative's PPM pages (they have no `costs.view`): the rule the owner wrote.
 - `cost`-type fields of a card stay on `card.edit`; `cost_history` follows the cost permissions.
 - The configured relation of a cost follows `can_edit_costs`, so the Cost Controller needs no `relations.manage`.
+- Invoice rows answer 404 (not 403) to a user without cost visibility, by design: the row does not exist for them.
 - The notice in the changelog: whoever holds `card.manage_stakeholders` can assign the Cost Controller; a built-in role an admin deletes is recreated at restart.
 
 ## Left to the builder

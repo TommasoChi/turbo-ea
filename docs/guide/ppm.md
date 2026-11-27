@@ -319,7 +319,30 @@ Conversely, the **Card Details** tab within the PML Initiative Detail View shows
 | Permission | Description |
 |-----------|-------------|
 | `ppm.view` | View the PML dashboard, Gantt chart, and initiative reports, and read Initiative cards. Granted to all roles by default |
-| `ppm.manage` | Create and manage status reports, tasks, budgets, cost items, risks and WBS items. Granted to Admin, BPM Admin and Member roles |
+| `ppm.manage` | Create and manage status reports, tasks, budgets, cost items, risks and WBS items, on the initiatives where the card permissions below also allow it. Granted to the Admin and PPM Manager roles |
 | `reports.ppm_dashboard` | View the PML portfolio dashboard. Granted to all roles by default |
 
-Budget and Cost Items follow PML access and the Initiative's visibility. Invoice details and the initiative-wide invoiced total also require cost visibility on that Initiative. Recording or moving invoices requires PML management access and cost visibility. **On Cost** in the protected Timeline also requires cost visibility.
+Two layers apply. The application permission opens a function; the card permission says on which initiatives it applies. A card you cannot read does not exist for you.
+
+- **Manage** on status reports, risks, tasks and the Gantt needs `ppm.manage` **and** edit rights on the card (`inventory.edit` or a stakeholder role with **card.edit**).
+- Costs (budget lines, cost items, invoices) are written with `ppm.manage` **and** cost edit rights on the card (`costs.edit` or a stakeholder role with **card.edit_costs**), and the costs must be viewable.
+- A user without cost access (`costs.view`, or a stakeholder role with **card.view_costs**) sees **no amounts** on the initiative: rows, descriptions, years, Providers and dates stay, while amounts, totals, subtotals, roll-ups and calculated or numeric custom values are left out. The **Budget & Costs** tab is hidden, without a message, and the portfolio shows no figures. The Cost Report lists only initiatives whose costs you can see.
+- The invoice routes answer "not found" (404) to a user without cost access.
+- Moderating (editing or deleting) other people's comments needs edit rights on the card.
+- The Manage buttons on the initiative follow these rights, and the cost **Manage** button on the card page needs `ppm.manage` and cost edit rights: a user who only views costs does not see it.
+
+| Function | Permissions required |
+|---|---|
+| See the card (general data) | `card.view` |
+| See the costs of the card | `card.view` + `view_costs` |
+| See PML without costs (status reports, risks, tasks, Gantt) | `card.view` + `ppm.view` |
+| See PML costs (budget, cost items, invoices, amounts) | `card.view` + `view_costs` + `ppm.view` |
+| Edit card data | `card.view` + `card.edit` |
+| Edit PML without costs | `card.view` + `card.edit` + `ppm.view` + `ppm.manage` |
+| Edit PML costs | `card.view` + `view_costs` + `edit_costs` + `ppm.view` + `ppm.manage` |
+| Build cost report | `ppm.view`; lists only cards with `card.view` + `view_costs` |
+| Open the PML pages | `ppm.view` |
+
+`view_costs` is `costs.view` or **card.view_costs**; `edit_costs` is `costs.edit` or **card.edit_costs**. For Applications and IT Components the yearly cost items are edited with `card.view` + `view_costs` + `edit_costs`, with no PML permission.
+
+The **Cost Controller** stakeholder role reads the initiative and its status reports, risks and Gantt and edits only the costs; give its holders the **PPM Manager** application role. A Responsible or IT Project Manager keeps managing the initiative and its costs. **On Cost** in the protected Timeline also requires cost visibility.

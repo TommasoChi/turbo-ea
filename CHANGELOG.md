@@ -5,6 +5,30 @@ All notable changes to Turbo EA are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.215.0] - 2026-11-27
+
+### Added
+
+- A **Cost Controller** stakeholder role (Initiative, Application and IT Component) that reads a card and manages its costs, and nothing else.
+- A **card.edit_costs** card permission, separate from **card.edit**; existing stakeholder roles keep what they had.
+- A **PPM Manager** application role: the Viewer's rights plus `ppm.manage`.
+
+### Changed
+
+- PPM amounts are withheld from users without cost access: the amount keys are absent from the API responses, and the Budget & Costs tab and cost sections are hidden.
+- PPM Manage on status reports, risks, tasks and the Gantt needs edit rights on the card.
+- PPM cost writes (budget lines, cost items, invoices) need cost edit rights on the card.
+- Moderating comments needs card edit rights.
+- The cost history and the relations a cost configures follow the cost permissions.
+- Member and BPM Admin lose PPM Manage and cost view, the built-in roles of existing installs too: a Project Manager with a Member role needs the PPM Manager role.
+- Whoever holds the manage-stakeholders right can assign the Cost Controller.
+- A built-in stakeholder role an admin deletes is recreated at restart.
+- The cost Manage button on the card page needs PPM manage and cost edit rights: a user who only views costs no longer sees it.
+
+### Security
+
+- The amounts of an initiative no longer leak to users without cost access.
+
 ## [2.214.0] - 2026-11-25
 
 ### Added
