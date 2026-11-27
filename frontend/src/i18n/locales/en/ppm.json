@@ -353,5 +353,6 @@
   "riskSummaryTotal": "Total",
   "riskSummaryOpen": "Open",
   "riskSummaryHighOpen": "High open",
+  "riskSummaryManage": "Manage risks",
   "riskSummaryLoading": "Loading risks…"
 }

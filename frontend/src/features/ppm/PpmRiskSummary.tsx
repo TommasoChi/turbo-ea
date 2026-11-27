@@ -3,7 +3,7 @@
  * draw: three tiles, the exposure donut, the status bars and a compact heat
  * map, all over the ACTIVE risks (open or mitigating) except Total and Status.
  */
-import { useMemo, useState } from "react";
+import { useId, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
@@ -41,6 +41,9 @@ export default function PpmRiskSummary({
   const { t } = useTranslation("ppm");
   const theme = useTheme();
   const chartTheme = useEChartsTheme();
+  const exposureId = useId();
+  const statusId = useId();
+  const heatMapId = useId();
   const [selected, setSelected] = useState<Record<string, boolean>>({});
 
   const model = useMemo(() => {
@@ -58,14 +61,14 @@ export default function PpmRiskSummary({
     <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
       <Typography variant="h6">{t("riskManagement")}</Typography>
       {onManage && (
-        <Button size="small" onClick={onManage}>
+        <Button size="small" aria-label={t("riskSummaryManage")} onClick={onManage}>
           {t("manage")}
         </Button>
       )}
     </Stack>
   );
 
-  if (!model) {
+  if (!risks || !model) {
     return (
       <Box>
         {header}
@@ -73,7 +76,7 @@ export default function PpmRiskSummary({
       </Box>
     );
   }
-  if (!risks || risks.length === 0) {
+  if (risks.length === 0) {
     return (
       <Box>
         {header}
@@ -162,28 +165,28 @@ export default function PpmRiskSummary({
       </Stack>
       <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
         <Box sx={{ flex: 1, minWidth: 0 }}>
-          <Typography variant="subtitle2" sx={{ mb: 1 }}>
+          <Typography variant="subtitle2" id={exposureId} sx={{ mb: 1 }}>
             {t("riskSummaryExposure")}
           </Typography>
           <EChart
             option={donutOption}
-            ariaLabel={t("riskSummaryExposure")}
+            labelledBy={exposureId}
             style={{ height: CHART_HEIGHT }}
             onLegendSelectChanged={(p) => setSelected(p.selected)}
           />
         </Box>
         <Box sx={{ flex: 1, minWidth: 0 }}>
-          <Typography variant="subtitle2" sx={{ mb: 1 }}>
+          <Typography variant="subtitle2" id={statusId} sx={{ mb: 1 }}>
             {t("riskSummaryStatus")}
           </Typography>
           <EChart
             option={statusOption}
-            ariaLabel={t("riskSummaryStatus")}
+            labelledBy={statusId}
             style={{ height: CHART_HEIGHT }}
           />
         </Box>
-        <Box sx={{ flex: 1, minWidth: 0 }}>
-          <Typography variant="subtitle2" sx={{ mb: 1 }}>
+        <Box role="group" aria-labelledby={heatMapId} sx={{ flex: 1, minWidth: 0 }}>
+          <Typography variant="subtitle2" id={heatMapId} sx={{ mb: 1 }}>
             {t("riskSummaryHeatMap")}
           </Typography>
           <PpmRiskMatrix risks={model.active} size="compact" />

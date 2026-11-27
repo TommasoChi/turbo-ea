@@ -5,17 +5,30 @@ import type { PpmRisk } from "@/types";
 import PpmRiskSummary from "./PpmRiskSummary";
 
 interface ChartProps {
-  option: Record<string, unknown> & Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
-  ariaLabel?: string;
+  option: Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
+  labelledBy?: string;
   onLegendSelectChanged?: (p: { name: string; selected: Record<string, boolean> }) => void;
 }
+interface MatrixProps {
+  risks: readonly PpmRisk[];
+  size?: string;
+}
 
-const charts = vi.hoisted(() => ({ calls: [] as ChartProps[] }));
+const mocks = vi.hoisted(() => ({
+  charts: [] as ChartProps[],
+  matrices: [] as MatrixProps[],
+}));
 
 vi.mock("@/components/charts/EChart", () => ({
   default: (props: ChartProps) => {
-    charts.calls.push(props);
-    return <div data-testid="echart" data-label={props.ariaLabel} />;
+    mocks.charts.push(props);
+    return <div role="img" aria-labelledby={props.labelledBy} />;
+  },
+}));
+vi.mock("./PpmRiskMatrix", () => ({
+  default: (props: MatrixProps) => {
+    mocks.matrices.push(props);
+    return <div data-testid="matrix" />;
   },
 }));
 
@@ -36,16 +49,23 @@ const RISKS = [
   risk("r5", "mitigated", 2, 2),
 ];
 
-const chartNamed = (label: RegExp) => {
-  const last = [...charts.calls].reverse().find((c) => label.test(c.ariaLabel ?? ""));
-  if (!last) throw new Error(`no chart ${label}`);
+/** The latest option of the chart whose visible title is `title`. */
+const chartTitled = (title: string) => {
+  const last = [...mocks.charts]
+    .reverse()
+    .find((c) => c.labelledBy && document.getElementById(c.labelledBy)?.textContent === title);
+  if (!last) throw new Error(`no chart titled ${title}`);
   return last;
 };
-const donut = () => chartNamed(/exposed/i);
+const donut = () => chartTitled("How exposed are we?");
 const tile = (name: string) => screen.getByText(name).parentElement as HTMLElement;
+const lastMatrix = () => mocks.matrices[mocks.matrices.length - 1];
+const hideBands = (selected: Record<string, boolean>) =>
+  act(() => donut().onLegendSelectChanged?.({ name: "High", selected }));
 
 beforeEach(() => {
-  charts.calls.length = 0;
+  mocks.charts.length = 0;
+  mocks.matrices.length = 0;
 });
 
 describe("PpmRiskSummary", () => {
@@ -67,14 +87,16 @@ describe("PpmRiskSummary", () => {
     ]);
   });
 
+  it("names each chart and the heat map by its visible title", () => {
+    render(<PpmRiskSummary risks={RISKS} />);
+    expect(screen.getByRole("img", { name: "How exposed are we?" })).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "Where do the risks stand?" })).toBeInTheDocument();
+    expect(screen.getByRole("group", { name: "Where do the risks sit?" })).toBeInTheDocument();
+  });
+
   it("a legend click removes the band from the centre total and the selection survives a re-render", () => {
     const { rerender } = render(<PpmRiskSummary risks={RISKS} />);
-    act(() =>
-      donut().onLegendSelectChanged?.({
-        name: "High",
-        selected: { High: false, Medium: true, Low: true },
-      }),
-    );
+    hideBands({ High: false, Medium: true, Low: true });
     expect(donut().option.title.text).toBe("2");
     expect(donut().option.legend.selected).toEqual({ High: false, Medium: true, Low: true });
     rerender(<PpmRiskSummary risks={[...RISKS]} />);
@@ -82,51 +104,64 @@ describe("PpmRiskSummary", () => {
     expect(donut().option.title.text).toBe("2");
   });
 
+  it("keeps a hidden band hidden when the risks change, and the total follows the new counts", () => {
+    const { rerender } = render(<PpmRiskSummary risks={RISKS} />);
+    hideBands({ High: false, Medium: true, Low: true });
+    rerender(
+      <PpmRiskSummary risks={[...RISKS, risk("r6", "open", 5, 5), risk("r7", "open", 3, 3)]} />,
+    );
+    expect(donut().option.legend.selected.High).toBe(false);
+    expect(donut().option.title.text).toBe("3");
+  });
+
   it("hiding every band shows 0", () => {
     render(<PpmRiskSummary risks={RISKS} />);
-    act(() =>
-      donut().onLegendSelectChanged?.({
-        name: "Low",
-        selected: { High: false, Medium: false, Low: false },
-      }),
-    );
+    hideBands({ High: false, Medium: false, Low: false });
     expect(donut().option.title.text).toBe("0");
   });
 
   it("the status bars list the five statuses", () => {
     render(<PpmRiskSummary risks={RISKS} />);
-    const opt = chartNamed(/stand/i).option;
-    const cats = (Array.isArray(opt.yAxis) ? opt.yAxis[0] : opt.yAxis).data;
-    expect(cats).toEqual(["Open", "Mitigating", "Mitigated", "Closed", "Accepted"]);
-    expect(opt.series[0].data.map((d: { value: number } | number) =>
-      typeof d === "number" ? d : d.value,
-    )).toEqual([2, 1, 1, 1, 0]);
+    const opt = chartTitled("Where do the risks stand?").option;
+    expect(opt.yAxis.data).toEqual(["Open", "Mitigating", "Mitigated", "Closed", "Accepted"]);
+    expect(opt.series[0].data.map((d: { value: number }) => d.value)).toEqual([2, 1, 1, 1, 0]);
   });
 
-  it("draws the heat map over the active risks", () => {
-    const { container } = render(<PpmRiskSummary risks={RISKS} />);
-    expect(container.querySelectorAll("[data-row]")).toHaveLength(25);
+  it("draws a compact heat map over the active risks only", () => {
+    render(<PpmRiskSummary risks={RISKS} />);
+    expect(lastMatrix().size).toBe("compact");
+    expect(lastMatrix().risks.map((r) => r.id)).toEqual(["r1", "r2", "r3"]);
   });
 
-  it("Manage appears only with onManage and calls it", async () => {
+  it("with no active risk the centre, Open, High open and heat map are all empty", () => {
+    render(<PpmRiskSummary risks={[risk("r1", "closed", 5, 5), risk("r2", "accepted", 4, 4)]} />);
+    expect(tile("Total")).toHaveTextContent("2");
+    expect(tile("Open")).toHaveTextContent("0");
+    expect(tile("High open")).toHaveTextContent("0");
+    expect(donut().option.title.text).toBe("0");
+    expect(lastMatrix().risks).toHaveLength(0);
+  });
+
+  it("Manage appears only with onManage, is named for the risks and calls it", async () => {
     const onManage = vi.fn();
     const { rerender } = render(<PpmRiskSummary risks={RISKS} />);
     expect(screen.getByText("Risk Management")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Manage" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Manage risks" })).not.toBeInTheDocument();
     rerender(<PpmRiskSummary risks={RISKS} onManage={onManage} />);
-    await userEvent.click(screen.getByRole("button", { name: "Manage" }));
+    await userEvent.click(screen.getByRole("button", { name: "Manage risks" }));
     expect(onManage).toHaveBeenCalledTimes(1);
+    expect(screen.getByText("Manage")).toBeInTheDocument();
   });
 
   it("an empty list shows the empty state and no charts", () => {
     render(<PpmRiskSummary risks={[]} />);
     expect(screen.getByText("No risks yet")).toBeInTheDocument();
-    expect(screen.queryAllByTestId("echart")).toHaveLength(0);
+    expect(screen.queryAllByRole("img")).toHaveLength(0);
   });
 
   it("shows a loading line while the risks are not loaded", () => {
     render(<PpmRiskSummary risks={null} />);
     expect(screen.getByText("Loading risks…")).toBeInTheDocument();
-    expect(screen.queryAllByTestId("echart")).toHaveLength(0);
+    expect(screen.queryAllByRole("img")).toHaveLength(0);
   });
 });
