@@ -117,11 +117,11 @@ A aba de **Papéis** permite gerenciar papéis em nível de aplicação. Cada pa
 |-------|-----------|
 | **Admin** | Acesso total a todos os recursos e administração |
 | **BPM Admin** | Permissões completas de BPM mais acesso ao inventário, sem configurações de admin |
-| **Membro** | Criar, editar e gerenciar cards, relacionamentos e comentários. Sem acesso admin |
+| **Membro** | Criar, editar e gerenciar cards, relacionamentos e comentários. Não pode gerir partes interessadas. Sem acesso admin |
 | **Visualizador** | Acesso somente leitura em todas as áreas |
 | **PPM Manager** | Os direitos só de leitura do Visualizador mais `ppm.manage`. O perfil dos gestores de projeto e dos controladores de custos: o que podem fazer num cartão decorre do seu papel de parte interessada nele |
 
-**Membro** e **BPM Admin** não possuem `ppm.manage` nem `costs.view` (mantêm `ppm.view`), nas instalações novas e, após a atualização, nas existentes. Os papéis personalizados não são alterados. Um gestor de projeto que tinha um papel de Membro precisa do papel **PPM Manager** para continuar a gerir iniciativas, e um utilizador que precise do relatório de custos necessita de `costs.view` ou de um papel de parte interessada que mostre os custos. Nenhum papel predefinido possui `costs.edit`; a edição de custos vem de um papel de parte interessada com **card.edit_costs** (ver [Metamodelo](metamodel.md#stakeholder-roles)).
+**Membro** e **BPM Admin** não possuem `ppm.manage`, `costs.view` nem `stakeholders.manage` (Gerir partes interessadas; mantêm `ppm.view`), nas instalações novas e, após a atualização, nas existentes. Os papéis personalizados não são alterados. Um gestor de projeto que tinha um papel de Membro precisa do papel **PPM Manager** para continuar a gerir iniciativas, e um utilizador que precise do relatório de custos necessita de `costs.view` ou de um papel de parte interessada que mostre os custos. Só os papéis que ainda possuem `stakeholders.manage` (Admin e os papéis personalizados a que o conceda) podem atribuir partes interessadas, incluindo o controlador de custos; um papel de parte interessada com **card.manage_stakeholders** fá-lo nos seus próprios cartões. Nenhum papel predefinido possui `costs.edit`; a edição de custos vem de um papel de parte interessada com **card.edit_costs** (ver [Metamodelo](metamodel.md#stakeholder-roles)).
 
 Papéis personalizados podem ser criados com controle granular de permissões sobre inventário, relacionamentos, partes interessadas, comentários, documentos, diagramas, BPM, relatórios e mais. O grupo BPM inclui uma permissão somente leitura, `bpm.value_chain`, para as páginas [Cadeia de valor e mapas de fluxo de valor](../guide/value-chain.md).
 
