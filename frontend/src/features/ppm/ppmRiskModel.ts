@@ -162,10 +162,9 @@ export function riskBandCounts(risks: readonly PpmRisk[]): Record<RiskScoreBand,
 export function riskStatusCounts(
   risks: readonly PpmRisk[],
 ): { status: string; count: number }[] {
-  return RISK_STATUSES.map((status) => ({
-    status,
-    count: risks.filter((r) => r.status === status).length,
-  }));
+  const counts: Record<string, number> = {};
+  for (const r of risks) counts[r.status] = (counts[r.status] ?? 0) + 1;
+  return RISK_STATUSES.map((status) => ({ status, count: counts[status] ?? 0 }));
 }
 
 /** A new array, highest score first, ties by title. The input is left alone. */

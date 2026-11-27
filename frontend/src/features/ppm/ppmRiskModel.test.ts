@@ -21,16 +21,16 @@ import {
   activeRiskFilterCount,
   activeRiskSummary,
   bandColor,
-  isActiveRisk,
-  riskBandCounts,
-  riskStatusCounts,
   defaultRiskGridPrefs,
   filterRisks,
+  isActiveRisk,
   loadRiskGridPrefs,
   paletteColor,
+  riskBandCounts,
   riskCellText,
   riskColumnsDifferFromDefault,
   riskOwnerOptions,
+  riskStatusCounts,
   riskStatusLabel,
   riskStatusLabelKey,
   riskStatusPaletteColor,
@@ -217,6 +217,16 @@ describe("riskBandCounts and riskStatusCounts", () => {
     ];
     expect(riskBandCounts(risks)).toEqual({ high: 1, medium: 1, low: 2 });
     expect(riskStatusCounts(risks).map((s) => s.count)).toEqual([2, 0, 0, 2, 0]);
+  });
+
+  it("leave out a status this build does not know, so the sum can be below the list length", () => {
+    const risks = [
+      risk({ id: "a", status: "open" }),
+      risk({ id: "b", status: "paused" as PpmRisk["status"] }),
+    ];
+    const counts = riskStatusCounts(risks);
+    expect(counts.map((s) => s.count)).toEqual([1, 0, 0, 0, 0]);
+    expect(counts.reduce((n, s) => n + s.count, 0)).toBeLessThan(risks.length);
   });
 });
 

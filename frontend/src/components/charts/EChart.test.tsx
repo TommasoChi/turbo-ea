@@ -119,6 +119,9 @@ describe("EChart", () => {
     const handler = chart.on.mock.calls[0][1];
     unmount();
     expect(chart.off).toHaveBeenCalledWith("click", handler);
+    const legend = chart.on.mock.calls.find((c) => c[0] === "legendselectchanged")?.[1];
+    expect(legend).toBeTypeOf("function");
+    expect(chart.off).toHaveBeenCalledWith("legendselectchanged", legend);
     expect(chart.dispose).toHaveBeenCalledTimes(1);
   });
 
