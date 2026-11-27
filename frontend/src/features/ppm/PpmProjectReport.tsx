@@ -177,7 +177,7 @@ export default function PpmProjectReport() {
 
   const [data, setData] = useState<ReportData | null>(null);
   // The amounts are not even asked for without cost access.
-  const financials = usePpmFinancials(data?.canViewCosts ? id : null);
+  const financials = usePpmFinancials(data?.canViewCosts && data.card.id === id ? id : null);
   const [loading, setLoading] = useState(true);
   // Stryker disable next-line StringLiteral: equivalent: loading starts true and the effect clears error before it can clear loading, so the initial error is never rendered
   const [error, setError] = useState("");

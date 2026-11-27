@@ -1104,6 +1104,37 @@ describe("PpmProjectReport — reading the initiative", () => {
     expect(await screen.findByText("Second Initiative")).toBeInTheDocument();
   });
 
+  it("asks no financials of the next initiative before its own permissions answered", async () => {
+    const perms = deferred<unknown>();
+    scriptOther({ ...CARD, id: "i2", name: "Second Initiative" });
+    mockApi.on("get", "/cards/i2/my-permissions", () => perms.promise);
+    const user = userEvent.setup();
+    renderPage();
+    await loaded();
+    await user.click(screen.getByRole("button", { name: "other-initiative" }));
+    await waitFor(() =>
+      expect(mockApi.callsOf("get").map((c) => c.path)).toContain("/cards/i2/my-permissions"),
+    );
+    await new Promise((r) => setTimeout(r, 20));
+    expect(mockApi.callsOf("get").map((c) => c.path)).not.toContain("/ppm/initiatives/i2/financials");
+    perms.resolve({ effective: { can_view_costs: true } });
+    await screen.findByText("Second Initiative");
+    await waitFor(() =>
+      expect(mockApi.callsOf("get").map((c) => c.path)).toContain("/ppm/initiatives/i2/financials"),
+    );
+  });
+
+  it("never asks the financials of the next initiative whose permissions deny costs", async () => {
+    scriptOther({ ...CARD, id: "i2", name: "Second Initiative" });
+    mockApi.on("get", "/cards/i2/my-permissions", { effective: { can_view_costs: false } });
+    const user = userEvent.setup();
+    renderPage();
+    await loaded();
+    await user.click(screen.getByRole("button", { name: "other-initiative" }));
+    await screen.findByText("Second Initiative");
+    expect(mockApi.callsOf("get").map((c) => c.path)).not.toContain("/ppm/initiatives/i2/financials");
+  });
+
   it("waits for selected financials before allowing print or export", async () => {
     const financial = deferred<unknown>();
     mockApi.on("get", `${BASE}/financials`, () => financial.promise);

@@ -93,6 +93,7 @@ describe("PpmTaskBoard write access", () => {
     cleanup();
     renderBoard(true);
     await screen.findByText("Ship it");
+    expect(sortable.length).toBeGreaterThan(0);
     expect(sortable.every((a) => !a.disabled)).toBe(true);
   });
 });
