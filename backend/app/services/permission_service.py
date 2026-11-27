@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import time
-from collections.abc import Iterable
+from collections.abc import AsyncIterator, Iterable
 from uuid import UUID
 
 from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.sql import Select
 
 from app.core.permissions import (
     EDIT_COSTS_CARD_PERMISSION,
@@ -241,6 +242,27 @@ class PermissionService:
         return type_key
 
     @staticmethod
+    def direct_stakeholder_roles(user_id: UUID) -> Select:
+        return select(Stakeholder.card_id, Stakeholder.role).where(Stakeholder.user_id == user_id)
+
+    @staticmethod
+    def direct_stakeholder_card_roles(user_id: UUID) -> Select:
+        return (
+            PermissionService.direct_stakeholder_roles(user_id)
+            .join(Card, Stakeholder.card_id == Card.id)
+            .with_only_columns(Stakeholder.card_id, Card.type, Stakeholder.role)
+        )
+
+    @staticmethod
+    async def iter_stakeholder_grants(
+        db: AsyncSession, rows: Iterable[tuple[UUID, str, str]]
+    ) -> AsyncIterator[tuple[UUID, str, dict[str, bool]]]:
+        for card_id, type_key, role_key in rows:
+            perms = await PermissionService.stakeholder_role_permissions(db, type_key, role_key)
+            if perms:
+                yield card_id, role_key, perms
+
+    @staticmethod
     async def has_card_permission(
         db: AsyncSession,
         user: User,
@@ -256,9 +278,8 @@ class PermissionService:
         lookup rather than querying the same row twice.
         """
         stakeholder_result = await db.execute(
-            select(Stakeholder.role).where(
-                Stakeholder.card_id == card_id,
-                Stakeholder.user_id == user.id,
+            PermissionService.direct_stakeholder_roles(user.id).where(
+                Stakeholder.card_id == card_id
             )
         )
         if type_key is None:
@@ -266,9 +287,9 @@ class PermissionService:
         if not type_key:
             return False
 
-        for (role_key,) in stakeholder_result.all():
-            perms = await PermissionService.stakeholder_role_permissions(db, type_key, role_key)
-            if perms and perms.get(permission):
+        rows = ((cid, type_key, role) for cid, role in stakeholder_result)
+        async for _, _, perms in PermissionService.iter_stakeholder_grants(db, rows):
+            if perms.get(permission):
                 return True
         return False
 
@@ -485,13 +506,13 @@ class PermissionService:
         if not pending:
             return allowed
         held = await db.execute(
-            select(Stakeholder.card_id, Card.type, Stakeholder.role)
-            .join(Card)
-            .where(Stakeholder.user_id == user.id, Stakeholder.card_id.in_(pending))
+            PermissionService.direct_stakeholder_card_roles(user.id).where(
+                Stakeholder.card_id.in_(pending)
+            )
         )
-        for card_id, type_key, role_key in held.all():
-            perms = await PermissionService.stakeholder_role_permissions(db, type_key, role_key)
-            if perms and perms.get(card_permission):
+        rows = ((card_id, type_key, role) for card_id, type_key, role in held)
+        async for card_id, _, perms in PermissionService.iter_stakeholder_grants(db, rows):
+            if perms.get(card_permission):
                 allowed.add(card_id)
         return allowed
 
@@ -562,22 +583,20 @@ class PermissionService:
 
         # Get user stakeholder roles on this card
         stakeholder_result = await db.execute(
-            select(Stakeholder.role).where(
-                Stakeholder.card_id == card_id,
-                Stakeholder.user_id == user.id,
+            PermissionService.direct_stakeholder_roles(user.id).where(
+                Stakeholder.card_id == card_id
             )
         )
-        stakeholder_roles = [r for (r,) in stakeholder_result.all()]
+        stakeholder_roles = [role for _, role in stakeholder_result]
 
         # Aggregate card-level permissions from all stakeholder roles
         card_level: dict[str, bool] = {}
         if type_key:
-            for role_key in stakeholder_roles:
-                perms = await PermissionService.stakeholder_role_permissions(db, type_key, role_key)
-                if perms:
-                    for k, v in perms.items():
-                        if v:
-                            card_level[k] = True
+            rows = ((card_id, type_key, role) for role in stakeholder_roles)
+            async for _, _, perms in PermissionService.iter_stakeholder_grants(db, rows):
+                for k, v in perms.items():
+                    if v:
+                        card_level[k] = True
 
         # Compute effective permissions (union of app-level and card-level)
         is_admin = bool(app_perms.get("*"))
