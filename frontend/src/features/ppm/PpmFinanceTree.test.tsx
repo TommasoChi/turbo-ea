@@ -524,6 +524,39 @@ it("assigned cost items and invoices have no move action", () => {
   expect(
     screen.queryByRole("button", { name: /assign renewal/i }),
   ).not.toBeInTheDocument();
+  for (const text of ["Renewal", "INV-001"]) {
+    expect(screen.getByText(text).closest("tr")).not.toHaveTextContent(
+      "drive_file_move",
+    );
+  }
+  fireEvent.click(
+    screen.getByRole("button", { name: /expand costs without a budget/i }),
+  );
+  expect(screen.getByText("Legacy").closest("tr")).toHaveTextContent(
+    "drive_file_move",
+  );
+});
+
+it.each([
+  ["editable", false],
+  ["read-only", true],
+])("the spanning rows cover every column when %s", (_label, readOnly) => {
+  render(
+    <PpmFinanceTree
+      data={data}
+      rollup={null}
+      readOnly={readOnly}
+      onChanged={vi.fn()}
+    />,
+  );
+  const region = screen.getByRole("region", { name: "Budget, costs and invoices" });
+  const columns = region.querySelector("thead tr")!.children.length;
+  expect(columns).toBe(readOnly ? 9 : 10);
+  const spans = [...region.querySelectorAll<HTMLTableCellElement>("td")]
+    .map((cell) => cell.colSpan)
+    .filter((span) => span > 4);
+  expect(spans).toHaveLength(3);
+  expect(new Set(spans)).toEqual(new Set([columns]));
 });
 
 it("an unassigned cost item can still be assigned to a budget", () => {

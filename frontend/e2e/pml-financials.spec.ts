@@ -186,8 +186,9 @@ test("tracks invoices through the budget hierarchy, Initiative, portfolio and pr
     const moved = (await projection(request, card.id)).invoices.find(
       (invoice) => invoice.invoice_id === "00051",
     );
+    expect(moved).toBeDefined();
     await json(
-      await request.patch("/api/v1/ppm/invoices/" + moved?.id, {
+      await request.patch("/api/v1/ppm/invoices/" + moved!.id, {
         data: { cost_item_id: support.id },
       }),
     );

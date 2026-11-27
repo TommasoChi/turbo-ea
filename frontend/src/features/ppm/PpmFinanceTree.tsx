@@ -129,9 +129,7 @@ export default function PpmFinanceTree({
   const columns = (kind: "budget" | "cost_item" | "invoice") => {
     const config = data.field_definitions?.[kind];
     return (config?.visible_columns ?? [])
-      .filter(
-        (key) => kind !== "budget" || key !== config?.provider_field_key,
-      )
+      .filter((key) => key !== config?.provider_field_key)
       .map((key) => config?.fields.find((field) => field.key === key))
       .filter((field): field is NonNullable<typeof field> => !!field);
   };

@@ -35,6 +35,7 @@ interface Props {
   initiativeId: string;
   data: PpmFinancials;
   kind: "budget" | "cost" | "invoice";
+  /** `move` assigns a cost item (kind "cost") to a budget. */
   mode: "create" | "edit" | "move";
   parentId?: string;
   row?: FinancialRow;
@@ -81,7 +82,7 @@ export default function PpmFinancialRowForm({
   );
   const [invoiceId, setInvoiceId] = useState(invoice?.invoice_id ?? "");
   const [destination, setDestination] = useState(
-    cost?.budget_line_id ?? invoice?.cost_item_id ?? parentId ?? "",
+    cost?.budget_line_id ?? parentId ?? "",
   );
   const [fieldValues, setFieldValues] = useState<Record<string, Value>>(
     (row?.field_values ?? {}) as Record<string, Value>,
@@ -126,7 +127,6 @@ export default function PpmFinancialRowForm({
     setError(null);
     if (
       kind === "invoice" &&
-      mode !== "move" &&
       (!amount.trim() || !Number.isFinite(Number(amount)) || Number(amount) < 0)
     ) {
       setError(t("financialForm.invalidAmount"));
@@ -151,9 +151,9 @@ export default function PpmFinancialRowForm({
     let path: string;
     let body: Record<string, unknown>;
     if (mode === "move") {
-      path = kind === "cost" ? "/ppm/costs/" + cost?.id : "/ppm/invoices/" + invoice?.id;
-      body = kind === "cost" ? { budget_line_id: destination } : { cost_item_id: destination };
-      if (kind === "cost" && providerChanged) body.provider_child_id = provider?.id ?? null;
+      path = "/ppm/costs/" + cost?.id;
+      body = { budget_line_id: destination };
+      if (providerChanged) body.provider_child_id = provider?.id ?? null;
     } else if (kind === "budget") {
       path =
         mode === "create"
@@ -229,7 +229,7 @@ export default function PpmFinancialRowForm({
   };
   const title =
     mode === "move"
-      ? t(kind === "cost" ? "financialForm.moveCost" : "financialForm.moveInvoice")
+      ? t("financialForm.assignCost")
       : t(
           kind === "budget"
             ? mode === "create"
@@ -262,18 +262,16 @@ export default function PpmFinancialRowForm({
           {mode === "move" ? (
             <TextField
               select
-              label={t(kind === "cost" ? "financialForm.selectBudget" : "financialForm.selectCost")}
+              label={t("financialForm.selectBudget")}
               value={destination}
               onChange={(event) => {
                 setDestination(event.target.value);
-                if (kind === "cost") {
-                  setProvider(null);
-                  setProviderChanged(false);
-                }
+                setProvider(null);
+                setProviderChanged(false);
               }}
               fullWidth
             >
-              {(kind === "cost" ? data.budget_lines : data.cost_items).map((item) => (
+              {data.budget_lines.map((item) => (
                 <MenuItem key={item.id} value={item.id}>
                   {item.description || item.id.slice(0, 8)}
                 </MenuItem>

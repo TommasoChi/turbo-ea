@@ -143,35 +143,27 @@ describe("PpmFinancialRowForm", () => {
     );
   });
 
-  it("moves an invoice to a legacy unassigned cost item", async () => {
+  it("assigns an unassigned cost item to a budget under an assign title", async () => {
     const user = userEvent.setup();
-    const invoice = {
-      id: "inv1",
-      initiative_id: "i1",
-      cost_item_id: "c1",
-      invoice_id: "00038",
-      invoice_date: "2026-11-23",
-      amount: "30.11",
-    };
-    const target = { ...data.cost_items[0], id: "c2", description: "Legacy", budget_line_id: null };
-    const rows = { ...data, cost_items: [...data.cost_items, target] };
+    const legacy = { ...data.cost_items[0], id: "c2", budget_line_id: null };
     render(
       <PpmFinancialRowForm
         initiativeId="i1"
-        data={rows}
-        kind="invoice"
+        data={{ ...data, cost_items: [...data.cost_items, legacy] }}
+        kind="cost"
         mode="move"
-        row={invoice}
+        row={legacy}
         onClose={vi.fn()}
         onSaved={vi.fn()}
       />,
     );
+    expect(screen.getByRole("dialog", { name: "Assign to budget" })).toBeVisible();
     await user.click(screen.getByRole("combobox"));
-    await user.click(screen.getByRole("option", { name: "Legacy" }));
+    await user.click(screen.getByRole("option", { name: data.budget_lines[0].description! }));
     await user.click(screen.getByRole("button", { name: /save/i }));
     await waitFor(() =>
-      expect(mockApi.callsOf("patch", "/ppm/invoices/inv1")[0]?.body).toEqual({
-        cost_item_id: "c2",
+      expect(mockApi.callsOf("patch", "/ppm/costs/c2")[0]?.body).toEqual({
+        budget_line_id: data.budget_lines[0].id,
       }),
     );
   });
