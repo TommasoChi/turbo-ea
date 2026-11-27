@@ -1564,11 +1564,14 @@ EDIT_COSTS_SINCE = (2, 215, 0)
 
 
 def _predates_edit_costs(bundle: WorkspaceBundle) -> bool:
-    """Upstream never had ``card.edit_costs``; a fork bundle has it from 2.215.0."""
-    if schema.SHEET_COST_ITEM_TYPES not in bundle.sheets:
-        return True
+    """Upstream never had ``card.edit_costs``; a fork bundle has it from 2.215.0.
+
+    A bundle naming no usable version (a content pack, ``0.0.0-dev``) is taken at its word.
+    """
     version = bundle.app_version
-    return version is not None and version < EDIT_COSTS_SINCE
+    if version is None:
+        return False
+    return schema.SHEET_COST_ITEM_TYPES not in bundle.sheets or version < EDIT_COSTS_SINCE
 
 
 def _make_config_applier(sec: schema.ConfigSection):
