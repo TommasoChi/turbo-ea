@@ -741,10 +741,14 @@ async def build_gantt_items(
                 **date_kwargs,
                 cost_budget=(budget_total or None) if card.id in cost_access else None,
                 cost_actual=(actual_total or None) if card.id in cost_access else None,
-                capex_planned=costs.get("capex_planned", 0),
-                capex_actual=costs.get("capex_actual", 0),
-                opex_planned=costs.get("opex_planned", 0),
-                opex_actual=costs.get("opex_actual", 0),
+                **(
+                    {
+                        key: costs.get(key, 0)
+                        for key in ("capex_planned", "capex_actual", "opex_planned", "opex_actual")
+                    }
+                    if card.id in cost_access
+                    else {}
+                ),
                 group_id=str(group_info[0]) if group_info else None,
                 group_name=group_info[1] if group_info else None,
                 group_anchor=anchors.get(card.id) == card.id,

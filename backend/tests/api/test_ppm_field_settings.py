@@ -168,7 +168,12 @@ async def test_hidden_card_constants_and_transitive_results_are_not_disclosed(cl
     await create_role(
         db,
         key="pml_scoped_admin",
-        permissions={"admin.settings": True, "inventory.view": True, "ppm.view": True},
+        permissions={
+            "admin.settings": True,
+            "inventory.view": True,
+            "ppm.view": True,
+            "costs.view": True,
+        },
     )
     await create_card_type(
         db,
@@ -242,12 +247,13 @@ async def test_hidden_card_constants_and_transitive_results_are_not_disclosed(cl
     entry = listing.json()[0]
     assert "org" not in entry["field_values"]
     assert entry["reference_display"]["org"] == {"status": "UNAVAILABLE"}
-    # The scoped reader has no cost access: calculated_values is withheld whole.
-    assert "calculated_values" not in entry
+    assert "classification" not in entry["calculated_values"]
+    assert "derived" not in entry["calculated_values"]
     financials = await client.get(f"{base}/financials", headers=scoped_headers)
     assert financials.status_code == 200
     assert str(hidden.id) not in financials.text
-    assert "calculated_values" not in financials.json()["cost_items"][0]
+    assert "classification" not in financials.json()["cost_items"][0]["calculated_values"]
+    assert "derived" not in financials.json()["cost_items"][0]["calculated_values"]
 
     preview = await client.post(
         f"{SETTINGS}/cost_item/preview",
@@ -777,7 +783,12 @@ async def test_changing_input_type_cannot_unprotect_existing_rule(client, db, pp
     await create_role(
         db,
         key="pml_rules_admin",
-        permissions={"admin.settings": True, "inventory.view": True, "ppm.view": True},
+        permissions={
+            "admin.settings": True,
+            "inventory.view": True,
+            "ppm.view": True,
+            "costs.view": True,
+        },
     )
     await create_card_type(
         db,

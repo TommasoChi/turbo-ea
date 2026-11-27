@@ -145,6 +145,13 @@ def test_amount_lists_cover_the_schema_fields():
         "actual_invoiced",
         "card_comparison",
     }
+    assert set(PpmRollupOut.model_fields) - ROLLUP_AMOUNTS == {
+        "descendant_count",
+        "start_date",
+        "end_date",
+        "has_budget_lines",
+        "has_cost_lines",
+    }
     assert ROLLUP_AMOUNTS <= set(PpmRollupOut.model_fields)
 
 
@@ -327,14 +334,13 @@ async def test_dashboard_and_gantt_keep_rows_without_amounts(client, db, env, pr
     assert dash["total_budget"] is None and dash["total_actual"] is None
     items = await _get(client, user, "/api/v1/reports/ppm/gantt")
     assert {i["name"] for i in items} == {"Parent", "Child"}
+    amount_keys = ("cost_budget", "cost_actual", "capex_planned", "capex_actual")
+    amount_keys += ("opex_planned", "opex_actual")
     for item in items:
-        assert not item.get("cost_budget") and not item.get("cost_actual")
-        for key in ("capex_planned", "capex_actual", "opex_planned", "opex_actual"):
-            assert not item.get(key)
-        assert not item.get("rollup", {}) or all(
-            not (item["rollup"] or {}).get(k)
-            for k in ("capex_planned", "capex_actual", "opex_planned", "opex_actual")
-        )
+        for key in amount_keys:
+            assert item.get(key) is None
+        assert all(k not in item for k in amount_keys[2:])
+        assert all(v is None for k, v in (item.get("rollup") or {}).items() if k in amount_keys)
 
 
 @pytest.mark.parametrize("profile", FULL)
@@ -362,3 +368,6 @@ async def test_cost_access_sees_everything(client, db, env, profile):
     assert roll["capex_planned"] == 4321 and roll["total_planned"] == 4321
     assert roll["has_budget_lines"] is True
     assert roll["by_year"][0]["capex_budget"] == 4321
+    items = await _get(client, user, "/api/v1/reports/ppm/gantt")
+    parent = next(i for i in items if i["name"] == "Parent")
+    assert parent["capex_planned"] == 1234 and parent["cost_budget"] == 1234

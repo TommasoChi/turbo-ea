@@ -338,7 +338,9 @@ async def test_provider_formula_context_is_redacted_for_hidden_parent(client, db
         assert rows[0]["calculated_values"]["provider_match"] == "match"
 
     await create_role(
-        db, key="pml_hidden_provider", permissions={"inventory.view": True, "ppm.view": True}
+        db,
+        key="pml_hidden_provider",
+        permissions={"inventory.view": True, "ppm.view": True, "costs.view": True},
     )
     env["provider_type"].role_permissions = {"pml_hidden_provider": {"inventory.view": False}}
     viewer = await create_user(
@@ -352,8 +354,7 @@ async def test_provider_formula_context_is_redacted_for_hidden_parent(client, db
         assert str(env["child"].id) not in response.text
         rows = response.json() if key is None else response.json()[key]
         assert rows[0]["provider"] == {"status": "UNAVAILABLE"}
-        # No cost access for this viewer: calculated_values is withheld whole.
-        assert "calculated_values" not in rows[0]
+        assert "provider_match" not in rows[0]["calculated_values"]
 
 
 async def test_move_cost_with_child_to_different_budget_requires_clear(client, provider_setup):
