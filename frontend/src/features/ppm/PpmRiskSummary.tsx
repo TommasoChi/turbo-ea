@@ -16,6 +16,7 @@ import { useEChartsTheme } from "@/components/charts/echartsTheme";
 import { legend, tooltip } from "@/components/charts/chrome";
 import type { PpmRisk } from "@/types";
 import PpmRiskMatrix from "./PpmRiskMatrix";
+import PpmSectionHeader from "./PpmSectionHeader";
 import {
   RISK_SCORE_BANDS,
   activeRiskSummary,
@@ -58,16 +59,16 @@ export default function PpmRiskSummary({
   }, [risks]);
 
   const header = (
-    <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
-      <Typography variant="subtitle1" fontWeight={600}>
-        {t("riskManagement")}
-      </Typography>
-      {onManage && (
-        <Button size="small" aria-label={t("riskSummaryManage")} onClick={onManage}>
-          {t("manage")}
-        </Button>
-      )}
-    </Stack>
+    <PpmSectionHeader
+      title={t("riskManagement")}
+      action={
+        onManage && (
+          <Button size="small" aria-label={t("riskSummaryManage")} onClick={onManage}>
+            {t("manage")}
+          </Button>
+        )
+      }
+    />
   );
 
   if (!risks || !model) {

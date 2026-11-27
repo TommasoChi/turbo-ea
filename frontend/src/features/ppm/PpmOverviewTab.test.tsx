@@ -7,6 +7,7 @@
  * naming what the initiatives beneath this one add up to.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import userEvent from "@testing-library/user-event";
 import { act, render, screen, waitFor, within } from "@testing-library/react";
 import type {
   Card,
@@ -26,18 +27,40 @@ import { hookState } from "@/test/hooks";
 import { RAG_COLORS, STATUS_COLORS } from "@/theme/tokens";
 import i18n from "@/i18n";
 vi.mock("./StatusReportDialog", () => ({
-  default: ({ onSaved }: { onSaved: () => void }) => (
-    <button type="button" onClick={onSaved}>
-      stub-save-report
-    </button>
+  default: ({ onSaved, onClose }: { onSaved: () => void; onClose: () => void }) => (
+    <div data-testid="report-dialog">
+      <button type="button" onClick={onSaved}>
+        stub-save-report
+      </button>
+      <button type="button" onClick={onClose}>
+        stub-close-report
+      </button>
+    </div>
   ),
 }));
 vi.mock("./PpmManageDialog", () => ({
-  default: ({ tab }: { tab: string }) => <div data-testid="manage-dialog">{tab}</div>,
+  default: ({
+    tab,
+    onChanged,
+    onClose,
+  }: {
+    tab: string;
+    onChanged: () => void;
+    onClose: () => void;
+  }) => (
+    <div data-testid="manage-dialog">
+      {tab}
+      <button type="button" onClick={onChanged}>
+        stub-change-risk
+      </button>
+      <button type="button" onClick={onClose}>
+        stub-close-manage
+      </button>
+    </div>
+  ),
 }));
 
 import PpmOverviewTab from "./PpmOverviewTab";
-import userEvent from "@testing-library/user-event";
 import { pinEnglishNumberFormat } from "@/test/englishNumbers";
 
 pinEnglishNumberFormat();
@@ -50,6 +73,9 @@ const CARD = {
   subtype: null,
   attributes: {},
 } as unknown as Card;
+
+/** The access props every render needs; a test overrides what it is about. */
+const ACCESS = { canViewCosts: true, canEdit: false, onRefresh: () => {}, risks: [] };
 
 const ROLLUP_NONE: PpmRollupOut = {
   descendant_count: 0,
@@ -74,7 +100,7 @@ function renderTab(card: Card = CARD) {
       costLines={[]}
       budgetLines={[]}
       rollup={ROLLUP_NONE}
-      canViewCosts canEdit={false} onRefresh={() => {}} risks={[]}
+      {...ACCESS}
     />,
   );
 }
@@ -185,7 +211,7 @@ describe("PpmOverviewTab — completion", () => {
     mockApi.on("get", "/ppm/initiatives/i1/completion", () => slow.promise);
     mockApi.on("get", "/ppm/initiatives/i2/completion", { completion: 70 });
     const { rerender } = render(
-      <PpmOverviewTab card={CARD} latestReport={null} costLines={[]} budgetLines={[]} rollup={null} canViewCosts canEdit={false} onRefresh={() => {}} risks={[]} />,
+      <PpmOverviewTab card={CARD} latestReport={null} costLines={[]} budgetLines={[]} rollup={null} {...ACCESS} />,
     );
     rerender(
       <PpmOverviewTab
@@ -194,7 +220,7 @@ describe("PpmOverviewTab — completion", () => {
         costLines={[]}
         budgetLines={[]}
         rollup={null}
-        canViewCosts canEdit={false} onRefresh={() => {}} risks={[]}
+        {...ACCESS}
       />,
     );
     expect(await screen.findByText("70%")).toBeInTheDocument();
@@ -209,7 +235,7 @@ describe("PpmOverviewTab — completion", () => {
   it("does not show the previous initiative's figure while the next one loads", async () => {
     mockApi.on("get", "/ppm/initiatives/i2/completion", () => new Promise(() => {}));
     const { rerender } = render(
-      <PpmOverviewTab card={CARD} latestReport={null} costLines={[]} budgetLines={[]} rollup={null} canViewCosts canEdit={false} onRefresh={() => {}} risks={[]} />,
+      <PpmOverviewTab card={CARD} latestReport={null} costLines={[]} budgetLines={[]} rollup={null} {...ACCESS} />,
     );
     await screen.findByText("40%");
     rerender(
@@ -219,7 +245,7 @@ describe("PpmOverviewTab — completion", () => {
         costLines={[]}
         budgetLines={[]}
         rollup={null}
-        canViewCosts canEdit={false} onRefresh={() => {}} risks={[]}
+        {...ACCESS}
       />,
     );
     await waitFor(() => expect(screen.queryByText("40%")).not.toBeInTheDocument());
@@ -279,7 +305,7 @@ describe("PpmOverviewTab — health summary", () => {
   const dotOf = (label: string) => screen.getByText(label).previousElementSibling as HTMLElement;
 
   it("hides the cost health when the protected schedule omits it", async () => {
-    render(<PpmOverviewTab card={CARD} latestReport={report({})} costLines={[]} budgetLines={[]} rollup={null} canViewCosts canEdit={false} onRefresh={() => {}} risks={[]} />);
+    render(<PpmOverviewTab card={CARD} latestReport={report({})} costLines={[]} budgetLines={[]} rollup={null} {...ACCESS} />);
     await screen.findByText("Start Date");
     const summary = screen.getByText("Health Summary").parentElement!.parentElement!;
     expect(within(summary).queryByText("Cost")).not.toBeInTheDocument();
@@ -289,7 +315,7 @@ describe("PpmOverviewTab — health summary", () => {
   it("paints each dimension's dot in the theme's RAG colour", async () => {
     mockApi.on("get", "/ppm/initiatives/i1/schedule", { initiative_id: "i1", start_date: null, end_date: null, cost_health: "atRisk", plan_derived: false });
     render(
-      <PpmOverviewTab card={CARD} latestReport={report({})} costLines={[]} budgetLines={[]} rollup={null} canViewCosts canEdit={false} onRefresh={() => {}} risks={[]} />,
+      <PpmOverviewTab card={CARD} latestReport={report({})} costLines={[]} budgetLines={[]} rollup={null} {...ACCESS} />,
     );
     await screen.findByText("Cost");
     expect(dotOf("Schedule")).toHaveStyle({ backgroundColor: RAG_COLORS.green });
@@ -305,7 +331,7 @@ describe("PpmOverviewTab — health summary", () => {
         costLines={[]}
         budgetLines={[]}
         rollup={null}
-        canViewCosts canEdit={false} onRefresh={() => {}} risks={[]}
+        {...ACCESS}
       />,
     );
     await screen.findByText("40%");
@@ -371,7 +397,7 @@ describe("PpmOverviewTab — beneath this initiative", () => {
         costLines={costLines}
         budgetLines={budgetLines}
         rollup={rollup}
-        canViewCosts canEdit={false} onRefresh={() => {}} risks={[]}
+        {...ACCESS}
       />,
     );
   /** The KPI value under a caption. */
@@ -562,7 +588,7 @@ describe("PpmOverviewTab — without cost access", () => {
 
   it("leaves the Financials panel out, and everything else in place", async () => {
     render(
-      <PpmOverviewTab card={CARD} latestReport={null} costLines={[]} budgetLines={[]} rollup={WITHHELD} canViewCosts={false} canEdit={false} onRefresh={() => {}} risks={[]} />,
+      <PpmOverviewTab card={CARD} latestReport={null} costLines={[]} budgetLines={[]} rollup={WITHHELD} {...ACCESS} canViewCosts={false} />,
     );
     await screen.findByText("40%");
     expect(screen.queryByText("Financials")).not.toBeInTheDocument();
@@ -574,7 +600,7 @@ describe("PpmOverviewTab — without cost access", () => {
 
   it("shows no NaN when a roll-up arrives without amounts", async () => {
     render(
-      <PpmOverviewTab card={CARD} latestReport={null} costLines={[]} budgetLines={[]} rollup={WITHHELD} canViewCosts canEdit={false} onRefresh={() => {}} risks={[]} />,
+      <PpmOverviewTab card={CARD} latestReport={null} costLines={[]} budgetLines={[]} rollup={WITHHELD} {...ACCESS} />,
     );
     await screen.findByText("40%");
     const block = screen.getByTestId("ppm-beneath");
@@ -592,10 +618,7 @@ describe("PpmOverviewTab — layout", () => {
     costLines: [],
     budgetLines: [],
     rollup: null,
-    canViewCosts: true,
-    canEdit: false,
-    onRefresh: () => {},
-    risks: [],
+    ...ACCESS,
   };
 
   it("renders Description, Timeline, Health Summary, Risk Management, Financials in that order", async () => {
@@ -610,11 +633,14 @@ describe("PpmOverviewTab — layout", () => {
     });
   });
 
-  it("gives every section the same heading style", async () => {
+  it("gives every section the same heading: subtitle1, semibold, no divider", async () => {
     render(<PpmOverviewTab {...props} />);
     await screen.findByText("40%");
     for (const name of ["Description", "Timeline", "Health Summary", "Risk Management", "Financials"]) {
-      expect(screen.getByText(name)).toHaveClass("MuiTypography-subtitle1");
+      const heading = screen.getByText(name);
+      expect(heading).toHaveClass("MuiTypography-subtitle1");
+      expect(getComputedStyle(heading).fontWeight).toBe("600");
+      expect(getComputedStyle(heading.parentElement!).borderBottomWidth).not.toBe("1px");
     }
   });
 
@@ -632,7 +658,7 @@ describe("PpmOverviewTab — layout", () => {
     expect(screen.queryByRole("button", { name: /manage/i })).not.toBeInTheDocument();
   });
 
-  it("opens the status report dialog from Health Summary and refreshes after saving", async () => {
+  it("opens the status report dialog from Health Summary, refreshes after saving and closes", async () => {
     const onRefresh = vi.fn();
     const user = userEvent.setup();
     render(<PpmOverviewTab {...props} canEdit onRefresh={onRefresh} />);
@@ -640,15 +666,25 @@ describe("PpmOverviewTab — layout", () => {
     await user.click(screen.getByRole("button", { name: "Manage Health Summary" }));
     await user.click(screen.getByRole("button", { name: "stub-save-report" }));
     expect(onRefresh).toHaveBeenCalledTimes(1);
-    expect(screen.queryByRole("button", { name: "stub-save-report" })).not.toBeInTheDocument();
+    expect(screen.queryByTestId("report-dialog")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Manage Health Summary" }));
+    await user.click(screen.getByRole("button", { name: "stub-close-report" }));
+    expect(screen.queryByTestId("report-dialog")).not.toBeInTheDocument();
+    expect(onRefresh).toHaveBeenCalledTimes(1);
   });
 
-  it("opens the risks manage dialog from Risk Management and refreshes on change", async () => {
+  it("opens the risks dialog from Risk Management, refreshes on change and closes", async () => {
+    const onRefresh = vi.fn();
     const user = userEvent.setup();
-    render(<PpmOverviewTab {...props} canEdit />);
+    render(<PpmOverviewTab {...props} canEdit onRefresh={onRefresh} />);
     await screen.findByText("40%");
     await user.click(screen.getByRole("button", { name: "Manage risks" }));
     expect(screen.getByTestId("manage-dialog")).toHaveTextContent("risks");
+    await user.click(screen.getByRole("button", { name: "stub-change-risk" }));
+    expect(onRefresh).toHaveBeenCalledTimes(1);
+    await user.click(screen.getByRole("button", { name: "stub-close-manage" }));
+    expect(screen.queryByTestId("manage-dialog")).not.toBeInTheDocument();
   });
 
   it("keeps Risk Management and drops Financials without cost view", async () => {

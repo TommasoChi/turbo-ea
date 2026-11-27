@@ -6,6 +6,7 @@ import LinkifiedText from "@/components/LinkifiedText";
 import { useDateFormat } from "@/hooks/useDateFormat";
 import type { PmlInitiativeSchedule, PpmStatusReport } from "@/types";
 import { HealthDot } from "./ppmVisuals";
+import PpmSectionHeader from "./PpmSectionHeader";
 
 export type HealthReport = Pick<PmlInitiativeSchedule, "schedule_health" | "scope_health"> &
   Partial<Pick<PpmStatusReport, "report_date" | "summary" | "accomplishments" | "next_steps">>;
@@ -26,25 +27,20 @@ export default function PpmHealthSummary({ report, costHealth, onManage }: Props
   ] as const;
   return (
     <>
-      <Box
-        display="flex"
-        justifyContent="space-between"
-        alignItems="center"
-        sx={{ borderBottom: 1, borderColor: "divider", pb: 0.5, mb: 1 }}
-      >
-        <Typography variant="subtitle1" fontWeight={600}>
-          {t("healthSummary")}
-        </Typography>
-        {onManage && (
-          <Button
-            size="small"
-            aria-label={t("manageSection", { section: t("healthSummary") })}
-            onClick={onManage}
-          >
-            {t("manage")}
-          </Button>
-        )}
-      </Box>
+      <PpmSectionHeader
+        title={t("healthSummary")}
+        action={
+          onManage && (
+            <Button
+              size="small"
+              aria-label={t("manageSection", { section: t("healthSummary") })}
+              onClick={onManage}
+            >
+              {t("manage")}
+            </Button>
+          )
+        }
+      />
       {!report ? (
         <Typography variant="body2" color="text.secondary">
           {t("noReportsYet")}
