@@ -14,6 +14,7 @@ from app.core.permissions import (
     BPM_ADMIN_PERMISSIONS,
     DEFAULT_CARD_PERMISSIONS_BY_ROLE,
     MEMBER_PERMISSIONS,
+    PPM_MANAGER_APP_PERMISSIONS,
     VIEWER_PERMISSIONS,
 )
 from app.models.card_type import CardType
@@ -1411,6 +1412,17 @@ LIFECYCLE_PHASE_HELP: list[dict[str, Any]] = [
 ]
 
 
+# Only Initiative, Application and ITComponent carry it; never part of _DEFAULT_ROLES.
+_COST_CONTROLLER_ROLE: dict[str, Any] = {
+    "key": "costController",
+    "label": "Cost Controller",
+    "description": (
+        "Sees and edits the costs of this card without being able to edit "
+        "the rest of it. Only on the types that carry costs."
+    ),
+    "counts_for_quality": True,
+}
+
 # ── 14 Card Types (from Meta_Model.xml + BPM) ────────────────────────
 
 TYPES = [
@@ -2199,6 +2211,7 @@ TYPES = [
                     },
                 },
             },
+            _COST_CONTROLLER_ROLE,
         ],
         "translations": {
             "label": {
@@ -6646,7 +6659,12 @@ _DEFAULT_ROLES: list[dict[str, Any]] = [
         },
     },
 ]
+# TYPES is built before _DEFAULT_ROLES exists, so ITComponent's explicit list is set here.
+next(t for t in TYPES if t["key"] == "ITComponent")["stakeholder_roles"] = _DEFAULT_ROLES + [
+    _COST_CONTROLLER_ROLE
+]
 _APP_ROLES: list[dict[str, Any]] = _DEFAULT_ROLES + [
+    _COST_CONTROLLER_ROLE,
     {
         "key": "technicalApplicationOwner",
         "label": "Technical Application Owner",
@@ -6961,6 +6979,16 @@ async def seed_metamodel(db: AsyncSession) -> None:
             "color": "#757575",
             "permissions": VIEWER_PERMISSIONS,
             "sort_order": 3,
+        },
+        {
+            "key": "ppm_manager",
+            "label": "PPM Manager",
+            "description": "Read-only access plus management of the PPM portfolio.",
+            "is_system": False,
+            "is_default": False,
+            "color": "#00897B",
+            "permissions": PPM_MANAGER_APP_PERMISSIONS,
+            "sort_order": 4,
         },
     ]
 
