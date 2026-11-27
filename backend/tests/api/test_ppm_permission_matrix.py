@@ -338,6 +338,25 @@ async def test_moderating_someone_elses_comment_needs_manage_and_card_edit(
         assert resp.status_code == 403, resp.text
 
 
+@pytest.mark.parametrize("verb", ["PATCH", "DELETE"])
+async def test_moderating_someone_elses_comment_needs_ppm_view(client, db, env, verb):
+    await create_role(
+        db,
+        key="no_ppm_view",
+        label="No PPM view",
+        permissions={"inventory.view": True, "inventory.edit": True, "ppm.manage": True},
+    )
+    user = await create_user(db, email="noview@matrix.test", role="no_ppm_view")
+    comment = await _foreign_comment(db, env)
+    resp = await client.request(
+        verb,
+        f"{BASE}/task-comments/{comment.id}",
+        json={"content": "x"} if verb == "PATCH" else None,
+        headers=auth_headers(user),
+    )
+    assert resp.status_code == 403, resp.text
+
+
 async def test_author_of_a_comment_edits_and_deletes_it_without_manage(client, db, env):
     from app.models.ppm_task_comment import PpmTaskComment
 
@@ -361,3 +380,19 @@ async def test_author_of_a_comment_edits_and_deletes_it_without_manage(client, d
 async def test_route_tables_match_the_parametrised_names(env):
     assert list(_manage_routes(env)) == MANAGE_ROUTES
     assert list(_cost_routes(env)) == COST_ROUTES
+
+
+# Routes that authorise themselves: the comment author, or a manager (_can_moderate_comment).
+AUTHOR_OR_MANAGER_ROUTES = {"update_task_comment", "delete_task_comment"}
+
+
+def test_every_ppm_write_route_is_in_a_permission_matrix():
+    from fastapi.routing import APIRoute
+
+    from app.api.v1.ppm import router
+
+    write_routes = {
+        r.name for r in router.routes if isinstance(r, APIRoute) and r.methods - {"GET", "HEAD"}
+    }
+    covered = set(MANAGE_ROUTES) | set(COST_ROUTES) | AUTHOR_OR_MANAGER_ROUTES
+    assert write_routes - covered == set()

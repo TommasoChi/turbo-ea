@@ -217,7 +217,7 @@ async def test_upgrade_rewrites_member_and_stakeholders_only_and_is_idempotent(d
 def test_the_importer_applies_the_same_rule(stored):
     # An upgraded install and an older bundle imported into a new one must agree.
     planned = mig.plan_stakeholder_permissions(stored)
-    assert with_legacy_edit_cost_grant("any", stored) == (stored if planned is None else planned)
+    assert with_legacy_edit_cost_grant(stored) == (stored if planned is None else planned)
 
 
 def test_the_seed_defaults_are_what_the_migration_writes():

@@ -35,6 +35,16 @@ async def test_cost_controller_exists_on_exactly_the_cost_bearing_types(db):
         assert r.permissions == COST_CONTROLLER_CARD_PERMISSIONS
 
 
+async def test_cost_controller_sorts_after_every_other_role_of_its_type(db):
+    await seed_metamodel(db)
+    rows = (await db.execute(select(StakeholderRoleDefinition))).scalars().all()
+    for type_key in COST_TYPES:
+        orders = {r.key: r.sort_order for r in rows if r.card_type_key == type_key}
+        others = [v for k, v in orders.items() if k != "costController"]
+        assert orders["costController"] > max(others), type_key
+        assert len(set(orders.values())) == len(orders), type_key
+
+
 async def test_ppm_manager_application_role_is_seeded(db):
     await seed_metamodel(db)
     role = await db.scalar(select(Role).where(Role.key == "ppm_manager"))

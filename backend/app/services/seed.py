@@ -6688,7 +6688,6 @@ next(t for t in TYPES if t["key"] == "ITComponent")["stakeholder_roles"] = _DEFA
     _COST_CONTROLLER_ROLE
 ]
 _APP_ROLES: list[dict[str, Any]] = _DEFAULT_ROLES + [
-    _COST_CONTROLLER_ROLE,
     {
         "key": "technicalApplicationOwner",
         "label": "Technical Application Owner",
@@ -6753,6 +6752,7 @@ _APP_ROLES: list[dict[str, Any]] = _DEFAULT_ROLES + [
             },
         },
     },
+    _COST_CONTROLLER_ROLE,
 ]
 
 

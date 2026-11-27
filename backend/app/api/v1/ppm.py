@@ -146,11 +146,13 @@ async def _ensure_task_readable(db: AsyncSession, user: User, task_id) -> PpmTas
 
 
 async def _can_moderate_comment(db: AsyncSession, user: User, task: PpmTask) -> bool:
-    """A manager may edit or delete others' comments: ``ppm.manage`` and ``card.edit``."""
-    return await PermissionService.check_permission(
-        db, user, "ppm.manage"
-    ) and await PermissionService.check_permission(
-        db, user, "inventory.edit", task.initiative_id, "card.edit"
+    """A manager may moderate others' comments: ppm.view, ppm.manage and card.edit."""
+    return (
+        await PermissionService.check_permission(db, user, "ppm.view")
+        and await PermissionService.check_permission(db, user, "ppm.manage")
+        and await PermissionService.check_permission(
+            db, user, "inventory.edit", task.initiative_id, "card.edit"
+        )
     )
 
 

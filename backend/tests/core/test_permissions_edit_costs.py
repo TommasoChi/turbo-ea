@@ -51,9 +51,9 @@ def test_member_and_bpm_admin_have_no_ppm_manage_or_costs():
 
 
 def test_with_legacy_edit_cost_grant():
-    assert with_legacy_edit_cost_grant("x", {"card.edit": True})["card.edit_costs"] is True
-    assert with_legacy_edit_cost_grant("x", {"card.edit": False})["card.edit_costs"] is False
-    assert with_legacy_edit_cost_grant("x", {})["card.edit_costs"] is False
+    assert with_legacy_edit_cost_grant({"card.edit": True})["card.edit_costs"] is True
+    assert with_legacy_edit_cost_grant({"card.edit": False})["card.edit_costs"] is False
+    assert with_legacy_edit_cost_grant({})["card.edit_costs"] is False
     kept = {"card.edit": True, "card.edit_costs": False}
-    assert with_legacy_edit_cost_grant("x", kept) == kept
-    assert with_legacy_edit_cost_grant("x", [1]) == [1]
+    assert with_legacy_edit_cost_grant(kept) == kept
+    assert with_legacy_edit_cost_grant([1]) == [1]

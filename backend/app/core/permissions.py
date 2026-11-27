@@ -477,7 +477,7 @@ def with_legacy_cost_grant(role_key: str, permissions: dict) -> dict:
     }
 
 
-def with_legacy_edit_cost_grant(role_key: str, permissions: dict) -> dict:
+def with_legacy_edit_cost_grant(permissions: dict) -> dict:
     """Fill ``card.edit_costs`` into a role map written before the key existed.
 
     Costs used to be editable by any role that could edit the card, so the new

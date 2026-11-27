@@ -1612,7 +1612,7 @@ def _make_config_applier(sec: schema.ConfigSection):
                     ):
                         perms = with_legacy_license_grant(str(data.get("key")), perms)
                     if _predates_edit_costs(bundle):
-                        perms = with_legacy_edit_cost_grant(str(data.get("key")), perms)
+                        perms = with_legacy_edit_cost_grant(perms)
                     data["permissions"] = perms
                 elif sec.model is Role:
                     data["permissions"] = migrate_legacy_app_permissions(data["permissions"])
