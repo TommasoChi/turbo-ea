@@ -120,13 +120,8 @@ async def test_a_bundle_with_no_sheet_and_no_usable_version_is_taken_at_its_word
     assert stored == _ROLES
 
 
-async def test_a_bundle_at_the_current_version_keeps_explicit_values(db):
-    roles = {
-        "a": {"card.edit": True, "card.edit_costs": True},
-        "b": {"card.edit": True, "card.edit_costs": False},
-        "c": {"card.edit": False, "card.edit_costs": True},
-        "d": {"card.edit": False, "card.edit_costs": False},
-    }
+async def test_a_bundle_at_the_current_version_gets_no_grant_when_the_key_is_missing(db):
+    roles = {"can_edit": {"card.edit": True}, "cannot_edit": {"card.edit": False}}
     stored = await reimported_role_permissions(
         db, roles, app_version="2.215.0", fork=True, keep_edit_costs=True
     )
