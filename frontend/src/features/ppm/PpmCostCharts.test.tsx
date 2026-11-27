@@ -754,10 +754,13 @@ describe("PpmCostCharts — read-only (the Initiative Report)", () => {
 });
 
 describe("PpmCostCharts — amounts the server withheld", () => {
-  it("draws lines without amounts as zeros, never as NaN", () => {
+  it("draws every chart from lines without amounts with no NaN and no Infinity", () => {
     const bare = { ...budget({ id: "bx" }), amount: undefined };
     const bareCost = { ...cost({ id: "cx", date: "2020-03-01" }), actual: undefined, planned: undefined };
     renderCharts([bareCost as unknown as PpmCostLine], [bare as unknown as PpmBudgetLine]);
-    expect(JSON.stringify(optionOf("Cumulative spend by category"))).not.toMatch(/NaN/);
+    expect(echartState.props.length).toBeGreaterThan(0);
+    for (const chart of echartState.props) {
+      expect(JSON.stringify(chart.option)).not.toMatch(/NaN|Infinity/);
+    }
   });
 });

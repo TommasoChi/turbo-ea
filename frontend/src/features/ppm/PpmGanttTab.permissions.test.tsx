@@ -14,6 +14,11 @@ interface GanttProps {
   onDoubleClick?: unknown;
   onDateChange?: unknown;
   contextMenuOptions?: unknown[];
+  onProgressChange?: unknown;
+  onRelationChange?: unknown;
+  onMoveTaskBefore?: (target: TaskOrEmpty, moved: TaskOrEmpty) => Promise<void>;
+  onMoveTaskAfter?: unknown;
+  onMoveTaskInside?: unknown;
 }
 const gantt: { props: GanttProps | null } = { props: null };
 vi.mock("@wamra/gantt-task-react", async (importOriginal) => {
@@ -51,6 +56,9 @@ describe("PpmGanttTab write access", () => {
     expect(gantt.props?.canMoveTasks).not.toBe(false);
     expect(gantt.props?.onDoubleClick).toBeTypeOf("function");
     expect(gantt.props?.tasks.some((t) => t.type === "empty")).toBe(true);
+    for (const h of ["onDateChange", "onProgressChange", "onRelationChange", "onMoveTaskBefore", "onMoveTaskAfter", "onMoveTaskInside"] as const) {
+      expect(gantt.props?.[h], h).toBeTypeOf("function");
+    }
   });
 
   it("hands the chart nothing to edit without canEdit", async () => {
@@ -63,6 +71,9 @@ describe("PpmGanttTab write access", () => {
     expect(props.canMoveTasks).toBe(false);
     expect(props.onDoubleClick).toBeUndefined();
     expect(props.contextMenuOptions).toEqual([]);
+    for (const h of ["onDateChange", "onProgressChange", "onRelationChange", "onMoveTaskBefore", "onMoveTaskAfter", "onMoveTaskInside"] as const) {
+      expect(props[h], h).toBeUndefined();
+    }
     expect(props.tasks.some((t) => t.type === "empty")).toBe(false);
     expect(props.tasks.every((t) => (t as { isDisabled?: boolean }).isDisabled)).toBe(true);
     expect(screen.getByTestId("gantt")).toHaveTextContent("Phase 1");

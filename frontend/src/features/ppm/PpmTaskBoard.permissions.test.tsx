@@ -2,7 +2,7 @@
  * The task board without write access (`canEdit` false): the tasks are listed
  * and filterable, but nothing creates, completes, edits, deletes or drags one.
  */
-import { render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -12,7 +12,17 @@ import type { PpmTask, PpmWbs, User } from "@/types";
 
 import PpmTaskBoard from "./PpmTaskBoard";
 
-const { get } = vi.hoisted(() => ({ get: vi.fn() }));
+const { get, sortable } = vi.hoisted(() => ({ get: vi.fn(), sortable: [] as { disabled?: boolean }[] }));
+vi.mock("@dnd-kit/sortable", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@dnd-kit/sortable")>();
+  return {
+    ...actual,
+    useSortable: (args: Parameters<typeof actual.useSortable>[0]) => {
+      sortable.push({ disabled: (args as { disabled?: boolean }).disabled });
+      return actual.useSortable(args);
+    },
+  };
+});
 vi.mock("@/api/client", () => ({
   api: { get, post: vi.fn(), patch: vi.fn(), delete: vi.fn() },
   ApiError: class ApiError extends Error {},
@@ -33,6 +43,7 @@ const renderBoard = (canEdit: boolean, entry = "/ppm/i1") =>
   );
 
 beforeEach(() => {
+  sortable.length = 0;
   get.mockImplementation((path: string) =>
     Promise.resolve(path.endsWith("/tasks") ? TASKS : path.endsWith("/wbs") ? WBS : []),
   );
@@ -63,13 +74,25 @@ describe("PpmTaskBoard write access", () => {
 
   it("offers no complete, edit or delete in the list without canEdit", async () => {
     renderBoard(false, "/ppm/i1?view=list");
-    await screen.findByText("Ship it");
-    expect(document.querySelector('[data-testid="CheckCircleIcon"], tbody button')).toBeNull();
+    const row = (await screen.findByText("Ship it")).closest("tr") as HTMLElement;
+    expect(within(row).queryAllByRole("button")).toHaveLength(0);
   });
 
-  it("offers them in the list with canEdit", async () => {
+  it("offers complete, edit and delete in the list with canEdit", async () => {
     renderBoard(true, "/ppm/i1?view=list");
+    const row = (await screen.findByText("Ship it")).closest("tr") as HTMLElement;
+    expect(within(row).getAllByRole("button")).toHaveLength(3);
+  });
+
+  it("disables dragging on the kanban without canEdit, and enables it with", async () => {
+    renderBoard(false);
     await screen.findByText("Ship it");
-    await waitFor(() => expect(document.querySelectorAll("tbody button").length).toBeGreaterThan(0));
+    expect(sortable.length).toBeGreaterThan(0);
+    expect(sortable.every((a) => a.disabled === true)).toBe(true);
+    sortable.length = 0;
+    cleanup();
+    renderBoard(true);
+    await screen.findByText("Ship it");
+    expect(sortable.every((a) => !a.disabled)).toBe(true);
   });
 });

@@ -50,24 +50,25 @@ const PPM_TAB_LABEL_KEYS = [
   "cardDetails",
 ];
 
-// Until the initiative's own permissions have arrived.
+// Closed: nothing writable and no costs until the initiative's own permissions
+// have arrived, and for good when they cannot be read.
 const DEFAULT_PERMS: CardEffectivePermissions["effective"] = {
   can_view: true,
-  can_edit: true,
-  can_archive: true,
-  can_delete: true,
-  can_approval_status: true,
-  can_manage_stakeholders: true,
-  can_manage_relations: true,
-  can_manage_documents: true,
-  can_manage_comments: true,
-  can_create_comments: true,
-  can_bpm_edit: true,
-  can_bpm_manage_drafts: true,
-  can_bpm_approve: true,
-  can_manage_adr_links: true,
-  can_manage_diagram_links: true,
-  can_view_costs: true,
+  can_edit: false,
+  can_archive: false,
+  can_delete: false,
+  can_approval_status: false,
+  can_manage_stakeholders: false,
+  can_manage_relations: false,
+  can_manage_documents: false,
+  can_manage_comments: false,
+  can_create_comments: false,
+  can_bpm_edit: false,
+  can_bpm_manage_drafts: false,
+  can_bpm_approve: false,
+  can_manage_adr_links: false,
+  can_manage_diagram_links: false,
+  can_view_costs: false,
   can_edit_costs: false,
 };
 
@@ -155,7 +156,7 @@ export default function PpmProjectDetail() {
       setError("");
       try {
         // Stryker disable ObjectLiteral: the signal only cancels the request on the wire; the stale-reply guard, which is what the tests pin, is isCurrent()
-        const [c, r, cl, bl, ri, ru] = await Promise.all([
+        const [c, r, cl, bl, ri, ru, pm] = await Promise.all([
           api.get<Card>(`/cards/${id}`, { signal }),
           api.get<PpmStatusReport[]>(`/ppm/initiatives/${id}/reports`, { signal }),
           api.get<PpmCostLine[]>(`/ppm/initiatives/${id}/costs`, { signal }),
@@ -166,6 +167,9 @@ export default function PpmProjectDetail() {
           api
             .get<PpmRollupOut>(`/ppm/initiatives/${id}/rollup`, { signal })
             .catch(() => null),
+          api
+            .get<CardEffectivePermissions>(`/cards/${id}/my-permissions`, { signal })
+            .catch(() => null),
         ]);
         if (!isCurrent()) return;
         setCard(c);
@@ -174,14 +178,8 @@ export default function PpmProjectDetail() {
         setBudgetLines(bl);
         setRisks(ri);
         setRollup(ru);
-        // Fetch effective permissions (non-blocking)
-        api
-          .get<CardEffectivePermissions>(`/cards/${id}/my-permissions`, { signal })
-      // Stryker restore ObjectLiteral
-          .then((res) => {
-            if (isCurrent()) setPerms(res.effective);
-          })
-          .catch(() => {});
+        // Stryker restore ObjectLiteral
+        setPerms(pm?.effective ?? DEFAULT_PERMS);
       } catch (e) {
         // Superseded (or aborted because it was): the newer load owns the page.
         if (!isCurrent()) return;

@@ -300,28 +300,25 @@ describe("PpmProjectDetail switching initiatives", () => {
     expect(screen.queryByText(/ERP Replacement/)).toBeNull();
   });
 
-  it("gives the next initiative the default permissions until its own arrive, never the last one's", async () => {
-    serve("i1", "ERP Replacement", { canEdit: false });
+  it("shows nothing of the next initiative, nor the last one's rights, until its own permissions arrive", async () => {
+    serve("i1", "ERP Replacement", { canEdit: true });
     const perms2 = deferred();
     serve("i2", "CRM Rollout", { perms: () => perms2.promise });
     renderPage("/ppm/i1?tab=details");
     await waitFor(() =>
-      expect(screen.getByTestId("details-tab")).toHaveTextContent("ERP Replacement can edit: false"),
+      expect(screen.getByTestId("details-tab")).toHaveTextContent("ERP Replacement can edit: true"),
     );
 
     act(() => {
       navigateTo("/ppm/i2?tab=details");
     });
-    await waitFor(() =>
-      expect(screen.getByTestId("details-tab")).toHaveTextContent("CRM Rollout"),
-    );
-    expect(screen.getByTestId("details-tab")).toHaveTextContent("can edit: true");
+    await waitFor(() => expect(mockApi.callsOf("get", "/cards/i2/my-permissions")).toHaveLength(1));
+    expect(screen.queryByTestId("details-tab")).toBeNull();
 
-    // Then its own permissions take over.
     await act(async () => {
       perms2.resolve({ effective: { can_view: true, can_edit: false } });
     });
-    expect(screen.getByTestId("details-tab")).toHaveTextContent("CRM Rollout can edit: false");
+    expect(await screen.findByTestId("details-tab")).toHaveTextContent("CRM Rollout can edit: false");
   });
 
   it("ignores a late failure of the initiative the user has left", async () => {

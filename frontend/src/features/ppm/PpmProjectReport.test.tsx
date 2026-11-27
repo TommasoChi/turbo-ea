@@ -243,6 +243,7 @@ function scriptAll() {
   mockApi.on("get", `${BASE}/financials`, FINANCIALS);
   mockApi.on("get", "/settings/fiscal-year-start", { month: 1 });
   mockApi.on("get", "/cards/i1", CARD);
+  mockApi.on("get", "/cards/i1/my-permissions", { effective: { can_view_costs: true } });
   mockApi.on("get", "/ppm/initiatives/i1/schedule", {
     initiative_id: "i1",
     start_date: "2025-01-15",
@@ -1007,6 +1008,7 @@ describe("PpmProjectReport — reading the initiative", () => {
   function scriptOther(card: () => Promise<unknown> | unknown) {
     const other = "/ppm/initiatives/i2";
     mockApi.on("get", "/cards/i2", card);
+    mockApi.on("get", "/cards/i2/my-permissions", { effective: { can_view_costs: true } });
     for (const [path, value] of [
       ["financials", { ...EMPTY_FINANCIALS, initiative_id: "i2" }],
       ["schedule", { initiative_id: "i2", start_date: null, end_date: null }],
@@ -1443,6 +1445,15 @@ describe("PpmProjectReport — without cost access", () => {
     expect(within(overview).getByText("Completion")).toBeInTheDocument();
     expect(screen.queryByText(/NaN/)).not.toBeInTheDocument();
     expect(section("risks")).not.toBeNull();
+    expect(mockApi.callsOf("get").map((c) => c.path)).not.toContain(`${BASE}/financials`);
+  });
+
+  it("fails closed when the permissions cannot be read", async () => {
+    mockApi.fail("get", "/cards/i1/my-permissions", 500);
+    renderPage();
+    await loaded();
+    expect(section("costs")).toBeNull();
+    expect(mockApi.callsOf("get").map((c) => c.path)).not.toContain(`${BASE}/financials`);
   });
 
   it("does not forget a remembered cost section in the browser's choice", async () => {

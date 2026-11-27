@@ -467,6 +467,7 @@ export default function PpmRiskGrid({
   }, [filteredRisks]);
 
   const sidebarProps = {
+    readOnly,
     filters,
     onFiltersChange: setFilters,
     owners,

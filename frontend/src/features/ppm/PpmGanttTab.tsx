@@ -703,6 +703,7 @@ export default function PpmGanttTab({ initiativeId, card, canEdit }: Props) {
    *  either (the library keeps rows draggable whatever `canMoveTasks` says). */
   const handleRowDrop = useCallback(
     async (drop: GanttDropKind, targetId: string, movedId: string) => {
+      if (!canEdit) return;
       if (effectiveSort) {
         showSnack(t("ganttMoveWhileSorted"));
         return;
@@ -716,7 +717,7 @@ export default function PpmGanttTab({ initiativeId, card, canEdit }: Props) {
       }
       await loadData();
     },
-    [effectiveSort, initiativeId, wbsList, tasks, collapsed, loadData, showSnack, t],
+    [canEdit, effectiveSort, initiativeId, wbsList, tasks, collapsed, loadData, showSnack, t],
   );
   const handleMoveTaskBefore: OnMoveTaskBeforeAfter = useCallback(
     (target, taskForMove) => handleRowDrop("before", target.id, taskForMove.id),
@@ -1842,13 +1843,13 @@ export default function PpmGanttTab({ initiativeId, card, canEdit }: Props) {
             columns={ganttColumns}
             canResizeColumns
             onDoubleClick={canEdit ? handleDoubleClick : undefined}
-            onDateChange={handleDateChange}
-            onProgressChange={handleProgressChange}
+            onDateChange={canEdit ? handleDateChange : undefined}
+            onProgressChange={canEdit ? handleProgressChange : undefined}
             onChangeExpandState={handleExpanderClick}
-            onRelationChange={handleRelationChange}
-            onMoveTaskBefore={handleMoveTaskBefore}
-            onMoveTaskAfter={handleMoveTaskAfter}
-            onMoveTaskInside={handleMoveTaskInside}
+            onRelationChange={canEdit ? handleRelationChange : undefined}
+            onMoveTaskBefore={canEdit ? handleMoveTaskBefore : undefined}
+            onMoveTaskAfter={canEdit ? handleMoveTaskAfter : undefined}
+            onMoveTaskInside={canEdit ? handleMoveTaskInside : undefined}
             contextMenuOptions={canEdit ? contextMenuOptions : []}
             enableTableListContextMenu={2}
             roundDate={roundToDay}

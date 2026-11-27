@@ -111,7 +111,7 @@ interface ReportData {
   completion: Completion | null;
   wbs: PpmWbs[] | null;
   tasks: PpmTask[] | null;
-  /** The reader sees the amounts; an unreadable answer counts as yes, the server withholds them anyway. */
+  /** The reader sees the amounts; an unreadable answer counts as no. */
   canViewCosts: boolean;
 }
 
@@ -173,10 +173,11 @@ export default function PpmProjectReport() {
   const subtypeLabel = useCardSubtypeLabel();
   const statusLabel = useInitiativeStatusLabel();
   const { formatDate, formatDateTime } = useDateFormat();
-  const financials = usePpmFinancials(id);
   const schedule = usePpmSchedule(id);
 
   const [data, setData] = useState<ReportData | null>(null);
+  // The amounts are not even asked for without cost access.
+  const financials = usePpmFinancials(data?.canViewCosts ? id : null);
   const [loading, setLoading] = useState(true);
   // Stryker disable next-line StringLiteral: equivalent: loading starts true and the effect clears error before it can clear loading, so the initial error is never rendered
   const [error, setError] = useState("");
@@ -219,7 +220,7 @@ export default function PpmProjectReport() {
           completion,
           wbs,
           tasks,
-          canViewCosts: perms?.effective.can_view_costs ?? true,
+          canViewCosts: perms?.effective.can_view_costs ?? false,
         });
       } catch (e) {
         if (!isCurrent()) return;

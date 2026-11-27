@@ -389,7 +389,7 @@ describe("CardDetailContent Initiative summaries", () => {
     pml.enabled = true;
     initiative({}, true, {}, { can_edit_costs: false });
     expect(await screen.findByRole("button", { name: /manage timeline/i })).toBeInTheDocument();
-    expect(screen.getByTestId("initiative-financials")).toBeInTheDocument();
+    expect(await screen.findByTestId("initiative-financials")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /manage budget & costs/i })).not.toBeInTheDocument();
   });
 

@@ -620,6 +620,21 @@ describe("PpmRiskTab — read-only", () => {
     expect(screen.queryByRole("button", { name: "Delete" })).not.toBeInTheDocument();
   });
 
+  it("does not offer the Actions column in the Columns chooser without canEdit", async () => {
+    const user = userEvent.setup();
+    render(<PpmRiskTab initiativeId="i1" risks={RISKS} canEdit={false} onRefresh={vi.fn()} />);
+    await user.click(screen.getByRole("tab", { name: /Columns/i }));
+    expect(screen.queryByRole("checkbox", { name: "Actions" })).not.toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: "Mitigation" })).toBeInTheDocument();
+  });
+
+  it("offers it with canEdit", async () => {
+    const user = userEvent.setup();
+    renderTab();
+    await user.click(screen.getByRole("tab", { name: /Columns/i }));
+    expect(screen.getByRole("checkbox", { name: "Actions" })).toBeInTheDocument();
+  });
+
   it("offers them with canEdit", () => {
     renderTab();
     expect(screen.getByRole("button", { name: /Add Risk$/ })).toBeInTheDocument();

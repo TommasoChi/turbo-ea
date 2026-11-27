@@ -4,7 +4,7 @@
  * tab gets its own (ppm.manage and cost edit), and without cost access the
  * Budget & Costs tab is not offered while every other tab keeps its place.
  */
-import { screen, waitFor } from "@testing-library/react";
+import { act, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -136,5 +136,36 @@ describe("PpmProjectDetail permissions", () => {
     await screen.findByTestId("overview-tab");
     await user.click(screen.getByRole("tab", { name: "Tasks" }));
     expect(await screen.findByTestId("tasks-tab")).toBeInTheDocument();
+  });
+
+  it("shows nothing writable and no cost tab until the permissions answer", async () => {
+    let answer!: (v: unknown) => void;
+    get.mockImplementation((path: string) => {
+      if (path === "/cards/i1") return Promise.resolve(INITIATIVE);
+      if (path === "/cards/i1/my-permissions") return new Promise((r) => { answer = r; });
+      if (path === "/ppm/initiatives/i1/rollup") return Promise.resolve(null);
+      return Promise.resolve([]);
+    });
+    renderPage("cost", ["ppm.view", "ppm.manage"]);
+    await waitFor(() => expect(get).toHaveBeenCalledWith("/cards/i1/my-permissions", expect.anything()));
+    expect(screen.queryByTestId("cost-tab")).not.toBeInTheDocument();
+    expect(screen.queryByRole("tab")).not.toBeInTheDocument();
+    await act(async () => {
+      answer({ effective: { can_view_costs: true, can_edit_costs: true, can_edit: true } });
+    });
+    expect(await screen.findByTestId("cost-tab")).toHaveTextContent("true");
+  });
+
+  it("stays closed when the permissions cannot be read", async () => {
+    get.mockImplementation((path: string) => {
+      if (path === "/cards/i1") return Promise.resolve(INITIATIVE);
+      if (path === "/cards/i1/my-permissions") return Promise.reject(new Error("boom"));
+      if (path === "/ppm/initiatives/i1/rollup") return Promise.resolve(null);
+      return Promise.resolve([]);
+    });
+    renderPage("cost", ["ppm.view", "ppm.manage"]);
+    expect(await screen.findByTestId("overview-tab")).toHaveTextContent("undefined/false");
+    expect(screen.queryByRole("tab", { name: "Budget & Costs" })).not.toBeInTheDocument();
+    expect(get).not.toHaveBeenCalledWith(expect.stringContaining("/financials"), expect.anything());
   });
 });
