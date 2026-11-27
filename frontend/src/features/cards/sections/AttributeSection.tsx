@@ -79,6 +79,7 @@ function AttributeSection({
   initialExpanded,
   hiddenFieldKeys,
   canViewCosts = true,
+  canEditCosts = false,
   onDirtyChange,
   expandOn,
   editOn,
@@ -94,6 +95,7 @@ function AttributeSection({
   initialExpanded?: boolean;
   hiddenFieldKeys?: Set<string>;
   canViewCosts?: boolean;
+  canEditCosts?: boolean;
   onDirtyChange?: (dirty: boolean) => void;
   /** A new value expands the section (a data-quality jump). */
   expandOn?: number;
@@ -394,6 +396,7 @@ function AttributeSection({
               currencySymbol={symbol}
               error={fieldErrors[field.key]}
               canViewCosts={canViewCosts}
+              canEditCosts={canEditCosts}
             />
           </Box>
         )

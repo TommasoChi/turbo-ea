@@ -310,7 +310,30 @@ Inversement, l'onglet **Détails de la fiche** dans la vue détaillée PML de l'
 | Permission | Description |
 |-----------|-------------|
 | `ppm.view` | Voir le tableau de bord PML, le diagramme de Gantt et les rapports d'initiatives, et lire les fiches d'initiative. Accordé à tous les rôles par défaut |
-| `ppm.manage` | Créer et gérer les rapports de statut, tâches, coûts, risques et éléments WBS. Accordé aux rôles Admin, Admin BPM et Membre |
+| `ppm.manage` | Créer et gérer les rapports de statut, tâches, budgets, postes de coût, risques et éléments WBS, sur les initiatives où les permissions de fiche ci-dessous l'autorisent aussi. Accordé aux rôles Admin et PPM Manager |
 | `reports.ppm_dashboard` | Voir le tableau de bord du portefeuille PML. Accordé à tous les rôles par défaut |
 
-Le budget et les postes de coût suivent les droits PML et la visibilité de l'initiative. Le détail et le total des factures, ainsi que l'indicateur de coût du calendrier, exigent aussi le droit de voir les coûts de l'initiative. L'enregistrement et le déplacement des factures exigent en plus le droit de gestion PML.
+Deux niveaux s'appliquent. La permission applicative ouvre une fonction ; la permission de fiche dit sur quelles initiatives elle s'applique. Une fiche que vous ne pouvez pas lire n'existe pas pour vous.
+
+- **Gérer** les rapports de statut, les risques, les tâches et le Gantt exige `ppm.manage` **et** des droits de modification sur la fiche (`inventory.edit` ou un rôle de partie prenante avec **card.edit**).
+- Les coûts (lignes de budget, postes de coût, factures) s'écrivent avec `ppm.manage` **et** des droits de modification des coûts sur la fiche (`costs.edit` ou un rôle de partie prenante avec **card.edit_costs**), et les coûts doivent être consultables.
+- Un utilisateur sans accès aux coûts (`costs.view`, ou un rôle de partie prenante avec **card.view_costs**) ne voit **aucun montant** sur l'initiative : les lignes, descriptions, années, fournisseurs et dates restent, tandis que les montants, totaux, sous-totaux, cumuls et valeurs personnalisées calculées ou numériques sont omis. L'onglet **Budget et coûts** est masqué, sans message, et le portefeuille n'affiche aucun chiffre. Le rapport de coûts ne liste que les initiatives dont vous pouvez voir les coûts.
+- Les routes de factures répondent « introuvable » (404) à un utilisateur sans accès aux coûts.
+- Modérer (modifier ou supprimer) les commentaires des autres exige des droits de modification sur la fiche.
+- Les boutons Gérer de l'initiative suivent ces droits, et le bouton **Gérer** des coûts sur la page de la fiche exige `ppm.manage` et des droits de modification des coûts : un utilisateur qui ne fait que consulter les coûts ne le voit pas.
+
+| Fonction | Permissions requises |
+|---|---|
+| Voir la fiche (données générales) | `card.view` |
+| Voir les coûts de la fiche | `card.view` + `view_costs` |
+| Voir PML sans les coûts (rapports de statut, risques, tâches, Gantt) | `card.view` + `ppm.view` |
+| Voir les coûts PML (budget, postes de coût, factures, montants) | `card.view` + `view_costs` + `ppm.view` |
+| Modifier les données de la fiche | `card.view` + `card.edit` |
+| Modifier PML sans les coûts | `card.view` + `card.edit` + `ppm.view` + `ppm.manage` |
+| Modifier les coûts PML | `card.view` + `view_costs` + `edit_costs` + `ppm.view` + `ppm.manage` |
+| Produire le rapport de coûts | `ppm.view` ; ne liste que les fiches avec `card.view` + `view_costs` |
+| Ouvrir les pages PML | `ppm.view` |
+
+`view_costs` est `costs.view` ou **card.view_costs** ; `edit_costs` est `costs.edit` ou **card.edit_costs**. Pour les Applications et les Composants IT, les postes de coût annuels se modifient avec `card.view` + `view_costs` + `edit_costs`, sans permission PML.
+
+Le rôle de partie prenante **Contrôleur de coûts** lit l'initiative ainsi que ses rapports de statut, risques et Gantt, et ne modifie que les coûts ; donnez à ses titulaires le rôle applicatif **PPM Manager**. Un Responsable ou un Chef de projet IT continue de gérer l'initiative et ses coûts. **Dans le budget** dans la chronologie protégée exige aussi la visibilité des coûts.

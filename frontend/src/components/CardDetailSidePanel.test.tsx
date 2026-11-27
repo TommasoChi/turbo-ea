@@ -43,7 +43,9 @@ vi.mock("@/features/cards/CardDetailContent", () => ({
     onSaveOrigin,
     onDirtyChange,
     focusTarget,
+    perms,
   }: {
+    perms?: { can_manage_stakeholders?: boolean };
     card: { name: string; data_quality: number };
     onCardUpdate: (c: unknown) => void;
     onSaveOrigin?: (anchor: string) => void;
@@ -58,6 +60,7 @@ vi.mock("@/features/cards/CardDetailContent", () => ({
     return (
     <div
       data-testid="card-content"
+      data-can-manage-stakeholders={String(perms?.can_manage_stakeholders)}
       data-focus-anchor={focusTarget ? (focusTarget.target.anchor ?? "") : "none"}
       data-focus-field={focusTarget?.target.fieldKey ?? ""}
       data-focus-nonce={focusTarget ? String(focusTarget.nonce) : "none"}
@@ -206,6 +209,18 @@ function mount(props: { nonModal?: boolean; open?: boolean; cardId?: string | nu
 const backdrop = () => document.querySelector(".MuiBackdrop-root");
 const panel = () => document.querySelector(".MuiDrawer-paper") as HTMLElement;
 const closeButton = () => panel().querySelector("button") as HTMLButtonElement;
+
+describe("CardDetailSidePanel — permissions", () => {
+  it("offers no stakeholder management while /my-permissions is unknown or rejects", async () => {
+    vi.mocked(api.get).mockImplementation((path: string) =>
+      path.endsWith("/my-permissions") ? Promise.reject(new Error("boom")) : Promise.resolve(CARD),
+    );
+    mount();
+    const content = await screen.findByTestId("card-content");
+    await waitFor(() => expect(api.get).toHaveBeenCalledWith("/cards/c1/my-permissions"));
+    expect(content).toHaveAttribute("data-can-manage-stakeholders", "false");
+  });
+});
 
 describe("CardDetailSidePanel — modal by default", () => {
   it("places its modal in the supplied fullscreen container", async () => {

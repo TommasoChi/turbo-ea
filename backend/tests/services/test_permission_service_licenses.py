@@ -126,3 +126,28 @@ async def test_license_edit_requires_visibility(db, app_card_type):
     user = await create_user(db, role="license_editor")
     card = await create_card(db, card_type="Application")
     assert await PermissionService.can_edit_licenses(db, user, card.id) is False
+
+
+async def test_view_denied_type_refuses_license_edit_despite_stakeholder_view_grant(
+    db, app_card_type
+):
+    await create_stakeholder_role_def(
+        db, key="lic_reader", label="Reader", permissions={"card.view_licenses": True}
+    )
+    await create_role(
+        db,
+        key="lic_editor",
+        permissions={"inventory.view": True, "licenses.view": True, "licenses.edit": True},
+    )
+    user = await create_user(db, role="lic_editor")
+    card = await create_card(db, card_type="Application")
+    await _stake(db, user=user, card=card, role="lic_reader")
+
+    assert await PermissionService.can_edit_licenses(db, user, card.id) is True
+
+    ct = (await db.execute(select(CardType).where(CardType.key == "Application"))).scalar_one()
+    ct.role_permissions = {"lic_editor": {"inventory.view": False}}
+    await db.flush()
+    PermissionService.invalidate_type_permission_cache()
+
+    assert await PermissionService.can_edit_licenses(db, user, card.id) is False

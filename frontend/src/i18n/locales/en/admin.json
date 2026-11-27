@@ -503,6 +503,7 @@
   "metamodel.stakeholderPanel.permissions": "Permissions",
   "metamodel.stakeholderPanel.noPermissions": "No permissions defined.",
   "metamodel.stakeholderPanel.viewLicensesDescription": "View this card's licenses without the licenses.view permission",
+  "metamodel.stakeholderPanel.editCostsDescription": "Edit this card's costs, with a stakeholder role, without the costs.edit permission",
   "metamodel.stakeholderPanel.selfAssignableHint": "Anyone who can view a card can make themselves its Observer, so whatever this role allows is open to all of them.",
   "metamodel.stakeholderPanel.newRole": "New Stakeholder Role",
   "metamodel.stakeholderPanel.keyLabel": "Key",

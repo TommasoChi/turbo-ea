@@ -250,7 +250,8 @@ APP_PERMISSIONS: dict[str, dict] = {
             ),
             "costs.edit": (
                 "Edit the cost items of any card "
-                "(stakeholders whose role can edit a card edit that card's costs regardless)"
+                "(a stakeholder role with card.edit_costs edits the costs of its own cards "
+                "without it)"
             ),
         },
     },
@@ -380,6 +381,9 @@ CARD_PERMISSIONS: dict[str, str] = {
     "card.view_costs": "View this card's cost fields without the costs.view permission",
     "card.view_licenses": "View this card's licenses without the licenses.view permission",
     "card.edit": "Edit this card's fields, name, description, lifecycle",
+    "card.edit_costs": (
+        "Edit this card's costs (budget, cost items, invoices) without the costs.edit permission"
+    ),
     "card.archive": "Archive or restore this card",
     "card.delete": "Permanently delete this card (admin)",
     "card.approval_status": "Approve, reject, or reset approval status",
@@ -446,6 +450,7 @@ def strip_legacy_card_permissions(permissions: dict) -> dict:
 # grants ``card.view_costs``.
 VIEW_COSTS_CARD_PERMISSION = "card.view_costs"
 VIEW_LICENSES_CARD_PERMISSION = "card.view_licenses"
+EDIT_COSTS_CARD_PERMISSION = "card.edit_costs"
 
 # The role anyone who can view a card can give themselves, without the right
 # to manage stakeholders (``POST /cards/{id}/me/observe``). A user who *may*
@@ -470,6 +475,18 @@ def with_legacy_cost_grant(role_key: str, permissions: dict) -> dict:
         **permissions,
         VIEW_COSTS_CARD_PERMISSION: role_key != SELF_ASSIGNABLE_STAKEHOLDER_ROLE,
     }
+
+
+def with_legacy_edit_cost_grant(permissions: dict) -> dict:
+    """Fill ``card.edit_costs`` into a role map written before the key existed.
+
+    Costs used to be editable by any role that could edit the card, so the new
+    key takes ``card.edit``'s value (False when absent). A map that already
+    carries the key, either value, is returned as it is.
+    """
+    if not isinstance(permissions, dict) or EDIT_COSTS_CARD_PERMISSION in permissions:
+        return permissions
+    return {**permissions, EDIT_COSTS_CARD_PERMISSION: bool(permissions.get("card.edit", False))}
 
 
 def with_legacy_license_grant(role_key: str, permissions: dict) -> dict:
@@ -504,6 +521,7 @@ APP_TO_CARD_PERMISSION_MAP: dict[str, str] = {
     "adr.manage": "card.manage_adr_links",
     "diagrams.manage": "card.manage_diagram_links",
     "costs.view": "card.view_costs",
+    "costs.edit": "card.edit_costs",
     "licenses.view": "card.view_licenses",
 }
 
@@ -736,7 +754,7 @@ BPM_ADMIN_PERMISSIONS: dict[str, bool] = {
     "relations.view": True,
     "relations.manage": True,
     "stakeholders.view": True,
-    "stakeholders.manage": True,
+    "stakeholders.manage": False,
     "comments.view": True,
     "comments.create": True,
     "comments.manage": True,
@@ -756,7 +774,7 @@ BPM_ADMIN_PERMISSIONS: dict[str, bool] = {
     "bpm.assessments": True,
     "bpm.value_chain": True,
     "ppm.view": True,
-    "ppm.manage": True,
+    "ppm.manage": False,
     "reports.ea_dashboard": True,
     "reports.bpm_dashboard": True,
     "reports.ppm_dashboard": True,
@@ -794,7 +812,7 @@ BPM_ADMIN_PERMISSIONS: dict[str, bool] = {
     "grc.manage": True,
     "ai.suggest": True,
     "ai.portfolio_insights": True,
-    "costs.view": True,
+    "costs.view": False,
     "costs.edit": False,
     "licenses.view": True,
     "licenses.edit": False,
@@ -829,7 +847,7 @@ MEMBER_PERMISSIONS: dict[str, bool] = {
     "relations.view": True,
     "relations.manage": True,
     "stakeholders.view": True,
-    "stakeholders.manage": True,
+    "stakeholders.manage": False,
     "comments.view": True,
     "comments.create": True,
     "comments.manage": False,
@@ -847,7 +865,7 @@ MEMBER_PERMISSIONS: dict[str, bool] = {
     "bpm.assessments": True,
     "bpm.value_chain": True,
     "ppm.view": True,
-    "ppm.manage": True,
+    "ppm.manage": False,
     "reports.ea_dashboard": True,
     "reports.bpm_dashboard": True,
     "reports.ppm_dashboard": True,
@@ -885,7 +903,7 @@ MEMBER_PERMISSIONS: dict[str, bool] = {
     "grc.manage": True,
     "ai.suggest": True,
     "ai.portfolio_insights": True,
-    "costs.view": True,
+    "costs.view": False,
     "costs.edit": False,
     "licenses.view": True,
     "licenses.edit": False,
@@ -997,6 +1015,8 @@ VIEWER_PERMISSIONS: dict[str, bool] = {
     "admin.dashboards": False,
 }
 
+PPM_MANAGER_APP_PERMISSIONS: dict[str, bool] = {**VIEWER_PERMISSIONS, "ppm.manage": True}
+
 # ---------------------------------------------------------------------------
 # Default stakeholder-role permission sets
 # ---------------------------------------------------------------------------
@@ -1006,6 +1026,7 @@ RESPONSIBLE_CARD_PERMISSIONS: dict[str, bool] = {
     "card.view_costs": True,
     "card.view_licenses": True,
     "card.edit": True,
+    "card.edit_costs": True,
     "card.archive": True,
     "card.delete": False,
     "card.approval_status": True,
@@ -1027,6 +1048,7 @@ OBSERVER_CARD_PERMISSIONS: dict[str, bool] = {
     "card.view_costs": False,
     "card.view_licenses": False,
     "card.edit": False,
+    "card.edit_costs": False,
     "card.archive": False,
     "card.delete": False,
     "card.approval_status": False,
@@ -1048,6 +1070,7 @@ PROCESS_OWNER_CARD_PERMISSIONS: dict[str, bool] = {
     "card.view_costs": True,
     "card.view_licenses": True,
     "card.edit": True,
+    "card.edit_costs": True,
     "card.archive": False,
     "card.delete": False,
     "card.approval_status": True,
@@ -1071,6 +1094,7 @@ TECH_APP_OWNER_CARD_PERMISSIONS: dict[str, bool] = {
     "card.view_costs": True,
     "card.view_licenses": True,
     "card.edit": True,
+    "card.edit_costs": True,
     "card.archive": False,
     "card.delete": False,
     "card.approval_status": False,
@@ -1092,6 +1116,7 @@ BIZ_APP_OWNER_CARD_PERMISSIONS: dict[str, bool] = {
     "card.view_costs": True,
     "card.view_licenses": True,
     "card.edit": True,
+    "card.edit_costs": True,
     "card.archive": False,
     "card.delete": False,
     "card.approval_status": False,
@@ -1113,6 +1138,7 @@ IT_PROJECT_MANAGER_CARD_PERMISSIONS: dict[str, bool] = {
     "card.view_costs": True,
     "card.view_licenses": True,
     "card.edit": True,
+    "card.edit_costs": True,
     "card.archive": False,
     "card.delete": False,
     "card.approval_status": True,
@@ -1129,6 +1155,14 @@ IT_PROJECT_MANAGER_CARD_PERMISSIONS: dict[str, bool] = {
     "card.manage_diagram_links": True,
 }
 
+COST_CONTROLLER_CARD_PERMISSIONS: dict[str, bool] = {
+    **{k: False for k in OBSERVER_CARD_PERMISSIONS},
+    "card.view": True,
+    "card.view_costs": True,
+    "card.edit_costs": True,
+    "card.create_comments": True,
+}
+
 # Map stakeholder role key → default permissions
 DEFAULT_CARD_PERMISSIONS_BY_ROLE: dict[str, dict[str, bool]] = {
     "responsible": RESPONSIBLE_CARD_PERMISSIONS,
@@ -1137,4 +1171,5 @@ DEFAULT_CARD_PERMISSIONS_BY_ROLE: dict[str, dict[str, bool]] = {
     "technicalApplicationOwner": TECH_APP_OWNER_CARD_PERMISSIONS,
     "businessApplicationOwner": BIZ_APP_OWNER_CARD_PERMISSIONS,
     "itProjectManager": IT_PROJECT_MANAGER_CARD_PERMISSIONS,
+    "costController": COST_CONTROLLER_CARD_PERMISSIONS,
 }

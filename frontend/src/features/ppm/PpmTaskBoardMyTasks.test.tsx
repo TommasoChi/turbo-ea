@@ -64,7 +64,7 @@ function renderBoard(user: User | null = ME, entry = "/ppm/i1") {
   return render(
     <MemoryRouter initialEntries={[entry]}>
       <AuthProvider user={user} refreshUser={async () => {}}>
-        <PpmTaskBoard initiativeId="i1" />
+        <PpmTaskBoard initiativeId="i1" canEdit />
       </AuthProvider>
     </MemoryRouter>,
   );
@@ -124,7 +124,7 @@ describe("PpmTaskBoard — My tasks shortcut", () => {
     render(
       <MemoryRouter initialEntries={["/ppm/i1"]}>
         <AuthProvider user={ME} refreshUser={async () => {}}>
-          <PpmTaskBoard initiativeId="i1" />
+          <PpmTaskBoard initiativeId="i1" canEdit />
           <Probe />
         </AuthProvider>
       </MemoryRouter>,

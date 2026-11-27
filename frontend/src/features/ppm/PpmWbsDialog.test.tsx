@@ -119,3 +119,12 @@ describe("PpmWbsDialog completion slider", () => {
     expect(screen.getByRole("slider")).not.toBeDisabled();
   });
 });
+
+describe("PpmWbsDialog read-only", () => {
+  it("shows the package but offers no Save or Delete", () => {
+    renderDialog({ wbs: wbs(), readOnly: true });
+    expect(screen.getByLabelText(/Title/)).toBeDisabled();
+    expect(screen.queryByRole("button", { name: /^Save$/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Delete/ })).not.toBeInTheDocument();
+  });
+});

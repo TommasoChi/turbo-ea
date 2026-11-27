@@ -25,7 +25,7 @@ export interface LineGroup<T> {
  */
 function sumLines<T>(
   lines: T[],
-  amountOf: (line: T) => number,
+  amountOf: (line: T) => number | undefined,
   categoryOf: (line: T) => string,
 ): BudgetTotals {
   const totals: BudgetTotals = { capex: 0, opex: 0, total: 0 };

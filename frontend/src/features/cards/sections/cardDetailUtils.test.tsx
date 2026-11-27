@@ -155,6 +155,22 @@ describe("field help icon in an editable control's label", () => {
     expect(iconInLabel(container)).toHaveAccessibleName("Admin help.");
   });
 
+  it("renders a cost field read-only without the right to edit costs, editable with it", () => {
+    const field: FieldDef = { key: "f", label: "Budget", type: "cost" };
+    const { rerender } = render(
+      <FieldEditor field={field} value={10} onChange={() => {}} canEditCosts={false} />,
+    );
+    expect(screen.getByRole("spinbutton")).toBeDisabled();
+    rerender(<FieldEditor field={field} value={10} onChange={() => {}} canEditCosts />);
+    expect(screen.getByRole("spinbutton")).toBeEnabled();
+  });
+
+  it("renders a cost field read-only when the flag is absent", () => {
+    const field: FieldDef = { key: "f", label: "Budget", type: "cost" };
+    render(<FieldEditor field={field} value={10} onChange={() => {}} />);
+    expect(screen.getByRole("spinbutton")).toBeDisabled();
+  });
+
   it("keeps the cost field's currency adornment beside the notch label", () => {
     render(
       <FieldEditor

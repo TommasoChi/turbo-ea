@@ -48,6 +48,7 @@ import { useOptionLabel } from "@/hooks/useResolveLabel";
 import { CARD_TYPE_COLORS, iconSize } from "@/theme/tokens";
 import type {
   Card,
+  CardEffectivePermissions,
   PpmBudgetLine,
   PpmCostLine,
   PpmFinancials,
@@ -100,6 +101,8 @@ interface Completion {
 }
 
 interface ReportData {
+  /** The id this load was made for: the address may spell it in another case than the card does. */
+  loadedId: string;
   card: Card;
   reports: PpmStatusReport[];
   costLines: PpmCostLine[];
@@ -110,6 +113,8 @@ interface ReportData {
   completion: Completion | null;
   wbs: PpmWbs[] | null;
   tasks: PpmTask[] | null;
+  /** The reader sees the amounts; an unreadable answer counts as no. */
+  canViewCosts: boolean;
 }
 
 /** A secondary read: its failure degrades its part of the page, never the page. */
@@ -170,10 +175,11 @@ export default function PpmProjectReport() {
   const subtypeLabel = useCardSubtypeLabel();
   const statusLabel = useInitiativeStatusLabel();
   const { formatDate, formatDateTime } = useDateFormat();
-  const financials = usePpmFinancials(id);
   const schedule = usePpmSchedule(id);
 
   const [data, setData] = useState<ReportData | null>(null);
+  // The amounts are not even asked for without cost access.
+  const financials = usePpmFinancials(data?.canViewCosts && data.loadedId === id ? id : null);
   const [loading, setLoading] = useState(true);
   // Stryker disable next-line StringLiteral: equivalent: loading starts true and the effect clears error before it can clear loading, so the initial error is never rendered
   const [error, setError] = useState("");
@@ -181,7 +187,7 @@ export default function PpmProjectReport() {
   const chartRef = useRef<HTMLDivElement>(null);
   const theme = useTheme();
 
-  usePageSubject(data && data.card.id === id ? data.card.name : undefined);
+  usePageSubject(data && data.loadedId === id ? data.card.name : undefined);
   usePageSection(t("pdfDocumentTitle"));
 
   useAbortableEffect(
@@ -192,7 +198,7 @@ export default function PpmProjectReport() {
       setData(null);
       const base = `/ppm/initiatives/${id}`;
       try {
-        const [card, reports, costLines, budgetLines, risks, rollup, completion, wbs, tasks] =
+        const [card, reports, costLines, budgetLines, risks, rollup, completion, wbs, tasks, perms] =
           await Promise.all([
             api.get<Card>(`/cards/${id}`, { signal }),
             api.get<PpmStatusReport[]>(`${base}/reports`, { signal }),
@@ -203,9 +209,11 @@ export default function PpmProjectReport() {
             orNull(api.get<Completion>(`${base}/completion`, { signal })),
             orNull(api.get<PpmWbs[]>(`${base}/wbs`, { signal })),
             orNull(api.get<PpmTask[]>(`${base}/tasks`, { signal })),
+            orNull(api.get<CardEffectivePermissions>(`/cards/${id}/my-permissions`, { signal })),
           ]);
         if (!isCurrent()) return;
         setData({
+          loadedId: id,
           card,
           reports,
           costLines,
@@ -215,6 +223,7 @@ export default function PpmProjectReport() {
           completion,
           wbs,
           tasks,
+          canViewCosts: perms?.effective.can_view_costs ?? false,
         });
       } catch (e) {
         if (!isCurrent()) return;
@@ -242,7 +251,7 @@ export default function PpmProjectReport() {
     </Tooltip>
   );
 
-  if (loading || schedule.loading || (data && data.card.id !== id)) {
+  if (loading || schedule.loading || (data && data.loadedId !== id)) {
     return (
       <Box display="flex" justifyContent="center" alignItems="center" minHeight={240}>
         <CircularProgress />
@@ -259,8 +268,11 @@ export default function PpmProjectReport() {
     );
   }
 
+  // Without cost access the report has no cost section; the stored choice keeps it.
+  const shownSections = data.canViewCosts ? sections : sections.filter((s) => s !== "costs");
+
   // Do not offer an incomplete print or deck while the selected financial tree loads.
-  if (sections.includes("costs") && !financials.data && !financials.error) {
+  if (shownSections.includes("costs") && !financials.data && !financials.error) {
     return (
       <Box display="flex" alignItems="center" gap={2} minHeight={120} role="status">
         <CircularProgress size={24} />
@@ -296,7 +308,7 @@ export default function PpmProjectReport() {
     { label: t("reportPrinted"), value: formatDateTime(new Date()) },
   ];
 
-  const deckSections = exportableSections(sections, {
+  const deckSections = exportableSections(shownSections, {
     reports: data.reports.length,
     costLines:
       data.budgetLines.length +
@@ -345,7 +357,7 @@ export default function PpmProjectReport() {
       <Typography variant="body2" color="text.secondary">
         {t("pdfSections")}
       </Typography>
-      {REPORT_SECTIONS.map((s) => {
+      {REPORT_SECTIONS.filter((s) => s !== "costs" || data.canViewCosts).map((s) => {
         const on = sections.includes(s);
         return (
           <Chip
@@ -383,7 +395,7 @@ export default function PpmProjectReport() {
       printParams={printParams}
     >
       <Box className="ppm-project-report">
-        {sections.length === 0 && (
+        {shownSections.length === 0 && (
           <Typography
             variant="body2"
             color="text.secondary"
@@ -394,13 +406,13 @@ export default function PpmProjectReport() {
             {t("reportNoSections")}
           </Typography>
         )}
-        {sections.includes("overview") && <OverviewSection data={data} schedule={schedule.data} />}
-        {sections.includes("reports") && <ReportsSection reports={data.reports} />}
-        {sections.includes("costs") && (
+        {shownSections.includes("overview") && <OverviewSection data={data} schedule={schedule.data} />}
+        {shownSections.includes("reports") && <ReportsSection reports={data.reports} />}
+        {shownSections.includes("costs") && (
           <CostsSection data={data} financials={financials.data} financialsError={financials.error} />
         )}
-        {sections.includes("risks") && <RisksSection risks={data.risks} />}
-        {sections.includes("schedule") && <ScheduleSection wbs={data.wbs} tasks={data.tasks} />}
+        {shownSections.includes("risks") && <RisksSection risks={data.risks} />}
+        {shownSections.includes("schedule") && <ScheduleSection wbs={data.wbs} tasks={data.tasks} />}
       </Box>
     </ReportShell>
   );
@@ -576,23 +588,27 @@ function OverviewSection({ data, schedule }: { data: ReportData; schedule: PmlIn
   return (
     <Section section="overview">
       <Box className="ppm-report-tiles" data-export-row sx={STRIP_SX}>
-        <MetricCard
-          label={t("totalBudget")}
-          icon="savings"
-          value={<DerivedValue tip={money.budgetNote}>{money.amount(totals.budget.total)}</DerivedValue>}
-        />
-        <MetricCard
-          label={t("totalActual")}
-          icon="payments"
-          value={<DerivedValue tip={money.actualNote}>{money.amount(totals.actual.total)}</DerivedValue>}
-        />
-        <MetricCard
-          label={t("variance")}
-          icon="balance"
-          color={varianceColor}
-          iconColor={varianceColor}
-          value={<DerivedValue tip={money.varianceNote}>{money.amount(money.variance)}</DerivedValue>}
-        />
+        {data.canViewCosts && (
+          <>
+            <MetricCard
+              label={t("totalBudget")}
+              icon="savings"
+              value={<DerivedValue tip={money.budgetNote}>{money.amount(totals.budget.total)}</DerivedValue>}
+            />
+            <MetricCard
+              label={t("totalActual")}
+              icon="payments"
+              value={<DerivedValue tip={money.actualNote}>{money.amount(totals.actual.total)}</DerivedValue>}
+            />
+            <MetricCard
+              label={t("variance")}
+              icon="balance"
+              color={varianceColor}
+              iconColor={varianceColor}
+              value={<DerivedValue tip={money.varianceNote}>{money.amount(money.variance)}</DerivedValue>}
+            />
+          </>
+        )}
         <MetricCard
           label={t("completion")}
           icon="donut_large"
@@ -600,7 +616,7 @@ function OverviewSection({ data, schedule }: { data: ReportData; schedule: PmlIn
           subtitle={completionNote}
         />
       </Box>
-      <DerivedNotes notes={[money.budgetNote, money.actualNote]} />
+      {data.canViewCosts && <DerivedNotes notes={[money.budgetNote, money.actualNote]} />}
 
       <Box className="ppm-report-cards" sx={OVERVIEW_GRID_SX}>
         <SectionPaper data-export-row icon="monitor_heart" title={t("healthSummary")}>
@@ -632,7 +648,7 @@ function OverviewSection({ data, schedule }: { data: ReportData; schedule: PmlIn
           )}
         </SectionPaper>
 
-        <SectionPaper data-export-row icon="account_balance_wallet" title={t("financials")}>
+        {data.canViewCosts && <SectionPaper data-export-row icon="account_balance_wallet" title={t("financials")}>
           {bar(t("budgetBarTotal"), totals.budget.total, totals.actual.total)}
           {bar(t("capex"), totals.budget.capex, totals.actual.capex)}
           {bar(t("opex"), totals.budget.opex, totals.actual.opex)}
@@ -641,7 +657,8 @@ function OverviewSection({ data, schedule }: { data: ReportData; schedule: PmlIn
               <Typography variant="body2" fontWeight={600}>
                 {t("beneathThisInitiative", { count: rollup.descendant_count })}
               </Typography>
-              {!(totals.budget.derived && totals.actual.derived) && (
+              {rollup.total_planned != null && rollup.total_actual != null
+                && !(totals.budget.derived && totals.actual.derived) && (
                 <Typography variant="body2" color="text.secondary">
                   {t("beneathFigures", {
                     budget: money.fmt.format(rollup.total_planned),
@@ -659,7 +676,7 @@ function OverviewSection({ data, schedule }: { data: ReportData; schedule: PmlIn
               )}
             </Box>
           )}
-        </SectionPaper>
+        </SectionPaper>}
 
         <SectionPaper data-export-row icon="event" title={t("timeline")}>
           <Box display="flex" gap={3} mb={2} flexWrap="wrap">

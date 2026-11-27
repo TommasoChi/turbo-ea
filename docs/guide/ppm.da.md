@@ -318,12 +318,35 @@ Når PML er aktiveret, viser **Initiative**-kort en **PML**-fane som den sidste 
 
 Omvendt viser **Card Details**-fanen inden i PML Initiativ-detaljevisningen standardkortdetaljesektionerne uden PML-fanen, hvilket undgår cirkulær navigation.
 
-## Tilladelser
+## Tilladelser { #permissions }
 
 | Tilladelse | Beskrivelse |
 |------------|-------------|
 | `ppm.view` | Se PML-dashboardet, Gantt-diagram og initiativrapporter samt læse initiativkort. Givet til alle roller som standard |
-| `ppm.manage` | Opret og administrer statusrapporter, opgaver, omkostninger, risici og WBS-elementer. Givet til Admin-, BPM Admin- og Member-roller |
+| `ppm.manage` | Opret og administrer statusrapporter, opgaver, budgetter, omkostningsposter, risici og WBS-elementer, på de initiativer hvor kortets tilladelser nedenfor også tillader det. Gives til rollerne Admin og PPM Manager |
 | `reports.ppm_dashboard` | Se PML-portefølje-dashboardet. Givet til alle roller som standard |
 
-Budget og omkostningsposter følger PML-tilladelsen og initiativets synlighed. Fakturadetaljer, faktureringstotal og tidslinjens omkostningsindikator kræver også ret til at se omkostningerne. Registrering og flytning af fakturaer kræver desuden adgang til at administrere PML.
+Der gælder to lag. App-tilladelsen åbner en funktion; korttilladelsen angiver, på hvilke initiativer den gælder. Et kort, du ikke kan læse, findes ikke for dig.
+
+- **Administrér** statusrapporter, risici, opgaver og Gantt kræver `ppm.manage` **og** redigeringsrettigheder på kortet (`inventory.edit` eller en interessentrolle med **card.edit**).
+- Omkostninger (budgetlinjer, omkostningsposter, fakturaer) skrives med `ppm.manage` **og** rettigheder til at redigere omkostninger på kortet (`costs.edit` eller en interessentrolle med **card.edit_costs**), og omkostningerne skal kunne ses.
+- En bruger uden adgang til omkostninger (`costs.view` eller en interessentrolle med **card.view_costs**) ser **ingen beløb** på initiativet: rækker, beskrivelser, år, leverandører og datoer består, mens beløb, totaler, subtotaler, sammenlægninger og beregnede eller numeriske brugerdefinerede værdier udelades. Fanen **Budget og omkostninger** er skjult uden besked, og porteføljen viser ingen tal. Omkostningsrapporten viser kun initiativer, hvis omkostninger du kan se.
+- Fakturaruterne svarer »ikke fundet« (404) til en bruger uden adgang til omkostninger.
+- Moderering (redigering eller sletning) af andres kommentarer kræver redigeringsrettigheder på kortet.
+- Knapperne Administrér på initiativet følger disse rettigheder, og omkostningsknappen **Administrér** på kortsiden kræver `ppm.manage` og rettigheder til at redigere omkostninger: En bruger, der kun ser omkostninger, ser den ikke.
+
+| Funktion | Nødvendige tilladelser |
+|---|---|
+| Se kortet (generelle data) | `card.view` |
+| Se kortets omkostninger | `card.view` + `view_costs` |
+| Se PML uden omkostninger (statusrapporter, risici, opgaver, Gantt) | `card.view` + `ppm.view` |
+| Se PML-omkostninger (budget, omkostningsposter, fakturaer, beløb) | `card.view` + `view_costs` + `ppm.view` |
+| Redigere kortdata | `card.view` + `card.edit` |
+| Redigere PML uden omkostninger | `card.view` + `card.edit` + `ppm.view` + `ppm.manage` |
+| Redigere PML-omkostninger | `card.view` + `view_costs` + `edit_costs` + `ppm.view` + `ppm.manage` |
+| Bygge omkostningsrapport | `ppm.view`; viser kun kort med `card.view` + `view_costs` |
+| Åbne PML-siderne | `ppm.view` |
+
+`view_costs` er `costs.view` eller **card.view_costs**; `edit_costs` er `costs.edit` eller **card.edit_costs**. For Applikationer og IT-komponenter redigeres de årlige omkostningsposter med `card.view` + `view_costs` + `edit_costs`, uden PML-tilladelse.
+
+Interessentrollen **Omkostningscontroller** læser initiativet og dets statusrapporter, risici og Gantt og redigerer kun omkostningerne; giv dens indehavere approllen **PPM Manager**. En Ansvarlig eller IT-projektleder administrerer fortsat initiativet og dets omkostninger. **På budget** i den beskyttede tidslinje kræver også omkostningssynlighed.

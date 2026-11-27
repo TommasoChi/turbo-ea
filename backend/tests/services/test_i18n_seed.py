@@ -558,7 +558,7 @@ def _seeded_stakeholder_roles():
 
 
 class TestStakeholderRoleDescriptionTranslations:
-    def test_the_six_built_in_roles_are_all_walked(self):
+    def test_the_seven_built_in_roles_are_all_walked(self):
         keys = {p.values[0]["key"] for p in _seeded_stakeholder_roles()}
         assert keys == {
             "responsible",
@@ -567,6 +567,7 @@ class TestStakeholderRoleDescriptionTranslations:
             "businessApplicationOwner",
             "itProjectManager",
             "processOwner",
+            "costController",
         }
 
     @pytest.mark.parametrize("role", _seeded_stakeholder_roles())

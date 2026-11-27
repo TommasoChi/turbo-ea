@@ -11,6 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.permissions import (
+    EDIT_COSTS_CARD_PERMISSION,
     VIEW_COSTS_CARD_PERMISSION,
     VIEW_LICENSES_CARD_PERMISSION,
     type_cell_decision,
@@ -396,17 +397,18 @@ class PermissionService:
         return result.scalar_one_or_none() is not None
 
     @staticmethod
-    async def _can_edit_domain(db: AsyncSession, user: User, card_id: UUID, perm: str) -> bool:
+    async def _can_edit_domain(
+        db: AsyncSession, user: User, card_id: UUID, perm: str, card_perm: str = "card.edit"
+    ) -> bool:
         """Edit rule shared by costs and licenses: the app-level ``perm``, or a stakeholder
-        role on THIS card whose permissions give `card.edit` (Observer does not).
+        role on THIS card whose permissions give ``card_perm`` (Observer does not).
+        The app-level grant is type-aware: a View deny on the card's type removes it.
         App-level `inventory.edit` alone grants nothing here."""
-        if await PermissionService.has_app_permission(db, user, perm):
-            return True
-        return await PermissionService.has_card_permission(db, user, card_id, "card.edit")
+        return await PermissionService.check_permission(db, user, perm, card_id, card_perm)
 
     @staticmethod
     async def can_view_costs(db: AsyncSession, user: User, card_id: UUID) -> bool:
-        """Return True if the user may see and change cost fields on this card.
+        """Return True if the user may see cost fields on this card.
 
         ``costs.view`` shows them on every card whose type the role may view
         (a View deny on the type takes the grant away, as for every other
@@ -498,7 +500,20 @@ class PermissionService:
         """Edit cost items only where their values are visible."""
         return await PermissionService.can_view_costs(
             db, user, card_id
-        ) and await PermissionService._can_edit_domain(db, user, card_id, "costs.edit")
+        ) and await PermissionService._can_edit_domain(
+            db, user, card_id, "costs.edit", EDIT_COSTS_CARD_PERMISSION
+        )
+
+    @staticmethod
+    async def card_ids_with_cost_edit_access(
+        db: AsyncSession, user: User, candidate_card_ids: Iterable[UUID | None]
+    ) -> set[UUID]:
+        """Bulk variant of `can_edit_costs`: costs visible AND editable, same semantics."""
+        candidates = [cid for cid in candidate_card_ids if cid is not None]
+        visible = await PermissionService.card_ids_with_cost_access(db, user, candidates)
+        return visible & await PermissionService._card_ids_with_domain_access(
+            db, user, visible, "costs.edit", EDIT_COSTS_CARD_PERMISSION
+        )
 
     @staticmethod
     async def can_view_licenses(db: AsyncSession, user: User, card_id: UUID) -> bool:
@@ -633,6 +648,7 @@ class PermissionService:
             "can_view_licenses": is_admin
             or _app("licenses.view")
             or card_level.get(VIEW_LICENSES_CARD_PERMISSION, False),
+            "can_edit_costs": await PermissionService.can_edit_costs(db, user, card_id),
         }
 
         return {

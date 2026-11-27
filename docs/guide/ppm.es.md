@@ -305,12 +305,35 @@ Cuando PML está activado, las fichas de **Iniciativa** muestran una pestaña **
 
 A la inversa, la pestaña **Detalles de la ficha** dentro de la vista detallada PML de la iniciativa muestra las secciones estándar de la ficha sin la pestaña PML, evitando la navegación circular.
 
-## Permisos
+## Permisos { #permissions }
 
 | Permiso | Descripción |
 |---------|-------------|
 | `ppm.view` | Ver el panel de PML, diagrama de Gantt e informes de iniciativas, y leer las tarjetas de iniciativa. Concedido a todos los roles por defecto |
-| `ppm.manage` | Crear y gestionar informes de estado, tareas, costos, riesgos y elementos WBS. Concedido a los roles Admin, BPM Admin y Miembro |
+| `ppm.manage` | Crear y gestionar informes de estado, tareas, presupuestos, partidas de coste, riesgos y elementos WBS, en las iniciativas donde los permisos de ficha que se indican abajo también lo permitan. Concedido a los roles Admin y PPM Manager |
 | `reports.ppm_dashboard` | Ver el panel del portafolio PML. Concedido a todos los roles por defecto |
 
-El presupuesto y las partidas siguen los permisos de PML y la visibilidad de la iniciativa. Las facturas, su total y el indicador de costes del cronograma requieren además acceso a los costes de la iniciativa. Registrar o mover facturas también requiere permiso de gestión PML.
+Se aplican dos capas. El permiso de aplicación abre una función; el permiso de ficha indica en qué iniciativas se aplica. Una ficha que no puede leer no existe para usted.
+
+- **Gestionar** informes de estado, riesgos, tareas y el Gantt exige `ppm.manage` **y** derechos de edición sobre la ficha (`inventory.edit` o un rol de parte interesada con **card.edit**).
+- Los costes (líneas de presupuesto, partidas de coste, facturas) se escriben con `ppm.manage` **y** derechos de edición de costes sobre la ficha (`costs.edit` o un rol de parte interesada con **card.edit_costs**), y los costes deben poder verse.
+- Un usuario sin acceso a los costes (`costs.view`, o un rol de parte interesada con **card.view_costs**) no ve **ningún importe** en la iniciativa: las filas, descripciones, años, proveedores y fechas permanecen, mientras que los importes, totales, subtotales, acumulados y valores personalizados calculados o numéricos se omiten. La pestaña **Presupuesto y costes** se oculta, sin mensaje, y la cartera no muestra cifras. El informe de costes solo lista las iniciativas cuyos costes puede ver.
+- Las rutas de facturas responden «no encontrado» (404) a un usuario sin acceso a los costes.
+- Moderar (editar o eliminar) los comentarios de otras personas exige derechos de edición sobre la ficha.
+- Los botones Gestionar de la iniciativa siguen estos derechos, y el botón **Gestionar** de costes en la página de la ficha exige `ppm.manage` y derechos de edición de costes: un usuario que solo ve los costes no lo ve.
+
+| Función | Permisos necesarios |
+|---|---|
+| Ver la ficha (datos generales) | `card.view` |
+| Ver los costes de la ficha | `card.view` + `view_costs` |
+| Ver PML sin costes (informes de estado, riesgos, tareas, Gantt) | `card.view` + `ppm.view` |
+| Ver los costes de PML (presupuesto, partidas de coste, facturas, importes) | `card.view` + `view_costs` + `ppm.view` |
+| Editar los datos de la ficha | `card.view` + `card.edit` |
+| Editar PML sin costes | `card.view` + `card.edit` + `ppm.view` + `ppm.manage` |
+| Editar los costes de PML | `card.view` + `view_costs` + `edit_costs` + `ppm.view` + `ppm.manage` |
+| Generar el informe de costes | `ppm.view`; solo lista fichas con `card.view` + `view_costs` |
+| Abrir las páginas de PML | `ppm.view` |
+
+`view_costs` es `costs.view` o **card.view_costs**; `edit_costs` es `costs.edit` o **card.edit_costs**. En Aplicaciones y Componentes de TI, las partidas de coste anuales se editan con `card.view` + `view_costs` + `edit_costs`, sin permiso de PML.
+
+El rol de parte interesada **Controlador de costes** lee la iniciativa y sus informes de estado, riesgos y Gantt, y edita únicamente los costes; asigne a sus titulares el rol de aplicación **PPM Manager**. Un Responsable o un Director de proyecto TI sigue gestionando la iniciativa y sus costes. **En presupuesto** en la cronología protegida también exige visibilidad de los costes.

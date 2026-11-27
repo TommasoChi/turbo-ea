@@ -5,8 +5,6 @@ import CircularProgress from "@mui/material/CircularProgress";
 import Paper from "@mui/material/Paper";
 import Typography from "@mui/material/Typography";
 import { useTranslation } from "react-i18next";
-import { hasPermission } from "@/components/RequirePermission";
-import { useOptionalAuthUser } from "@/hooks/AuthContext";
 import { useCurrency } from "@/hooks/useCurrency";
 import type { PpmBudgetLine, PpmCostLine, PpmRollupOut } from "@/types";
 import { financialTotals } from "./derivedFinancials";
@@ -21,11 +19,12 @@ interface Props {
   costLines: PpmCostLine[];
   rollup: PpmRollupOut | null;
   onRefresh: () => void;
+  /** ppm.manage and the right to edit this initiative's costs. */
+  canEdit: boolean;
 }
 
-export default function PpmCostTab({ initiativeId, rollup, onRefresh }: Props) {
+export default function PpmCostTab({ initiativeId, rollup, onRefresh, canEdit }: Props) {
   const { t } = useTranslation(["ppm", "common"]);
-  const user = useOptionalAuthUser();
   const financials = usePpmFinancials(initiativeId);
   const format = usePpmFinancialAmount();
   const { fmt } = useCurrency();
@@ -42,7 +41,7 @@ export default function PpmCostTab({ initiativeId, rollup, onRefresh }: Props) {
   }));
   const totals = financialTotals(budgetLines, costLines, rollup);
   const changed = () => { financials.refetch(); onRefresh(); };
-  const budget = totals.budget.derived ? totals.budget.total : data?.budget_totals.amount;
+  const budget = totals.budget.derived ? totals.budget.total : data?.budget_totals?.amount;
   const actual = totals.actual.total;
 
   return <Box>
@@ -66,6 +65,6 @@ export default function PpmCostTab({ initiativeId, rollup, onRefresh }: Props) {
       <Suspense fallback={null}><PpmCostCharts costLines={costLines} budgetLines={budgetLines} /></Suspense>
     </>}
     <PpmFinanceTree key={initiativeId} data={data} rollup={rollup}
-      readOnly={!!user && !hasPermission(user.permissions, "ppm.manage")} onChanged={changed} />
+      readOnly={!canEdit} onChanged={changed} />
   </Box>;
 }

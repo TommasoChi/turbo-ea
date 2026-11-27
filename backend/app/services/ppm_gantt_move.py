@@ -80,7 +80,7 @@ async def next_sort_order(
     return 0 if highest is None else highest + 1
 
 
-async def _check_new_parent(
+async def check_new_parent(
     db: AsyncSession, initiative_id: uuid.UUID, parent_id: uuid.UUID
 ) -> None:
     """400 unless ``parent_id`` is a work package of this initiative that can
@@ -113,7 +113,7 @@ async def apply_gantt_move(db: AsyncSession, initiative_id: uuid.UUID, move: Ppm
     old_parent = item.wbs_id if isinstance(item, PpmTask) else item.parent_id
     parent_changes = old_parent != parent_id
     if parent_changes and parent_id is not None:
-        await _check_new_parent(db, initiative_id, parent_id)
+        await check_new_parent(db, initiative_id, parent_id)
 
     if isinstance(item, PpmTask):
         same_parent = PpmTask.wbs_id.is_(None) if parent_id is None else PpmTask.wbs_id == parent_id

@@ -38,10 +38,14 @@ async def report_env(db):
     # Holds costs.view and nothing else: the shape an admin creates when they
     # want someone to see money but not the EA reports suite.
     await create_role(db, key="costs_only", permissions={"costs.view": True})
+    await create_role(
+        db, key="member_costs", permissions={**MEMBER_PERMISSIONS, "costs.view": True}
+    )
     admin = await create_user(db, email="admin@test.com", role="admin")
     member = await create_user(db, email="member@test.com", role="member")
     viewer = await create_user(db, email="viewer@test.com", role="viewer")
     costs_only = await create_user(db, email="costs@test.com", role="costs_only")
+    member_costs = await create_user(db, email="membercosts@test.com", role="member_costs")
     for name, cost in (("A", 100), ("B", 200)):
         card = await create_card(
             db, card_type="Application", name=name, attributes={"costTotalAnnual": cost}
@@ -52,17 +56,25 @@ async def report_env(db):
         "member": member,
         "viewer": viewer,
         "costs_only": costs_only,
+        "member_costs": member_costs,
     }
 
 
 class TestCostReportEndpoint:
-    async def test_member_can_see_cost_report(self, client, db, report_env):
+    async def test_role_with_costs_view_can_see_cost_report(self, client, db, report_env):
+        r = await client.get(
+            "/api/v1/reports/cost?type=Application",
+            headers=auth_headers(report_env["member_costs"]),
+        )
+        assert r.status_code == 200
+        assert r.json()["total"] == 300
+
+    async def test_default_member_blocked_on_cost_report(self, client, db, report_env):
         r = await client.get(
             "/api/v1/reports/cost?type=Application",
             headers=auth_headers(report_env["member"]),
         )
-        assert r.status_code == 200
-        assert r.json()["total"] == 300
+        assert r.status_code == 403
 
     async def test_viewer_blocked_on_cost_report(self, client, db, report_env):
         r = await client.get(
@@ -73,12 +85,19 @@ class TestCostReportEndpoint:
 
 
 class TestCostTreemapEndpoint:
-    async def test_member_can_see_cost_treemap(self, client, db, report_env):
+    async def test_role_with_costs_view_can_see_cost_treemap(self, client, db, report_env):
+        r = await client.get(
+            "/api/v1/reports/cost-treemap?type=Application&cost_field=costTotalAnnual",
+            headers=auth_headers(report_env["member_costs"]),
+        )
+        assert r.status_code == 200
+
+    async def test_default_member_blocked_on_cost_treemap(self, client, db, report_env):
         r = await client.get(
             "/api/v1/reports/cost-treemap?type=Application&cost_field=costTotalAnnual",
             headers=auth_headers(report_env["member"]),
         )
-        assert r.status_code == 200
+        assert r.status_code == 403
 
     async def test_viewer_blocked_on_cost_treemap(self, client, db, report_env):
         r = await client.get(
@@ -98,12 +117,21 @@ class TestPortfolioCostAxisGate:
         )
         assert r.status_code == 403
 
-    async def test_member_can_use_cost_size_field(self, client, db, report_env):
+    async def test_default_member_blocked_when_size_field_is_cost(self, client, db, report_env):
         r = await client.get(
             "/api/v1/reports/portfolio?type=Application"
             "&size_field=costTotalAnnual"
             "&x_axis=functionalFit&y_axis=technicalFit&color_field=businessCriticality",
             headers=auth_headers(report_env["member"]),
+        )
+        assert r.status_code == 403
+
+    async def test_role_with_costs_view_can_use_cost_size_field(self, client, db, report_env):
+        r = await client.get(
+            "/api/v1/reports/portfolio?type=Application"
+            "&size_field=costTotalAnnual"
+            "&x_axis=functionalFit&y_axis=technicalFit&color_field=businessCriticality",
+            headers=auth_headers(report_env["member_costs"]),
         )
         assert r.status_code == 200
 

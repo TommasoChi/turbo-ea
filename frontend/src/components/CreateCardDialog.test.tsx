@@ -601,6 +601,28 @@ describe("CreateCardDialog", () => {
 // Per-card-type create permissions (discussion #1068)
 // ---------------------------------------------------------------------------
 
+describe("CreateCardDialog — cost fields need costs.view and costs.edit", () => {
+  it("hides a required cost field from a creator without costs.edit", () => {
+    authRef.user.permissions = { "inventory.create": true, "costs.view": true };
+    renderDialog({ initialType: "Application" });
+    expect(screen.queryByLabelText("Total Annual Cost", { exact: false })).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Hosting Model", { exact: false })).toBeInTheDocument();
+  });
+
+  it("shows it with costs.view and costs.edit", () => {
+    authRef.user.permissions = { "inventory.create": true, "costs.view": true, "costs.edit": true };
+    renderDialog({ initialType: "Application" });
+    expect(screen.getByLabelText("Total Annual Cost", { exact: false })).toBeInTheDocument();
+  });
+
+  it("hides it when the type denies View for the role", () => {
+    authRef.user.permissions = { "inventory.create": true, "costs.view": true, "costs.edit": true };
+    authRef.user.type_permissions = { Application: { "inventory.view": false, "inventory.create": true } };
+    renderDialog({ initialType: "Application" });
+    expect(screen.queryByLabelText("Total Annual Cost", { exact: false })).not.toBeInTheDocument();
+  });
+});
+
 describe("CreateCardDialog — per-card-type create permissions", () => {
   /** A member who may create everything except the named types. */
   function memberDeniedOn(...typeKeys: string[]) {

@@ -53,7 +53,9 @@ VIEWS_WIDGET = {
 @pytest.fixture
 async def env(db):
     await create_role(db, key="admin", label="Admin", permissions={"*": True})
-    await create_role(db, key="member", label="Member", permissions=MEMBER_PERMISSIONS)
+    await create_role(
+        db, key="member", label="Member", permissions={**MEMBER_PERMISSIONS, "costs.view": True}
+    )
     await create_role(db, key="viewer", label="Viewer", permissions=VIEWER_PERMISSIONS)
     await create_role(
         db,

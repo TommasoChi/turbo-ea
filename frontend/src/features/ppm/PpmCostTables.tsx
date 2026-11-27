@@ -167,10 +167,10 @@ function DerivedRows({
  * A line's amount under its category's column; one whose category is
  * neither shows it under Total, the only figure it counts towards.
  */
-function AmountCells({ amount, category }: { amount: number; category: string }) {
+function AmountCells({ amount, category }: { amount?: number; category: string }) {
   const { fmt } = useCurrency();
   const bucket = bucketFor(category);
-  const text = fmt.format(amount);
+  const text = amount === undefined ? "—" : fmt.format(amount);
   return (
     <>
       <TableCell align="right" sx={NUM_SX}>

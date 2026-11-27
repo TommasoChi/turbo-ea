@@ -43,7 +43,7 @@ paths:
 
 ### Multi-level Permission System
 
-1. **App-level Roles** (`roles` table): System-wide roles like admin, member, viewer, bpm_admin. Each role has a JSONB `permissions` field with granular capability flags. Cached with 5-minute TTL by `PermissionService`. Admin role uses `{"*": true}` wildcard.
+1. **App-level Roles** (`roles` table): System-wide roles like admin, member, viewer, bpm_admin, ppm_manager. Each role has a JSONB `permissions` field with granular capability flags. Cached with 5-minute TTL by `PermissionService`. Admin role uses `{"*": true}` wildcard.
 
 2. **Stakeholder Roles** (`stakeholder_role_definitions`): Per-card-type role definitions. Each card type can define custom roles (e.g., Application → "technical_application_owner"). Roles carry per-type permissions.
 
@@ -52,7 +52,9 @@ paths:
 4. **Effective Permissions**: For any user + card combination, the system computes the union of:
    - App-level role permissions (with app→card permission mapping from `core/permissions.py`)
    - All stakeholder role permissions the user holds on that card
-   - Result exposed via `GET /cards/{id}/effective-permissions`
+   - Result exposed via `GET /cards/{id}/my-permissions` (its `effective` block carries `can_view_costs`, `can_view_licenses` and `can_edit_costs`)
+
+5. **Two layers for a function that works on cards: the app permission opens the function, the card permission says on which cards.** Both must hold: `ppm.manage` writes an Initiative only with `card.edit` on it (`can_edit_costs` for its budget, cost items and invoices), and a stakeholder `card.edit_costs` opens no PPM write without `ppm.manage`. A new module write gates on both, never on the app permission alone (`_require_manage` / `_require_cost_write` in `ppm.py` are the pattern).
 
 ### Permission Key Registry (`core/permissions.py`)
 
@@ -60,7 +62,7 @@ Single source of truth for all valid permission keys. Two categories:
 
 **App-level permissions** (30 groups, 96 keys; five of them — `inventory.view` / `create` / `edit` / `archive` / `delete` — can be overridden per card type and role through `card_types.role_permissions`, see *A card read has one scope* above): `inventory.*`, `relations.*`, `stakeholders.*`, `comments.*`, `documents.*`, `diagrams.*`, `bpm.*`, `ppm.*`, `reports.*`, `surveys.*`, `soaw.*`, `adr.*`, `tags.*`, `bookmarks.*`, `saved_reports.*`, `eol.*`, `web_portals.*`, `notifications.*`, `servicenow.*`, `turbolens.*`, `compliance.*` (view + manage for the GRC Compliance scanner — the CVE half of the old "Security & Compliance" tab was removed), `risks.*` (view + manage for the EA Risk Register), `grc.*`, `costs.*`, `ai.*`, `archimatediagrams.*`, `boRelationship.*`, `licenses.*`, `users.*`, `admin.*` (includes `admin.export_workspace` / `admin.import_workspace` for the Workspace Transfer tool)
 
-**Card-level permissions** (16 keys): `card.view`, `card.edit`, `card.archive`, `card.delete`, `card.approval_status`, `card.manage_stakeholders`, `card.manage_relations`, `card.manage_documents`, `card.manage_comments`, `card.create_comments`, `card.bpm_edit`, `card.bpm_manage_drafts`, `card.bpm_withdraw`, `card.bpm_approve`, `card.manage_adr_links`, `card.manage_diagram_links`
+**Card-level permissions** (19 keys): `card.view`, `card.view_costs`, `card.view_licenses`, `card.edit`, `card.edit_costs`, `card.archive`, `card.delete`, `card.approval_status`, `card.manage_stakeholders`, `card.manage_relations`, `card.manage_documents`, `card.manage_comments`, `card.create_comments`, `card.bpm_edit`, `card.bpm_manage_drafts`, `card.bpm_withdraw`, `card.bpm_approve`, `card.manage_adr_links`, `card.manage_diagram_links`. `card.view_costs` / `card.view_licenses` / `card.edit_costs` give a stakeholder on that card what `costs.view` / `licenses.view` / `costs.edit` give landscape-wide (`APP_TO_CARD_PERMISSION_MAP`).
 
 ### Permission Checking (Backend)
 ```python
@@ -82,9 +84,10 @@ has_access = await PermissionService.check_permission(db, user, "bpm.edit")
 | Role | Key | Wildcard | Notable Restrictions |
 |------|-----|----------|---------------------|
 | Admin | `admin` | `{"*": true}` | Full access to everything |
-| BPM Admin | `bpm_admin` | No | All BPM permissions + full inventory, no admin.* |
-| Member | `member` | No | Full inventory + BPM edit (no approve), no admin.* |
+| BPM Admin | `bpm_admin` | No | All BPM permissions + full inventory, no admin.*, no `ppm.manage` / `costs.view` / `stakeholders.manage` |
+| Member | `member` | No | Full inventory + BPM edit (no approve), no admin.*, no `ppm.manage` / `costs.view` / `stakeholders.manage` |
 | Viewer | `viewer` | No | View-only across all domains, can respond to surveys |
+| PPM Manager | `ppm_manager` | No | Viewer + `ppm.manage`, not a system role; what it may do on an Initiative comes from the stakeholder role there |
 
 ### Role Impersonation
 

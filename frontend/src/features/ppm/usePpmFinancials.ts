@@ -13,9 +13,10 @@ function useInitiativeQuery<T extends { initiative_id: string }>(
     initiativeId ? "/ppm/initiatives/" + encodeURIComponent(initiativeId) + "/" + resource : null,
     { keepPreviousData: false, refetchKey },
   );
+  // The API answers with the id in lower case, whatever case the address spelled it in.
   return {
     ...query,
-    data: !query.error && query.data?.initiative_id === initiativeId ? query.data : undefined,
+    data: !query.error && query.data?.initiative_id.toLowerCase() === initiativeId?.toLowerCase() ? query.data : undefined,
   };
 }
 

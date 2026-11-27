@@ -2046,6 +2046,56 @@ describe("InventoryPage mass edit attributes", () => {
     expect(within(listbox).getByRole("option", { name: /^seats$/i })).toBeInTheDocument();
   });
 
+  /** A member holding the given cost permissions on top of the editing basics. */
+  function mockMember(...costPerms: string[]) {
+    vi.mocked(useAuth).mockReturnValue({
+      user: {
+        id: "u1",
+        email: "m@test.com",
+        display_name: "Member",
+        role: "member",
+        permissions: Object.fromEntries(
+          ["inventory.view", "inventory.edit", "relations.manage", ...costPerms].map((p) => [p, true]),
+        ),
+      },
+      loading: false,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any);
+  }
+
+  it("keeps a cost column viewable but not editable without costs.edit", async () => {
+    mockMember("costs.view");
+    renderInventory();
+    await userEvent.click(screen.getByTestId("select-application"));
+    await waitFor(() => expect(col("attr_licenseCost")).toBeDefined());
+    await userEvent.click(await screen.findByRole("button", { name: /grid edit/i }));
+    await waitFor(() => expect(col("attr_seats")!.editable).toBe(true));
+    expect(col("attr_licenseCost")!.editable).toBe(false);
+  });
+
+  it("makes the cost column editable with costs.edit", async () => {
+    mockMember("costs.view", "costs.edit");
+    renderInventory();
+    await userEvent.click(screen.getByTestId("select-application"));
+    await waitFor(() => expect(col("attr_licenseCost")).toBeDefined());
+    await userEvent.click(await screen.findByRole("button", { name: /grid edit/i }));
+    await waitFor(() => expect(col("attr_licenseCost")!.editable).toBe(true));
+  });
+
+  it("does not offer a cost field to mass edit without costs.edit", async () => {
+    mockMember("costs.view");
+    renderInventory();
+    await waitFor(() => expect(screen.getByTestId("ag-grid")).toBeInTheDocument());
+    await userEvent.click(screen.getByTestId("select-application"));
+    await userEvent.click(screen.getByTestId("select-all-rows"));
+    await userEvent.click(await screen.findByRole("button", { name: /mass edit/i }));
+    const dialog = await screen.findByRole("dialog");
+    await userEvent.click(within(dialog).getAllByRole("combobox")[0]);
+    const listbox = await screen.findByRole("listbox");
+    expect(within(listbox).getByRole("option", { name: /^seats$/i })).toBeInTheDocument();
+    expect(within(listbox).queryByRole("option", { name: /license cost/i })).toBeNull();
+  });
+
   it("gives the multi-select grid column a real cell editor", async () => {
     renderInventory();
     await userEvent.click(screen.getByTestId("select-application"));

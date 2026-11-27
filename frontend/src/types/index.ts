@@ -96,6 +96,7 @@ export interface CardEffectivePermissions {
     can_manage_adr_links: boolean;
     can_manage_diagram_links: boolean;
     can_view_costs: boolean;
+    can_edit_costs: boolean;
   };
 }
 
@@ -2646,8 +2647,8 @@ export interface PpmCostLine {
   initiative_id: string;
   description: string;
   category: "capex" | "opex";
-  planned: number;
-  actual: number;
+  planned?: number;
+  actual?: number;
   date: string | null;
   created_at: string;
   updated_at: string;
@@ -2659,7 +2660,7 @@ export interface PpmBudgetLine {
   fiscal_year: number;
   category: "capex" | "opex";
   description: string | null;
-  amount: number;
+  amount?: number;
   created_at: string;
   updated_at: string;
 }
@@ -2704,8 +2705,8 @@ export interface PmlRowFields {
 }
 
 export interface PpmFinancialTotals {
-  amount: string;
-  total_cost_items: string;
+  amount?: string;
+  total_cost_items?: string;
   remaining_budget?: string;
   total_invoiced?: string | null;
   remaining_to_invoice?: string | null;
@@ -2725,8 +2726,8 @@ export interface PpmFinancialCost extends PmlRowFields {
   budget_line_id: string | null;
   description: string;
   category: PpmCostLine["category"];
-  planned: string;
-  actual: string;
+  planned?: string;
+  actual?: string;
   date: string | null;
   total_invoiced?: string | null;
   remaining_to_invoice?: string | null;
@@ -2760,7 +2761,8 @@ export interface PpmFinancials {
   initiative_id: string;
   budget_lines: PpmFinancialBudget[];
   budget_subtotals: PpmFinancialSubtotal[];
-  budget_totals: PpmFinancialTotals;
+  /** Absent when the amounts are withheld from the reader. */
+  budget_totals?: PpmFinancialTotals | null;
   cost_items: PpmFinancialCost[];
   invoice_access: boolean;
   invoices?: PpmInvoice[] | null;
@@ -2822,12 +2824,12 @@ export interface PpmGanttItem {
   end_date: string | null;
   actual_start_date?: string | null;
   actual_end_date?: string | null;
-  cost_budget: number | null;
-  cost_actual: number | null;
-  capex_planned: number;
-  capex_actual: number;
-  opex_planned: number;
-  opex_actual: number;
+  cost_budget?: number | null;
+  cost_actual?: number | null;
+  capex_planned?: number;
+  capex_actual?: number;
+  opex_planned?: number;
+  opex_actual?: number;
   group_id: string | null;
   group_name: string | null;
   /** Under a `subtype:<key>` grouping, the initiative that names its group (header only). */
@@ -2872,17 +2874,19 @@ export interface PpmRollupYear {
  */
 export interface PpmRollupOut {
   descendant_count: number;
-  capex_planned: number;
-  capex_actual: number;
-  opex_planned: number;
-  opex_actual: number;
-  total_planned: number;
-  total_actual: number;
+  /** The amounts are absent when withheld from the reader. */
+  capex_planned?: number;
+  capex_actual?: number;
+  opex_planned?: number;
+  opex_actual?: number;
+  total_planned?: number;
+  total_actual?: number;
   start_date: string | null;
   end_date: string | null;
-  has_budget_lines: boolean;
-  has_cost_lines: boolean;
-  by_year: PpmRollupYear[];
+  /** Absent with the amounts when they are withheld from the reader. */
+  has_budget_lines?: boolean;
+  has_cost_lines?: boolean;
+  by_year?: PpmRollupYear[];
 }
 
 export type PpmHealthValue = "onTrack" | "atRisk" | "offTrack";

@@ -137,7 +137,9 @@ from app.services.cost_field_filter import (
     cost_field_keys_from_card_schema,
     keep_stored_cost_values,
 )
+from app.services.cost_redaction import attributes_for_new_card
 from app.services.cost_redaction import card_cost_redaction_map as _cost_redaction_map
+from app.services.cost_redaction import card_cost_write_guard_map as _cost_write_guard_map
 from app.services.data_quality import calc_data_quality, calc_data_quality_breakdown
 from app.services.document_event_scope import document_event_read_filters
 from app.services.event_bus import event_bus
@@ -735,6 +737,7 @@ async def create_card(
     if body.parent_id:
         # A parent hidden from the caller does not exist for them.
         await require_card_readable(db, user, uuid.UUID(body.parent_id), mode="module")
+    card_type = await db.scalar(select(CardType).where(CardType.key == body.type))
     card = await card_write_service.create_card(
         db,
         card_write_service.WriteActor.from_user(user),
@@ -745,7 +748,9 @@ async def create_card(
         parent_id=uuid.UUID(body.parent_id) if body.parent_id else None,
         parent_label=body.parent_label,
         lifecycle=body.lifecycle,
-        attributes=body.attributes,
+        attributes=await attributes_for_new_card(
+            db, user, card_type, body.subtype, body.attributes
+        ),
         external_id=body.external_id,
         alias=body.alias,
         strict_attributes=body.strict_attributes,
@@ -989,6 +994,9 @@ async def bulk_create_cards(
             )
             row_attributes = await validate_timeline_attributes(
                 db, r.type, row_attributes, mapping=timeline_mapping
+            )
+            row_attributes = await attributes_for_new_card(
+                db, user, await _bulk_type(r.type), r.subtype, row_attributes
             )
             await _validate_url_attributes(db, r.type, r.attributes or {})
             await _validate_percentage_attributes(db, r.type, r.attributes or {})
@@ -1946,14 +1954,14 @@ async def bulk_update(
             await _validate_cost_attributes(db, card.type, updates["attributes"])
             if strict_attrs:
                 await _validate_strict_attributes(db, card.type, updates["attributes"])
-    # Preserve cost-typed keys for any card the user may not see costs on —
+    # Preserve cost-typed keys for any card the user may not edit costs on —
     # PATCH does a full replace on `attributes`, so we merge the existing
     # cost values back into the incoming payload. Without this, a bulk edit
-    # would silently wipe cost values from cards the user couldn't see.
-    # `is not None`, as on the single PATCH: an empty `attributes` replaces the
-    # dict too, and must not wipe the costs either.
+    # would silently wipe cost values from cards the user couldn't edit.
+    # Keyed on presence, as on the single PATCH: an empty or null `attributes`
+    # replaces the dict too, and must not wipe the costs either.
     incoming_attr_redact = (
-        await _cost_redaction_map(db, user, sheets) if updates.get("attributes") is not None else {}
+        await _cost_write_guard_map(db, user, sheets) if "attributes" in updates else {}
     )
 
     # Prefetch schemas once per distinct type for the per-card required-field
@@ -2067,10 +2075,9 @@ async def bulk_update(
             if field == "parent_id" and value is not None:
                 value = uuid.UUID(value)
             elif field == "attributes":
-                if value is not None:
-                    strip = incoming_attr_redact.get(card.id)
-                    if strip:
-                        value = keep_stored_cost_values(card.attributes, value, strip)
+                strip = incoming_attr_redact.get(card.id)
+                if strip:
+                    value = keep_stored_cost_values(card.attributes, value or {}, strip)
                 locked = locked_by_type.get(card.type)
                 if locked:
                     value = field_gate.checked_attributes(
@@ -2735,22 +2742,22 @@ async def update_card(
         # A parent hidden from the caller does not exist for them.
         await require_card_readable(db, user, uuid.UUID(str(new_parent)), mode="module")
 
-    # Preserve cost-typed keys when the user lacks cost access on this card.
+    # Preserve cost-typed keys when the user may not edit costs on this card.
     # PATCH does a full replace on `attributes`, so simply dropping the
     # forbidden keys from the incoming payload would wipe whatever the card
     # already had. Merge the existing values back so the user's update can
     # only touch the non-cost keys they were allowed to see. This is
     # permission shaping of the incoming payload, so it stays route-side —
     # the write service applies the merged result.
-    if "attributes" in updates and updates["attributes"] is not None:
-        if not await PermissionService.can_view_costs(db, user, card.id):
+    if "attributes" in updates:
+        if not await PermissionService.can_edit_costs(db, user, card.id):
             type_schema_row = await db.execute(
                 select(CardType.fields_schema).where(CardType.key == card.type)
             )
             cost_keys = cost_field_keys_from_card_schema(type_schema_row.scalar_one_or_none())
             if cost_keys:
                 updates["attributes"] = keep_stored_cost_values(
-                    card.attributes, updates["attributes"], cost_keys
+                    card.attributes, updates["attributes"] or {}, cost_keys
                 )
 
     pending_notifications = []

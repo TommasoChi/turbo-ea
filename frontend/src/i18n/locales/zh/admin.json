@@ -503,6 +503,7 @@
   "metamodel.stakeholderPanel.permissions": "权限",
   "metamodel.stakeholderPanel.noPermissions": "未定义权限。",
   "metamodel.stakeholderPanel.viewLicensesDescription": "无需 licenses.view 权限即可查看此卡片的许可证",
+  "metamodel.stakeholderPanel.editCostsDescription": "通过干系人角色编辑此卡片的成本，无需 costs.edit 权限",
   "metamodel.stakeholderPanel.selfAssignableHint": "任何能查看卡片的人都可以让自己成为该卡片的观察者，因此此角色所允许的一切操作对他们所有人都是开放的。",
   "metamodel.stakeholderPanel.newRole": "新建利益相关者角色",
   "metamodel.stakeholderPanel.keyLabel": "键",

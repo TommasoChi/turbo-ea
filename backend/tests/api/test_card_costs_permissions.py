@@ -46,7 +46,12 @@ async def env(db):
             db,
             key=key,
             label=key,
-            permissions={"card.view": True, "card.edit": edit, "card.view_costs": edit},
+            permissions={
+                "card.view": True,
+                "card.edit": edit,
+                "card.view_costs": edit,
+                "card.edit_costs": edit,
+            },
         )
     card = await create_card(db, card_type="Application", name="ERP", user_id=users["admin"].id)
     db.add(Stakeholder(card_id=card.id, user_id=users["resp"].id, role="responsible"))
@@ -130,13 +135,13 @@ async def test_history_redacts_attribute_diff(client, db, env):
     assert r.json()[0]["data"]["changes"]["attributes"]["new"]["costTotalAnnual"] == 22
 
 
-async def _member(db, env, email="m@cp.com"):
-    await create_role(db, key="member", label="Member", permissions=MEMBER_PERMISSIONS)
+async def _member(db, env, email="m@cp.com", **extra):
+    await create_role(db, key="member", label="Member", permissions={**MEMBER_PERMISSIONS, **extra})
     return await create_user(db, email=email, role="member")
 
 
 async def test_default_member_cannot_edit_costs_without_stakeholder_role(client, db, env):
-    env["member"] = await _member(db, env)
+    env["member"] = await _member(db, env, **{"costs.view": True})
     assert (await put(client, env, "member")).status_code == 403
     r = await client.get(url(env), headers=auth_headers(env["member"]))
     assert r.status_code == 200 and r.json()["can_edit"] is False
@@ -344,5 +349,31 @@ async def test_put_with_provider_by_a_caller_without_edit_right_is_403(client, e
         url(env, f"/{CUR}/items/lic"),
         json={"amount": 1, "provider_id": str(env["card"].id)},
         headers=auth_headers(env["obs"]),
+    )
+    assert r.status_code == 403
+
+
+async def test_a_view_deny_on_the_type_removes_the_app_level_costs_edit(client, db, env):
+    from sqlalchemy import select
+
+    from app.models.card_type import CardType
+
+    await create_role(
+        db, key="costly", label="Costly", permissions={"costs.edit": True, "costs.view": True}
+    )
+    await create_stakeholder_role_def(
+        db,
+        key="reader",
+        label="Reader",
+        permissions={"card.view": True, "card.view_costs": True},
+    )
+    user = await create_user(db, email="costly@cp.com", role="costly")
+    db.add(Stakeholder(card_id=env["card"].id, user_id=user.id, role="reader"))
+    ct = (await db.execute(select(CardType).where(CardType.key == "Application"))).scalar_one()
+    ct.role_permissions = {"costly": {"inventory.view": False}}
+    await db.flush()
+    PermissionService.invalidate_type_permission_cache()
+    r = await client.put(
+        url(env, f"/{CUR}/items/lic"), json={"amount": 1}, headers=auth_headers(user)
     )
     assert r.status_code == 403

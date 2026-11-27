@@ -182,6 +182,8 @@ class TestPpmGantt:
         assert item["end_date"] == "2026-12-31"
         assert item["group_id"] is None
         assert item["group_name"] is None
+        for key in ("capex_planned", "capex_actual", "opex_planned", "opex_actual"):
+            assert item[key] == 0
 
     async def test_gantt_with_group_by(self, client, db, ppm_env):
         """When group_by is specified, initiatives should include group info."""

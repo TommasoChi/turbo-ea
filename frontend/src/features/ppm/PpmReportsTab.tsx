@@ -16,9 +16,11 @@ interface Props {
   initiativeId: string;
   reports: PpmStatusReport[];
   onRefresh: () => void;
+  /** ppm.manage and edit on the initiative. */
+  canEdit: boolean;
 }
 
-export default function PpmReportsTab({ initiativeId, reports, onRefresh }: Props) {
+export default function PpmReportsTab({ initiativeId, reports, onRefresh, canEdit }: Props) {
   const { t } = useTranslation("ppm");
   const [reportDialog, setReportDialog] = useState<{
     open: boolean;
@@ -40,16 +42,18 @@ export default function PpmReportsTab({ initiativeId, reports, onRefresh }: Prop
 
   return (
     <Box>
-      <Box display="flex" justifyContent="flex-end" mb={2}>
-        <Button
-          variant="contained"
-          size="small"
-          startIcon={<MaterialSymbol icon="add" size={18} />}
-          onClick={() => setReportDialog({ open: true })}
-        >
-          {t("addReport")}
-        </Button>
-      </Box>
+      {canEdit && (
+        <Box display="flex" justifyContent="flex-end" mb={2}>
+          <Button
+            variant="contained"
+            size="small"
+            startIcon={<MaterialSymbol icon="add" size={18} />}
+            onClick={() => setReportDialog({ open: true })}
+          >
+            {t("addReport")}
+          </Button>
+        </Box>
+      )}
 
       {deleteError && (
         // Stryker disable next-line ObjectLiteral: spacing is presentation
@@ -68,28 +72,30 @@ export default function PpmReportsTab({ initiativeId, reports, onRefresh }: Prop
             key={report.id}
             report={report}
             actions={
-              <>
-                <IconButton
-                  size="small"
-                  aria-label={t("editReport")}
-                  onClick={() => setReportDialog({ open: true, report })}
-                >
-                  <MaterialSymbol icon="edit" size={18} />
-                </IconButton>
-                <IconButton
-                  size="small"
-                  aria-label={t("deleteReport")}
-                  onClick={() => handleDelete(report.id)}
-                >
-                  <MaterialSymbol icon="delete" size={18} />
-                </IconButton>
-              </>
+              canEdit ? (
+                <>
+                  <IconButton
+                    size="small"
+                    aria-label={t("editReport")}
+                    onClick={() => setReportDialog({ open: true, report })}
+                  >
+                    <MaterialSymbol icon="edit" size={18} />
+                  </IconButton>
+                  <IconButton
+                    size="small"
+                    aria-label={t("deleteReport")}
+                    onClick={() => handleDelete(report.id)}
+                  >
+                    <MaterialSymbol icon="delete" size={18} />
+                  </IconButton>
+                </>
+              ) : undefined
             }
           />
         ))
       )}
 
-      {reportDialog.open && (
+      {canEdit && reportDialog.open && (
         <StatusReportDialog
           initiativeId={initiativeId}
           report={reportDialog.report}

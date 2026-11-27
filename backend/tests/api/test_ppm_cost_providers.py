@@ -338,7 +338,9 @@ async def test_provider_formula_context_is_redacted_for_hidden_parent(client, db
         assert rows[0]["calculated_values"]["provider_match"] == "match"
 
     await create_role(
-        db, key="pml_hidden_provider", permissions={"inventory.view": True, "ppm.view": True}
+        db,
+        key="pml_hidden_provider",
+        permissions={"inventory.view": True, "ppm.view": True, "costs.view": True},
     )
     env["provider_type"].role_permissions = {"pml_hidden_provider": {"inventory.view": False}}
     viewer = await create_user(
@@ -446,7 +448,13 @@ async def test_editor_cannot_replace_invisible_provider_child(client, db, provid
     await create_role(
         db,
         key="pml_provider_editor",
-        permissions={"inventory.view": True, "ppm.view": True, "ppm.manage": True},
+        permissions={
+            "inventory.view": True,
+            "ppm.view": True,
+            "ppm.manage": True,
+            "costs.view": True,
+            "costs.edit": True,
+        },
     )
     env["provider_type"].role_permissions = {"pml_provider_editor": {"inventory.view": False}}
     editor = await create_user(db, role="pml_provider_editor", email="provider-editor@example.test")

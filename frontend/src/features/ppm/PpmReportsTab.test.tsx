@@ -35,7 +35,7 @@ function report(overrides: Partial<PpmStatusReport> = {}): PpmStatusReport {
 }
 
 function renderTab(reports: PpmStatusReport[]) {
-  render(<PpmReportsTab initiativeId="i1" reports={reports} onRefresh={vi.fn()} />);
+  render(<PpmReportsTab initiativeId="i1" reports={reports} onRefresh={vi.fn()} canEdit />);
 }
 
 describe("PpmReportsTab — RAG dots", () => {
@@ -53,5 +53,22 @@ describe("PpmReportsTab — RAG dots", () => {
     renderTab([report({ schedule_health: "" })]);
     expect(screen.getByTitle("No Report")).toHaveStyle({ backgroundColor: STATUS_COLORS.neutral });
     expect(screen.getByTitle("On Track")).toHaveStyle({ backgroundColor: RAG_COLORS.green });
+  });
+});
+
+describe("PpmReportsTab — write access", () => {
+  it("offers adding, editing and deleting a report with canEdit", () => {
+    renderTab([report()]);
+    expect(screen.getByRole("button", { name: /Add Report$/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Edit Report" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Delete Report" })).toBeInTheDocument();
+  });
+
+  it("is read-only without canEdit and still lists the reports", () => {
+    render(<PpmReportsTab initiativeId="i1" reports={[report()]} onRefresh={vi.fn()} canEdit={false} />);
+    expect(screen.getByTitle("On Track")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Add Report$/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Edit Report" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Delete Report" })).not.toBeInTheDocument();
   });
 });

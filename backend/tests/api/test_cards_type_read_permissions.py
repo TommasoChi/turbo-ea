@@ -18,6 +18,7 @@ from sqlalchemy import select
 from app.core.permissions import MEMBER_PERMISSIONS, VIEWER_PERMISSIONS
 from app.models.architecture_decision_card import ArchitectureDecisionCard
 from app.models.card_type import CardType
+from app.models.role import Role
 from app.models.stakeholder import Stakeholder
 from app.models.stakeholder_role_definition import StakeholderRoleDefinition
 from app.models.turbolens import TurboLensVendorAnalysis
@@ -512,6 +513,12 @@ class TestCostsUnderAViewDeny:
         assert listed == {"costBudget": 5000, "note": "funded"}
 
     async def test_without_the_deny_the_app_grant_shows_them(self, client, db, costed):
+        # Member no longer holds `costs.view` by default: grant it, so the control is
+        # "the app grant shows them once the deny is gone".
+        role = (await db.execute(select(Role).where(Role.key == "member"))).scalar_one()
+        role.permissions = {**MEMBER_PERMISSIONS, "costs.view": True}
+        await db.flush()
+        PermissionService.invalidate_role_cache()
         await set_overrides(db, "Initiative", {})
         detail, flag, listed = await self._read(client, costed)
         assert flag is True
