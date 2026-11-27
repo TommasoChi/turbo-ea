@@ -37,14 +37,13 @@ export default function PpmManageDialog({ card, tab, onClose, onChanged }: Props
     tab === "risks" ? "/ppm/initiatives/" + encodeURIComponent(card.id) + "/risks" : null,
     { keepPreviousData: false },
   );
-  const title =
-    tab === "cost"
-      ? t("budgetAndCosts")
-      : tab === "reports"
-        ? t("statusReports")
-        : tab === "risks"
-          ? t("riskManagement")
-          : t("gantt");
+  const titles: Record<Props["tab"], string> = {
+    cost: t("budgetAndCosts"),
+    gantt: t("gantt"),
+    reports: t("statusReports"),
+    risks: t("riskManagement"),
+  };
+  const title = titles[tab];
 
   return (
     <Dialog

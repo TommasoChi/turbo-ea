@@ -54,6 +54,22 @@ describe("PpmManageDialog", () => {
     render(<PpmManageDialog card={CARD} tab="risks" onClose={vi.fn()} onChanged={vi.fn()} />);
     expect(await screen.findByTestId("risks")).toHaveTextContent("i1|r1,r2|true|ERP");
     expect(screen.getByRole("heading", { name: "Risk Management" })).toBeInTheDocument();
+    expect(mockApi.callsOf("get", "/ppm/initiatives/i1/reports")).toHaveLength(0);
+    expect(mockApi.callsOf("get", "/ppm/initiatives/i1/rollup")).toHaveLength(0);
+  });
+
+  it("a failed risks request shows the error and no risk tab", async () => {
+    mockApi.fail("get", "/ppm/initiatives/i1/risks", 500);
+    render(<PpmManageDialog card={CARD} tab="risks" onClose={vi.fn()} onChanged={vi.fn()} />);
+    expect(await screen.findByRole("alert")).toHaveTextContent("GET /ppm/initiatives/i1/risks failed");
+    expect(screen.queryByTestId("risks")).not.toBeInTheDocument();
+  });
+
+  it("while the risks load it shows a spinner and no risk tab", async () => {
+    mockApi.on("get", "/ppm/initiatives/i1/risks", () => new Promise(() => {}));
+    render(<PpmManageDialog card={CARD} tab="risks" onClose={vi.fn()} onChanged={vi.fn()} />);
+    expect(await screen.findByRole("progressbar")).toBeInTheDocument();
+    expect(screen.queryByTestId("risks")).not.toBeInTheDocument();
   });
 
   it("refreshing a risk refetches and calls onChanged", async () => {
