@@ -75,7 +75,8 @@ def _write(conn, statement, row_id, permissions: dict) -> None:
 
 def upgrade() -> None:
     conn = op.get_bind()
-    for row in conn.execute(text("SELECT id, permissions FROM stakeholder_role_definitions")):
+    rows = conn.execute(text("SELECT id, permissions FROM stakeholder_role_definitions")).fetchall()
+    for row in rows:
         updated = plan_stakeholder_permissions(row.permissions)
         if updated is not None:
             _write(conn, _UPDATE_STAKEHOLDER, row.id, updated)

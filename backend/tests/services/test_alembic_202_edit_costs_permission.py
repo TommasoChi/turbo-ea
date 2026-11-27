@@ -15,7 +15,11 @@ from alembic.migration import MigrationContext
 from alembic.operations import Operations
 from sqlalchemy import select
 
-from app.core.permissions import EDIT_COSTS_CARD_PERMISSION
+from app.core.permissions import (
+    DEFAULT_CARD_PERMISSIONS_BY_ROLE,
+    EDIT_COSTS_CARD_PERMISSION,
+    with_legacy_edit_cost_grant,
+)
 from app.models.role import Role
 from app.models.stakeholder_role_definition import StakeholderRoleDefinition
 from tests.conftest import create_card_type
@@ -187,3 +191,38 @@ async def test_upgrade_rewrites_member_and_stakeholders_only_and_is_idempotent(d
         )
     ).scalar_one()
     assert stakeholder.permissions == {"card.edit": True, "card.edit_costs": True}
+
+    await _run(db, mig.downgrade)
+    db.expire_all()
+    stakeholder = (
+        await db.execute(
+            select(StakeholderRoleDefinition).where(StakeholderRoleDefinition.id == definition_id)
+        )
+    ).scalar_one()
+    assert stakeholder.permissions == {"card.edit": True}
+    for key, permissions in snapshot.items():
+        assert (await _role(db, key)).permissions == permissions
+
+
+@pytest.mark.parametrize(
+    "stored",
+    [
+        {},
+        {"card.edit": True},
+        {"card.edit": False},
+        {"card.edit": True, "card.edit_costs": False},
+        {"card.edit": False, "card.edit_costs": True},
+    ],
+)
+def test_the_importer_applies_the_same_rule(stored):
+    # An upgraded install and an older bundle imported into a new one must agree.
+    planned = mig.plan_stakeholder_permissions(stored)
+    assert with_legacy_edit_cost_grant("any", stored) == (stored if planned is None else planned)
+
+
+def test_the_seed_defaults_are_what_the_migration_writes():
+    for role, perms in DEFAULT_CARD_PERMISSIONS_BY_ROLE.items():
+        if role == "costController":  # the role post-dates migration 202
+            continue
+        without = {k: v for k, v in perms.items() if k != "card.edit_costs"}
+        assert mig.plan_stakeholder_permissions(without) == perms, role
