@@ -119,6 +119,9 @@ La pestaña **Roles** permite gestionar los roles a nivel de aplicación. Cada r
 | **BPM Admin** | Permisos completos de BPM más acceso al inventario, sin configuración de administración |
 | **Miembro** | Crear, editar y gestionar fichas, relaciones y comentarios. Sin acceso de administración |
 | **Visor** | Acceso de solo lectura en todas las áreas |
+| **PPM Manager** | Los derechos de solo lectura del Visor más `ppm.manage`. El perfil de los jefes de proyecto y los controladores de costes: lo que pueden hacer en una ficha procede de su rol de parte interesada en ella |
+
+**Miembro** y **BPM Admin** no tienen `ppm.manage` ni `costs.view` (conservan `ppm.view`), en las instalaciones nuevas y, tras la actualización, en las existentes. Los roles personalizados no cambian. Un jefe de proyecto que tenía un rol de Miembro necesita el rol **PPM Manager** para seguir gestionando iniciativas, y un usuario que necesite el informe de costes requiere `costs.view` o un rol de parte interesada que muestre los costes. Ningún rol predeterminado tiene `costs.edit`; la edición de costes procede de un rol de parte interesada con **card.edit_costs** (véase [Metamodelo](metamodel.md#stakeholder-roles)).
 
 Se pueden crear roles personalizados con control granular de permisos sobre inventario, relaciones, partes interesadas, comentarios, documentos, diagramas, BPM, informes y más. El grupo BPM incluye un permiso de solo lectura, `bpm.value_chain`, para las páginas [Cadena de valor y mapas de flujo de valor](../guide/value-chain.md).
 

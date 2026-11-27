@@ -119,6 +119,9 @@ Fanebladet **Roller** giver mulighed for at administrere applikationsroller. Hve
 | **BPM Admin** | Alle BPM-tilladelser plus lageradgang, ingen admin-indstillinger |
 | **Member** | Opret, rediger og administrer kort, relationer og kommentarer. Ingen admin-adgang |
 | **Viewer** | Skrivebeskyttet adgang på tværs af alle områder |
+| **PPM Manager** | Viewerens skrivebeskyttede rettigheder plus `ppm.manage`. Profilen for projektledere og omkostningscontrollere: Hvad de må på et kort, kommer fra deres interessentrolle på det |
+
+**Member** og **BPM Admin** har hverken `ppm.manage` eller `costs.view` (de beholder `ppm.view`), på nye installationer og efter opgraderingen på eksisterende. Brugerdefinerede roller ændres ikke. En projektleder, der havde en Member-rolle, har brug for rollen **PPM Manager** for fortsat at administrere initiativer, og en bruger, der har brug for omkostningsrapporten, skal have `costs.view` eller en interessentrolle, der viser omkostninger. Ingen standardrolle har `costs.edit`; redigering af omkostninger kommer fra en interessentrolle med **card.edit_costs** (se [Metamodel](metamodel.md#stakeholder-roles)).
 
 Brugerdefinerede roller kan oprettes med granulær tilladelseskontrol over lager, relationer, interessenter, kommentarer, dokumenter, diagrammer, BPM, rapporter og mere. BPM-gruppen indeholder en skrivebeskyttet tilladelse, `bpm.value_chain`, til siderne [Værdikæde og værdistrømskort](../guide/value-chain.md).
 

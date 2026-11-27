@@ -519,6 +519,7 @@
   "metamodel.stakeholderPanel.permissions": "Разрешения",
   "metamodel.stakeholderPanel.noPermissions": "Разрешения не определены.",
   "metamodel.stakeholderPanel.viewLicensesDescription": "Просматривать лицензии этой карточки без разрешения licenses.view",
+  "metamodel.stakeholderPanel.editCostsDescription": "Редактировать стоимость этой карточки через роль стейкхолдера без разрешения costs.edit",
   "metamodel.stakeholderPanel.selfAssignableHint": "Любой, кто может просматривать карточку, может сделать себя её наблюдателем, поэтому всё, что разрешает эта роль, доступно им всем.",
   "metamodel.stakeholderPanel.newRole": "Новая роль стейкхолдера",
   "metamodel.stakeholderPanel.keyLabel": "Ключ",

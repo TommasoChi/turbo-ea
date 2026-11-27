@@ -119,6 +119,9 @@ Der **Rollen**-Tab ermöglicht die Verwaltung anwendungsweiter Rollen. Jede Roll
 | **BPM-Admin** | Vollständige BPM-Berechtigungen plus Inventarzugriff, keine Administrationseinstellungen |
 | **Mitglied** | Karten, Beziehungen und Kommentare erstellen, bearbeiten und verwalten. Kein Administratorzugriff |
 | **Betrachter** | Schreibgeschützter Zugriff über alle Bereiche |
+| **PPM Manager** | Die schreibgeschützten Rechte des Betrachters plus `ppm.manage`. Das Profil von Projektleitern und Kostencontrollern: Was sie auf einer Karte tun dürfen, ergibt sich aus ihrer Stakeholder-Rolle auf dieser Karte |
+
+**Mitglied** und **BPM-Admin** besitzen weder `ppm.manage` noch `costs.view` (sie behalten `ppm.view`), bei Neuinstallationen und nach dem Upgrade auch bei bestehenden. Benutzerdefinierte Rollen bleiben unverändert. Ein Projektleiter, der eine Mitglied-Rolle hatte, benötigt die Rolle **PPM Manager**, um weiterhin Initiativen zu verwalten, und ein Benutzer, der den Kostenbericht braucht, benötigt `costs.view` oder eine Stakeholder-Rolle, die Kosten anzeigt. Keine Standardrolle besitzt `costs.edit`; das Bearbeiten von Kosten kommt aus einer Stakeholder-Rolle mit **card.edit_costs** (siehe [Metamodell](metamodel.md#stakeholder-roles)).
 
 Benutzerdefinierte Rollen können mit granularer Berechtigungssteuerung über Inventar, Beziehungen, Stakeholder, Kommentare, Dokumente, Diagramme, BPM, Berichte und mehr erstellt werden. Die Gruppe BPM enthält eine schreibgeschützte Berechtigung, `bpm.value_chain`, für die Seiten [Wertschöpfungskette und Wertstromkarten](../guide/value-chain.md).
 

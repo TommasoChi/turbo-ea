@@ -119,6 +119,9 @@ L'onglet **Rôles** permet de gérer les rôles au niveau de l'application. Chaq
 | **Admin BPM** | Toutes les permissions BPM plus l'accès à l'inventaire, sans paramètres d'administration |
 | **Membre** | Créer, modifier et gérer les fiches, relations et commentaires. Pas d'accès administrateur |
 | **Lecteur** | Accès en lecture seule dans tous les domaines |
+| **PPM Manager** | Les droits en lecture seule du Lecteur plus `ppm.manage`. Le profil des chefs de projet et des contrôleurs de coûts : ce qu'ils peuvent faire sur une fiche découle de leur rôle de partie prenante sur celle-ci |
+
+**Membre** et **Admin BPM** ne détiennent ni `ppm.manage` ni `costs.view` (ils gardent `ppm.view`), sur les nouvelles installations et, après la mise à niveau, sur les installations existantes. Les rôles personnalisés ne sont pas modifiés. Un chef de projet qui avait un rôle Membre a besoin du rôle **PPM Manager** pour continuer à gérer les initiatives, et un utilisateur qui a besoin du rapport de coûts doit avoir `costs.view` ou un rôle de partie prenante qui affiche les coûts. Aucun rôle par défaut ne détient `costs.edit` ; la modification des coûts vient d'un rôle de partie prenante avec **card.edit_costs** (voir [Métamodèle](metamodel.md#stakeholder-roles)).
 
 Des rôles personnalisés peuvent être créés avec un contrôle granulaire des permissions sur l'inventaire, les relations, les parties prenantes, les commentaires, les documents, les diagrammes, le BPM, les rapports, et plus encore. Le groupe BPM comprend une permission en lecture seule, `bpm.value_chain`, pour les pages [Chaîne de valeur et cartes de flux de valeur](../guide/value-chain.md).
 

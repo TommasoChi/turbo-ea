@@ -310,7 +310,30 @@ Al contrario, la scheda **Dettagli della card** all'interno della vista dettagli
 | Permesso | Descrizione |
 |----------|-------------|
 | `ppm.view` | Visualizzare il dashboard PML, il diagramma di Gantt e i report delle iniziative, e leggere le card Iniziativa. Concesso a tutti i ruoli per impostazione predefinita |
-| `ppm.manage` | Creare e gestire report di stato, attività, costi, rischi ed elementi WBS. Concesso ai ruoli Admin, Admin BPM e Membro |
+| `ppm.manage` | Creare e gestire report di stato, attività, budget, voci di costo, rischi ed elementi WBS, sulle iniziative in cui lo consentono anche i permessi di scheda indicati sotto. Concesso ai ruoli Admin e PPM Manager |
 | `reports.ppm_dashboard` | Visualizzare il dashboard del portafoglio PML. Concesso a tutti i ruoli per impostazione predefinita |
 
-Budget e voci di costo seguono l'accesso a PML e la visibilità dell'iniziativa. Dettagli e totale delle fatture, così come l'indicatore dei costi in timeline, richiedono anche l'accesso ai costi della scheda. Registrare e spostare fatture richiede inoltre il permesso di gestione PML.
+Si applicano due livelli. Il permesso applicativo apre una funzione; il permesso di scheda dice su quali iniziative si applica. Una scheda che non puoi leggere non esiste per te.
+
+- **Gestire** report di stato, rischi, attività e Gantt richiede `ppm.manage` **e** diritti di modifica sulla scheda (`inventory.edit` o un ruolo di stakeholder con **card.edit**).
+- I costi (righe di budget, voci di costo, fatture) si scrivono con `ppm.manage` **e** diritti di modifica dei costi sulla scheda (`costs.edit` o un ruolo di stakeholder con **card.edit_costs**), e i costi devono essere visibili.
+- Un utente senza accesso ai costi (`costs.view`, o un ruolo di stakeholder con **card.view_costs**) non vede **alcun importo** sull'iniziativa: righe, descrizioni, anni, fornitori e date restano, mentre importi, totali, subtotali, aggregazioni e valori personalizzati calcolati o numerici vengono omessi. La scheda **Budget e costi** è nascosta, senza messaggio, e il portafoglio non mostra cifre. Il report dei costi elenca solo le iniziative di cui puoi vedere i costi.
+- Le route delle fatture rispondono «non trovato» (404) a un utente senza accesso ai costi.
+- Moderare (modificare o eliminare) i commenti altrui richiede diritti di modifica sulla scheda.
+- I pulsanti Gestisci dell'iniziativa seguono questi diritti, e il pulsante **Gestisci** dei costi nella pagina della scheda richiede `ppm.manage` e diritti di modifica dei costi: un utente che si limita a vedere i costi non lo vede.
+
+| Funzione | Permessi richiesti |
+|---|---|
+| Vedere la scheda (dati generali) | `card.view` |
+| Vedere i costi della scheda | `card.view` + `view_costs` |
+| Vedere PML senza costi (report di stato, rischi, attività, Gantt) | `card.view` + `ppm.view` |
+| Vedere i costi PML (budget, voci di costo, fatture, importi) | `card.view` + `view_costs` + `ppm.view` |
+| Modificare i dati della scheda | `card.view` + `card.edit` |
+| Modificare PML senza costi | `card.view` + `card.edit` + `ppm.view` + `ppm.manage` |
+| Modificare i costi PML | `card.view` + `view_costs` + `edit_costs` + `ppm.view` + `ppm.manage` |
+| Produrre il report dei costi | `ppm.view`; elenca solo le schede con `card.view` + `view_costs` |
+| Aprire le pagine PML | `ppm.view` |
+
+`view_costs` è `costs.view` o **card.view_costs**; `edit_costs` è `costs.edit` o **card.edit_costs**. Per Applicazioni e Componenti IT le voci di costo annuali si modificano con `card.view` + `view_costs` + `edit_costs`, senza permessi PML.
+
+Il ruolo di stakeholder **Controller dei costi** legge l'iniziativa con i suoi report di stato, rischi e Gantt e modifica solo i costi; assegna ai suoi titolari il ruolo applicativo **PPM Manager**. Un Responsabile o un Responsabile progetto IT continua a gestire l'iniziativa e i suoi costi. **Nel budget** nella Timeline protetta richiede anch'esso la visibilità dei costi.

@@ -1421,6 +1421,30 @@ _COST_CONTROLLER_ROLE: dict[str, Any] = {
         "the rest of it. Only on the types that carry costs."
     ),
     "counts_for_quality": True,
+    "translations": {
+        "label": {
+            "de": "Kostencontroller",
+            "fr": "Contrôleur de coûts",
+            "es": "Controlador de costes",
+            "it": "Controller dei costi",
+            "pt": "Controlador de custos",
+            "zh": "成本控制员",
+            "ru": "Контролёр затрат",
+            "da": "Omkostningscontroller",
+            "ar": "مراقب التكاليف",
+        },
+        "description": {
+            "de": "Sieht und bearbeitet die Kosten dieser Karte, ohne den Rest bearbeiten zu können. Nur bei den Typen, die Kosten führen.",
+            "fr": "Consulte et modifie les coûts de cette fiche sans pouvoir modifier le reste. Uniquement sur les types qui portent des coûts.",
+            "es": "Ve y edita los costes de esta ficha sin poder editar el resto. Solo en los tipos que llevan costes.",
+            "it": "Vede e modifica i costi di questa scheda senza poter modificare il resto. Solo sui tipi che prevedono costi.",
+            "pt": "Vê e edita os custos desta ficha sem poder editar o resto. Apenas nos tipos que têm custos.",
+            "zh": "可查看并编辑此卡片的成本，但无法编辑其余内容。仅适用于带有成本的类型。",
+            "ru": "Видит и редактирует затраты этой карточки, но не может изменять остальное. Только для типов, у которых есть затраты.",
+            "da": "Ser og redigerer omkostningerne for dette kort uden at kunne redigere resten. Kun på de typer, der har omkostninger.",
+            "ar": "يرى تكاليف هذه البطاقة ويعدّلها دون أن يستطيع تعديل بقية محتواها. فقط على الأنواع التي تحمل تكاليف.",
+        },
+    },
 }
 
 # ── 14 Card Types (from Meta_Model.xml + BPM) ────────────────────────

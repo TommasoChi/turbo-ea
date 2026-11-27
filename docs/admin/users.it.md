@@ -119,6 +119,9 @@ La scheda **Ruoli** consente di gestire i ruoli a livello di applicazione. Ogni 
 | **BPM Admin** | Permessi BPM completi più accesso all'inventario, nessuna impostazione admin |
 | **Member** | Crea, modifica e gestisce card, relazioni e commenti. Nessun accesso admin |
 | **Viewer** | Accesso di sola lettura in tutte le aree |
+| **PPM Manager** | I diritti di sola lettura del Viewer più `ppm.manage`. Il profilo di project manager e controller dei costi: ciò che possono fare su una scheda deriva dal loro ruolo di stakeholder su di essa |
+
+**Member** e **BPM Admin** non possiedono `ppm.manage` né `costs.view` (mantengono `ppm.view`), sulle nuove installazioni e, dopo l'aggiornamento, su quelle esistenti. I ruoli personalizzati non vengono modificati. Un project manager che aveva un ruolo Member ha bisogno del ruolo **PPM Manager** per continuare a gestire le iniziative, e un utente che ha bisogno del report dei costi richiede `costs.view` o un ruolo di stakeholder che mostri i costi. Nessun ruolo predefinito possiede `costs.edit`; la modifica dei costi deriva da un ruolo di stakeholder con **card.edit_costs** (vedi [Metamodello](metamodel.md#stakeholder-roles)).
 
 I ruoli personalizzati possono essere creati con controllo granulare dei permessi su inventario, relazioni, stakeholder, commenti, documenti, diagrammi, BPM, report e altro. Il gruppo BPM include un permesso di sola lettura, `bpm.value_chain`, per le pagine [Catena del valore e mappe dei flussi di valore](../guide/value-chain.md).
 
