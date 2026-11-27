@@ -336,7 +336,8 @@ async def load_financials(db: AsyncSession, card: Card, user: User) -> tuple[dic
                 "amount": str(grand["amount"]),
                 "total_cost_items": str(grand["total_cost_items"]),
                 "remaining_budget": str(grand["amount"] - grand["total_cost_items"]),
-                **{k: str(grand[k]) for k in ("total_invoiced", "remaining_to_invoice")},
+                "total_invoiced": str(grand["total_invoiced"]),
+                "remaining_to_invoice": str(grand["remaining_to_invoice"]),
             }
             result["invoices"] = [
                 PpmInvoiceOut.model_validate(i).model_dump(mode="json") for i in invoices

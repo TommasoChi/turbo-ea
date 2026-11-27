@@ -27,6 +27,7 @@ from app.services import (
     survey_apply,
     survey_service,
 )
+from app.services.cost_field_filter import cost_field_keys_from_card_schema
 from app.services.event_bus import event_bus, request_batch_id
 from app.services.permission_service import PermissionService
 
@@ -92,7 +93,45 @@ def _survey_to_dict(s: Survey, stats: dict | None = None) -> dict:
     return d
 
 
-def _response_to_dict(r: SurveyResponse) -> dict:
+def _survey_cost_keys(fields_schema: object, survey_fields: list[dict] | None) -> frozenset[str]:
+    keys = set(cost_field_keys_from_card_schema(fields_schema))
+    keys.update(f["key"] for f in survey_fields or [] if f.get("type") == "cost")
+    return frozenset(keys)
+
+
+async def _cost_keys_withheld(
+    db: AsyncSession,
+    user: User,
+    card_id: uuid.UUID,
+    fields_schema: object,
+    survey_fields: list[dict] | None,
+) -> frozenset[str]:
+    """Keys of the cost fields whose stored value this user may not see on the card."""
+    keys = _survey_cost_keys(fields_schema, survey_fields)
+    if keys and await PermissionService.can_view_costs(db, user, card_id):
+        return frozenset()
+    return frozenset(keys)
+
+
+def _without_cost_snapshots(
+    responses: dict | None, withheld: frozenset[str], *, keep_new_value: bool = False
+) -> dict:
+    """A stored response with the withheld cost fields' amounts blanked.
+
+    ``current_value`` always goes; ``new_value`` (the card's stored cost once
+    applied) stays only for the respondent reading their own answer.
+    """
+    out = dict(responses or {})
+    for key in withheld & out.keys():
+        if isinstance(out[key], dict):
+            blanked = {**out[key], "current_value": None}
+            if not keep_new_value:
+                blanked["new_value"] = None
+            out[key] = blanked
+    return out
+
+
+def _response_to_dict(r: SurveyResponse, withheld: frozenset[str] = frozenset()) -> dict:
     return {
         "id": str(r.id),
         "survey_id": str(r.survey_id),
@@ -103,7 +142,7 @@ def _response_to_dict(r: SurveyResponse) -> dict:
         "user_display_name": r.user.display_name if r.user else None,
         "user_email": r.user.email if r.user else None,
         "status": r.status,
-        "responses": r.responses or {},
+        "responses": _without_cost_snapshots(r.responses, withheld),
         "applied": r.applied,
         "responded_at": r.responded_at.isoformat() if r.responded_at else None,
         "applied_at": r.applied_at.isoformat() if r.applied_at else None,
@@ -563,7 +602,26 @@ async def list_responses(
         q = q.where(SurveyResponse.status == status)
 
     result = await db.execute(q)
-    return [_response_to_dict(r) for r in result.scalars().all()]
+    survey = (
+        await db.execute(select(Survey).where(Survey.id == uuid.UUID(survey_id)))
+    ).scalar_one_or_none()
+    type_schema = None
+    if survey:
+        type_schema = (
+            await db.execute(
+                select(CardType.fields_schema).where(CardType.key == survey.target_type_key)
+            )
+        ).scalar_one_or_none()
+    cost_keys = _survey_cost_keys(type_schema, survey.fields if survey else None)
+    responses = result.scalars().all()
+    visible = (
+        await PermissionService.card_ids_with_cost_access(db, user, {r.card_id for r in responses})
+        if cost_keys
+        else set()
+    )
+    return [
+        _response_to_dict(r, frozenset() if r.card_id in visible else cost_keys) for r in responses
+    ]
 
 
 # What the results page shows for a response that failed for a reason the
@@ -617,6 +675,7 @@ async def apply_responses(
     # A stakeholder answer is a role assignment: ``surveys.manage`` alone does
     # not grant it, so the applier's stakeholder authority is asked once per card.
     can_manage_stakeholders: dict[uuid.UUID, bool] = {}
+    can_edit_costs: dict[uuid.UUID, bool] = {}
 
     # Open the request's audit batch before the per-response savepoints: one
     # created lazily by the first event inside a savepoint that then rolls
@@ -663,7 +722,11 @@ async def apply_responses(
                 card.id,
                 "card.manage_stakeholders",
                 card_type_key=card.type,
+                subtype=card.subtype,
             )
+
+        if card.id not in can_edit_costs:
+            can_edit_costs[card.id] = await PermissionService.can_edit_costs(db, user, card.id)
 
         # One savepoint per response: an answer the card refuses (a required
         # field cleared, an unknown option, a malformed list of people) rolls
@@ -682,6 +745,7 @@ async def apply_responses(
                 card,
                 user,
                 can_manage_stakeholders=can_manage_stakeholders[card.id],
+                can_edit_costs=can_edit_costs[card.id],
                 deferred_notifications=mine,
             )
             resp.applied = True
@@ -779,6 +843,9 @@ async def get_response_form(
 
     # Build current values for each survey field, enriched with metamodel translations
     attrs = card.attributes or {}
+    withheld_costs = await _cost_keys_withheld(
+        db, user, card.id, card_type.fields_schema if card_type else None, survey.fields
+    )
     role_defs: dict[str, dict] | None = None
     fields_with_values = []
     for field_def in survey.fields or []:
@@ -812,7 +879,7 @@ async def get_response_form(
             )
             continue
 
-        current_value = attrs.get(field_def["key"])
+        current_value = None if field_def["key"] in withheld_costs else attrs.get(field_def["key"])
         meta_field = meta_field_by_key.get(field_def["key"]) or {}
         enriched: dict = {**field_def, "current_value": current_value}
 
@@ -891,7 +958,9 @@ async def get_response_form(
             "subtype_translations": subtype_translations,
         },
         "fields": fields_with_values,
-        "existing_responses": resp.responses or {},
+        "existing_responses": _without_cost_snapshots(
+            resp.responses, withheld_costs, keep_new_value=True
+        ),
     }
 
 

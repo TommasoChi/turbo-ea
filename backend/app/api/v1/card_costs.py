@@ -122,7 +122,8 @@ async def download_cost_import_template(
 
 
 async def _load_for_edit(db: AsyncSession, user: User, card_id: str) -> Card:
-    """Writes: ``card.edit_costs`` on this card."""
+    """Writing takes the right to see the card's costs, plus `costs.edit` or a `card.edit_costs`
+    stakeholder role on it."""
     card_uuid = parse_uuid(card_id)
     card_type = await require_card_readable(db, user, card_uuid, mode="module")
     if card_type not in COST_ITEM_TYPES:

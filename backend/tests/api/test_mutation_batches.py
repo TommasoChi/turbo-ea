@@ -443,7 +443,7 @@ async def test_rollback_requires_parent_read_access(monkeypatch):
     readable = AsyncMock(side_effect=[None, HTTPException(status_code=404)])
     monkeypatch.setattr(routes, "require_card_readable", readable)
     monkeypatch.setattr(routes.PermissionService, "require_permission", AsyncMock())
-    monkeypatch.setattr(routes.PermissionService, "can_view_costs", AsyncMock(return_value=True))
+    monkeypatch.setattr(routes.PermissionService, "can_edit_costs", AsyncMock(return_value=True))
     with pytest.raises(HTTPException) as exc:
         await routes._require_rollback_permissions(
             db,

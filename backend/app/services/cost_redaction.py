@@ -10,7 +10,7 @@ Lifecycle reports share.
 from __future__ import annotations
 
 import uuid
-from collections.abc import Sequence
+from collections.abc import Awaitable, Callable, Iterable, Sequence
 from typing import Any
 
 from sqlalchemy import select
@@ -34,6 +34,23 @@ async def card_cost_redaction_map(
 
     Cards whose costs the user is allowed to see are absent from the map.
     """
+    return await _redaction_map(db, user, cards, PermissionService.card_ids_with_cost_access)
+
+
+async def card_cost_write_guard_map(
+    db: AsyncSession, user: User, cards: Sequence[Card]
+) -> dict[uuid.UUID, frozenset[str]]:
+    """Map of card_id → cost field keys a write must keep at their stored value:
+    the cards whose costs the user may not *change* (``can_edit_costs``)."""
+    return await _redaction_map(db, user, cards, PermissionService.card_ids_with_cost_edit_access)
+
+
+async def _redaction_map(
+    db: AsyncSession,
+    user: User,
+    cards: Sequence[Card],
+    allowed_ids: Callable[[AsyncSession, User, Iterable[uuid.UUID]], Awaitable[set[uuid.UUID]]],
+) -> dict[uuid.UUID, frozenset[str]]:
     if not cards:
         return {}
     type_keys = {c.type for c in cards if c.type}
@@ -52,13 +69,34 @@ async def card_cost_redaction_map(
     candidate_ids = [c.id for c in cards if c.type in cost_keys_per_type]
     if not candidate_ids:
         return {}
-    allowed = await PermissionService.card_ids_with_cost_access(db, user, candidate_ids)
+    allowed = await allowed_ids(db, user, candidate_ids)
     redact: dict[uuid.UUID, frozenset[str]] = {}
     for card in cards:
         cost_keys = cost_keys_per_type.get(card.type)
         if cost_keys and card.id not in allowed:
             redact[card.id] = cost_keys
     return redact
+
+
+async def attributes_for_new_card(
+    db: AsyncSession,
+    user: User,
+    card_type: CardType | None,
+    subtype: str | None,
+    attributes: dict | None,
+) -> dict | None:
+    """``attributes`` of a card about to be created, minus the cost fields the
+    creator may not set (a new card has no stakeholder role yet, so only the
+    app-level ``costs.view`` + ``costs.edit`` for its type count)."""
+    cost_keys = cost_field_keys_from_card_schema(card_type.fields_schema if card_type else None)
+    if not attributes or not cost_keys.intersection(attributes):
+        return attributes
+    for permission in ("costs.view", "costs.edit"):
+        if not await PermissionService.has_app_permission(
+            db, user, permission, card_type_key=card_type.key, subtype=subtype
+        ):
+            return {k: v for k, v in attributes.items() if k not in cost_keys}
+    return attributes
 
 
 def _without(attributes: Any, cost_keys: frozenset[str] | None) -> Any:

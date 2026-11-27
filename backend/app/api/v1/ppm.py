@@ -74,6 +74,7 @@ from app.services.ppm_ancestors import active_initiative_ancestors
 from app.services.ppm_gantt_move import (
     apply_gantt_move,
     assert_no_wbs_cycle,
+    check_new_parent,
     next_sort_order,
 )
 from app.services.ppm_portfolio_service import build_initiative_rollup, build_initiative_schedule
@@ -1581,6 +1582,20 @@ async def list_tasks(
     return [await _task_to_out(db, t) for t in result.scalars().all()]
 
 
+async def _require_wbs_in_initiative(
+    db: AsyncSession, wbs_id: str | None, initiative_id: str
+) -> None:
+    """400 unless ``wbs_id`` (when given) is a work package of this initiative
+    that can hold items, the rule of the Gantt move."""
+    if wbs_id is None:
+        return
+    try:
+        wbs_uuid = uuid.UUID(wbs_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid WBS item id") from None
+    await check_new_parent(db, uuid.UUID(initiative_id), wbs_uuid)
+
+
 @router.post("/initiatives/{initiative_id}/tasks", response_model=PpmTaskOut)
 async def create_task(
     initiative_id: str,
@@ -1589,6 +1604,7 @@ async def create_task(
     user: User = Depends(get_current_user),
 ):
     card = await _require_manage(db, user, initiative_id)
+    await _require_wbs_in_initiative(db, body.wbs_id, initiative_id)
     task = PpmTask(
         id=uuid.uuid4(),
         initiative_id=initiative_id,
@@ -1649,8 +1665,12 @@ async def update_task(
     card = await _require_manage(db, user, str(task.initiative_id))
     old_assignee_id = str(task.assignee_id) if task.assignee_id else None
     data = body.model_dump(exclude_unset=True)
-    if "wbs_id" in data and "sort_order" not in data and data["wbs_id"] != _id_str(task.wbs_id):
-        data["sort_order"] = await next_sort_order(db, "task", task.initiative_id, data["wbs_id"])
+    if "wbs_id" in data and data["wbs_id"] != _id_str(task.wbs_id):
+        await _require_wbs_in_initiative(db, data["wbs_id"], str(task.initiative_id))
+        if "sort_order" not in data:
+            data["sort_order"] = await next_sort_order(
+                db, "task", task.initiative_id, data["wbs_id"]
+            )
     for key, val in data.items():
         setattr(task, key, val)
     await _sync_task_todo(db, task, card, user.id)

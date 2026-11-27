@@ -274,18 +274,50 @@ class TestCreateStakeholder:
         assert "id" in data
         assert "user_display_name" in data
 
-    async def test_member_can_create_stakeholder(self, client, db, stakeholders_env):
-        """Member role has stakeholders.manage permission."""
+    async def test_a_role_holding_stakeholders_manage_can_create_stakeholder(
+        self, client, db, stakeholders_env
+    ):
+        await create_role(
+            db, key="assigner", label="Assigner", permissions={"stakeholders.manage": True}
+        )
+        assigner = await create_user(db, email="assigner@test.com", role="assigner")
         admin = stakeholders_env["admin"]
-        member = stakeholders_env["member"]
         card = stakeholders_env["card"]
         resp = await client.post(
             f"/api/v1/cards/{card.id}/stakeholders",
             json={"user_id": str(admin.id), "role": "observer"},
-            headers=auth_headers(member),
+            headers=auth_headers(assigner),
         )
         assert resp.status_code == 201
         assert resp.json()["role"] == "observer"
+
+    async def test_member_cannot_make_themselves_cost_controller(
+        self, client, db, stakeholders_env
+    ):
+        await create_stakeholder_role_def(
+            db, card_type_key="Application", key="costController", label="Cost Controller"
+        )
+        member = stakeholders_env["member"]
+        card = stakeholders_env["card"]
+        resp = await client.post(
+            f"/api/v1/cards/{card.id}/stakeholders",
+            json={"user_id": str(member.id), "role": "costController"},
+            headers=auth_headers(member),
+        )
+        assert resp.status_code == 403
+
+    async def test_admin_can_assign_cost_controller(self, client, db, stakeholders_env):
+        await create_stakeholder_role_def(
+            db, card_type_key="Application", key="costController", label="Cost Controller"
+        )
+        member = stakeholders_env["member"]
+        card = stakeholders_env["card"]
+        resp = await client.post(
+            f"/api/v1/cards/{card.id}/stakeholders",
+            json={"user_id": str(member.id), "role": "costController"},
+            headers=auth_headers(stakeholders_env["admin"]),
+        )
+        assert resp.status_code == 201
 
     async def test_duplicate_stakeholder_returns_409(self, client, db, stakeholders_env):
         """Same user + same role on the same card is rejected."""

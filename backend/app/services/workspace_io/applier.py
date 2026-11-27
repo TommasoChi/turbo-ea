@@ -1560,18 +1560,19 @@ def _predates_view_costs(bundle: WorkspaceBundle) -> bool:
     return version is not None and version < first_release
 
 
-EDIT_COSTS_SINCE = (2, 215, 0)
-
-
 def _predates_edit_costs(bundle: WorkspaceBundle) -> bool:
-    """Upstream never had ``card.edit_costs``; a fork bundle has it from 2.215.0.
+    """A bundle predates ``card.edit_costs`` when no stakeholder-role row carries it.
 
-    A bundle naming no usable version (a content pack, ``0.0.0-dev``) is taken at its word.
+    Every row exported since migration 202 has the key. A bundle naming no usable version
+    (a content pack, ``0.0.0-dev``) is taken at its word.
     """
-    version = bundle.app_version
-    if version is None:
+    if bundle.app_version is None:
         return False
-    return schema.SHEET_COST_ITEM_TYPES not in bundle.sheets or version < EDIT_COSTS_SINCE
+    return not any(
+        isinstance(perms := from_cell(row.get("permissions"), is_json=True), dict)
+        and "card.edit_costs" in perms
+        for row in bundle.rows(schema.SHEET_STAKEHOLDER_ROLES)
+    )
 
 
 def _make_config_applier(sec: schema.ConfigSection):
@@ -1580,6 +1581,9 @@ def _make_config_applier(sec: schema.ConfigSection):
         index: dict[tuple, Any] = {
             tuple(getattr(r, k) for k in sec.natural_key): r for r in existing_rows
         }
+        predates_edit_costs = sec.model is StakeholderRoleDefinition and _predates_edit_costs(
+            bundle
+        )
         for row in bundle.rows(sec.sheet):
             data = _coerce(row, sec.columns, sec.json_columns)
             # A bundle exported from an install that predates the permission
@@ -1611,7 +1615,7 @@ def _make_config_applier(sec: schema.ConfigSection):
                         and bundle.app_version < VIEW_COSTS_SINCE
                     ):
                         perms = with_legacy_license_grant(str(data.get("key")), perms)
-                    if _predates_edit_costs(bundle):
+                    if predates_edit_costs:
                         perms = with_legacy_edit_cost_grant(perms)
                     data["permissions"] = perms
                 elif sec.model is Role:

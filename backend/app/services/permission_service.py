@@ -402,14 +402,13 @@ class PermissionService:
     ) -> bool:
         """Edit rule shared by costs and licenses: the app-level ``perm``, or a stakeholder
         role on THIS card whose permissions give ``card_perm`` (Observer does not).
+        The app-level grant is type-aware: a View deny on the card's type removes it.
         App-level `inventory.edit` alone grants nothing here."""
-        if await PermissionService.has_app_permission(db, user, perm):
-            return True
-        return await PermissionService.has_card_permission(db, user, card_id, card_perm)
+        return await PermissionService.check_permission(db, user, perm, card_id, card_perm)
 
     @staticmethod
     async def can_view_costs(db: AsyncSession, user: User, card_id: UUID) -> bool:
-        """Return True if the user may see and change cost fields on this card.
+        """Return True if the user may see cost fields on this card.
 
         ``costs.view`` shows them on every card whose type the role may view
         (a View deny on the type takes the grant away, as for every other
@@ -503,6 +502,17 @@ class PermissionService:
             db, user, card_id
         ) and await PermissionService._can_edit_domain(
             db, user, card_id, "costs.edit", EDIT_COSTS_CARD_PERMISSION
+        )
+
+    @staticmethod
+    async def card_ids_with_cost_edit_access(
+        db: AsyncSession, user: User, candidate_card_ids: Iterable[UUID | None]
+    ) -> set[UUID]:
+        """Bulk variant of `can_edit_costs`: costs visible AND editable, same semantics."""
+        candidates = [cid for cid in candidate_card_ids if cid is not None]
+        visible = await PermissionService.card_ids_with_cost_access(db, user, candidates)
+        return visible & await PermissionService._card_ids_with_domain_access(
+            db, user, visible, "costs.edit", EDIT_COSTS_CARD_PERMISSION
         )
 
     @staticmethod

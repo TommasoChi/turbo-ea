@@ -26,12 +26,14 @@ from sqlalchemy import select
 from app.api.v1.surveys import UNEXPECTED_APPLY_ERROR
 from app.models.audit_log import AuditLogEntry
 from app.models.card import Card
+from app.models.card_type import CardType
 from app.models.event import Event
 from app.models.mutation_batch import MutationBatch
 from app.models.notification import Notification
 from app.models.stakeholder import Stakeholder
 from app.models.survey import Survey, SurveyResponse
 from app.services import notification_service, survey_apply
+from app.services.permission_service import PermissionService
 from app.services.rollback_service import execute_rollback
 from tests.api.test_surveys_extended import _create_draft_survey, survey_env  # noqa: F401
 from tests.conftest import (
@@ -207,6 +209,86 @@ class TestResponseForm:
         # Every phase the card holds, so the form can warn about ordering
         # against a phase the survey did not ask about.
         assert body["card"]["lifecycle"] == {"plan": "2024-01-01", "active": "2024-06-01"}
+
+    async def test_cost_current_value_needs_cost_visibility(self, client, db, env):
+        """The form keeps the cost field but shows its stored value only to a
+        recipient who may see costs on the card."""
+        base = {"surveys.respond": True, "inventory.view": True}
+        await create_role(db, key="resp_nocost", label="No cost", permissions=base)
+        await create_role(
+            db, key="resp_cost", label="Cost", permissions={**base, "costs.view": True}
+        )
+        nocost = await create_user(db, email="nocost@test.com", role="resp_nocost")
+        withcost = await create_user(db, email="withcost@test.com", role="resp_cost")
+        for u in (nocost, withcost):
+            db.add(Stakeholder(card_id=env["card"].id, user_id=u.id, role="responsible"))
+        await db.flush()
+        fields = [
+            {"key": "costTotalAnnual", "label": "Cost", "type": "cost", "action": "maintain"},
+            {"key": "riskLevel", "label": "Risk", "type": "single_select", "action": "maintain"},
+        ]
+        sid = await _send(client, env["admin"], fields)
+
+        async def form(user):
+            resp = await client.get(
+                f"/api/v1/surveys/{sid}/respond/{env['card'].id}", headers=auth_headers(user)
+            )
+            assert resp.status_code == 200, resp.text
+            return {f["key"]: f for f in resp.json()["fields"]}
+
+        seen = await form(withcost)
+        assert seen["costTotalAnnual"]["current_value"] == 50000
+        hidden = await form(nocost)
+        assert "costTotalAnnual" in hidden
+        assert hidden["costTotalAnnual"]["current_value"] is None
+        assert hidden["riskLevel"]["current_value"] == "medium"
+
+    async def test_cost_snapshot_is_withheld_from_readers_without_cost_visibility(
+        self, client, db, env
+    ):
+        """The stored ``current_value`` snapshot of a cost answer reaches neither
+        the respondent re-opening the form nor a ``surveys.manage`` holder who
+        may not see costs."""
+        await create_role(
+            db,
+            key="resp_nocost",
+            label="No cost",
+            permissions={"surveys.respond": True, "inventory.view": True},
+        )
+        await create_role(
+            db, key="mgr_nocost", label="Manager", permissions={"surveys.manage": True}
+        )
+        nocost = await create_user(db, email="nocost@test.com", role="resp_nocost")
+        mgr = await create_user(db, email="mgr@test.com", role="mgr_nocost")
+        db.add(Stakeholder(card_id=env["card"].id, user_id=nocost.id, role="responsible"))
+        await db.flush()
+        fields = [{"key": "costTotalAnnual", "label": "Cost", "type": "cost", "action": "maintain"}]
+        sid = await _send(client, env["admin"], fields)
+        card_id = env["card"].id
+        await _answer(client, nocost, sid, card_id, {"costTotalAnnual": {"new_value": 7}})
+
+        reopened = await client.get(
+            f"/api/v1/surveys/{sid}/respond/{card_id}", headers=auth_headers(nocost)
+        )
+        snap = reopened.json()["existing_responses"]["costTotalAnnual"]
+        assert snap["current_value"] is None
+        assert snap["new_value"] == 7
+
+        listing = await client.get(f"/api/v1/surveys/{sid}/responses", headers=auth_headers(mgr))
+        assert listing.status_code == 200
+        answered = [r for r in listing.json() if r["status"] == "completed"]
+        assert len(answered) == 1
+        assert answered[0]["responses"]["costTotalAnnual"]["current_value"] is None
+        assert answered[0]["responses"]["costTotalAnnual"]["new_value"] is None
+
+        as_admin = await client.get(
+            f"/api/v1/surveys/{sid}/responses", headers=auth_headers(env["admin"])
+        )
+        assert [
+            r["responses"]["costTotalAnnual"]["current_value"]
+            for r in as_admin.json()
+            if r["status"] == "completed"
+        ] == [50000]
 
     async def test_can_view_is_false_without_a_read_grant(self, client, db, env):
         await create_role(
@@ -530,6 +612,101 @@ class TestApply:
         await db.flush()
         result = await _apply(client, applier, sid, [roles])
         assert result == {"applied": 1, "errors": []}
+
+    async def test_a_subtype_view_deny_removes_the_stakeholders_manage_grant(self, client, db, env):
+        await create_role(
+            db,
+            key="survey_admin",
+            label="Survey admin",
+            permissions={
+                "surveys.manage": True,
+                "stakeholders.manage": True,
+                "inventory.view": True,
+                "inventory.edit": True,
+            },
+        )
+        applier = await create_user(db, email="applier@test.com", role="survey_admin")
+        card = env["card"]
+        card.subtype = "Document"
+        await db.flush()
+        sid = await _send(client, env["admin"], [OBSERVER_FIELD])
+        roles = await _answer(
+            client,
+            env["member"],
+            sid,
+            card.id,
+            {"sh:observer": {"new_value": [{"id": str(env["joining"].id)}]}},
+        )
+        card_id, joining_id = card.id, env["joining"].id
+
+        ct = (await db.execute(select(CardType).where(CardType.key == "Provider"))).scalar_one()
+        ct.role_permissions = {
+            "survey_admin": {"inventory.view": {"value": False, "subtypes": ["Document"]}}
+        }
+        await db.flush()
+        PermissionService.invalidate_type_permission_cache()
+
+        result = await _apply(client, applier, sid, [roles])
+        assert result["applied"] == 0
+        assert "stakeholders.manage" in result["errors"][0]["error"]
+        joined = await db.execute(
+            select(Stakeholder).where(
+                Stakeholder.card_id == card_id, Stakeholder.user_id == joining_id
+            )
+        )
+        assert joined.scalar_one_or_none() is None
+
+    async def test_a_cost_answer_needs_the_right_to_edit_costs(self, client, db, env):
+        """``surveys.manage`` applies the other answers but leaves the cost fields of
+        a card the applier may not edit costs on at their stored value."""
+        await create_role(
+            db,
+            key="survey_admin",
+            label="Survey admin",
+            permissions={"surveys.manage": True, "inventory.view": True, "inventory.edit": True},
+        )
+        applier = await create_user(db, email="applier@test.com", role="survey_admin")
+        fields = [
+            {"key": "costTotalAnnual", "label": "Cost", "type": "cost", "action": "maintain"},
+            {"key": "riskLevel", "label": "Risk", "type": "single_select", "action": "maintain"},
+        ]
+        sid = await _send(client, env["admin"], fields)
+        card_id = env["card"].id
+        answer = await _answer(
+            client,
+            env["member"],
+            sid,
+            card_id,
+            {"costTotalAnnual": {"new_value": 99}, "riskLevel": {"new_value": "high"}},
+        )
+
+        assert await _apply(client, applier, sid, [answer]) == {"applied": 1, "errors": []}
+
+        card = await db.get(Card, card_id)
+        await db.refresh(card)
+        assert card.attributes["costTotalAnnual"] == 50000
+        assert card.attributes["riskLevel"] == "high"
+
+        await create_role(
+            db,
+            key="cost_editor",
+            label="Cost editor",
+            permissions={
+                "surveys.manage": True,
+                "inventory.view": True,
+                "inventory.edit": True,
+                "costs.view": True,
+                "costs.edit": True,
+            },
+        )
+        editor = await create_user(db, email="editor@test.com", role="cost_editor")
+        sid = await _send(client, env["admin"], fields)
+        answer = await _answer(
+            client, env["member"], sid, card_id, {"costTotalAnnual": {"new_value": 99}}
+        )
+        await _apply(client, editor, sid, [answer])
+        await db.refresh(card)
+        assert card.attributes["costTotalAnnual"] == 99
 
     async def test_an_unchanged_stakeholder_answer_writes_nothing(self, client, db, env):
         sid = await _send(client, env["admin"], [OBSERVER_FIELD])

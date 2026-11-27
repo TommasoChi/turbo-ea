@@ -192,6 +192,21 @@ class TestCardIdsWithCostAccess:
         )
         assert out == {owned.id}
 
+    async def test_bulk_result_equals_the_per_card_rule(self, db, roles):
+        viewer = await _viewer(db)
+        await create_role(db, key="cost_role", permissions={"costs.view": True})
+        granted = await create_user(db, email="granted@test.com", role="cost_role")
+        owned = await create_card(db, card_type="Application", name="Owned")
+        observed = await create_card(db, card_type="Application", name="Observed")
+        neither = await create_card(db, card_type="Application", name="Neither")
+        await _make_stakeholder(db, user=viewer, card=owned)
+        await _make_stakeholder(db, user=viewer, card=observed, role="observer")
+        ids = [owned.id, observed.id, neither.id]
+
+        for user in (viewer, granted):
+            per_card = {i for i in ids if await PermissionService.can_view_costs(db, user, i)}
+            assert await PermissionService.card_ids_with_cost_access(db, user, ids) == per_card
+
     async def test_one_role_that_shows_costs_is_enough(self, db, roles):
         user = await _viewer(db)
         card = await create_card(db, card_type="Application")

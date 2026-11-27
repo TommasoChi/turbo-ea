@@ -25,7 +25,11 @@ from sqlalchemy import event as sa_event
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.pool import NullPool
 
-from app.core.permissions import MEMBER_PERMISSIONS, VIEWER_PERMISSIONS
+from app.core.permissions import (
+    MEMBER_PERMISSIONS,
+    PPM_MANAGER_APP_PERMISSIONS,
+    VIEWER_PERMISSIONS,
+)
 from app.core.security import create_access_token, hash_password
 from app.models.base import Base
 from tests import mutation_plugin
@@ -952,7 +956,6 @@ async def create_ppm_manager_user(db, *, email="ppm-manager@test.com"):
     ``ppm.manage``). The role is created on first use."""
     from sqlalchemy import select
 
-    from app.core.permissions import PPM_MANAGER_APP_PERMISSIONS
     from app.models.role import Role
 
     if await db.scalar(select(Role.key).where(Role.key == "ppm_manager")) is None:

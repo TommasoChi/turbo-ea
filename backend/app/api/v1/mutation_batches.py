@@ -505,7 +505,7 @@ async def _require_rollback_permissions(
                         raise HTTPException(404, "Card not found")
                     if parent_id != card.parent_id:
                         await require_card_readable(db, user, parent_id, mode="module")
-            if kind == "restore_card_fields" and not await PermissionService.can_view_costs(
+            if kind == "restore_card_fields" and not await PermissionService.can_edit_costs(
                 db, user, card_id
             ):
                 card = await db.get(Card, card_id, populate_existing=True)

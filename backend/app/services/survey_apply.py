@@ -30,6 +30,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.card import Card
+from app.models.card_type import CardType
 from app.models.relation import Relation
 from app.models.relation_type import RelationType
 from app.models.stakeholder import Stakeholder
@@ -37,6 +38,7 @@ from app.models.survey import Survey, SurveyResponse
 from app.models.user import User
 from app.services import stakeholder_service
 from app.services.bo_relationship_constants import ER_RELATION
+from app.services.cost_field_filter import cost_field_keys_from_card_schema, keep_stored_cost_values
 from app.services.lifecycle import PHASE_CHRONOLOGICAL, parse_lifecycle_date
 from app.services.relation_orientation import direction_for
 
@@ -522,6 +524,7 @@ async def apply_response(
     actor: User,
     *,
     can_manage_stakeholders: bool = True,
+    can_edit_costs: bool,
     deferred_notifications: list[dict] | None = None,
 ) -> bool:
     """Write one completed response onto its card. Flushes, never commits.
@@ -542,7 +545,10 @@ async def apply_response(
     what the Stakeholders tab would refuse, so without it such a response is
     refused as a whole. ``deferred_notifications`` is handed to ``update_card``
     so the subscriber nudges are collected for delivery after the commit
-    instead of emailed inline on the request's session.
+    instead of emailed inline on the request's session. ``can_edit_costs`` is the
+    applier's ``PermissionService.can_edit_costs`` on this card: without it the
+    cost-typed answers are dropped and the stored cost values kept, the other
+    answers still apply.
     """
     from app.services.card_write_service import WriteActor, update_card
 
@@ -590,6 +596,13 @@ async def apply_response(
     updates: dict[str, object] = {}
     if attr_updates:
         updates["attributes"] = {**(card.attributes or {}), **attr_updates}
+        if not can_edit_costs:
+            cost_keys = cost_field_keys_from_card_schema(
+                await db.scalar(select(CardType.fields_schema).where(CardType.key == card.type))
+            )
+            updates["attributes"] = keep_stored_cost_values(
+                card.attributes, updates["attributes"], cost_keys
+            )
     if lifecycle_updates:
         lifecycle = dict(card.lifecycle or {})
         for phase, answer in lifecycle_updates.items():

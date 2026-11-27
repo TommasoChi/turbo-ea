@@ -218,7 +218,8 @@ async def plan_import(
         if card.type in card_costs.COST_ITEM_TYPES
         and scope.readable(card.id, card.type, subtype=card.subtype, mode="module")
     }
-    editable = {cid: await PermissionService.can_edit_costs(db, user, cid) for cid in plan.cards}
+    allowed = await PermissionService.card_ids_with_cost_edit_access(db, user, plan.cards)
+    editable = {cid: cid in allowed for cid in plan.cards}
     if for_apply:
         ids_to_lock = [cid for cid, allowed in editable.items() if allowed]
         locked = (

@@ -351,3 +351,29 @@ async def test_put_with_provider_by_a_caller_without_edit_right_is_403(client, e
         headers=auth_headers(env["obs"]),
     )
     assert r.status_code == 403
+
+
+async def test_a_view_deny_on_the_type_removes_the_app_level_costs_edit(client, db, env):
+    from sqlalchemy import select
+
+    from app.models.card_type import CardType
+
+    await create_role(
+        db, key="costly", label="Costly", permissions={"costs.edit": True, "costs.view": True}
+    )
+    await create_stakeholder_role_def(
+        db,
+        key="reader",
+        label="Reader",
+        permissions={"card.view": True, "card.view_costs": True},
+    )
+    user = await create_user(db, email="costly@cp.com", role="costly")
+    db.add(Stakeholder(card_id=env["card"].id, user_id=user.id, role="reader"))
+    ct = (await db.execute(select(CardType).where(CardType.key == "Application"))).scalar_one()
+    ct.role_permissions = {"costly": {"inventory.view": False}}
+    await db.flush()
+    PermissionService.invalidate_type_permission_cache()
+    r = await client.put(
+        url(env, f"/{CUR}/items/lic"), json={"amount": 1}, headers=auth_headers(user)
+    )
+    assert r.status_code == 403

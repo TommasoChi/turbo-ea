@@ -246,7 +246,12 @@ class TestPatchDropsCostsWhenForbidden:
             card_type_key="Provider",
             key="full_editor",
             label="Full Editor",
-            permissions={"card.view": True, "card.edit": True, "card.view_costs": True},
+            permissions={
+                "card.view": True,
+                "card.edit": True,
+                "card.view_costs": True,
+                "card.edit_costs": True,
+            },
             color="#000",
             sort_order=0,
             is_archived=False,
@@ -313,7 +318,12 @@ class TestPatchDropsCostsWhenForbidden:
             card_type_key="Provider",
             key="full_editor",
             label="Full Editor",
-            permissions={"card.view": True, "card.edit": True, "card.view_costs": True},
+            permissions={
+                "card.view": True,
+                "card.edit": True,
+                "card.view_costs": True,
+                "card.edit_costs": True,
+            },
         )
         db.add(
             Stakeholder(
