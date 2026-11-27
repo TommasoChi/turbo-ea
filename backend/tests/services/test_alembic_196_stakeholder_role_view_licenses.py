@@ -31,6 +31,8 @@ def test_migration_and_old_bundle_agree(role, stored):
 def test_defaults_match_existing_role_migration():
     assert migration.down_revision == "195"
     for role, permissions in DEFAULT_CARD_PERMISSIONS_BY_ROLE.items():
+        if role == "costController":  # the role post-dates migration 196
+            continue
         old = {key: value for key, value in permissions.items() if key != "card.view_licenses"}
         assert migration.plan_permissions(role, old) == permissions
 
