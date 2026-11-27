@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense, type ReactNode } from "react";
+import { Fragment, useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense, type ReactNode } from "react";
 import { useNavigate } from "react-router";
 import Box from "@mui/material/Box";
 import MuiCard from "@mui/material/Card";
@@ -107,6 +107,8 @@ interface Props {
   beforeTabs?: ReactNode;
   /** Field keys auto-computed by PPM (treated as readonly with "auto" badge) */
   autoFieldKeys?: string[];
+  /** Draw Health Summary and Risk Management after an Initiative's Cost & Timeline section (the full card page only) */
+  showPpmSummary?: boolean;
   /** Show Layered Dependency View section at bottom of Card tab (default true, disabled in side panel) */
   showLdvSection?: boolean;
   /** Optional AI-suggest trigger rendered in the Description section header */
@@ -142,6 +144,7 @@ export default function CardDetailContent({
   beforeTabs,
   autoFieldKeys = [],
   showLdvSection = true,
+  showPpmSummary = false,
   onAiSuggest,
   aiBusy = false,
   onDirtyChange,
@@ -607,7 +610,9 @@ export default function CardDetailContent({
       if (!section) return null;
       // Skip section if all its fields are hidden for the active subtype
       if (allFieldsHidden(section, hiddenFieldKeys)) return null;
-      return (
+      const showHealthAndRisk = showPpmSummary && !!summaryAnchors?.schedule
+        && section.fields.some((field) => field.key === summaryAnchors.schedule);
+      const attributes = (
         <ErrorBoundary key={key} label={section.section}>
           <AttributeSection
             section={summaryAnchors ? initiativeSummaryGroups(section, t("ppm:summaryCost"), t("ppm:summaryTimeline")) : section}
@@ -643,7 +648,7 @@ export default function CardDetailContent({
                 )}
                 {summaryAnchors.schedule && keys.includes(summaryAnchors.schedule) && (
                   <Box key="schedule-summary">
-                    <InitiativeTimelineSummary card={card} revision={scheduleRevision} onManage={canManageCard ? () => setManageTab({ cardId: card.id, tab: "reports" }) : undefined} />
+                    <InitiativeTimelineSummary card={card} revision={scheduleRevision} />
                   </Box>
                 )}
               </>
@@ -661,6 +666,23 @@ export default function CardDetailContent({
             editOn={editOn(customSectionAnchor(section.section))}
           />
         </ErrorBoundary>
+      );
+      if (!showHealthAndRisk) return attributes;
+      return (
+        <Fragment key={key}>
+          {attributes}
+          <ErrorBoundary label="Health Summary and Risk Management">
+            <Suspense fallback={null}>
+              <InitiativeHealthAndRisk
+                initiativeId={card.id}
+                revision={scheduleRevision}
+                canManage={canManageCard}
+                onManageRisks={() => setManageTab({ cardId: card.id, tab: "risks" })}
+                onChanged={() => setScheduleRevision((revision) => revision + 1)}
+              />
+            </Suspense>
+          </ErrorBoundary>
+        </Fragment>
       );
     }
     return null;
@@ -968,19 +990,15 @@ const InitiativeFinancialSummary = lazy(() => import("@/features/ppm/InitiativeF
 const InitiativeCompletion = lazy(() => import("@/features/ppm/InitiativeCompletion"));
 const PpmInitiativeTimeline = lazy(() => import("@/features/ppm/PpmInitiativeTimeline"));
 
-const PpmHealthSummary = lazy(() => import("@/features/ppm/PpmHealthSummary"));
+const InitiativeHealthAndRisk = lazy(() => import("@/features/ppm/InitiativeHealthAndRisk"));
 const PpmManageDialog = lazy(() => import("@/features/ppm/PpmManageDialog"));
 
-function InitiativeTimelineSummary({ card, revision, onManage }: { card: Card; revision: number; onManage?: () => void }) {
+function InitiativeTimelineSummary({ card, revision }: { card: Card; revision: number }) {
   const { data } = usePpmSchedule(card.id, revision);
   if (!data) return null;
-  const report = data.schedule_health || data.scope_health || data.cost_health ? data : null;
   return (
     <Suspense fallback={null}>
       <PpmInitiativeTimeline schedule={data} name={card.name} showDates={false} />
-      <Box sx={{ mt: 2 }}>
-        <PpmHealthSummary report={report} costHealth={data.cost_health} onManage={onManage} />
-      </Box>
     </Suspense>
   );
 }

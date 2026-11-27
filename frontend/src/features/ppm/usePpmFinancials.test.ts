@@ -1,7 +1,7 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { api } from "@/api/client";
-import { financialAmountFormatter, usePpmFinancials, usePpmLatestReport, usePpmSchedule } from "./usePpmFinancials";
+import { financialAmountFormatter, usePpmFinancials, usePpmLatestReport, usePpmRisks, usePpmSchedule } from "./usePpmFinancials";
 
 vi.mock("@/api/client", () => ({
   api: { get: vi.fn() },
@@ -108,5 +108,34 @@ describe("usePpmLatestReport", () => {
     await waitFor(() => expect(result.current.data?.id).toBe("new"));
     expect(get).toHaveBeenCalledTimes(2);
     expect(get.mock.calls[1][0]).toBe(get.mock.calls[0][0]);
+  });
+});
+
+describe("usePpmRisks", () => {
+  it("reads the initiative's risks, drops the previous initiative's and reloads on refetchKey", async () => {
+    get
+      .mockResolvedValueOnce([{ id: "r1" }])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{ id: "r2" }, { id: "r3" }]);
+    const { result, rerender } = renderHook(({ id, key }) => usePpmRisks(id, key), {
+      initialProps: { id: "i1", key: 0 },
+    });
+    await waitFor(() => expect(result.current.data?.map((r) => r.id)).toEqual(["r1"]));
+    expect(get).toHaveBeenCalledWith("/ppm/initiatives/i1/risks", { signal: expect.any(AbortSignal) });
+    rerender({ id: "i2", key: 0 });
+    expect(result.current.data).toBeNull();
+    await waitFor(() => expect(result.current.data).toEqual([]));
+    rerender({ id: "i2", key: 1 });
+    await waitFor(() => expect(result.current.data).toHaveLength(2));
+  });
+
+  it("reads nothing without an initiative and gives null on an error", async () => {
+    const none = renderHook(() => usePpmRisks(null));
+    expect(none.result.current.data).toBeNull();
+    expect(get).not.toHaveBeenCalled();
+    get.mockRejectedValueOnce(new Error("Forbidden"));
+    const denied = renderHook(() => usePpmRisks("i1"));
+    await waitFor(() => expect(denied.result.current.error).toBeTruthy());
+    expect(denied.result.current.data).toBeNull();
   });
 });

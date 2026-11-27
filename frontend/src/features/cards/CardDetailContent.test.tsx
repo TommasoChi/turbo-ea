@@ -24,6 +24,7 @@ vi.mock("@/hooks/useCurrency", () => ({
 }));
 const pml = vi.hoisted(() => ({ enabled: false, canView: true, canManage: true }));
 const completionReply = vi.hoisted(() => ({ value: { completion: 40, wbs_count: 3 } as unknown }));
+const reportsReply = vi.hoisted(() => ({ value: [] as unknown }));
 const comparisonReply = vi.hoisted(() => ({ value: undefined as unknown }));
 vi.mock("@/hooks/usePpmEnabled", () => ({ usePpmEnabled: () => ({ ppmEnabled: pml.enabled }) }));
 vi.mock("@/hooks/useGrcEnabled", () => ({ useGrcEnabled: () => ({ grcEnabled: false }) }));
@@ -39,6 +40,15 @@ vi.mock("@/hooks/usePermissions", () => ({ usePermissions: () => ({ can: (permis
 vi.mock("@/features/ppm/PpmInitiativeTimeline", () => ({ default: ({ schedule }: { schedule?: { start_date?: string; actual_start_date?: string } }) => <span data-testid="initiative-timeline">{schedule?.start_date} {schedule?.actual_start_date}</span> }));
 vi.mock("@/features/ppm/PpmCostTab", () => ({ default: () => <div>Cost tab content</div> }));
 vi.mock("@/features/ppm/PpmGanttTab", () => ({ default: () => <div>Gantt tab content</div> }));
+vi.mock("@/features/ppm/PpmRiskTab", () => ({ default: () => <div>Risk tab content</div> }));
+vi.mock("@/features/ppm/StatusReportDialog", () => ({
+  default: ({ initiativeId, report, onSaved, onClose }: { initiativeId: string; report?: unknown; onSaved: () => void; onClose: () => void }) => (
+    <div role="dialog" aria-label="report editor" data-initiative={initiativeId} data-edit={String(!!report)}>
+      <button onClick={onSaved}>save report</button>
+      <button onClick={onClose}>close editor</button>
+    </div>
+  ),
+}));
 vi.mock("@/features/ppm/PpmReportsTab", () => ({ default: ({ reports, onRefresh }: { reports: unknown[]; onRefresh: () => void }) => <div>Reports tab content {reports.length}<button onClick={onRefresh}>Refresh reports</button></div> }));
 vi.mock("@/components/EolLinkSection", () => ({ default: () => null }));
 vi.mock("@/features/bpm/ProcessFlowTab", () => ({ default: () => null }));
@@ -145,6 +155,7 @@ beforeEach(() => {
   pml.canView = true;
   pml.canManage = true;
   completionReply.value = { completion: 40, wbs_count: 3 };
+  reportsReply.value = [];
   comparisonReply.value = undefined;
   vi.mocked(api.get).mockReset().mockResolvedValue([]);
   vi.mocked(useMetamodel).mockReturnValue({
@@ -294,7 +305,7 @@ describe("CardDetailContent extension header slot", () => {
 });
 
 describe("CardDetailContent Initiative summaries", () => {
-  function initiative(summaryConfig = {}, canViewCosts = true, schedule = {}, permsOverride: Record<string, boolean> = {}) {
+  function initiative(summaryConfig = {}, canViewCosts = true, schedule = {}, permsOverride: Record<string, boolean> = {}, showPpmSummary = true) {
     const type = {
       ...APP_TYPE, key: "Initiative",
       fields_schema: [{
@@ -324,14 +335,14 @@ describe("CardDetailContent Initiative summaries", () => {
         ? (completionReply.value instanceof Error ? Promise.reject(completionReply.value) : completionReply.value)
         : path.endsWith("/schedule")
         ? { initiative_id: card.id, start_date: "2026-04-01", actual_start_date: "2026-05-15", ...schedule }
-        : []);
+        : path.endsWith("/reports") ? reportsReply.value : []);
     const record = { ...card, type: "Initiative", attributes: {
       costBudget: 100, costActual: 70, startDate: "2026-04-01", actualStart: "2026-05-15",
       endDate: "2026-09-30", actualEnd: "2026-10-15",
     } };
     vi.mocked(api.patch).mockResolvedValue(record);
     return render(<MemoryRouter><CardDetailContent card={record} perms={{ ...perms, can_view_costs: canViewCosts, ...permsOverride }}
-      onCardUpdate={() => {}} showLdvSection={false} showPpmTab={false} /></MemoryRouter>);
+      onCardUpdate={() => {}} showLdvSection={false} showPpmTab={false} showPpmSummary={showPpmSummary} /></MemoryRouter>);
   }
 
   it("places the Total budget bar and the Timeline inside the configured groups", async () => {
@@ -348,12 +359,12 @@ describe("CardDetailContent Initiative summaries", () => {
     );
   });
 
-  it("offers Cost, Timeline and Health Summary management for the initiative", async () => {
+  it("offers Cost, Timeline, Health Summary and Risk Management management for the initiative", async () => {
     pml.enabled = true;
     initiative();
     const summary = screen.getByRole("button", { name: /cost & timeline/i }).closest(".MuiAccordion-root")!;
-    await waitFor(() => expect(screen.getAllByRole("button", { name: /manage/i })).toHaveLength(3));
-    expect(summary).toContainElement(screen.getByText("Health Summary"));
+    await waitFor(() => expect(screen.getAllByRole("button", { name: /manage/i })).toHaveLength(4));
+    expect(summary).not.toContainElement(screen.getByText("Health Summary"));
     const costHeading = screen.getByText("Cost", { exact: true });
     const timelineHeading = screen.getByText("Timeline", { exact: true });
     expect(screen.getByRole("button", { name: /manage budget & costs/i }).parentElement).toBe(costHeading.parentElement);
@@ -366,15 +377,71 @@ describe("CardDetailContent Initiative summaries", () => {
     fireEvent.click(screen.getByRole("button", { name: /manage timeline/i }));
     expect(await screen.findByRole("dialog", { name: /gantt/i })).toBeInTheDocument();
     expect(await screen.findByText("Gantt tab content")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+  });
+
+  it("the full card page shows Health Summary and Risk Management for an Initiative", async () => {
+    pml.enabled = true;
+    reportsReply.value = [{ id: "r1", report_date: "2026-03-01", created_at: "x", schedule_health: "onTrack", scope_health: "onTrack", cost_health: null, summary: "Latest words", accomplishments: "", next_steps: "" }];
+    initiative();
+    expect(await screen.findByText("Latest words")).toBeInTheDocument();
+    expect(screen.getByText("Risk Management")).toBeInTheDocument();
+    const accordion = screen.getByRole("button", { name: /cost & timeline/i }).closest(".MuiAccordion-root")!;
+    const health = screen.getByText("Health Summary");
+    expect(accordion.compareDocumentPosition(health) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(api.get).toHaveBeenCalledWith(`/ppm/initiatives/${card.id}/risks`, expect.anything());
+  });
+
+  it("the side panel does not", async () => {
+    pml.enabled = true;
+    initiative({}, true, {}, {}, false);
+    expect(await screen.findByTestId("initiative-timeline")).toBeInTheDocument();
+    expect(screen.queryByText("Health Summary")).not.toBeInTheDocument();
+    expect(screen.queryByText("Risk Management")).not.toBeInTheDocument();
+    expect(api.get).not.toHaveBeenCalledWith(expect.stringMatching(/\/(risks|reports)$/), expect.anything());
+  });
+
+  it("Manage in Health Summary opens the status report editor and a save refreshes the summary", async () => {
+    pml.enabled = true;
+    initiative();
+    fireEvent.click(await screen.findByRole("button", { name: /manage health summary/i }));
+    const dialog = await screen.findByRole("dialog", { name: "report editor" });
+    expect(dialog).toHaveAttribute("data-initiative", card.id);
+    expect(dialog).toHaveAttribute("data-edit", "false");
+    const reads = () => vi.mocked(api.get).mock.calls.filter(([path]) => path.endsWith("/reports")).length;
+    const before = reads();
+    fireEvent.click(screen.getByRole("button", { name: "save report" }));
+    await waitFor(() => expect(reads()).toBeGreaterThan(before));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
-    fireEvent.click(screen.getByRole("button", { name: /manage health summary/i }));
-    const dialog = await screen.findByRole("dialog", { name: /status reports/i });
-    expect(await within(dialog).findByText("Reports tab content 0")).toBeInTheDocument();
-    expect(api.get).toHaveBeenCalledWith(expect.stringMatching(/\/reports$/), expect.anything());
-    const reportReads = vi.mocked(api.get).mock.calls.filter(([path]) => path.endsWith("/reports")).length;
-    fireEvent.click(within(dialog).getByRole("button", { name: "Refresh reports" }));
-    await waitFor(() => expect(vi.mocked(api.get).mock.calls.filter(([path]) => path.endsWith("/reports")).length).toBeGreaterThan(reportReads));
+  });
+
+  it("Manage in Risk Management opens the popup on the risks tab", async () => {
+    pml.enabled = true;
+    initiative();
+    fireEvent.click(await screen.findByRole("button", { name: /manage risks/i }));
+    expect(await screen.findByRole("dialog", { name: /risk management/i })).toBeInTheDocument();
+    expect(await screen.findByText("Risk tab content")).toBeInTheDocument();
+  });
+
+  it("both Manage buttons are absent without ppm.manage and can_edit", async () => {
+    pml.enabled = true;
+    pml.canManage = false;
+    const view = initiative();
+    expect(await screen.findByText("Risk Management")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /manage health summary|manage risks/i })).not.toBeInTheDocument();
+    view.unmount();
+    pml.canManage = true;
+    initiative({}, true, {}, { can_edit: false });
+    expect(await screen.findByText("Risk Management")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /manage health summary|manage risks/i })).not.toBeInTheDocument();
+  });
+
+  it("Risk Management renders for a user without cost view", async () => {
+    pml.enabled = true;
+    initiative({}, false);
+    expect(await screen.findByText("Risk Management")).toBeInTheDocument();
+    expect(screen.getByText("Health Summary")).toBeInTheDocument();
+    expect(api.get).toHaveBeenCalledWith(`/ppm/initiatives/${card.id}/risks`, expect.anything());
+    expect(api.get).not.toHaveBeenCalledWith(expect.stringMatching(/\/financials$/), expect.anything());
   });
 
   it("keeps initiative summaries visible without offering management to viewers", async () => {
@@ -422,6 +489,7 @@ describe("CardDetailContent Initiative summaries", () => {
 
   it("shows cost health even when the other health values are missing", async () => {
     pml.enabled = true;
+    reportsReply.value = [{ id: "r1", report_date: "2026-03-01", created_at: "x", schedule_health: null, scope_health: null, cost_health: null, summary: "", accomplishments: "", next_steps: "" }];
     initiative({}, true, { cost_health: "atRisk" });
     expect(await screen.findByText("Cost", { selector: ".MuiTypography-body2" })).toBeInTheDocument();
     expect(screen.queryByText("No status reports yet")).not.toBeInTheDocument();
@@ -454,7 +522,7 @@ describe("CardDetailContent Initiative summaries", () => {
     initiative();
     expect(screen.getByText("Actual Cost")).toBeInTheDocument();
     expect(screen.getByText("Actual Start")).toBeInTheDocument();
-    expect(api.get).not.toHaveBeenCalledWith(expect.stringMatching(/\/(financials|schedule|completion)$/), expect.anything());
+    expect(api.get).not.toHaveBeenCalledWith(expect.stringMatching(/\/(financials|schedule|completion|risks|reports)$/), expect.anything());
     expect(screen.queryByText("Total", { exact: true })).not.toBeInTheDocument();
     expect(screen.queryByTestId("initiative-timeline")).not.toBeInTheDocument();
   });
@@ -462,11 +530,11 @@ describe("CardDetailContent Initiative summaries", () => {
   it("does not mount private requests on hidden sections or without PML access", () => {
     pml.enabled = true;
     const view = initiative({ "custom:0": { hidden: true } });
-    expect(api.get).not.toHaveBeenCalledWith(expect.stringMatching(/\/(financials|schedule|completion)$/), expect.anything());
+    expect(api.get).not.toHaveBeenCalledWith(expect.stringMatching(/\/(financials|schedule|completion|risks|reports)$/), expect.anything());
     view.unmount();
     pml.canView = false;
     initiative();
-    expect(api.get).not.toHaveBeenCalledWith(expect.stringMatching(/\/(financials|schedule|completion)$/), expect.anything());
+    expect(api.get).not.toHaveBeenCalledWith(expect.stringMatching(/\/(financials|schedule|completion|risks|reports)$/), expect.anything());
   });
 
   it("refreshes the same Initiative schedule after saving the date without requesting financials for restricted readers", async () => {

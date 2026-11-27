@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { useApiQuery } from "@/hooks/useApiQuery";
 import { useCurrency } from "@/hooks/useCurrency";
 import { currencySymbolOverride } from "@/lib/currency";
-import type { PmlInitiativeSchedule, PpmFinancials, PpmStatusReport } from "@/types";
+import type { PmlInitiativeSchedule, PpmFinancials, PpmRisk, PpmStatusReport } from "@/types";
 
 function useInitiativeQuery<T extends { initiative_id: string }>(
   initiativeId: string | null | undefined,
@@ -64,6 +64,14 @@ export function usePpmLatestReport(
     [data],
   );
   return { data: error ? null : latest, loading, error };
+}
+
+export function usePpmRisks(initiativeId: string | null | undefined, refetchKey?: number) {
+  const { data, loading, error } = useApiQuery<PpmRisk[]>(
+    initiativeId ? "/ppm/initiatives/" + encodeURIComponent(initiativeId) + "/risks" : null,
+    { keepPreviousData: false, refetchKey },
+  );
+  return { data: error ? null : (data ?? null), loading, error };
 }
 
 export function decimalWithoutExponent(value: string): string {
