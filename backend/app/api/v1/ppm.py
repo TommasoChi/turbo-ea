@@ -565,7 +565,7 @@ def _cost_line_out_projected(
     withheld: bool = False,
 ) -> PpmCostLineOut:
     # Unset fields are omitted by the route's ``response_model_exclude_unset``.
-    amounts = (
+    amounts: dict[str, Any] = (
         {}
         if withheld
         else {"calculated_values": calculated, "planned": cl.planned, "actual": cl.actual}
@@ -871,7 +871,9 @@ async def _budget_line_out(db: AsyncSession, user: User, bl: PpmBudgetLine) -> P
 def _budget_line_out_projected(
     bl: PpmBudgetLine, visible: dict, calculated: dict, references: dict, *, withheld: bool = False
 ) -> PpmBudgetLineOut:
-    amounts = {} if withheld else {"calculated_values": calculated, "amount": bl.amount}
+    amounts: dict[str, Any] = (
+        {} if withheld else {"calculated_values": calculated, "amount": bl.amount}
+    )
     return PpmBudgetLineOut(
         field_values=visible,
         reference_display=references,

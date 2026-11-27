@@ -25,6 +25,7 @@ import from here.
 from __future__ import annotations
 
 import uuid
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -595,14 +596,13 @@ async def apply_response(
 
     updates: dict[str, object] = {}
     if attr_updates:
-        updates["attributes"] = {**(card.attributes or {}), **attr_updates}
+        merged: dict[str, Any] = {**(card.attributes or {}), **attr_updates}
+        updates["attributes"] = merged
         if not can_edit_costs:
             cost_keys = cost_field_keys_from_card_schema(
                 await db.scalar(select(CardType.fields_schema).where(CardType.key == card.type))
             )
-            updates["attributes"] = keep_stored_cost_values(
-                card.attributes, updates["attributes"], cost_keys
-            )
+            updates["attributes"] = keep_stored_cost_values(card.attributes, merged, cost_keys)
     if lifecycle_updates:
         lifecycle = dict(card.lifecycle or {})
         for phase, answer in lifecycle_updates.items():

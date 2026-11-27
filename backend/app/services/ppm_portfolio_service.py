@@ -729,6 +729,14 @@ async def build_gantt_items(
                     "opex_actual": None,
                 }
             )
+        cost_amounts: dict[str, Any] = (
+            {
+                key: costs.get(key, 0)
+                for key in ("capex_planned", "capex_actual", "opex_planned", "opex_actual")
+            }
+            if card.id in cost_access
+            else {}
+        )
         items.append(
             PpmGanttItem(
                 id=str(card.id),
@@ -739,14 +747,7 @@ async def build_gantt_items(
                 **date_kwargs,
                 cost_budget=(budget_total or None) if card.id in cost_access else None,
                 cost_actual=(actual_total or None) if card.id in cost_access else None,
-                **(
-                    {
-                        key: costs.get(key, 0)
-                        for key in ("capex_planned", "capex_actual", "opex_planned", "opex_actual")
-                    }
-                    if card.id in cost_access
-                    else {}
-                ),
+                **cost_amounts,
                 group_id=str(group_info[0]) if group_info else None,
                 group_name=group_info[1] if group_info else None,
                 group_anchor=anchors.get(card.id) == card.id,

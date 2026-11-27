@@ -89,7 +89,7 @@ async def attributes_for_new_card(
     creator may not set (a new card has no stakeholder role yet, so only the
     app-level ``costs.view`` + ``costs.edit`` for its type count)."""
     cost_keys = cost_field_keys_from_card_schema(card_type.fields_schema if card_type else None)
-    if not attributes or not cost_keys.intersection(attributes):
+    if card_type is None or not attributes or not cost_keys.intersection(attributes):
         return attributes
     for permission in ("costs.view", "costs.edit"):
         if not await PermissionService.has_app_permission(
