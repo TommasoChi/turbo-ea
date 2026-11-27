@@ -232,6 +232,10 @@ const TAB_PPM_STATUS_REPORTS = tabSelector(...i18nLabels("ppm:statusReports"));
 const TAB_PPM_RISK = tabSelector(...i18nLabels("ppm:riskManagement"));
 const TAB_PPM_TASKS = tabSelector(...i18nLabels("ppm:tasks"));
 const TAB_PPM_GANTT = tabSelector(...i18nLabels("ppm:gantt"));
+// Section heading of the Risk Management block on the Initiative card page.
+const HEADING_PPM_RISK = i18nLabels("ppm:riskManagement")
+  .map((l) => `.MuiTypography-subtitle1:has-text("${hasTextArg(l)}")`)
+  .join(", ");
 const BTN_CREATE = i18nLabels("common:actions.create", "nav:create")
   .map((l) => `button:has-text("${hasTextArg(l)}")`)
   .join(", ");
@@ -2117,6 +2121,29 @@ export const DOC_PAGES: PageDef[] = [
       pt: "60_ficha_subelementos_relacoes",
       zh: "60_card_subitem_relations",
       ru: "60_kartochka_podelementy_svyazi",
+    },
+  },
+
+  // Initiative card page: Cost & Timeline (Budget and Actual Cost side by side,
+  // Completion by the dates), then Health Summary and Risk Management.
+  {
+    id: "106_initiative_card_ppm",
+    route: "/cards/{{cardId:sampleInitiative}}",
+    waitFor: "[data-testid='card-detail'], [class*='CardDetail'], h5, h4",
+    actions: [
+      { type: "wait", ms: 1500 },
+      { type: "scroll", target: HEADING_PPM_RISK, align: "start" },
+      { type: "wait", ms: 600 },
+    ],
+    filenames: {
+      en: "106_initiative_card_ppm",
+      de: "106_initiative_karte_ppm",
+      fr: "106_initiative_fiche_ppm",
+      es: "106_iniciativa_ficha_ppm",
+      it: "106_iniziativa_scheda_ppm",
+      pt: "106_iniciativa_ficha_ppm",
+      zh: "106_initiative_card_ppm",
+      ru: "106_initsiativa_kartochka_ppm",
     },
   },
 

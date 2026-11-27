@@ -5,6 +5,21 @@ All notable changes to Turbo EA are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.216.0] - 2026-11-28
+
+### Added
+
+- Health Summary on an Initiative card and the PML Overview shows the report date and the three texts of the latest status report.
+- The three texts of a status report are limited to 250 characters, with a counter in the editor.
+- Risk Management on the Initiative card page and the PML Overview: tiles, a donut by score band, a chart by status and a compact heat map of the active risks.
+- FY, Category and Provider columns in the Plan Budget tables.
+
+### Changed
+
+- On the Initiative card page, Budget and Actual Cost sit side by side with one Total budget bar, and Timeline comes before Cost with Completion next to the dates.
+- The Plan Budget tables scroll sideways at their natural widths and offer create, edit and delete only: the move icon and "Initiative total invoiced" are gone.
+- Both back arrows of the PML project page go to the portfolio tab.
+
 ## [2.215.0] - 2026-11-27
 
 ### Added

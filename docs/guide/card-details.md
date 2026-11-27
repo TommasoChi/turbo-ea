@@ -293,6 +293,19 @@ When the [GRC module](grc.md) is enabled **and** the card has at least one linke
 
 For **Business Process** cards, an additional **Process Flow** tab appears with an embedded BPMN diagram viewer/editor. See [BPM](bpm.md) for details on process flow management.
 
+### Initiative Summary (Initiative cards)
+
+![Initiative card page](../assets/img/en/106_initiative_card_ppm.png)
+
+On an **Initiative** card the **Cost & Timeline** section is a summary of the initiative:
+
+- **Timeline** comes first, with the permitted Plan and Actual dates and the **Completion** ring next to the dates.
+- **Budget** and **Actual Cost** sit side by side, followed by one **Total budget** bar that compares them. The bar is part of the cost view, so it is shown only to readers who may see costs.
+- **Health Summary** follows the section. It shows the report date, the **On Time**, **On Cost** and **On Scope** indicators and three texts from the latest status report. Each text is limited to 250 characters: the status report editor shows a counter and refuses more.
+- **Risk Management** shows the active risks (open and mitigating): tiles, a donut by score band whose legend you click to hide or show a band, a chart by status and a compact heat map.
+
+The **Manage** buttons of Health Summary and Risk Management need the PML manage permission and edit rights on the card. **Manage** on Health Summary opens the status report editor for a new report; **Manage** on Risk Management opens the **Manage** popup on its **Risks** tab.
+
 ## PML Tab (Initiative cards only) { #ppm-tab-initiative-cards-only }
 
 When the [PML module](ppm.md) is enabled, **Initiative** cards display an additional **PML** tab as the last tab. Clicking this tab navigates to the PML Initiative Detail View where you can manage status reports, budgets, risks, tasks, and Gantt timelines.
