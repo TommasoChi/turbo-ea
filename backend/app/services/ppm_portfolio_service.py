@@ -386,12 +386,10 @@ async def build_initiative_rollup(
     type_schema = await db.scalar(select(CardType).where(CardType.key == INITIATIVE_TYPE))
     ids, dates = await _visible_descendant_dates(db, root, read_scope, type_schema)
     cost_access = await PermissionService.card_ids_with_cost_access(db, user, [root.id, *ids])
-    cost_ids = (
-        [card_id for card_id in ids if card_id in cost_access] if root.id in cost_access else []
-    )
     start, end = date_span(ids, dates)
     if root.id not in cost_access:
         return PpmRollupOut(descendant_count=len(ids), start_date=start, end_date=end)
+    cost_ids = [card_id for card_id in ids if card_id in cost_access]
     cost_rows = await load_cost_rows(db, [root.id, *cost_ids])
     own = cost_presence_from(cost_rows).get(root.id, LinePresence(False, False))
     aggregates = cost_aggregates_from(cost_rows)

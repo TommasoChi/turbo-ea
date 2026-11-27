@@ -273,15 +273,17 @@ async def load_financials(db: AsyncSession, card: Card, user: User) -> tuple[dic
                 "date": cost.date,
             }
             if can_view:
-                row.update(planned=str(cost.planned), actual=str(amount))
+                row.update(
+                    planned=str(cost.planned),
+                    actual=str(amount),
+                    total_invoiced=str(invoiced[cost.id]),
+                    remaining_to_invoice=str(amount - invoiced[cost.id]),
+                )
             if cost.budget_line_id in budget_values:
                 dest = budget_values[cost.budget_line_id]
                 dest["total_cost_items"] += amount
                 dest["total_invoiced"] += invoiced[cost.id]
                 dest["remaining_to_invoice"] += amount - invoiced[cost.id]
-            if can_view:
-                row["total_invoiced"] = str(invoiced[cost.id])
-                row["remaining_to_invoice"] = str(amount - invoiced[cost.id])
             cost_rows.append(row)
         budget_rows = []
         for budget in budgets:
@@ -300,9 +302,8 @@ async def load_financials(db: AsyncSession, card: Card, user: User) -> tuple[dic
                     amount=str(budget.amount),
                     total_cost_items=str(vals["total_cost_items"]),
                     remaining_budget=str(Decimal(str(budget.amount)) - vals["total_cost_items"]),
-                )
-                budget_row.update(
-                    {k: str(vals[k]) for k in ("total_invoiced", "remaining_to_invoice")}
+                    total_invoiced=str(vals["total_invoiced"]),
+                    remaining_to_invoice=str(vals["remaining_to_invoice"]),
                 )
             budget_rows.append(budget_row)
         grand: dict[str, Decimal] = defaultdict(Decimal)
@@ -319,9 +320,8 @@ async def load_financials(db: AsyncSession, card: Card, user: User) -> tuple[dic
                     amount=str(values["amount"]),
                     total_cost_items=str(values["total_cost_items"]),
                     remaining_budget=str(values["amount"] - values["total_cost_items"]),
-                )
-                subtotal_result.update(
-                    {k: str(values[k]) for k in ("total_invoiced", "remaining_to_invoice")}
+                    total_invoiced=str(values["total_invoiced"]),
+                    remaining_to_invoice=str(values["remaining_to_invoice"]),
                 )
             subtotals.append(subtotal_result)
         result: dict[str, Any] = {

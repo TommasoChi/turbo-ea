@@ -555,27 +555,27 @@ export default function PpmRiskGrid({
               {t("common:actions.export")}
             </Button>
             {!readOnly && (
-              <Button
-                variant="outlined"
-                color="inherit"
-                size="small"
-                startIcon={<MaterialSymbol icon="upload" size={18} />}
-                onClick={onImport}
-                sx={SX.toolbarButton}
-              >
-                {t("common:actions.import")}
-              </Button>
-            )}
-            {!readOnly && (
-              <Button
-                variant="contained"
-                size="small"
-                startIcon={<MaterialSymbol icon="add" size={18} />}
-                onClick={onAdd}
-                sx={SX.toolbarButton}
-              >
-                {t("addRisk")}
-              </Button>
+              <>
+                <Button
+                  variant="outlined"
+                  color="inherit"
+                  size="small"
+                  startIcon={<MaterialSymbol icon="upload" size={18} />}
+                  onClick={onImport}
+                  sx={SX.toolbarButton}
+                >
+                  {t("common:actions.import")}
+                </Button>
+                <Button
+                  variant="contained"
+                  size="small"
+                  startIcon={<MaterialSymbol icon="add" size={18} />}
+                  onClick={onAdd}
+                  sx={SX.toolbarButton}
+                >
+                  {t("addRisk")}
+                </Button>
+              </>
             )}
           </Stack>
         </Stack>

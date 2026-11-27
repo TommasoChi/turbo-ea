@@ -164,8 +164,9 @@ export default function CardDetailContent({
   // Costs are managed with the right to edit them, everything else with card edit.
   const canManageCosts = can("ppm.manage") && perms.can_edit_costs;
   const canManageCard = can("ppm.manage") && perms.can_edit;
+  const canManageTab = manageTab?.tab === "cost" ? canManageCosts : canManageCard;
   const canShowManage = !!manageTab && manageTab.cardId === card.id && showInitiativeSummaries
-    && (manageTab.tab === "cost" ? canManageCosts : canManageCard);
+    && canManageTab;
   if (manageTab && !canShowManage) setManageTab(null);
 
   // Card-scoped Risks / Compliance counts. `null` = still loading → render the
@@ -935,7 +936,7 @@ export default function CardDetailContent({
       {canShowManage && manageTab && (
         <Suspense fallback={null}>
           <PpmManageDialog
-            canEdit={manageTab.tab === "cost" ? canManageCosts : canManageCard}
+            canEdit={canManageTab}
             card={card}
             tab={manageTab.tab}
             onChanged={() => {

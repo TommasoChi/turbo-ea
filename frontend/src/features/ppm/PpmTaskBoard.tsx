@@ -406,7 +406,7 @@ export default function PpmTaskBoard({ initiativeId, canEdit }: Props) {
                   </DroppableColumn>
                 </SortableContext>
                 <Box sx={{ p: 1, mt: "auto" }}>
-                  {!canEdit ? null : quickAdd?.status === status ? (
+                  {canEdit && (quickAdd?.status === status ? (
                     <TextField
                       autoFocus
                       size="small"
@@ -432,7 +432,7 @@ export default function PpmTaskBoard({ initiativeId, canEdit }: Props) {
                     >
                       {t("quickAdd")}
                     </Button>
-                  )}
+                  ))}
                 </Box>
               </Paper>
             );
