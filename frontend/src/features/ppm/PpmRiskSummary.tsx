@@ -59,7 +59,9 @@ export default function PpmRiskSummary({
 
   const header = (
     <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
-      <Typography variant="h6">{t("riskManagement")}</Typography>
+      <Typography variant="subtitle1" fontWeight={600}>
+        {t("riskManagement")}
+      </Typography>
       {onManage && (
         <Button size="small" aria-label={t("riskSummaryManage")} onClick={onManage}>
           {t("manage")}

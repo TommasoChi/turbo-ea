@@ -5,6 +5,7 @@
  * Budget & Costs tab is not offered while every other tab keeps its place.
  */
 import { act, screen, waitFor } from "@testing-library/react";
+import { useLocation } from "react-router";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -63,6 +64,41 @@ function renderPage(tab: string, permissions: string[]) {
 }
 
 beforeEach(() => get.mockReset());
+
+function Landing() {
+  const { pathname, search } = useLocation();
+  return <output data-testid="landing">{pathname + search}</output>;
+}
+
+function renderWithLanding(route: string) {
+  return renderWithProviders(<PpmProjectDetail />, {
+    route,
+    routes: [{ path: "/ppm/:id" }, { path: "/ppm", element: <Landing /> }],
+    user: userWith("ppm.view"),
+  });
+}
+
+const backArrow = () => screen.getByText("arrow_back").closest("button")!;
+
+describe("PpmProjectDetail back arrows", () => {
+  it("the header arrow goes to the portfolio tab", async () => {
+    load({ can_view_costs: true, can_edit: true });
+    const { user } = renderWithLanding("/ppm/i1");
+    await screen.findByTestId("overview-tab");
+    await user.click(backArrow());
+    expect(screen.getByTestId("landing")).toHaveTextContent("/ppm?tab=portfolio");
+  });
+
+  it("the arrow of the error state goes to the portfolio tab", async () => {
+    get.mockImplementation((path: string) =>
+      path === "/cards/i1" ? Promise.reject(new Error("boom")) : Promise.resolve([]),
+    );
+    const { user } = renderWithLanding("/ppm/i1");
+    await screen.findByText("boom");
+    await user.click(backArrow());
+    expect(screen.getByTestId("landing")).toHaveTextContent("/ppm?tab=portfolio");
+  });
+});
 
 describe("PpmProjectDetail permissions", () => {
   it("hands the write tabs canEdit = ppm.manage and card edit", async () => {
@@ -164,7 +200,7 @@ describe("PpmProjectDetail permissions", () => {
       return Promise.resolve([]);
     });
     renderPage("cost", ["ppm.view", "ppm.manage"]);
-    expect(await screen.findByTestId("overview-tab")).toHaveTextContent("undefined/false");
+    expect(await screen.findByTestId("overview-tab")).toHaveTextContent("false/false");
     expect(screen.queryByRole("tab", { name: "Budget & Costs" })).not.toBeInTheDocument();
     expect(get).not.toHaveBeenCalledWith(expect.stringContaining("/financials"), expect.anything());
   });

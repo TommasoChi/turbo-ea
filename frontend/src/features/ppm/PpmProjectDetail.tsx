@@ -200,7 +200,7 @@ export default function PpmProjectDetail() {
     return (
       <Box sx={{ p: { xs: 1.5, sm: 3 }, maxWidth: 1400, mx: "auto" }}>
         <Box display="flex" alignItems="center" gap={1} mb={2}>
-          <IconButton sx={{ flexShrink: 0 }} onClick={() => navigate("/ppm")}>
+          <IconButton sx={{ flexShrink: 0 }} onClick={() => navigate("/ppm?tab=portfolio")}>
             <MaterialSymbol icon="arrow_back" size={20} />
           </IconButton>
         </Box>
@@ -215,7 +215,7 @@ export default function PpmProjectDetail() {
     <Box sx={{ p: { xs: 1.5, sm: 3 }, maxWidth: 1400, mx: "auto" }}>
       {/* Header */}
       <Box display="flex" alignItems="center" gap={1} mb={2}>
-        <IconButton sx={{ flexShrink: 0 }} onClick={() => navigate("/ppm")}>
+        <IconButton sx={{ flexShrink: 0 }} onClick={() => navigate("/ppm?tab=portfolio")}>
           <MaterialSymbol icon="arrow_back" size={20} />
         </IconButton>
         <Box sx={{ flex: 1, minWidth: 0 }}>
@@ -289,6 +289,9 @@ export default function PpmProjectDetail() {
           budgetLines={budgetLines}
           rollup={rollup}
           canViewCosts={perms.can_view_costs}
+          canEdit={canEdit}
+          onRefresh={loadData}
+          risks={risks}
         />
       )}
       {activeTab === 1 && (

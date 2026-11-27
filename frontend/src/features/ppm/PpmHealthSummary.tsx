@@ -32,7 +32,7 @@ export default function PpmHealthSummary({ report, costHealth, onManage }: Props
         alignItems="center"
         sx={{ borderBottom: 1, borderColor: "divider", pb: 0.5, mb: 1 }}
       >
-        <Typography variant="subtitle2" fontWeight={600}>
+        <Typography variant="subtitle1" fontWeight={600}>
           {t("healthSummary")}
         </Typography>
         {onManage && (

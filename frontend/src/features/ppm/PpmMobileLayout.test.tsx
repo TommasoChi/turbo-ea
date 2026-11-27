@@ -87,7 +87,7 @@ describe("PpmOverviewTab financials", () => {
         latestReport={null}
         costLines={[]}
         budgetLines={[]}
-        canViewCosts
+        canViewCosts canEdit={false} onRefresh={() => {}} risks={[]}
       />,
     );
     // The KPI caption said "Total Budget" and the first BudgetBar repeated it

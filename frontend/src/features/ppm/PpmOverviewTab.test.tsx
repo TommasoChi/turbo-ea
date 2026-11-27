@@ -25,7 +25,19 @@ import { mockApi } from "@/test/apiMock";
 import { hookState } from "@/test/hooks";
 import { RAG_COLORS, STATUS_COLORS } from "@/theme/tokens";
 import i18n from "@/i18n";
+vi.mock("./StatusReportDialog", () => ({
+  default: ({ onSaved }: { onSaved: () => void }) => (
+    <button type="button" onClick={onSaved}>
+      stub-save-report
+    </button>
+  ),
+}));
+vi.mock("./PpmManageDialog", () => ({
+  default: ({ tab }: { tab: string }) => <div data-testid="manage-dialog">{tab}</div>,
+}));
+
 import PpmOverviewTab from "./PpmOverviewTab";
+import userEvent from "@testing-library/user-event";
 import { pinEnglishNumberFormat } from "@/test/englishNumbers";
 
 pinEnglishNumberFormat();
@@ -62,7 +74,7 @@ function renderTab(card: Card = CARD) {
       costLines={[]}
       budgetLines={[]}
       rollup={ROLLUP_NONE}
-      canViewCosts
+      canViewCosts canEdit={false} onRefresh={() => {}} risks={[]}
     />,
   );
 }
@@ -173,7 +185,7 @@ describe("PpmOverviewTab — completion", () => {
     mockApi.on("get", "/ppm/initiatives/i1/completion", () => slow.promise);
     mockApi.on("get", "/ppm/initiatives/i2/completion", { completion: 70 });
     const { rerender } = render(
-      <PpmOverviewTab card={CARD} latestReport={null} costLines={[]} budgetLines={[]} rollup={null} canViewCosts />,
+      <PpmOverviewTab card={CARD} latestReport={null} costLines={[]} budgetLines={[]} rollup={null} canViewCosts canEdit={false} onRefresh={() => {}} risks={[]} />,
     );
     rerender(
       <PpmOverviewTab
@@ -182,7 +194,7 @@ describe("PpmOverviewTab — completion", () => {
         costLines={[]}
         budgetLines={[]}
         rollup={null}
-        canViewCosts
+        canViewCosts canEdit={false} onRefresh={() => {}} risks={[]}
       />,
     );
     expect(await screen.findByText("70%")).toBeInTheDocument();
@@ -197,7 +209,7 @@ describe("PpmOverviewTab — completion", () => {
   it("does not show the previous initiative's figure while the next one loads", async () => {
     mockApi.on("get", "/ppm/initiatives/i2/completion", () => new Promise(() => {}));
     const { rerender } = render(
-      <PpmOverviewTab card={CARD} latestReport={null} costLines={[]} budgetLines={[]} rollup={null} canViewCosts />,
+      <PpmOverviewTab card={CARD} latestReport={null} costLines={[]} budgetLines={[]} rollup={null} canViewCosts canEdit={false} onRefresh={() => {}} risks={[]} />,
     );
     await screen.findByText("40%");
     rerender(
@@ -207,7 +219,7 @@ describe("PpmOverviewTab — completion", () => {
         costLines={[]}
         budgetLines={[]}
         rollup={null}
-        canViewCosts
+        canViewCosts canEdit={false} onRefresh={() => {}} risks={[]}
       />,
     );
     await waitFor(() => expect(screen.queryByText("40%")).not.toBeInTheDocument());
@@ -267,7 +279,7 @@ describe("PpmOverviewTab — health summary", () => {
   const dotOf = (label: string) => screen.getByText(label).previousElementSibling as HTMLElement;
 
   it("hides the cost health when the protected schedule omits it", async () => {
-    render(<PpmOverviewTab card={CARD} latestReport={report({})} costLines={[]} budgetLines={[]} rollup={null} canViewCosts />);
+    render(<PpmOverviewTab card={CARD} latestReport={report({})} costLines={[]} budgetLines={[]} rollup={null} canViewCosts canEdit={false} onRefresh={() => {}} risks={[]} />);
     await screen.findByText("Start Date");
     const summary = screen.getByText("Health Summary").parentElement!.parentElement!;
     expect(within(summary).queryByText("Cost")).not.toBeInTheDocument();
@@ -277,7 +289,7 @@ describe("PpmOverviewTab — health summary", () => {
   it("paints each dimension's dot in the theme's RAG colour", async () => {
     mockApi.on("get", "/ppm/initiatives/i1/schedule", { initiative_id: "i1", start_date: null, end_date: null, cost_health: "atRisk", plan_derived: false });
     render(
-      <PpmOverviewTab card={CARD} latestReport={report({})} costLines={[]} budgetLines={[]} rollup={null} canViewCosts />,
+      <PpmOverviewTab card={CARD} latestReport={report({})} costLines={[]} budgetLines={[]} rollup={null} canViewCosts canEdit={false} onRefresh={() => {}} risks={[]} />,
     );
     await screen.findByText("Cost");
     expect(dotOf("Schedule")).toHaveStyle({ backgroundColor: RAG_COLORS.green });
@@ -293,7 +305,7 @@ describe("PpmOverviewTab — health summary", () => {
         costLines={[]}
         budgetLines={[]}
         rollup={null}
-        canViewCosts
+        canViewCosts canEdit={false} onRefresh={() => {}} risks={[]}
       />,
     );
     await screen.findByText("40%");
@@ -359,7 +371,7 @@ describe("PpmOverviewTab — beneath this initiative", () => {
         costLines={costLines}
         budgetLines={budgetLines}
         rollup={rollup}
-        canViewCosts
+        canViewCosts canEdit={false} onRefresh={() => {}} risks={[]}
       />,
     );
   /** The KPI value under a caption. */
@@ -550,7 +562,7 @@ describe("PpmOverviewTab — without cost access", () => {
 
   it("leaves the Financials panel out, and everything else in place", async () => {
     render(
-      <PpmOverviewTab card={CARD} latestReport={null} costLines={[]} budgetLines={[]} rollup={WITHHELD} canViewCosts={false} />,
+      <PpmOverviewTab card={CARD} latestReport={null} costLines={[]} budgetLines={[]} rollup={WITHHELD} canViewCosts={false} canEdit={false} onRefresh={() => {}} risks={[]} />,
     );
     await screen.findByText("40%");
     expect(screen.queryByText("Financials")).not.toBeInTheDocument();
@@ -562,12 +574,88 @@ describe("PpmOverviewTab — without cost access", () => {
 
   it("shows no NaN when a roll-up arrives without amounts", async () => {
     render(
-      <PpmOverviewTab card={CARD} latestReport={null} costLines={[]} budgetLines={[]} rollup={WITHHELD} canViewCosts />,
+      <PpmOverviewTab card={CARD} latestReport={null} costLines={[]} budgetLines={[]} rollup={WITHHELD} canViewCosts canEdit={false} onRefresh={() => {}} risks={[]} />,
     );
     await screen.findByText("40%");
     const block = screen.getByTestId("ppm-beneath");
     expect(block).not.toHaveTextContent("NaN");
     expect(block).not.toHaveTextContent("Budget $");
     expect(screen.queryByText(/NaN/)).not.toBeInTheDocument();
+  });
+});
+
+describe("PpmOverviewTab — layout", () => {
+  const NO_REPORT = { initiative_id: "i1", start_date: null, end_date: null, plan_derived: false };
+  const props = {
+    card: CARD,
+    latestReport: null,
+    costLines: [],
+    budgetLines: [],
+    rollup: null,
+    canViewCosts: true,
+    canEdit: false,
+    onRefresh: () => {},
+    risks: [],
+  };
+
+  it("renders Description, Timeline, Health Summary, Risk Management, Financials in that order", async () => {
+    mockApi.on("get", "/ppm/initiatives/i1/schedule", NO_REPORT);
+    render(<PpmOverviewTab {...props} />);
+    await screen.findByText("40%");
+    const titles = ["Description", "Timeline", "Health Summary", "Risk Management", "Financials"].map(
+      (name) => screen.getByText(name),
+    );
+    titles.slice(1).forEach((el, i) => {
+      expect(titles[i].compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    });
+  });
+
+  it("gives every section the same heading style", async () => {
+    render(<PpmOverviewTab {...props} />);
+    await screen.findByText("40%");
+    for (const name of ["Description", "Timeline", "Health Summary", "Risk Management", "Financials"]) {
+      expect(screen.getByText(name)).toHaveClass("MuiTypography-subtitle1");
+    }
+  });
+
+  it("puts Completion beside the dates, inside the Timeline panel", async () => {
+    render(<PpmOverviewTab {...props} />);
+    const completion = (await screen.findByText("40%")).closest("div");
+    const panel = screen.getByText("Timeline").parentElement!;
+    expect(panel).toContainElement(completion);
+    expect(within(panel).getByText("Completion")).toBeInTheDocument();
+  });
+
+  it("offers no Manage button when canEdit is false", async () => {
+    render(<PpmOverviewTab {...props} />);
+    await screen.findByText("40%");
+    expect(screen.queryByRole("button", { name: /manage/i })).not.toBeInTheDocument();
+  });
+
+  it("opens the status report dialog from Health Summary and refreshes after saving", async () => {
+    const onRefresh = vi.fn();
+    const user = userEvent.setup();
+    render(<PpmOverviewTab {...props} canEdit onRefresh={onRefresh} />);
+    await screen.findByText("40%");
+    await user.click(screen.getByRole("button", { name: "Manage Health Summary" }));
+    await user.click(screen.getByRole("button", { name: "stub-save-report" }));
+    expect(onRefresh).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("button", { name: "stub-save-report" })).not.toBeInTheDocument();
+  });
+
+  it("opens the risks manage dialog from Risk Management and refreshes on change", async () => {
+    const user = userEvent.setup();
+    render(<PpmOverviewTab {...props} canEdit />);
+    await screen.findByText("40%");
+    await user.click(screen.getByRole("button", { name: "Manage risks" }));
+    expect(screen.getByTestId("manage-dialog")).toHaveTextContent("risks");
+  });
+
+  it("keeps Risk Management and drops Financials without cost view", async () => {
+    render(<PpmOverviewTab {...props} canViewCosts={false} />);
+    await screen.findByText("40%");
+    expect(screen.getByText("Risk Management")).toBeInTheDocument();
+    expect(screen.getByText("No risks yet")).toBeInTheDocument();
+    expect(screen.queryByText("Financials")).not.toBeInTheDocument();
   });
 });
