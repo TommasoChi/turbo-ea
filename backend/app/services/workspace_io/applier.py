@@ -42,6 +42,7 @@ from app.core.permissions import (
     migrate_legacy_app_permissions,
     strip_legacy_card_permissions,
     with_legacy_cost_grant,
+    with_legacy_edit_cost_grant,
     with_legacy_license_grant,
 )
 from app.models.app_settings import AppSettings
@@ -1559,6 +1560,17 @@ def _predates_view_costs(bundle: WorkspaceBundle) -> bool:
     return version is not None and version < first_release
 
 
+EDIT_COSTS_SINCE = (2, 215, 0)
+
+
+def _predates_edit_costs(bundle: WorkspaceBundle) -> bool:
+    """Upstream never had ``card.edit_costs``; a fork bundle has it from 2.215.0."""
+    if schema.SHEET_COST_ITEM_TYPES not in bundle.sheets:
+        return True
+    version = bundle.app_version
+    return version is not None and version < EDIT_COSTS_SINCE
+
+
 def _make_config_applier(sec: schema.ConfigSection):
     async def _apply(db, bundle: WorkspaceBundle, sr: SectionResult, dry_run: bool) -> None:
         existing_rows = (await db.execute(select(sec.model))).scalars().all()
@@ -1596,6 +1608,8 @@ def _make_config_applier(sec: schema.ConfigSection):
                         and bundle.app_version < VIEW_COSTS_SINCE
                     ):
                         perms = with_legacy_license_grant(str(data.get("key")), perms)
+                    if _predates_edit_costs(bundle):
+                        perms = with_legacy_edit_cost_grant(str(data.get("key")), perms)
                     data["permissions"] = perms
                 elif sec.model is Role:
                     data["permissions"] = migrate_legacy_app_permissions(data["permissions"])

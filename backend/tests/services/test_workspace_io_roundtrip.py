@@ -1623,15 +1623,17 @@ async def test_import_cannot_reintroduce_legacy_permission_keys(db):
         )
     ).scalar_one()
     assert "card.quality_seal" not in stored
+    stored.pop("card.edit_costs", None)
     assert stored == {"card.view": True}
 
 
 async def _reimported_role_permissions(
-    db, roles: dict, *, app_version, wipe=True, fork=False
+    db, roles: dict, *, app_version, wipe=True, fork=False, keep_edit_costs=False
 ) -> dict:
     """Export ``roles`` (key -> permissions), stamp the bundle as written by
     ``app_version`` (``None`` leaves the manifest without one) and import it
-    back; returns each role's stored permissions."""
+    back; returns each role's stored permissions (``card.edit_costs`` left out
+    unless ``keep_edit_costs``, which these cases do not concern)."""
     from app.models.card_type import CardType
     from app.models.stakeholder_role_definition import StakeholderRoleDefinition
 
@@ -1675,7 +1677,12 @@ async def _reimported_role_permissions(
             StakeholderRoleDefinition.key, StakeholderRoleDefinition.permissions
         ).execution_options(populate_existing=True)
     )
-    return {key: permissions for key, permissions in rows.all()}
+    return {
+        key: permissions
+        if keep_edit_costs
+        else {k: v for k, v in permissions.items() if k != "card.edit_costs"}
+        for key, permissions in rows.all()
+    }
 
 
 _PRE_COSTS_ROLES = {
