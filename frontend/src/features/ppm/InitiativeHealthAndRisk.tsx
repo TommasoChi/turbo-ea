@@ -1,9 +1,11 @@
+import Alert from "@mui/material/Alert";
 import Box from "@mui/material/Box";
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import PpmHealthSummary from "./PpmHealthSummary";
 import PpmRiskSummary from "./PpmRiskSummary";
 import StatusReportDialog from "./StatusReportDialog";
-import { usePpmLatestReport, usePpmRisks, usePpmSchedule } from "./usePpmFinancials";
+import { usePpmLatestReport, usePpmRisks } from "./usePpmFinancials";
 
 interface Props {
   initiativeId: string;
@@ -17,21 +19,29 @@ interface Props {
 
 /** The Initiative card page's Health Summary and Risk Management sections. */
 export default function InitiativeHealthAndRisk({ initiativeId, revision, canManage, onManageRisks, onChanged }: Props) {
+  const { t } = useTranslation("ppm");
   const [editing, setEditing] = useState(false);
-  const { data: report } = usePpmLatestReport(initiativeId, revision);
-  const { data: schedule } = usePpmSchedule(initiativeId, revision);
-  const { data: risks } = usePpmRisks(initiativeId, revision);
+  const { data: report, error: reportError } = usePpmLatestReport(initiativeId, revision);
+  const { data: risks, error: risksError } = usePpmRisks(initiativeId, revision);
   return (
     <>
       <Box sx={{ mb: 2 }}>
-        <PpmHealthSummary
-          report={report}
-          costHealth={schedule?.cost_health}
-          onManage={canManage ? () => setEditing(true) : undefined}
-        />
+        {reportError ? (
+          <Alert severity="error">{reportError.message || t("common:errors.generic")}</Alert>
+        ) : (
+          <PpmHealthSummary
+            report={report}
+            costHealth={report?.cost_health}
+            onManage={canManage ? () => setEditing(true) : undefined}
+          />
+        )}
       </Box>
       <Box sx={{ mb: 2 }}>
-        <PpmRiskSummary risks={risks} onManage={canManage ? onManageRisks : undefined} />
+        {risksError ? (
+          <Alert severity="error">{risksError.message || t("common:errors.generic")}</Alert>
+        ) : (
+          <PpmRiskSummary risks={risks} onManage={canManage ? onManageRisks : undefined} />
+        )}
       </Box>
       {editing && (
         <StatusReportDialog

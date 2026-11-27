@@ -25,6 +25,7 @@ vi.mock("@/hooks/useCurrency", () => ({
 const pml = vi.hoisted(() => ({ enabled: false, canView: true, canManage: true }));
 const completionReply = vi.hoisted(() => ({ value: { completion: 40, wbs_count: 3 } as unknown }));
 const reportsReply = vi.hoisted(() => ({ value: [] as unknown }));
+const risksReply = vi.hoisted(() => ({ value: [] as unknown }));
 const comparisonReply = vi.hoisted(() => ({ value: undefined as unknown }));
 vi.mock("@/hooks/usePpmEnabled", () => ({ usePpmEnabled: () => ({ ppmEnabled: pml.enabled }) }));
 vi.mock("@/hooks/useGrcEnabled", () => ({ useGrcEnabled: () => ({ grcEnabled: false }) }));
@@ -49,7 +50,6 @@ vi.mock("@/features/ppm/StatusReportDialog", () => ({
     </div>
   ),
 }));
-vi.mock("@/features/ppm/PpmReportsTab", () => ({ default: ({ reports, onRefresh }: { reports: unknown[]; onRefresh: () => void }) => <div>Reports tab content {reports.length}<button onClick={onRefresh}>Refresh reports</button></div> }));
 vi.mock("@/components/EolLinkSection", () => ({ default: () => null }));
 vi.mock("@/features/bpm/ProcessFlowTab", () => ({ default: () => null }));
 vi.mock("@/features/bpm/ProcessAssessmentPanel", () => ({ default: () => null }));
@@ -156,6 +156,7 @@ beforeEach(() => {
   pml.canManage = true;
   completionReply.value = { completion: 40, wbs_count: 3 };
   reportsReply.value = [];
+  risksReply.value = [];
   comparisonReply.value = undefined;
   vi.mocked(api.get).mockReset().mockResolvedValue([]);
   vi.mocked(useMetamodel).mockReturnValue({
@@ -305,7 +306,7 @@ describe("CardDetailContent extension header slot", () => {
 });
 
 describe("CardDetailContent Initiative summaries", () => {
-  function initiative(summaryConfig = {}, canViewCosts = true, schedule = {}, permsOverride: Record<string, boolean> = {}, showPpmSummary = true) {
+  function initiative(summaryConfig = {}, canViewCosts = true, schedule = {}, permsOverride: Record<string, boolean> = {}, withSummary = true, hiddenDates: string[] = []) {
     const type = {
       ...APP_TYPE, key: "Initiative",
       fields_schema: [{
@@ -319,6 +320,7 @@ describe("CardDetailContent Initiative summaries", () => {
         ],
       }],
       section_config: summaryConfig,
+      subtypes: hiddenDates.length ? [{ key: "s", label: "S", hidden_fields: hiddenDates }] : [],
     };
     vi.mocked(useMetamodel).mockReturnValue({
       ...vi.mocked(useMetamodel)(), getType: () => type,
@@ -335,14 +337,15 @@ describe("CardDetailContent Initiative summaries", () => {
         ? (completionReply.value instanceof Error ? Promise.reject(completionReply.value) : completionReply.value)
         : path.endsWith("/schedule")
         ? { initiative_id: card.id, start_date: "2026-04-01", actual_start_date: "2026-05-15", ...schedule }
-        : path.endsWith("/reports") ? reportsReply.value : []);
-    const record = { ...card, type: "Initiative", attributes: {
+        : path.endsWith("/reports") ? (reportsReply.value instanceof Error ? Promise.reject(reportsReply.value) : reportsReply.value)
+        : path.endsWith("/risks") ? (risksReply.value instanceof Error ? Promise.reject(risksReply.value) : risksReply.value) : []);
+    const record = { ...card, type: "Initiative", subtype: hiddenDates.length ? "s" : undefined, attributes: {
       costBudget: 100, costActual: 70, startDate: "2026-04-01", actualStart: "2026-05-15",
       endDate: "2026-09-30", actualEnd: "2026-10-15",
     } };
     vi.mocked(api.patch).mockResolvedValue(record);
     return render(<MemoryRouter><CardDetailContent card={record} perms={{ ...perms, can_view_costs: canViewCosts, ...permsOverride }}
-      onCardUpdate={() => {}} showLdvSection={false} showPpmTab={false} showPpmSummary={showPpmSummary} /></MemoryRouter>);
+      onCardUpdate={() => {}} showLdvSection={false} showPpmTab={false} {...(withSummary ? { showPpmSummary: true } : {})} /></MemoryRouter>);
   }
 
   it("places the Total budget bar and the Timeline inside the configured groups", async () => {
@@ -487,12 +490,46 @@ describe("CardDetailContent Initiative summaries", () => {
     expect(screen.queryByRole("button", { name: /manage budget & costs/i })).not.toBeInTheDocument();
   });
 
-  it("shows cost health even when the other health values are missing", async () => {
+  it("takes the Cost dot from the latest report, not from a second schedule read", async () => {
     pml.enabled = true;
-    reportsReply.value = [{ id: "r1", report_date: "2026-03-01", created_at: "x", schedule_health: null, scope_health: null, cost_health: null, summary: "", accomplishments: "", next_steps: "" }];
-    initiative({}, true, { cost_health: "atRisk" });
+    reportsReply.value = [{ id: "r1", report_date: "2026-03-01", created_at: "x", schedule_health: "onTrack", scope_health: "onTrack", cost_health: "atRisk", summary: "", accomplishments: "", next_steps: "" }];
+    initiative();
     expect(await screen.findByText("Cost", { selector: ".MuiTypography-body2" })).toBeInTheDocument();
     expect(screen.queryByText("No status reports yet")).not.toBeInTheDocument();
+    await screen.findByTestId("initiative-timeline");
+    expect(vi.mocked(api.get).mock.calls.filter(([path]) => path.endsWith("/schedule"))).toHaveLength(1);
+  });
+
+  it("shows no Cost dot when the report carries no cost health", async () => {
+    pml.enabled = true;
+    reportsReply.value = [{ id: "r1", report_date: "2026-03-01", created_at: "x", schedule_health: "onTrack", scope_health: "onTrack", cost_health: null, summary: "", accomplishments: "", next_steps: "" }];
+    initiative({}, false);
+    await screen.findByText("Schedule", { selector: ".MuiTypography-body2" });
+    expect(screen.queryByText("Cost", { selector: ".MuiTypography-body2" })).not.toBeInTheDocument();
+  });
+
+  it("keeps Health Summary and Risk Management when a subtype hides every date field", async () => {
+    pml.enabled = true;
+    initiative({}, true, {}, {}, true, ["startDate", "actualStart", "endDate", "actualEnd"]);
+    expect(await screen.findByText("Risk Management")).toBeInTheDocument();
+    expect(screen.getByText("Health Summary")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Actual Start")).not.toBeInTheDocument();
+  });
+
+  it("says so when the status reports cannot be read, instead of claiming there are none", async () => {
+    pml.enabled = true;
+    reportsReply.value = new Error("Reports unavailable");
+    initiative();
+    expect(await screen.findByText("Reports unavailable")).toBeInTheDocument();
+    expect(screen.queryByText("No status reports yet")).not.toBeInTheDocument();
+  });
+
+  it("says so when the risks cannot be read, instead of loading forever", async () => {
+    pml.enabled = true;
+    risksReply.value = new Error("Risks unavailable");
+    initiative();
+    expect(await screen.findByText("Risks unavailable")).toBeInTheDocument();
+    expect(screen.queryByText(/loading/i)).not.toBeInTheDocument();
   });
 
   it("closes an open management dialog when the initiative changes", async () => {

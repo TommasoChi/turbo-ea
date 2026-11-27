@@ -26,10 +26,9 @@ function renderIt(props: Partial<React.ComponentProps<typeof InitiativeHealthAnd
 beforeEach(() => {
   mockApi.reset();
   mockApi.on("get", BASE + "/reports", [
-    { id: "r1", report_date: "2026-03-01", created_at: "x", schedule_health: "onTrack", scope_health: "onTrack", cost_health: null, summary: "Latest words", accomplishments: "", next_steps: "" },
+    { id: "r1", report_date: "2026-03-01", created_at: "x", schedule_health: "onTrack", scope_health: "onTrack", cost_health: "atRisk", summary: "Latest words", accomplishments: "", next_steps: "" },
   ]);
   mockApi.on("get", BASE + "/risks", []);
-  mockApi.on("get", BASE + "/schedule", { initiative_id: "i1", cost_health: "atRisk" });
 });
 
 describe("InitiativeHealthAndRisk", () => {
@@ -39,6 +38,28 @@ describe("InitiativeHealthAndRisk", () => {
     expect(screen.getByText("Health Summary")).toBeInTheDocument();
     expect(await screen.findByText("Risk Management")).toBeInTheDocument();
     expect(await screen.findByText("No risks yet")).toBeInTheDocument();
+  });
+
+  it("draws the Cost dot from the report and reads no schedule", async () => {
+    renderIt();
+    expect(await screen.findByText("Cost")).toBeInTheDocument();
+    expect(mockApi.calls.some((c) => c.path.endsWith("/schedule"))).toBe(false);
+  });
+
+  it("shows the error instead of claiming there are no reports", async () => {
+    mockApi.fail("get", BASE + "/reports", 500);
+    renderIt();
+    expect(await screen.findByRole("alert")).toBeInTheDocument();
+    expect(screen.queryByText("No status reports yet")).not.toBeInTheDocument();
+    expect(await screen.findByText("No risks yet")).toBeInTheDocument();
+  });
+
+  it("shows the error instead of loading risks forever", async () => {
+    mockApi.fail("get", BASE + "/risks", 500);
+    renderIt();
+    expect(await screen.findByRole("alert")).toBeInTheDocument();
+    expect(screen.queryByText("Loading risks…")).not.toBeInTheDocument();
+    expect(await screen.findByText("Latest words")).toBeInTheDocument();
   });
 
   it("opens the report editor in create mode and refreshes the reports after a save", async () => {
@@ -75,12 +96,12 @@ describe("InitiativeHealthAndRisk", () => {
     expect(screen.queryByRole("button", { name: /manage/i })).not.toBeInTheDocument();
   });
 
-  it("reads all three again when the revision changes", async () => {
+  it("reads both again when the revision changes", async () => {
     const view = renderIt();
     await screen.findByText("Latest words");
     const reads = () => mockApi.calls.filter((c) => c.method === "get").length;
     const before = reads();
     view.rerender(<InitiativeHealthAndRisk initiativeId="i1" revision={1} onManageRisks={() => {}} onChanged={() => {}} />);
-    await waitFor(() => expect(reads()).toBe(before + 3));
+    await waitFor(() => expect(reads()).toBe(before + 2));
   });
 });

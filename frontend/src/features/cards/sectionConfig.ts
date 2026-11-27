@@ -204,7 +204,7 @@ export function allFieldsHidden(section: SectionDef, hidden: Set<string>): boole
 }
 
 const INITIATIVE_COST_FIELDS = ["costBudget", "costActual"];
-const INITIATIVE_DATE_FIELDS = ["startDate", "actualStart", "endDate", "actualEnd"];
+export const INITIATIVE_DATE_FIELDS = ["startDate", "actualStart", "endDate", "actualEnd"];
 
 export function initiativeSummaryGroups(section: SectionDef, cost: string, timeline: string): SectionDef {
   if (section.section !== "Cost & Timeline") return section;

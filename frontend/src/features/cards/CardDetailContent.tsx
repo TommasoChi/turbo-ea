@@ -73,6 +73,7 @@ import {
   initiativeSummaryAnchors,
   initiativeSummaryGroups,
   sectionDefaultExpanded,
+  INITIATIVE_DATE_FIELDS,
 } from "@/features/cards/sectionConfig";
 import {
   CARD_TAB_LABEL_KEYS,
@@ -368,6 +369,10 @@ export default function CardDetailContent({
     ? initiativeSummaryAnchors(customSections.filter((_, index) => !secHidden("custom:" + index)), hiddenFieldKeys)
     : undefined;
 
+  // Health Summary and Risk Management follow the Cost & Timeline section (or the first visible one holding a date field).
+  const healthAnchorIndex = customSections.findIndex((section, index) => !secHidden("custom:" + index) && !allFieldsHidden(section, hiddenFieldKeys)
+    && (section.section === "Cost & Timeline" || section.fields.some((field) => INITIATIVE_DATE_FIELDS.includes(field.key))));
+
   const sectionOrder = buildSectionOrder(sc as Record<string, unknown>, customSections.length, {
     hierarchy: !!typeConfig?.has_hierarchy,
     successors: !!typeConfig?.has_successors,
@@ -610,8 +615,7 @@ export default function CardDetailContent({
       if (!section) return null;
       // Skip section if all its fields are hidden for the active subtype
       if (allFieldsHidden(section, hiddenFieldKeys)) return null;
-      const showHealthAndRisk = showPpmSummary && !!summaryAnchors?.schedule
-        && section.fields.some((field) => field.key === summaryAnchors.schedule);
+      const showHealthAndRisk = showPpmSummary && !!summaryAnchors && idx === healthAnchorIndex;
       const attributes = (
         <ErrorBoundary key={key} label={section.section}>
           <AttributeSection
