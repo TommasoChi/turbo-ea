@@ -306,8 +306,56 @@ describe("StatusReportDialog — 250 character limit", () => {
   const long = "x".repeat(STATUS_TEXT_LIMIT + 1);
   const box = (name: RegExp) => within(screen.getByRole("dialog")).getByRole("textbox", { name });
 
-  it("exports the limit", () => {
-    expect(STATUS_TEXT_LIMIT).toBe(250);
+  it("keeps Add Report enabled at exactly 250 characters and disables it at 251", async () => {
+    const { user } = renderDialog();
+    const add = within(screen.getByRole("dialog")).getByRole("button", { name: "Add Report" });
+    await user.click(box(/^Summary/));
+    await user.paste("x".repeat(STATUS_TEXT_LIMIT));
+    expect(add).toBeEnabled();
+    await user.type(box(/^Summary/), "y");
+    expect(add).toBeDisabled();
+  });
+
+  it("announces the helper text as an alert when the 251st character is typed", async () => {
+    const { user } = renderDialog();
+    await user.click(box(/^Summary/));
+    await user.paste("x".repeat(STATUS_TEXT_LIMIT));
+    expect(within(screen.getByRole("dialog")).queryByRole("alert")).not.toBeInTheDocument();
+    await user.type(box(/^Summary/), "y");
+    expect(await within(screen.getByRole("dialog")).findByRole("alert")).toHaveTextContent(
+      "250 characters or fewer",
+    );
+  });
+
+  it("blocks Save when a stored text over 250 is edited but stays over 250", async () => {
+    const { user } = renderDialog({ ...REPORT, summary: long });
+    await user.type(box(/^Summary/), "z");
+    expect(within(screen.getByRole("dialog")).getByRole("button", { name: "Save" })).toBeDisabled();
+  });
+
+  it("sends no key for a text edited and reverted to its stored value, and re-enables Save", async () => {
+    const { user, onSaved } = renderDialog(REPORT);
+    const save = within(screen.getByRole("dialog")).getByRole("button", { name: "Save" });
+    await user.click(box(/^Summary/));
+    await user.paste(long);
+    expect(save).toBeDisabled();
+    await user.clear(box(/^Summary/));
+    await user.type(box(/^Summary/), "Slipping by two weeks");
+    expect(save).toBeEnabled();
+    await user.click(save);
+    await waitFor(() => expect(onSaved).toHaveBeenCalledOnce());
+    const body = mockApi.callsOf("patch", "/ppm/reports/rep1")[0].body as Record<string, unknown>;
+    expect(body).not.toHaveProperty("summary");
+  });
+
+  it("sends null for a stored text cleared to empty", async () => {
+    const { user, onSaved } = renderDialog(REPORT);
+    await user.clear(box(/^Summary/));
+    await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(onSaved).toHaveBeenCalledOnce());
+    const body = mockApi.callsOf("patch", "/ppm/reports/rep1")[0].body as Record<string, unknown>;
+    expect(body.summary).toBeNull();
+    expect(body).not.toHaveProperty("next_steps");
   });
 
   it("shows the counter in each label", () => {

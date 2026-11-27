@@ -131,14 +131,15 @@ export default function StatusReportDialog({
     ([, { value, stored }]) => !isEdit || value !== (stored ?? ""),
   );
   const tooLong = sentTexts.some(([, { value }]) => value.length > STATUS_TEXT_LIMIT);
-  const counted = (label: string, value: string) => ({
-    label: t("statusReportCounter", { label, count: value.length }),
-    error: value.length > STATUS_TEXT_LIMIT,
-    helperText:
-      value.length > STATUS_TEXT_LIMIT
-        ? t("statusReportTooLong", { limit: STATUS_TEXT_LIMIT })
-        : undefined,
-  });
+  const counted = (label: string, value: string) => {
+    const over = value.length > STATUS_TEXT_LIMIT;
+    return {
+      label: t("statusReportCounter", { label, count: value.length, limit: STATUS_TEXT_LIMIT }),
+      error: over,
+      helperText: over ? t("statusReportTooLong", { limit: STATUS_TEXT_LIMIT }) : undefined,
+      FormHelperTextProps: { role: "alert" },
+    };
+  };
 
   const handleSave = async () => {
     setSaving(true);
