@@ -176,6 +176,8 @@ interface Props {
   columnOrder: string[];
   onColumnOrderChange: (next: string[]) => void;
   onResetColumnOrder?: () => void;
+  /** The Actions column does not exist: it is not offered in the chooser. */
+  readOnly?: boolean;
 }
 
 export default function PpmRiskFilterSidebar({
@@ -194,6 +196,7 @@ export default function PpmRiskFilterSidebar({
   columnOrder,
   onColumnOrderChange,
   onResetColumnOrder,
+  readOnly = false,
 }: Props) {
   const { t } = useTranslation("ppm");
   const [tab, setTab] = useState<0 | 1>(0);
@@ -481,7 +484,7 @@ export default function PpmRiskFilterSidebar({
                     }
                   />
                 </ListItemButton>
-                {RISK_GRID_COLUMNS.map((c) => {
+                {RISK_GRID_COLUMNS.filter((c) => !readOnly || c.id !== "actions").map((c) => {
                   const locked = LOCKED_RISK_COLUMNS.has(c.id);
                   const label = t(c.labelKey);
                   const row = (

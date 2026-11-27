@@ -487,7 +487,8 @@ class TestGetResponseForm:
         assert "riskLevel" in field_keys
 
         cost_field = next(f for f in data["fields"] if f["key"] == "costTotalAnnual")
-        assert cost_field["current_value"] == 50000
+        # The member holds no cost access: the field stays, its stored value does not.
+        assert cost_field["current_value"] is None
 
         risk_field = next(f for f in data["fields"] if f["key"] == "riskLevel")
         assert risk_field["current_value"] == "medium"

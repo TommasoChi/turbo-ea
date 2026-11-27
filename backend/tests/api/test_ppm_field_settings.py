@@ -168,7 +168,12 @@ async def test_hidden_card_constants_and_transitive_results_are_not_disclosed(cl
     await create_role(
         db,
         key="pml_scoped_admin",
-        permissions={"admin.settings": True, "inventory.view": True, "ppm.view": True},
+        permissions={
+            "admin.settings": True,
+            "inventory.view": True,
+            "ppm.view": True,
+            "costs.view": True,
+        },
     )
     await create_card_type(
         db,
@@ -532,11 +537,11 @@ async def test_budget_without_costs_exposes_the_configured_provider_to_ppm_edito
     assert row["provider_child_enabled"] is True
 
 
-async def test_provider_relation_denial_and_reuse_for_ppm_editor(client, ppm_env, db):
+async def test_provider_relation_creation_and_reuse_for_cost_editor(client, ppm_env, db):
     from sqlalchemy import select
 
     from app.models.relation import Relation
-    from tests.conftest import create_relation, create_relation_type
+    from tests.conftest import create_relation_type
 
     admin = auth_headers(ppm_env["admin"])
     initiative_id = ppm_env["initiative"].id
@@ -556,7 +561,13 @@ async def test_provider_relation_denial_and_reuse_for_ppm_editor(client, ppm_env
     await create_role(
         db,
         key="pml_editor",
-        permissions={"inventory.view": True, "ppm.view": True, "ppm.manage": True},
+        permissions={
+            "inventory.view": True,
+            "ppm.view": True,
+            "ppm.manage": True,
+            "costs.view": True,
+            "costs.edit": True,
+        },
     )
     editor = auth_headers(await create_user(db, email="pml-editor@test.com", role="pml_editor"))
     budget_config = _config(
@@ -594,32 +605,19 @@ async def test_provider_relation_denial_and_reuse_for_ppm_editor(client, ppm_env
     cost_id = cost.json()["id"]
     cost_path = f"/api/v1/ppm/costs/{cost_id}"
     selected = {"provider_child_id": str(child_id)}
-    denied = await client.patch(
-        cost_path, json={**selected, "description": "Must roll back"}, headers=editor
-    )
-    assert denied.status_code == 403, denied.text
-    await db.rollback()
-    listed = await client.get(f"{base}/costs", headers=admin)
-    assert listed.status_code == 200, listed.text
-    assert listed.json()[0]["description"] == "Initial"
-    assert listed.json()[0]["provider"]["id"] == str(parent_id)
+    # Cost-edit access is the permission: the editor holds no `relations.manage` and the
+    # provider relation is still created.
+    created_child = await client.patch(cost_path, json=selected, headers=editor)
+    assert created_child.status_code == 200, created_child.text
+    assert created_child.json()["provider"]["id"] == str(child_id)
     child_relation = select(Relation).where(
         Relation.type == relation_key, Relation.source_id == child_id
     )
-    assert await db.scalar(child_relation) is None
-
-    relation = await create_relation(
-        db,
-        type_key=relation_key,
-        source_id=child_id,
-        target_id=initiative_id,
-        attributes={"existing": "preserve"},
-    )
+    relation = (await db.scalars(child_relation)).one()
     relation.description = "Manually maintained"
+    relation.attributes = {"existing": "preserve"}
     relation_id = relation.id
-    updated = await client.patch(cost_path, json=selected, headers=editor)
-    assert updated.status_code == 200, updated.text
-    assert updated.json()["provider"]["id"] == str(child_id)
+    await db.flush()
     invoice = await client.post(
         f"{base}/invoices",
         json={
@@ -785,7 +783,12 @@ async def test_changing_input_type_cannot_unprotect_existing_rule(client, db, pp
     await create_role(
         db,
         key="pml_rules_admin",
-        permissions={"admin.settings": True, "inventory.view": True, "ppm.view": True},
+        permissions={
+            "admin.settings": True,
+            "inventory.view": True,
+            "ppm.view": True,
+            "costs.view": True,
+        },
     )
     await create_card_type(
         db,
@@ -837,6 +840,7 @@ async def test_hidden_saved_reference_cannot_be_cleared_or_replaced(client, db, 
             "ppm.view": True,
             "inventory.view": True,
             "costs.view": True,
+            "costs.edit": True,
         },
     )
     await create_card_type(
@@ -935,7 +939,12 @@ async def test_report_history_masks_cost_health_without_cost_visibility(client, 
     await create_role(
         db,
         key="pml_report_editor",
-        permissions={"inventory.view": True, "ppm.view": True, "ppm.manage": True},
+        permissions={
+            "inventory.view": True,
+            "inventory.edit": True,
+            "ppm.view": True,
+            "ppm.manage": True,
+        },
     )
     editor = await create_user(db, role="pml_report_editor", email="report-editor@example.test")
     admin_headers = auth_headers(ppm_env["admin"])
@@ -983,6 +992,8 @@ async def test_provider_constants_preview_and_visibility(client, db, ppm_env):
             "inventory.view": True,
             "ppm.view": True,
             "ppm.manage": True,
+            "costs.view": True,
+            "costs.edit": True,
         },
     )
     await create_card_type(

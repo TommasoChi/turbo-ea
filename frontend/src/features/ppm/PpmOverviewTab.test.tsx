@@ -62,6 +62,7 @@ function renderTab(card: Card = CARD) {
       costLines={[]}
       budgetLines={[]}
       rollup={ROLLUP_NONE}
+      canViewCosts
     />,
   );
 }
@@ -172,7 +173,7 @@ describe("PpmOverviewTab — completion", () => {
     mockApi.on("get", "/ppm/initiatives/i1/completion", () => slow.promise);
     mockApi.on("get", "/ppm/initiatives/i2/completion", { completion: 70 });
     const { rerender } = render(
-      <PpmOverviewTab card={CARD} latestReport={null} costLines={[]} budgetLines={[]} rollup={null} />,
+      <PpmOverviewTab card={CARD} latestReport={null} costLines={[]} budgetLines={[]} rollup={null} canViewCosts />,
     );
     rerender(
       <PpmOverviewTab
@@ -181,6 +182,7 @@ describe("PpmOverviewTab — completion", () => {
         costLines={[]}
         budgetLines={[]}
         rollup={null}
+        canViewCosts
       />,
     );
     expect(await screen.findByText("70%")).toBeInTheDocument();
@@ -195,7 +197,7 @@ describe("PpmOverviewTab — completion", () => {
   it("does not show the previous initiative's figure while the next one loads", async () => {
     mockApi.on("get", "/ppm/initiatives/i2/completion", () => new Promise(() => {}));
     const { rerender } = render(
-      <PpmOverviewTab card={CARD} latestReport={null} costLines={[]} budgetLines={[]} rollup={null} />,
+      <PpmOverviewTab card={CARD} latestReport={null} costLines={[]} budgetLines={[]} rollup={null} canViewCosts />,
     );
     await screen.findByText("40%");
     rerender(
@@ -205,6 +207,7 @@ describe("PpmOverviewTab — completion", () => {
         costLines={[]}
         budgetLines={[]}
         rollup={null}
+        canViewCosts
       />,
     );
     await waitFor(() => expect(screen.queryByText("40%")).not.toBeInTheDocument());
@@ -264,7 +267,7 @@ describe("PpmOverviewTab — health summary", () => {
   const dotOf = (label: string) => screen.getByText(label).previousElementSibling as HTMLElement;
 
   it("hides the cost health when the protected schedule omits it", async () => {
-    render(<PpmOverviewTab card={CARD} latestReport={report({})} costLines={[]} budgetLines={[]} rollup={null} />);
+    render(<PpmOverviewTab card={CARD} latestReport={report({})} costLines={[]} budgetLines={[]} rollup={null} canViewCosts />);
     await screen.findByText("Start Date");
     const summary = screen.getByText("Health Summary").parentElement!;
     expect(within(summary).queryByText("Cost")).not.toBeInTheDocument();
@@ -274,7 +277,7 @@ describe("PpmOverviewTab — health summary", () => {
   it("paints each dimension's dot in the theme's RAG colour", async () => {
     mockApi.on("get", "/ppm/initiatives/i1/schedule", { initiative_id: "i1", start_date: null, end_date: null, cost_health: "atRisk", plan_derived: false });
     render(
-      <PpmOverviewTab card={CARD} latestReport={report({})} costLines={[]} budgetLines={[]} rollup={null} />,
+      <PpmOverviewTab card={CARD} latestReport={report({})} costLines={[]} budgetLines={[]} rollup={null} canViewCosts />,
     );
     await screen.findByText("Cost");
     expect(dotOf("Schedule")).toHaveStyle({ backgroundColor: RAG_COLORS.green });
@@ -290,6 +293,7 @@ describe("PpmOverviewTab — health summary", () => {
         costLines={[]}
         budgetLines={[]}
         rollup={null}
+        canViewCosts
       />,
     );
     await screen.findByText("40%");
@@ -355,6 +359,7 @@ describe("PpmOverviewTab — beneath this initiative", () => {
         costLines={costLines}
         budgetLines={budgetLines}
         rollup={rollup}
+        canViewCosts
       />,
     );
   /** The KPI value under a caption. */
@@ -531,5 +536,38 @@ describe("PpmOverviewTab — beneath this initiative", () => {
         "No budget lines of its own: budget of the 1 initiative beneath it",
       ),
     ).toHaveLength(2);
+  });
+});
+
+describe("PpmOverviewTab — without cost access", () => {
+  const WITHHELD = {
+    descendant_count: 2,
+    start_date: "2026-02-01",
+    end_date: "2027-03-31",
+    has_budget_lines: true,
+    has_cost_lines: false,
+  } as unknown as PpmRollupOut;
+
+  it("leaves the Financials panel out, and everything else in place", async () => {
+    render(
+      <PpmOverviewTab card={CARD} latestReport={null} costLines={[]} budgetLines={[]} rollup={WITHHELD} canViewCosts={false} />,
+    );
+    await screen.findByText("40%");
+    expect(screen.queryByText("Financials")).not.toBeInTheDocument();
+    expect(screen.queryByText("Total Budget")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("ppm-beneath")).not.toBeInTheDocument();
+    expect(screen.getByText("Health Summary")).toBeInTheDocument();
+    expect(screen.getByText("Timeline")).toBeInTheDocument();
+  });
+
+  it("shows no NaN when a roll-up arrives without amounts", async () => {
+    render(
+      <PpmOverviewTab card={CARD} latestReport={null} costLines={[]} budgetLines={[]} rollup={WITHHELD} canViewCosts />,
+    );
+    await screen.findByText("40%");
+    const block = screen.getByTestId("ppm-beneath");
+    expect(block).not.toHaveTextContent("NaN");
+    expect(block).not.toHaveTextContent("Budget $");
+    expect(screen.queryByText(/NaN/)).not.toBeInTheDocument();
   });
 });

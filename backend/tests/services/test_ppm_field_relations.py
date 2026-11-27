@@ -122,30 +122,19 @@ async def test_no_relation_for_unchanged_value_or_unconfigured_relation(db, rela
     assert (await db.scalars(select(Relation))).all() == []
 
 
-async def test_missing_relation_requires_permission_before_creation(db, relation_env, monkeypatch):
-    from app.services.permission_service import PermissionService
-
-    user, initiative, organization, config = relation_env
-
-    async def deny(db, user, permission, *args, **kwargs):
-        assert permission == "relations.manage"
-        raise HTTPException(403, "Insufficient permissions")
-
-    monkeypatch.setattr(PermissionService, "require_permission", deny)
+async def test_creating_a_missing_relation_needs_no_relation_permission(db, relation_env):
+    """The cost-write gate on the PPM routes is the permission; the service adds none."""
+    _, initiative, organization, config = relation_env
+    await create_role(db, key="cost-only", permissions={"inventory.view": True})
+    user = await create_user(db, email="cost-only@example.test", role="cost-only")
     candidates = await prepare_configured_card_relations(
         db, user, initiative, config, {}, {"organization": str(organization.id)}
     )
-    with pytest.raises(HTTPException) as exc:
-        await apply_configured_card_relations(db, user, candidates, [])
-    assert exc.value.status_code == 403
-    assert (await db.scalars(select(Relation))).all() == []
+    await apply_configured_card_relations(db, user, candidates, [])
+    assert len((await db.scalars(select(Relation))).all()) == 1
 
 
-async def test_existing_relation_reuse_needs_no_new_relation_permission(
-    db, relation_env, monkeypatch
-):
-    from app.services.permission_service import PermissionService
-
+async def test_existing_relation_reuse_keeps_its_description(db, relation_env):
     user, initiative, organization, config = relation_env
     existing = await create_relation(
         db,
@@ -154,18 +143,16 @@ async def test_existing_relation_reuse_needs_no_new_relation_permission(
         target_id=initiative.id,
         description="Preserve existing",
     )
-
-    async def deny(db, user, permission, *args, **kwargs):
-        raise AssertionError("Existing relation should be reused")
-
     existing.description = "Preserve existing"
     await db.flush()
-    monkeypatch.setattr(PermissionService, "require_permission", deny)
+
     candidates = await prepare_configured_card_relations(
         db, user, initiative, config, {}, {"organization": str(organization.id)}
     )
     await apply_configured_card_relations(db, user, candidates, [])
+
     assert existing.description == "Preserve existing"
+    assert len((await db.scalars(select(Relation))).all()) == 1
 
 
 async def test_unreadable_card_is_not_exposed(db, relation_env, monkeypatch):

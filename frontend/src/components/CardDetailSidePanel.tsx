@@ -30,6 +30,7 @@ import { GainFlight } from "@/features/cards/gamification/GainFlight";
 import { useSaveOrigin, useScoreGain } from "@/features/cards/gamification/useScoreGain";
 import { useGamificationEnabled } from "@/hooks/useGamificationEnabled";
 import CardDetailContent from "@/features/cards/CardDetailContent";
+import { DEFAULT_CARD_PERMISSIONS } from "@/features/cards/defaultPermissions";
 import { cardFocusKey, resolveCardFocus } from "@/features/cards/cardFocus";
 import type { DataQualityJumpTarget } from "@/features/cards/dataQualityJump";
 import type {
@@ -38,25 +39,6 @@ import type {
   CardPanelFocus,
   AiSuggestResponse,
 } from "@/types";
-
-const DEFAULT_PERMISSIONS: CardEffectivePermissions["effective"] = {
-  can_view: true,
-  can_edit: true,
-  can_archive: true,
-  can_delete: true,
-  can_approval_status: true,
-  can_manage_stakeholders: true,
-  can_manage_relations: true,
-  can_manage_documents: true,
-  can_manage_comments: true,
-  can_create_comments: true,
-  can_bpm_edit: true,
-  can_bpm_manage_drafts: true,
-  can_manage_adr_links: true,
-  can_bpm_approve: true,
-  can_manage_diagram_links: true,
-  can_view_costs: true,
-};
 
 interface Props {
   cardId: string | null;
@@ -164,7 +146,7 @@ export default function CardDetailSidePanel({
   const [saveVersion, setSaveVersion] = useState(0);
   const [error, setError] = useState("");
   const [perms, setPerms] =
-    useState<CardEffectivePermissions["effective"]>(DEFAULT_PERMISSIONS);
+    useState<CardEffectivePermissions["effective"]>(DEFAULT_CARD_PERMISSIONS);
   // Gamified data quality: the panel's header is already sticky, so the pill
   // plays the gain (the orb flies to it from the saved section) and no
   // separate score bar is needed.
@@ -224,7 +206,7 @@ export default function CardDetailSidePanel({
     setCard(null);
     if (!shownId) return;
     setError("");
-    setPerms(DEFAULT_PERMISSIONS);
+    setPerms(DEFAULT_CARD_PERMISSIONS);
     setAiResponse(null);
     setAiError("");
     setAiLoading(false);

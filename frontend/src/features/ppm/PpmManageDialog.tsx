@@ -59,6 +59,7 @@ export default function PpmManageDialog({ card, tab, onClose, onChanged }: Props
               initiativeId={card.id}
               costLines={[]}
               rollup={rollup.data ?? null}
+              canEdit
               onRefresh={onChanged}
             />
           ) : tab === "reports" ? (
@@ -66,6 +67,7 @@ export default function PpmManageDialog({ card, tab, onClose, onChanged }: Props
               <PpmReportsTab
                 initiativeId={card.id}
                 reports={reports.data}
+                canEdit
                 onRefresh={() => {
                   reports.refetch();
                   onChanged();
@@ -75,7 +77,7 @@ export default function PpmManageDialog({ card, tab, onClose, onChanged }: Props
               <CircularProgress />
             ) : null
           ) : (
-            <PpmGanttTab initiativeId={card.id} card={card} />
+            <PpmGanttTab initiativeId={card.id} card={card} canEdit />
           )}
         </Suspense>
       </DialogContent>

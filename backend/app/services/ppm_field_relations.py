@@ -17,11 +17,9 @@ from app.schemas.ppm_fields import PmlSectionConfig
 from app.services.card_read_scope import is_card_readable
 from app.services.card_write_service import (
     WriteActor,
-    find_relation,
     lock_bo_relation_writes,
     upsert_relation,
 )
-from app.services.permission_service import PermissionService
 from app.services.ppm_ancestors import active_initiative_ancestors
 from app.services.relation_orientation import oriented
 
@@ -133,9 +131,6 @@ async def apply_configured_card_relations(
 ) -> None:
     actor = WriteActor.from_user(user)
     for item in candidates:
-        existing = await find_relation(db, item.type_key, item.source_id, item.target_id)
-        if existing is None:
-            await PermissionService.require_permission(db, user, "relations.manage")
         await upsert_relation(
             db,
             actor,

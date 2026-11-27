@@ -1,7 +1,7 @@
 """Helpers to identify and strip cost-typed fields from card and relation attributes.
 
-Used by endpoints that gate cost visibility behind the `costs.view` permission, or
-a stakeholder role granting `card.view_costs` — see PermissionService.can_view_costs().
+Used by endpoints that gate cost visibility and edits (`costs.view` / `card.view_costs`,
+`card.edit_costs`) — see PermissionService.can_view_costs() and can_edit_costs().
 """
 
 from __future__ import annotations
@@ -69,7 +69,7 @@ def cost_field_keys_from_relation_schema(attributes_schema: Any) -> frozenset[st
 def keep_stored_cost_values(
     stored: dict | None, incoming: dict, cost_keys: frozenset[str] | set[str]
 ) -> dict:
-    """What a caller without cost access may write over ``stored``.
+    """What a caller without the right to edit costs may write over ``stored``.
 
     A write replaces the whole ``attributes`` dict, so dropping the cost keys
     from the request would wipe values the caller was never shown, and taking

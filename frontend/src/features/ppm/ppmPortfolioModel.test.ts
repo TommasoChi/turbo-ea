@@ -1899,3 +1899,28 @@ describe("actual timeline ranges", () => {
     expect([range.end.getFullYear(), range.end.getMonth(), range.end.getDate()]).toEqual([2029, 11, 31]);
   });
 });
+
+describe("rows whose cost keys are withheld (absent from the response)", () => {
+  const withheld = () => {
+    const row = item({ id: "w" });
+    for (const k of ["capex_planned", "capex_actual", "opex_planned", "opex_actual"] as const) {
+      delete (row as Record<string, unknown>)[k];
+    }
+    return row;
+  };
+
+  it("draws no cost bar and counts no cost for a withheld row", () => {
+    const f = rowFigures(withheld());
+    expect(costBarModel(money(f.capexActual), money(f.capexPlanned), "CHF")).toBeNull();
+    expect(hasAnyCost(withheld())).toBe(false);
+  });
+
+  it("leaves a withheld row out of the group totals and keeps the others' sums", () => {
+    const rows = [withheld(), item({ capex_planned: 100, capex_actual: 40, opex_planned: 10, opex_actual: 5 })];
+    expect(groupTotals(rows)).toEqual({ capexPlanned: 100, capexActual: 40, opexPlanned: 10, opexActual: 5 });
+  });
+
+  it("gives a group of only withheld rows no totals at all", () => {
+    expect(groupTotals([withheld(), withheld()])).toBeNull();
+  });
+});

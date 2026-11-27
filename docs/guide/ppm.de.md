@@ -305,12 +305,35 @@ Wenn PML aktiviert ist, zeigen **Initiativ**-Karten einen **PML**-Tab als letzte
 
 Umgekehrt zeigt der **Kartendetails**-Tab innerhalb der PML-Initiativ-Detailansicht die Standardabschnitte der Kartendetails ohne den PML-Tab, um zirkuläre Navigation zu vermeiden.
 
-## Berechtigungen
+## Berechtigungen { #permissions }
 
 | Berechtigung | Beschreibung |
 |-------------|--------------|
 | `ppm.view` | PML-Dashboard, Gantt-Diagramm und Initiativberichte anzeigen sowie Initiative-Karten lesen. Standardmäßig für alle Rollen gewährt |
-| `ppm.manage` | Statusberichte, Aufgaben, Kosten, Risiken und WBS-Elemente erstellen und verwalten. Gewährt für Admin-, BPM-Admin- und Mitglied-Rollen |
+| `ppm.manage` | Statusberichte, Aufgaben, Budgets, Kostenpositionen, Risiken und WBS-Elemente erstellen und verwalten, auf den Initiativen, bei denen auch die untenstehenden Kartenberechtigungen es erlauben. Gewährt für die Rollen Admin und PPM Manager |
 | `reports.ppm_dashboard` | PML-Portfolio-Dashboard anzeigen. Standardmäßig für alle Rollen gewährt |
 
-Für Budget und Kostenpositionen gelten PML-Berechtigungen und die Sichtbarkeit der Initiative. Rechnungsdetails, Rechnungssummen und der Kostenindikator auf der Zeitachse setzen zusätzlich Zugriff auf die Kosten voraus. Zum Erfassen oder Verschieben von Rechnungen ist außerdem die PML-Verwaltungsberechtigung erforderlich.
+Es gelten zwei Ebenen. Die Anwendungsberechtigung öffnet eine Funktion; die Kartenberechtigung legt fest, auf welchen Initiativen sie gilt. Eine Karte, die Sie nicht lesen können, existiert für Sie nicht.
+
+- **Verwalten** von Statusberichten, Risiken, Aufgaben und Gantt erfordert `ppm.manage` **und** Bearbeitungsrechte auf der Karte (`inventory.edit` oder eine Stakeholder-Rolle mit **card.edit**).
+- Kosten (Budgetzeilen, Kostenpositionen, Rechnungen) werden mit `ppm.manage` **und** Kostenbearbeitungsrechten auf der Karte geschrieben (`costs.edit` oder eine Stakeholder-Rolle mit **card.edit_costs**), und die Kosten müssen sichtbar sein.
+- Ein Benutzer ohne Kostenzugriff (`costs.view` oder eine Stakeholder-Rolle mit **card.view_costs**) sieht auf der Initiative **keine Beträge**: Zeilen, Beschreibungen, Jahre, Anbieter und Datumsangaben bleiben, während Beträge, Summen, Zwischensummen, Aufsummierungen sowie berechnete oder numerische benutzerdefinierte Werte weggelassen werden. Der Tab **Budget & Kosten** wird ohne Hinweis ausgeblendet, und das Portfolio zeigt keine Zahlen. Der Kostenbericht listet nur Initiativen auf, deren Kosten Sie sehen können.
+- Die Rechnungs-Routen antworten einem Benutzer ohne Kostenzugriff mit „nicht gefunden“ (404).
+- Das Moderieren (Bearbeiten oder Löschen) von Kommentaren anderer erfordert Bearbeitungsrechte auf der Karte.
+- Die Schaltflächen „Verwalten“ der Initiative folgen diesen Rechten, und die Kostenschaltfläche **Verwalten** auf der Kartenseite erfordert `ppm.manage` und Kostenbearbeitungsrechte: Ein Benutzer, der Kosten nur ansieht, sieht sie nicht.
+
+| Funktion | Erforderliche Berechtigungen |
+|---|---|
+| Die Karte sehen (allgemeine Daten) | `card.view` |
+| Die Kosten der Karte sehen | `card.view` + `view_costs` |
+| PML ohne Kosten sehen (Statusberichte, Risiken, Aufgaben, Gantt) | `card.view` + `ppm.view` |
+| PML-Kosten sehen (Budget, Kostenpositionen, Rechnungen, Beträge) | `card.view` + `view_costs` + `ppm.view` |
+| Kartendaten bearbeiten | `card.view` + `card.edit` |
+| PML ohne Kosten bearbeiten | `card.view` + `card.edit` + `ppm.view` + `ppm.manage` |
+| PML-Kosten bearbeiten | `card.view` + `view_costs` + `edit_costs` + `ppm.view` + `ppm.manage` |
+| Kostenbericht erstellen | `ppm.view`; listet nur Karten mit `card.view` + `view_costs` |
+| Die PML-Seiten öffnen | `ppm.view` |
+
+`view_costs` ist `costs.view` oder **card.view_costs**; `edit_costs` ist `costs.edit` oder **card.edit_costs**. Bei Anwendungen und IT-Komponenten werden die jährlichen Kostenpositionen mit `card.view` + `view_costs` + `edit_costs` bearbeitet, ohne PML-Berechtigung.
+
+Die Stakeholder-Rolle **Kostencontroller** liest die Initiative samt Statusberichten, Risiken und Gantt und bearbeitet nur die Kosten; weisen Sie ihren Inhabern die Anwendungsrolle **PPM Manager** zu. Ein Verantwortlicher oder IT-Projektleiter verwaltet die Initiative und ihre Kosten weiterhin. **Im Budget** auf der geschützten Zeitachse erfordert ebenfalls Kostensichtbarkeit.

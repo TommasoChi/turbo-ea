@@ -14,6 +14,7 @@ from app.core.permissions import (
     BPM_ADMIN_PERMISSIONS,
     DEFAULT_CARD_PERMISSIONS_BY_ROLE,
     MEMBER_PERMISSIONS,
+    PPM_MANAGER_APP_PERMISSIONS,
     VIEWER_PERMISSIONS,
 )
 from app.models.card_type import CardType
@@ -1411,6 +1412,41 @@ LIFECYCLE_PHASE_HELP: list[dict[str, Any]] = [
 ]
 
 
+# Only Initiative, Application and ITComponent carry it; never part of _DEFAULT_ROLES.
+_COST_CONTROLLER_ROLE: dict[str, Any] = {
+    "key": "costController",
+    "label": "Cost Controller",
+    "description": (
+        "Sees and edits the costs of this card without being able to edit "
+        "the rest of it. Only on the types that carry costs."
+    ),
+    "counts_for_quality": True,
+    "translations": {
+        "label": {
+            "de": "Kostencontroller",
+            "fr": "Contrôleur de coûts",
+            "es": "Controlador de costes",
+            "it": "Controller dei costi",
+            "pt": "Controlador de custos",
+            "zh": "成本控制员",
+            "ru": "Контролёр затрат",
+            "da": "Omkostningscontroller",
+            "ar": "مراقب التكاليف",
+        },
+        "description": {
+            "de": "Sieht und bearbeitet die Kosten dieser Karte, ohne den Rest bearbeiten zu können. Nur bei den Typen, die Kosten führen.",
+            "fr": "Consulte et modifie les coûts de cette fiche sans pouvoir modifier le reste. Uniquement sur les types qui portent des coûts.",
+            "es": "Ve y edita los costes de esta ficha sin poder editar el resto. Solo en los tipos que llevan costes.",
+            "it": "Vede e modifica i costi di questa scheda senza poter modificare il resto. Solo sui tipi che prevedono costi.",
+            "pt": "Vê e edita os custos desta ficha sem poder editar o resto. Apenas nos tipos que têm custos.",
+            "zh": "可查看并编辑此卡片的成本，但无法编辑其余内容。仅适用于带有成本的类型。",
+            "ru": "Видит и редактирует затраты этой карточки, но не может изменять остальное. Только для типов, у которых есть затраты.",
+            "da": "Ser og redigerer omkostningerne for dette kort uden at kunne redigere resten. Kun på de typer, der har omkostninger.",
+            "ar": "يرى تكاليف هذه البطاقة ويعدّلها دون أن يستطيع تعديل بقية محتواها. فقط على الأنواع التي تحمل تكاليف.",
+        },
+    },
+}
+
 # ── 14 Card Types (from Meta_Model.xml + BPM) ────────────────────────
 
 TYPES = [
@@ -2199,6 +2235,7 @@ TYPES = [
                     },
                 },
             },
+            _COST_CONTROLLER_ROLE,
         ],
         "translations": {
             "label": {
@@ -6646,6 +6683,10 @@ _DEFAULT_ROLES: list[dict[str, Any]] = [
         },
     },
 ]
+# TYPES is built before _DEFAULT_ROLES exists, so ITComponent's explicit list is set here.
+next(t for t in TYPES if t["key"] == "ITComponent")["stakeholder_roles"] = _DEFAULT_ROLES + [
+    _COST_CONTROLLER_ROLE
+]
 _APP_ROLES: list[dict[str, Any]] = _DEFAULT_ROLES + [
     {
         "key": "technicalApplicationOwner",
@@ -6711,6 +6752,7 @@ _APP_ROLES: list[dict[str, Any]] = _DEFAULT_ROLES + [
             },
         },
     },
+    _COST_CONTROLLER_ROLE,
 ]
 
 
@@ -6961,6 +7003,16 @@ async def seed_metamodel(db: AsyncSession) -> None:
             "color": "#757575",
             "permissions": VIEWER_PERMISSIONS,
             "sort_order": 3,
+        },
+        {
+            "key": "ppm_manager",
+            "label": "PPM Manager",
+            "description": "Read-only access plus management of the PPM portfolio.",
+            "is_system": False,
+            "is_default": False,
+            "color": "#00897B",
+            "permissions": PPM_MANAGER_APP_PERMISSIONS,
+            "sort_order": 4,
         },
     ]
 

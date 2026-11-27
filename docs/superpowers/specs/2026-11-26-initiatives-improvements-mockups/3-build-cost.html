@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Mockup 3 - Build cost report</title><style>
+/* Shared look of the initiatives-improvements mockups. Static, no scripts needed except the legend toggles. */
+:root{--bg:#f4f5f7;--card:#fff;--ink:#1f2933;--muted:#6b7785;--line:#e2e6ea;--accent:#e35205;--navy:#16213e;
+  --good:#2e9e5b;--warn:#e0a100;--bad:#d64545;--c1:#2f6fed;--c2:#e35205;--c3:#16a085;--c4:#8e44ad;--c5:#e0a100;--c6:#7f8c8d;--other:#b8c0c8}
+@media (prefers-color-scheme:dark){:root{--bg:#14181d;--card:#1d232a;--ink:#e8ecef;--muted:#98a3ad;--line:#2c343c;--other:#56626d}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 system-ui,Segoe UI,Roboto,sans-serif;padding:16px}
+h1{font-size:18px;margin:0 0 4px}h2{font-size:15px;margin:0 0 8px}h3{font-size:13px;margin:0 0 2px}
+.note{background:#fff8e1;border:1px dashed #e0a100;color:#5c4400;padding:6px 10px;border-radius:6px;font-size:12px;margin:8px 0}
+@media (prefers-color-scheme:dark){.note{background:#2b2410;color:#e8d9a6}}
+.tag{display:inline-block;background:var(--accent);color:#fff;border-radius:4px;font-size:11px;padding:0 6px;margin-right:4px;font-weight:600}
+.page{max-width:1180px;margin:0 auto}
+.crumb{color:var(--muted);font-size:12px;margin-bottom:6px}
+.paper{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px;margin-bottom:12px}
+.row{display:flex;gap:12px;flex-wrap:wrap}.row>*{flex:1 1 0;min-width:240px}
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin-bottom:12px;flex-wrap:wrap}
+.tabs span{padding:8px 12px;color:var(--muted);font-size:13px}.tabs .on{color:var(--accent);border-bottom:2px solid var(--accent);font-weight:600}
+.btn{display:inline-block;border:1px solid var(--line);border-radius:6px;padding:3px 10px;font-size:12px;background:var(--card)}
+.btn.p{background:var(--accent);border-color:var(--accent);color:#fff}
+.dot{display:inline-block;width:11px;height:11px;border-radius:50%;margin-right:4px;vertical-align:-1px}
+.g{background:var(--good)}.a{background:var(--warn)}.r{background:var(--bad)}
+.field{font-size:12px;color:var(--muted)}.val{font-size:14px;color:var(--ink)}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-bottom:12px}
+.kpi{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+.kpi b{display:block;font-size:20px;line-height:1.2}.kpi small{color:var(--muted);font-size:11px}
+.kpi .pos{color:var(--good)}.kpi .neg{color:var(--warn)}
+.i{display:inline-block;width:14px;height:14px;line-height:14px;text-align:center;border:1px solid var(--muted);border-radius:50%;font-size:10px;color:var(--muted);margin-left:4px;font-style:normal}
+.box{border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:13px;min-height:80px}
+.box h3{color:var(--muted);font-weight:600;display:flex;justify-content:space-between}
+.cnt{font-weight:400;font-size:11px}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{padding:6px 10px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}
+th{color:var(--muted);font-weight:600;font-size:12px}td.n,th.n{text-align:right}
+.scroll{overflow-x:auto}
+.legend{display:flex;gap:10px;flex-wrap:wrap;font-size:12px;margin-top:6px}
+.legend label{cursor:pointer;user-select:none;display:inline-flex;align-items:center;gap:4px}
+.legend i{width:10px;height:10px;border-radius:2px;display:inline-block}
+.legend input{display:none}.legend input:not(:checked)+span{opacity:.35;text-decoration:line-through}
+.sw{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px}
+.bar{height:18px;background:var(--line);border-radius:4px;position:relative;overflow:hidden}
+.bar>i{position:absolute;left:0;top:0;bottom:0}
+.toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px}
+.chip{border:1px solid var(--line);border-radius:14px;padding:2px 10px;font-size:12px;background:var(--card)}
+.chip.on{border-color:var(--accent);color:var(--accent)}
+.mm{font-size:12px;color:var(--muted);margin-top:4px}
+.cap{font-size:11px;color:var(--muted);margin:-2px 0 6px}
+svg text{fill:var(--ink);font-size:11px}svg .m{fill:var(--muted)}
+</style></head><body><div class="page">
+<h1>Mockup 3 &middot; Build cost report <span class="field">/ppm (first tab) and /reports/build-cost</span></h1>
+<div class="note">Static mockup, illustrative figures, 24 initiatives, fiscal year 2026. <span class="tag">R11</span> tabs, <span class="tag">R14</span> toolbar and filters, <span class="tag">R15</span> KPI tiles, <span class="tag">R16</span> Charts view, <span class="tag">R17</span> clickable legends (try them), <span class="tag">R18</span> Radar view, <span class="tag">R20</span> earned value. Only initiatives whose costs the user may see are counted (<span class="tag">R22</span>); with none, an empty state with no mention of access.</div>
+
+<div class="paper">
+<div class="tabs"><span class="on">Build cost</span><span>Portfolio</span></div>
+<div class="toolbar"><span class="chip">All Cards &#9662;</span><span class="chip">Group by: none &#9662;</span><span style="flex:1"></span><span class="chip on">Time Travel &middot; FY 2026 &#9662;</span></div>
+<div class="toolbar"><span class="field">Filters</span><span class="chip">Related by: Provider &#9662;</span><span class="chip">Include sub-cards</span><span class="chip">Fields: Strategic area &#9662;</span><span class="chip">Status: Active &#9662;</span></div>
+
+<div class="kpis">
+ <div class="kpi"><small>Initiatives</small><b>24</b></div>
+ <div class="kpi"><small>Budget allocated</small><b>&euro; 18.4M</b></div>
+ <div class="kpi"><small>Total cost allocated</small><b>&euro; 14.1M</b></div>
+ <div class="kpi"><small>Total invoiced</small><b>&euro; 10.9M</b></div>
+ <div class="kpi"><small>Budget used</small><b>76.6%</b><small>cost &divide; budget</small></div>
+ <div class="kpi"><small>Remaining budget</small><b>&euro; 4.3M</b></div>
+ <div class="kpi"><small>Remaining to invoice</small><b>&euro; 3.2M</b></div>
+ <div class="kpi"><small>Initiatives over budget</small><b style="color:var(--warn)">5</b><small>cost &gt; budget</small></div>
+</div>
+<div class="kpis">
+ <div class="kpi"><small>CPI (estimate) <i class="i">i</i></small><b>0.91</b><small>3 initiatives left out: no Completion</small></div>
+ <div class="kpi"><small>EAC (estimate) <i class="i">i</i></small><b>&euro; 20.2M</b></div>
+ <div class="kpi"><small>Variance at completion (estimate) <i class="i">i</i></small><b style="color:var(--bad)">&minus;&euro; 1.8M</b></div>
+ <div class="kpi" style="background:transparent;border-style:dashed"><small>Earned value uses lifetime totals; it does not follow the fiscal year.</small></div>
+</div>
+
+<div class="toolbar"><span class="chip on">View: Charts</span><span class="chip">View: Radar</span></div>
+
+<h2>View &middot; Charts</h2>
+<div class="row">
+ <div class="paper"><h3>Where does the cost go, by parent Provider</h3><div class="cap">Answers: how much of the total cost goes to which parent Provider</div>
+  <svg width="100%" height="180" viewBox="0 0 230 180"><g transform="translate(115,90) rotate(-90)"><circle r="54" fill="none" stroke="var(--c1)" stroke-width="24" stroke-dasharray="117 339"/><circle r="54" fill="none" stroke="var(--c2)" stroke-width="24" stroke-dasharray="86 339" stroke-dashoffset="-117"/><circle r="54" fill="none" stroke="var(--c3)" stroke-width="24" stroke-dasharray="58 339" stroke-dashoffset="-203"/><circle r="54" fill="none" stroke="var(--other)" stroke-width="24" stroke-dasharray="78 339" stroke-dashoffset="-261"/></g><text x="115" y="88" text-anchor="middle" class="m">Total cost</text><text x="115" y="106" text-anchor="middle" style="font-weight:700;font-size:15px">&euro; 14.1M</text></svg>
+  <div class="legend"><label><input type="checkbox" checked><span><i style="background:var(--c1)"></i> Dell 35%</span></label><label><input type="checkbox" checked><span><i style="background:var(--c2)"></i> Microsoft 25%</span></label><label><input type="checkbox" checked><span><i style="background:var(--c3)"></i> Aruba Cloud 17%</span></label><label><input type="checkbox" checked><span><i style="background:var(--other)"></i> Other 23%</span></label></div></div>
+ <div class="paper"><h3>Which Providers receive the money</h3><div class="cap">Answers: cost per Provider, sorted</div>
+  <svg width="100%" height="180" viewBox="0 0 260 180"><g class="m"><text x="0" y="22">Dell Italia</text><text x="0" y="52">Microsoft</text><text x="0" y="82">Aruba Cloud</text><text x="0" y="112">Dell Services</text><text x="0" y="142">Cisco</text><text x="0" y="172">Unspecified</text></g>
+  <rect x="84" y="8" width="126" height="20" rx="3" fill="var(--c1)"/><text x="216" y="22">3.4M</text><rect x="84" y="38" width="94" height="20" rx="3" fill="var(--c2)"/><text x="184" y="52">3.5M</text><rect x="84" y="68" width="64" height="20" rx="3" fill="var(--c3)"/><text x="154" y="82">2.4M</text><rect x="84" y="98" width="44" height="20" rx="3" fill="var(--c1)" opacity=".6"/><text x="134" y="112">1.5M</text><rect x="84" y="128" width="30" height="20" rx="3" fill="var(--other)"/><text x="120" y="142">1.1M</text><rect x="84" y="158" width="64" height="20" rx="3" fill="var(--other)" opacity=".6"/><text x="154" y="172">2.2M</text></svg></div>
+</div>
+<div class="row">
+ <div class="paper"><h3>Budget vs Cost vs Invoiced per initiative</h3><div class="cap">Answers: which initiatives spend or invoice off their budget (top 10 by cost, 5 shown)</div>
+  <svg width="100%" height="190" viewBox="0 0 340 190"><g class="m"><text x="0" y="26">Digital Workplace</text><text x="0" y="62">Core Network</text><text x="0" y="98">Data Platform</text><text x="0" y="134">Zero Trust</text><text x="0" y="170">ERP Upgrade</text></g>
+  <g><rect x="110" y="10" width="110" height="9" fill="var(--c1)"/><rect x="110" y="20" width="90" height="9" fill="var(--c3)"/><rect x="110" y="30" width="70" height="9" fill="var(--other)"/>
+  <rect x="110" y="46" width="80" height="9" fill="var(--c1)"/><rect x="110" y="56" width="92" height="9" fill="var(--c3)" opacity="0"/><rect x="110" y="56" width="92" height="9" fill="var(--c1)" opacity="0"/>
+  <rect x="110" y="82" width="120" height="9" fill="var(--c1)"/><rect x="110" y="92" width="100" height="9" fill="var(--c3)"/><rect x="110" y="118" width="60" height="9" fill="var(--c1)"/><rect x="110" y="154" width="70" height="9" fill="var(--c1)"/></g>
+  <text x="228" y="20" class="m">&hellip;</text></svg>
+  <div class="cap" style="margin-top:0">Each row: bars for Cost and Invoiced, with the Budget as a reference line (simplified in the mockup).</div>
+  <div class="legend"><label><input type="checkbox" checked><span><i style="background:var(--c1)"></i> Cost</span></label><label><input type="checkbox" checked><span><i style="background:var(--c3)"></i> Invoiced</span></label><label><input type="checkbox" checked><span><i style="background:var(--other)"></i> Budget</span></label></div></div>
+ <div class="paper"><h3>Cost vs invoiced</h3><div class="cap">Answers: how much of the cost is invoiced</div>
+  <svg width="100%" height="150" viewBox="0 0 200 150"><g transform="translate(100,75) rotate(-90)"><circle r="46" fill="none" stroke="var(--c3)" stroke-width="20" stroke-dasharray="223 289"/><circle r="46" fill="none" stroke="var(--warn)" stroke-width="20" stroke-dasharray="66 289" stroke-dashoffset="-223"/></g><text x="100" y="80" text-anchor="middle" style="font-weight:700;font-size:15px">77%</text></svg>
+  <div class="legend"><label><input type="checkbox" checked><span><i style="background:var(--c3)"></i> Invoiced 10.9M</span></label><label><input type="checkbox" checked><span><i style="background:var(--warn)"></i> To invoice 3.2M</span></label></div></div>
+ <div class="paper"><h3>Cost and invoicing over the fiscal year</h3><div class="cap">Answers: do cost and invoices keep pace (cumulative by month)</div>
+  <svg width="100%" height="150" viewBox="0 0 260 150"><g stroke="var(--line)"><line x1="24" y1="120" x2="252" y2="120"/><line x1="24" y1="70" x2="252" y2="70"/><line x1="24" y1="20" x2="252" y2="20"/></g>
+  <polyline fill="none" stroke="var(--c1)" stroke-width="2" points="24,116 48,108 72,100 96,92 120,80 144,66 168,56 192,46 216,36 240,28"/><polyline fill="none" stroke="var(--c3)" stroke-width="2" points="24,118 48,112 72,106 96,100 120,92 144,80 168,70 192,60 216,50 240,42"/>
+  <g fill="var(--c1)"><circle cx="24" cy="116" r="3"/><circle cx="96" cy="92" r="3"/><circle cx="168" cy="56" r="3"/><circle cx="240" cy="28" r="3"/></g><g fill="var(--c3)"><circle cx="24" cy="118" r="3"/><circle cx="96" cy="100" r="3"/><circle cx="168" cy="70" r="3"/><circle cx="240" cy="42" r="3"/></g>
+  <g class="m"><text x="24" y="138">Jan</text><text x="96" y="138">Apr</text><text x="168" y="138">Jul</text><text x="228" y="138">Oct</text></g></svg>
+  <div class="legend"><label><input type="checkbox" checked><span><i style="background:var(--c1)"></i> Cost</span></label><label><input type="checkbox" checked><span><i style="background:var(--c3)"></i> Invoiced</span></label></div></div>
+</div>
+
+<h2 style="margin-top:16px">View &middot; Radar</h2>
+<div class="row">
+ <div class="paper"><h3>Radar 1 &middot; where does the money go</h3>
+  <div class="toolbar"><span class="chip">Radial axes: Strategic area &#9662;</span><span class="chip">Measure: Cost &#9662;</span><span class="chip">Series: Category (budget and cost lines) &#9662;</span><span class="chip">Scale: Subtotal &#9662;</span></div>
+  <svg id="r1" width="100%" height="300" viewBox="0 0 340 300" role="img" aria-label="Radar 1"></svg>
+  <div class="legend" id="l1"></div><div class="mm" id="mm1"></div></div>
+ <div class="paper"><h3>Radar 2 &middot; how is it distributed</h3>
+  <div class="toolbar"><span class="chip">Radial axes: Strategic area &#9662;</span><span class="chip">Measure: Cost &#9662;</span><span class="chip">Scale: Subtotal &#9662;</span></div>
+  <svg id="r2" width="100%" height="300" viewBox="0 0 340 300" role="img" aria-label="Radar 2"></svg>
+  <div class="legend" id="l2"></div><div class="mm" id="mm2"></div>
+  <div class="cap">Series Budget and Cost are fixed: this legend is not selectable.</div></div>
+</div>
+<div class="cap">Terms: radial axes = the spokes; measure = the value drawn on a spoke; series = the polygons compared; scale = the value at the outer ring (Total = total of the measure over all spokes, Subtotal = the largest spoke). With fewer than 3 spokes a message and plain bars replace the radar.</div>
+</div>
+</div>
+<script>
+const spokes=['Infrastructure','Security','Workplace','Data','Applications','Cloud'];
+const R1=[{n:'Capex',c:'var(--c1)',v:[2.4,1.1,2.2,1.5,2.0,1.2],on:true},{n:'Opex',c:'var(--c2)',v:[0.9,0.4,0.6,0.5,0.7,0.6],on:true}];
+const R2=[{n:'Budget',c:'var(--other)',v:[4.0,2.0,3.4,2.6,3.5,2.9],on:true,fixed:true},{n:'Cost',c:'var(--c1)',v:[3.3,1.5,2.8,2.0,2.7,1.8],on:true,fixed:true}];
+function draw(id,series,leg,mm,stack,max){
+  const cx=170,cy=150,r=105,n=spokes.length,svg=document.getElementById(id);let s='';
+  const pt=(i,v)=>{const a=-Math.PI/2+i*2*Math.PI/n,k=r*v/max;return[cx+k*Math.cos(a),cy+k*Math.sin(a)]};
+  for(const f of[.25,.5,.75,1]){s+=`<polygon fill="none" stroke="var(--line)" points="${spokes.map((_,i)=>pt(i,max*f).join(',')).join(' ')}"/>`}
+  spokes.forEach((t,i)=>{const[x,y]=pt(i,max),[lx,ly]=pt(i,max*1.16);s+=`<line x1="${cx}" y1="${cy}" x2="${x}" y2="${y}" stroke="var(--line)"/><text x="${lx}" y="${ly+4}" text-anchor="middle">${t}</text>`});
+  const vis=series.filter(x=>x.on);
+  // Radar 1: series are summed per spoke (stacked values); Radar 2: independent polygons.
+  const cum=spokes.map(()=>0);
+  vis.forEach(x=>{const vals=x.v.map((v,i)=>stack?(cum[i]+=v):v);
+    s+=`<polygon points="${vals.map((v,i)=>pt(i,v).join(',')).join(' ')}" fill="${x.c}" fill-opacity=".22" stroke="${x.c}" stroke-width="2"/>`+vals.map((v,i)=>{const[a,b]=pt(i,v);return`<circle cx="${a}" cy="${b}" r="3" fill="${x.c}"/>`}).join('')});
+  svg.innerHTML=s;
+  const tot=spokes.map((_,i)=>vis.reduce((a,x)=>a+(stack?x.v[i]:(x.n==='Cost'?x.v[i]:0)),0));
+  const hi=Math.max(...tot),lo=Math.min(...tot);
+  document.getElementById(mm).innerHTML=`Min <b>${spokes[tot.indexOf(lo)]}</b> &euro;${lo.toFixed(1)}M &middot; Max <b>${spokes[tot.indexOf(hi)]}</b> &euro;${hi.toFixed(1)}M &middot; spread ${(hi/lo).toFixed(1)}&times;`;
+  const L=document.getElementById(leg);
+  L.innerHTML=series.map((x,k)=>x.fixed?`<span><i class="sw" style="background:${x.c}"></i>${x.n}</span>`:`<label><input type="checkbox" ${x.on?'checked':''} data-k="${k}"><span><i style="background:${x.c}"></i> ${x.n}</span></label>`).join('');
+  L.querySelectorAll('input').forEach(b=>b.onchange=()=>{series[b.dataset.k].on=b.checked;draw(id,series,leg,mm,stack,max)});
+}
+draw('r1',R1,'l1','mm1',true,3.3);draw('r2',R2,'l2','mm2',false,4.0);
+</script></body></html>

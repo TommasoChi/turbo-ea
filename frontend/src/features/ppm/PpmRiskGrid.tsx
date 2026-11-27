@@ -75,6 +75,8 @@ interface Props {
   risks: PpmRisk[];
   /** Names the export file. */
   initiativeName?: string;
+  /** No add, import, edit or delete: the register is only read. */
+  readOnly?: boolean;
   onAdd: () => void;
   onEdit: (risk: PpmRisk) => void;
   onDelete: (id: string) => void;
@@ -129,6 +131,7 @@ const LONG_TEXT: Partial<ColDef<Row>> = {
 export default function PpmRiskGrid({
   risks,
   initiativeName,
+  readOnly = false,
   onAdd,
   onEdit,
   onDelete,
@@ -395,10 +398,12 @@ export default function PpmRiskGrid({
     () =>
       columnOrder.applyOrder(
         columnFreeze.applyFrozen(
-          columnDefs.map((c) => ({ ...c, hide: !visibleColumns.has(colIdOf(c)) })),
+          columnDefs
+            .filter((c) => !readOnly || colIdOf(c) !== "actions")
+            .map((c) => ({ ...c, hide: !visibleColumns.has(colIdOf(c)) })),
         ),
       ),
-    [columnDefs, visibleColumns, columnFreeze, columnOrder],
+    [columnDefs, readOnly, visibleColumns, columnFreeze, columnOrder],
   );
 
   // The Columns tab's order list: the columns on screen, from the grid's own defs.
@@ -462,6 +467,7 @@ export default function PpmRiskGrid({
   }, [filteredRisks]);
 
   const sidebarProps = {
+    readOnly,
     filters,
     onFiltersChange: setFilters,
     owners,
@@ -548,25 +554,29 @@ export default function PpmRiskGrid({
             >
               {t("common:actions.export")}
             </Button>
-            <Button
-              variant="outlined"
-              color="inherit"
-              size="small"
-              startIcon={<MaterialSymbol icon="upload" size={18} />}
-              onClick={onImport}
-              sx={SX.toolbarButton}
-            >
-              {t("common:actions.import")}
-            </Button>
-            <Button
-              variant="contained"
-              size="small"
-              startIcon={<MaterialSymbol icon="add" size={18} />}
-              onClick={onAdd}
-              sx={SX.toolbarButton}
-            >
-              {t("addRisk")}
-            </Button>
+            {!readOnly && (
+              <>
+                <Button
+                  variant="outlined"
+                  color="inherit"
+                  size="small"
+                  startIcon={<MaterialSymbol icon="upload" size={18} />}
+                  onClick={onImport}
+                  sx={SX.toolbarButton}
+                >
+                  {t("common:actions.import")}
+                </Button>
+                <Button
+                  variant="contained"
+                  size="small"
+                  startIcon={<MaterialSymbol icon="add" size={18} />}
+                  onClick={onAdd}
+                  sx={SX.toolbarButton}
+                >
+                  {t("addRisk")}
+                </Button>
+              </>
+            )}
           </Stack>
         </Stack>
 

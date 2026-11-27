@@ -144,7 +144,7 @@ Tags, relationer og overordnet har hver en **tilføj / fjern**-knap, så du udvi
 
 Når du vælger **Tilføj link** for en relationstype med detaljer — strømningsretningen mellem to applikationer, hvordan en organisation bruger en applikation, opret- / læs- / opdatér- / slet-markeringerne på et dataobjekt — viser dialogen også de felter. Det, du angiver, gemmes på hvert link, der tilføjes. Kort, der allerede er linket til et valgt mål, får også detaljerne, så at køre **Tilføj link** igen er måden at opdatere detaljerne på eksisterende links; en detalje, du lader stå tom, ændres ikke.
 
-Værdifeltet retter sig efter felttypen: et multivalgsfelt viser sine valgmuligheder med afkrydsningsfelter, et ja/nej-felt en Ja/Nej-liste og et datofelt en datovælger. Lader du værdien stå tom – **Ingen** i et ja/nej-felt – ryddes feltet på alle de valgte kort. Felter, der beregnes af en formel, og omkostningsfelter, du ikke har tilladelse til at se, tilbydes ikke.
+Værdifeltet retter sig efter felttypen: et multivalgsfelt viser sine valgmuligheder med afkrydsningsfelter, et ja/nej-felt en Ja/Nej-liste og et datofelt en datovælger. Lader du værdien stå tom – **Ingen** i et ja/nej-felt – ryddes feltet på alle de valgte kort. Felter, der beregnes af en formel, og omkostningsfelter, du ikke har tilladelse til at se eller redigere, tilbydes ikke. I gitteret kan omkostningsceller kun redigeres, hvis din rolle har tilladelsen **Rediger omkostninger**, og et kort, hvis omkostninger du ikke må redigere, beholder sin gemte værdi; en stakeholder-rolle, der redigerer omkostninger på ét kort, gør det fra kortsiden.
 
 ### Omstrukturering af hierarkiet { #mass-edit-parent }
 

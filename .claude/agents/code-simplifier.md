@@ -1,6 +1,6 @@
 ---
 name: code-simplifier
-description: Simplifies changed code, project instructions and configuration while preserving behaviour. Verifies the files it touches after the full test suites pass and before the independent code review.
+description: Simplifies changed code, project instructions and configuration while preserving behaviour. Verifies the files it touches after the tests of the diff pass and before the independent code review.
 model: opus
 effort: high
 tools: Read, Edit, Write, Bash, Grep, Glob, Skill, Agent(general-purpose)

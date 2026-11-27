@@ -5,6 +5,34 @@ All notable changes to Turbo EA are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.215.0] - 2026-11-27
+
+### Added
+
+- A **Cost Controller** stakeholder role (Initiative, Application and IT Component) that reads a card and manages its costs, and nothing else.
+- A **card.edit_costs** card permission, separate from **card.edit**; existing stakeholder roles keep what they had.
+- A **PPM Manager** application role: the Viewer's rights plus `ppm.manage`.
+
+### Changed
+
+- PPM amounts are withheld from users without cost access: the amount keys are absent from the API responses, and the Budget & Costs tab and cost sections are hidden.
+- PPM Manage on status reports, risks, tasks and the Gantt needs edit rights on the card.
+- PPM cost writes (budget lines, cost items, invoices) need cost edit rights on the card.
+- Moderating comments needs card edit rights.
+- The cost history and the relations a cost configures follow the cost permissions.
+- Member and BPM Admin lose PPM Manage and cost view, the built-in roles of existing installs too, also where an admin had granted them on purpose; a downgrade does not restore them. A Project Manager with a Member role needs the PPM Manager role.
+- Member and BPM Admin lose Manage stakeholders (`stakeholders.manage`), the built-in roles of existing installs too, also where an admin had granted it on purpose; a downgrade does not restore it. Only roles that still hold it can assign stakeholders, the Cost Controller included.
+- Cost fields on a card edit, bulk edit, create, rollback and survey apply need the cost edit right: without it they keep their stored value (or are left out on create) while the other fields save. The card page shows them read-only, the create dialog does not offer them and the inventory grid does not make them editable.
+- Importing a workspace bundle exported before this release restores the permissions it carries on Member and BPM Admin, as on every import.
+- Whoever holds the manage-stakeholders right can assign the Cost Controller.
+- The cost Manage button on the card page needs PPM manage and cost edit rights: a user who only views costs no longer sees it.
+
+### Security
+
+- The survey response form no longer shows the current value of a cost field to a recipient without cost access.
+- The amounts of an initiative no longer leak to users without cost access.
+- A Member or BPM Admin can no longer give themselves the Cost Controller role: they no longer hold Manage stakeholders. A custom role with it, or a stakeholder role with the card-level manage-stakeholders right, still can.
+
 ## [2.214.0] - 2026-11-25
 
 ### Added

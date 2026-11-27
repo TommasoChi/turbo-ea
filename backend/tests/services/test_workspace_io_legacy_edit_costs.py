@@ -1,0 +1,149 @@
+"""A bundle written before ``card.edit_costs`` keeps the cost-editing rights its roles had."""
+
+from __future__ import annotations
+
+import pytest
+from sqlalchemy import delete, select
+
+from app.models.role import Role
+from app.models.stakeholder_role_definition import StakeholderRoleDefinition
+from app.services.workspace_io import apply_bundle, build_bundle, parse_bundle, schema
+from app.services.workspace_io import bundle as bundle_io
+from tests.conftest import create_card_type, create_user
+from tests.services.workspace_io_helpers import reimported_role_permissions
+
+_ROLES = {
+    "responsible": {"card.view": True, "card.edit": True},
+    "observer": {"card.view": True},
+}
+
+
+@pytest.mark.parametrize(
+    ("version", "rows", "expected"),
+    [
+        ("2.214.0", [{"permissions": '{"card.edit": true}'}], True),
+        ("2.230.0", [{"permissions": '{"card.edit": true}'}], True),
+        ("2.230.0", [], True),
+        ("2.230.0", [{"permissions": None}], True),
+        ("2.214.0", [{"permissions": '{"card.edit_costs": false}'}], False),
+        (
+            "2.230.0",
+            [{"permissions": '{"card.edit": true}'}, {"permissions": '{"card.edit_costs": true}'}],
+            False,
+        ),
+        ("0.0.0-dev", [{"permissions": '{"card.edit": true}'}], False),
+        (None, [{"permissions": '{"card.edit": true}'}], False),
+    ],
+)
+async def test_which_bundles_predate_the_edit_costs_key(version, rows, expected):
+    from app.services.workspace_io.applier import _predates_edit_costs
+
+    manifest = {"format_version": "1"}
+    if version is not None:
+        manifest["app_version"] = version
+    sheets = {schema.SHEET_STAKEHOLDER_ROLES: rows}
+    assert (
+        _predates_edit_costs(bundle_io.WorkspaceBundle(manifest=manifest, sheets=sheets))
+        is expected
+    )
+
+
+@pytest.mark.parametrize("version", ["2.214.0", "2.230.0"])
+@pytest.mark.parametrize("wipe", [True, False])
+async def test_an_older_bundle_gives_edit_costs_to_whoever_could_edit(db, version, wipe):
+    stored = await reimported_role_permissions(
+        db, _ROLES, app_version=version, wipe=wipe, keep_edit_costs=True
+    )
+    assert stored["responsible"]["card.edit_costs"] is True
+    assert stored["observer"]["card.edit_costs"] is False
+
+
+@pytest.mark.parametrize("version", ["0.0.0-dev", None])
+async def test_a_bundle_with_no_usable_version_is_taken_at_its_word(db, version):
+    stored = await reimported_role_permissions(
+        db, _ROLES, app_version=version, keep_edit_costs=True
+    )
+    assert all("card.edit_costs" not in perms for perms in stored.values())
+
+
+async def test_an_explicit_edit_costs_value_wins(db):
+    roles = {"responsible": {"card.edit": True, "card.edit_costs": False}}
+    stored = await reimported_role_permissions(
+        db, roles, app_version="2.214.0", keep_edit_costs=True
+    )
+    assert stored["responsible"]["card.edit_costs"] is False
+
+
+async def test_an_older_bundle_leaves_app_roles_as_carried_and_keeps_missing_roles(db):
+    user = await create_user(db, email="edit-costs-ws@test.com", role="admin")
+    db.add(Role(key="custom_ec", label="Custom", permissions={"inventory.view": True}))
+    await create_card_type(db, key="Application", label="Application")
+    db.add(
+        StakeholderRoleDefinition(
+            card_type_key="Application",
+            key="costController",
+            label="Cost Controller",
+            permissions={"card.view": True},
+        )
+    )
+    await db.flush()
+    bundle = parse_bundle(await build_bundle(db))
+    bundle.manifest["app_version"] = "2.214.0"
+    bundle.sheets[schema.SHEET_STAKEHOLDER_ROLES] = [
+        r for r in bundle.sheets[schema.SHEET_STAKEHOLDER_ROLES] if r.get("key") != "costController"
+    ]
+    await db.execute(delete(Role).where(Role.key == "custom_ec"))
+    await db.flush()
+
+    result = await apply_bundle(db, bundle, user)
+    assert result.total_failed == 0, result.as_dict()
+
+    role = (await db.execute(select(Role).where(Role.key == "custom_ec"))).scalar_one()
+    assert "card.edit_costs" not in role.permissions
+    kept = (
+        await db.execute(
+            select(StakeholderRoleDefinition.permissions).where(
+                StakeholderRoleDefinition.key == "costController"
+            )
+        )
+    ).scalar_one()
+    assert kept == {"card.view": True}
+
+
+@pytest.mark.parametrize("version", [None, "0.0.0-dev"])
+async def test_a_bundle_with_no_usable_version_keeps_its_rows_as_carried(db, version):
+    # A content pack carries no usable app_version.
+    stored = await reimported_role_permissions(
+        db, _ROLES, app_version=version, keep_edit_costs=True
+    )
+    assert stored == _ROLES
+
+
+async def test_a_bundle_at_a_later_version_without_the_key_still_gets_the_legacy_grant(db):
+    # Detection is by content: an intermediate fork release newer than this key's own
+    # version still wrote rows without it.
+    roles = {"can_edit": {"card.edit": True}, "cannot_edit": {"card.edit": False}}
+    stored = await reimported_role_permissions(
+        db, roles, app_version="2.230.0", keep_edit_costs=True
+    )
+    assert stored["can_edit"]["card.edit_costs"] is True
+    assert stored["cannot_edit"]["card.edit_costs"] is False
+
+
+async def test_a_bundle_whose_rows_carry_the_key_gets_no_extra_grant(db):
+    roles = {
+        "explicit": {"card.edit": True, "card.edit_costs": False},
+        "plain": {"card.edit": True},
+    }
+    stored = await reimported_role_permissions(
+        db, roles, app_version="2.214.0", keep_edit_costs=True
+    )
+    assert stored == roles
+
+
+async def test_updating_an_existing_role_from_an_older_fork_bundle_grants_edit_costs(db):
+    roles = {"responsible": {"card.view": True, "card.edit": True}}
+    stored = await reimported_role_permissions(
+        db, roles, app_version="2.214.0", wipe=False, keep_edit_costs=True
+    )
+    assert stored["responsible"] == {"card.view": True, "card.edit": True, "card.edit_costs": True}

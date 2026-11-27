@@ -42,6 +42,7 @@ from app.core.permissions import (
     migrate_legacy_app_permissions,
     strip_legacy_card_permissions,
     with_legacy_cost_grant,
+    with_legacy_edit_cost_grant,
     with_legacy_license_grant,
 )
 from app.models.app_settings import AppSettings
@@ -1559,12 +1560,30 @@ def _predates_view_costs(bundle: WorkspaceBundle) -> bool:
     return version is not None and version < first_release
 
 
+def _predates_edit_costs(bundle: WorkspaceBundle) -> bool:
+    """A bundle predates ``card.edit_costs`` when no stakeholder-role row carries it.
+
+    Every row exported since migration 202 has the key. A bundle naming no usable version
+    (a content pack, ``0.0.0-dev``) is taken at its word.
+    """
+    if bundle.app_version is None:
+        return False
+    return not any(
+        isinstance(perms := from_cell(row.get("permissions"), is_json=True), dict)
+        and "card.edit_costs" in perms
+        for row in bundle.rows(schema.SHEET_STAKEHOLDER_ROLES)
+    )
+
+
 def _make_config_applier(sec: schema.ConfigSection):
     async def _apply(db, bundle: WorkspaceBundle, sr: SectionResult, dry_run: bool) -> None:
         existing_rows = (await db.execute(select(sec.model))).scalars().all()
         index: dict[tuple, Any] = {
             tuple(getattr(r, k) for k in sec.natural_key): r for r in existing_rows
         }
+        predates_edit_costs = sec.model is StakeholderRoleDefinition and _predates_edit_costs(
+            bundle
+        )
         for row in bundle.rows(sec.sheet):
             data = _coerce(row, sec.columns, sec.json_columns)
             # A bundle exported from an install that predates the permission
@@ -1596,6 +1615,8 @@ def _make_config_applier(sec: schema.ConfigSection):
                         and bundle.app_version < VIEW_COSTS_SINCE
                     ):
                         perms = with_legacy_license_grant(str(data.get("key")), perms)
+                    if predates_edit_costs:
+                        perms = with_legacy_edit_cost_grant(perms)
                     data["permissions"] = perms
                 elif sec.model is Role:
                     data["permissions"] = migrate_legacy_app_permissions(data["permissions"])

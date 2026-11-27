@@ -18,6 +18,8 @@ import { api, ApiError } from "@/api/client";
 import { useCardSubtypeLabel } from "@/hooks/useCardSubtypeLabel";
 import { usePageSection, usePageSubject } from "@/hooks/usePageTitle";
 import { useLatestRequest } from "@/hooks/useLatestRequest";
+import { useOptionalAuthUser } from "@/hooks/AuthContext";
+import { hasPermission } from "@/components/RequirePermission";
 import PpmOverviewTab from "./PpmOverviewTab";
 import PpmReportsTab from "./PpmReportsTab";
 import PpmCostTab from "./PpmCostTab";
@@ -25,6 +27,7 @@ import PpmRiskTab from "./PpmRiskTab";
 import PpmTaskBoard from "./PpmTaskBoard";
 import PpmGanttTab from "./PpmGanttTab";
 import CardDetailContent from "@/features/cards/CardDetailContent";
+import { CLOSED_CARD_PERMISSIONS } from "@/features/cards/defaultPermissions";
 import type {
   Card,
   CardEffectivePermissions,
@@ -36,6 +39,7 @@ import type {
 } from "@/types";
 
 const TAB_KEYS = ["overview", "reports", "cost", "risks", "tasks", "gantt", "details"];
+const COST_TAB = TAB_KEYS.indexOf("cost");
 // The `ppm`-namespace key each tab renders its label from, in TAB_KEYS order.
 const PPM_TAB_LABEL_KEYS = [
   "overview",
@@ -46,26 +50,6 @@ const PPM_TAB_LABEL_KEYS = [
   "gantt",
   "cardDetails",
 ];
-
-// Until the initiative's own permissions have arrived.
-const DEFAULT_PERMS: CardEffectivePermissions["effective"] = {
-  can_view: true,
-  can_edit: true,
-  can_archive: true,
-  can_delete: true,
-  can_approval_status: true,
-  can_manage_stakeholders: true,
-  can_manage_relations: true,
-  can_manage_documents: true,
-  can_manage_comments: true,
-  can_create_comments: true,
-  can_bpm_edit: true,
-  can_bpm_manage_drafts: true,
-  can_bpm_approve: true,
-  can_manage_adr_links: true,
-  can_manage_diagram_links: true,
-  can_view_costs: true,
-};
 
 export default function PpmProjectDetail() {
   const { id } = useParams<{ id: string }>();
@@ -94,7 +78,6 @@ export default function PpmProjectDetail() {
   // «Apollo Migration · Budget & Costs | Turbo EA» — an initiative page is the
   // one place both slots are live at once.
   usePageSubject(card?.name);
-  usePageSection(t(PPM_TAB_LABEL_KEYS[tab]));
   const [reports, setReports] = useState<PpmStatusReport[]>([]);
   const [costLines, setCostLines] = useState<PpmCostLine[]>([]);
   const [budgetLines, setBudgetLines] = useState<PpmBudgetLine[]>([]);
@@ -102,9 +85,17 @@ export default function PpmProjectDetail() {
   // What the initiatives beneath this one add up to: shown on a side this
   // initiative has no lines of its own for. `null` when it could not be read.
   const [rollup, setRollup] = useState<PpmRollupOut | null>(null);
-  const [perms, setPerms] = useState<CardEffectivePermissions["effective"]>(DEFAULT_PERMS);
+  const [perms, setPerms] = useState<CardEffectivePermissions["effective"]>(CLOSED_CARD_PERMISSIONS);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const user = useOptionalAuthUser();
+  const canManage = hasPermission(user?.permissions, "ppm.manage");
+  const canEdit = canManage && perms.can_edit;
+  const canEditCosts = canManage && perms.can_edit_costs;
+  // The Budget & Costs tab is not offered without cost access; the others keep
+  // their index, so a `tab` parameter still lands where it did.
+  const activeTab = tab === COST_TAB && !perms.can_view_costs ? 0 : tab;
+  usePageSection(t(PPM_TAB_LABEL_KEYS[activeTab]));
 
   // Another initiative: nothing of the previous one stays on screen while the
   // next one loads. Reset during render, so not even one frame shows it.
@@ -118,7 +109,7 @@ export default function PpmProjectDetail() {
     setBudgetLines([]);
     setRisks([]);
     setRollup(null);
-    setPerms(DEFAULT_PERMS);
+    setPerms(CLOSED_CARD_PERMISSIONS);
     setError("");
     // Stryker restore all
     setLoading(true);
@@ -144,7 +135,7 @@ export default function PpmProjectDetail() {
       setError("");
       try {
         // Stryker disable ObjectLiteral: the signal only cancels the request on the wire; the stale-reply guard, which is what the tests pin, is isCurrent()
-        const [c, r, cl, bl, ri, ru] = await Promise.all([
+        const [c, r, cl, bl, ri, ru, pm] = await Promise.all([
           api.get<Card>(`/cards/${id}`, { signal }),
           api.get<PpmStatusReport[]>(`/ppm/initiatives/${id}/reports`, { signal }),
           api.get<PpmCostLine[]>(`/ppm/initiatives/${id}/costs`, { signal }),
@@ -155,6 +146,9 @@ export default function PpmProjectDetail() {
           api
             .get<PpmRollupOut>(`/ppm/initiatives/${id}/rollup`, { signal })
             .catch(() => null),
+          api
+            .get<CardEffectivePermissions>(`/cards/${id}/my-permissions`, { signal })
+            .catch(() => null),
         ]);
         if (!isCurrent()) return;
         setCard(c);
@@ -163,14 +157,8 @@ export default function PpmProjectDetail() {
         setBudgetLines(bl);
         setRisks(ri);
         setRollup(ru);
-        // Fetch effective permissions (non-blocking)
-        api
-          .get<CardEffectivePermissions>(`/cards/${id}/my-permissions`, { signal })
-      // Stryker restore ObjectLiteral
-          .then((res) => {
-            if (isCurrent()) setPerms(res.effective);
-          })
-          .catch(() => {});
+        // Stryker restore ObjectLiteral
+        setPerms(pm?.effective ?? CLOSED_CARD_PERMISSIONS);
       } catch (e) {
         // Superseded (or aborted because it was): the newer load owns the page.
         if (!isCurrent()) return;
@@ -277,60 +265,63 @@ export default function PpmProjectDetail() {
 
       {/* Tabs */}
       <Tabs
-        value={tab}
+        value={activeTab}
         onChange={handleTabChange}
         variant="scrollable"
         scrollButtons="auto"
         allowScrollButtonsMobile
         sx={{ mb: 3 }}
       >
-        <Tab label={t("overview")} />
-        <Tab label={t("statusReports")} />
-        <Tab label={t("budgetAndCosts")} />
-        <Tab label={t("riskManagement")} />
-        <Tab label={t("tasks")} />
-        <Tab label={t("gantt")} />
-        <Tab label={t("cardDetails")} />
+        {PPM_TAB_LABEL_KEYS.map(
+          (labelKey, index) =>
+            (index !== COST_TAB || perms.can_view_costs) && (
+              <Tab key={labelKey} value={index} label={t(labelKey)} />
+            ),
+        )}
       </Tabs>
 
       {/* Tab Content */}
-      {tab === 0 && (
+      {activeTab === 0 && (
         <PpmOverviewTab
           card={card}
           latestReport={latestReport}
           costLines={costLines}
           budgetLines={budgetLines}
           rollup={rollup}
+          canViewCosts={perms.can_view_costs}
         />
       )}
-      {tab === 1 && (
+      {activeTab === 1 && (
         <PpmReportsTab
           initiativeId={id!}
           reports={reports}
+          canEdit={canEdit}
           onRefresh={loadData}
         />
       )}
-      {tab === 2 && (
+      {activeTab === 2 && (
         <PpmCostTab
           key={id}
           initiativeId={id!}
           costLines={costLines}
           rollup={rollup}
+          canEdit={canEditCosts}
           onRefresh={loadData}
         />
       )}
-      {tab === 3 && (
+      {activeTab === 3 && (
         <PpmRiskTab
           initiativeId={id!}
           risks={risks}
+          canEdit={canEdit}
           onRefresh={loadData}
           // Stryker disable next-line OptionalChaining: equivalent: card is non-null here, the page returned the error view above when it is null
           initiativeName={card?.name}
         />
       )}
-      {tab === 4 && <PpmTaskBoard initiativeId={id!} />}
-      {tab === 5 && <PpmGanttTab initiativeId={id!} card={card ?? undefined} />}
-      {tab === 6 && (
+      {activeTab === 4 && <PpmTaskBoard initiativeId={id!} canEdit={canEdit} />}
+      {activeTab === 5 && <PpmGanttTab initiativeId={id!} card={card ?? undefined} canEdit={canEdit} />}
+      {activeTab === 6 && (
         <CardDetailContent
           key={card.id}
           card={card}

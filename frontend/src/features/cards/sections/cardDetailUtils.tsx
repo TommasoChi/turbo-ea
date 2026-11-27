@@ -447,6 +447,7 @@ export function FieldEditor({
   currencySymbol,
   error,
   canViewCosts = true,
+  canEditCosts = false,
 }: {
   field: FieldDef;
   value: unknown;
@@ -454,6 +455,8 @@ export function FieldEditor({
   currencySymbol?: string;
   error?: string;
   canViewCosts?: boolean;
+  /** The server drops a cost value written without this right; show it read-only. */
+  canEditCosts?: boolean;
 }) {
   const { t } = useTranslation(["cards", "common"]);
   const fieldLabel = useFieldLabel();
@@ -626,6 +629,7 @@ export function FieldEditor({
           label={label}
           type="number"
           required={isRequired}
+          disabled={!canEditCosts}
           error={!!error}
           helperText={error}
           value={numVal}

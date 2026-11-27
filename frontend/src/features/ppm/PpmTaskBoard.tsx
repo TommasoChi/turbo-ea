@@ -64,6 +64,8 @@ function initials(name: string): string {
 
 interface Props {
   initiativeId: string;
+  /** ppm.manage and edit on the initiative. */
+  canEdit: boolean;
 }
 
 function DroppableColumn({
@@ -93,7 +95,7 @@ function DroppableColumn({
   );
 }
 
-export default function PpmTaskBoard({ initiativeId }: Props) {
+export default function PpmTaskBoard({ initiativeId, canEdit }: Props) {
   const { t } = useTranslation("ppm");
   const { formatDate } = useDateFormat();
   const { user } = useAuthContext();
@@ -231,7 +233,7 @@ export default function PpmTaskBoard({ initiativeId }: Props) {
         {g.wbs?.title ?? t("unassigned")}
       </Typography>
       <Chip label={g.tasks.length} size="small" sx={{ height: 18, fontSize: "0.65rem", ml: 0.5 }} />
-      {g.wbs && (
+      {canEdit && g.wbs && (
         <Button
           size="small"
           variant="text"
@@ -396,6 +398,7 @@ export default function PpmTaskBoard({ initiativeId }: Props) {
                         wbsName={
                           task.wbs_id ? wbsMap[task.wbs_id]?.title : undefined
                         }
+                        readOnly={!canEdit}
                         onClick={() => setTaskDialog({ open: true, task })}
                         onMarkDone={handleMarkDone}
                       />
@@ -403,7 +406,7 @@ export default function PpmTaskBoard({ initiativeId }: Props) {
                   </DroppableColumn>
                 </SortableContext>
                 <Box sx={{ p: 1, mt: "auto" }}>
-                  {quickAdd?.status === status ? (
+                  {canEdit && (quickAdd?.status === status ? (
                     <TextField
                       autoFocus
                       size="small"
@@ -429,7 +432,7 @@ export default function PpmTaskBoard({ initiativeId }: Props) {
                     >
                       {t("quickAdd")}
                     </Button>
-                  )}
+                  ))}
                 </Box>
               </Paper>
             );
@@ -536,7 +539,7 @@ export default function PpmTaskBoard({ initiativeId }: Props) {
             <TaskStatusChip status={task.status} />
           </TableCell>
           <TableCell>
-            <Box display="flex" gap={0.5}>
+            {canEdit && <Box display="flex" gap={0.5}>
               {task.status !== "done" && (
                 <IconButton
                   size="small"
@@ -562,7 +565,7 @@ export default function PpmTaskBoard({ initiativeId }: Props) {
               >
                 <MaterialSymbol icon="delete" size={16} />
               </IconButton>
-            </Box>
+            </Box>}
           </TableCell>
         </TableRow>
       );
@@ -714,14 +717,16 @@ export default function PpmTaskBoard({ initiativeId }: Props) {
               <MaterialSymbol icon="view_list" size={18} />
             </ToggleButton>
           </ToggleButtonGroup>
-          <Button
-            variant="contained"
-            size="small"
-            startIcon={<MaterialSymbol icon="add" size={18} />}
-            onClick={() => setTaskDialog({ open: true })}
-          >
-            {t("createTask")}
-          </Button>
+          {canEdit && (
+            <Button
+              variant="contained"
+              size="small"
+              startIcon={<MaterialSymbol icon="add" size={18} />}
+              onClick={() => setTaskDialog({ open: true })}
+            >
+              {t("createTask")}
+            </Button>
+          )}
         </Box>
       </Box>
 
@@ -729,6 +734,7 @@ export default function PpmTaskBoard({ initiativeId }: Props) {
 
       {taskDialog.open && (
         <PpmTaskDialog
+          readOnly={!canEdit}
           initiativeId={initiativeId}
           task={taskDialog.task}
           wbsList={wbsList}

@@ -157,6 +157,14 @@ describe("BudgetTable — the tab's mode", () => {
     ]);
   });
 
+  it("shows a dash, never $0, for a line without amount (no cost access)", () => {
+    const groups = groupBudgetLines([budget({ id: "x", description: "Hidden amt", amount: undefined })]);
+    render(<BudgetTable groups={groups} expanded={new Set([2026])} />);
+    const row = screen.getByText("Hidden amt").closest("tr") as HTMLElement;
+    expect([...row.querySelectorAll("td")].slice(1, 4).some((c) => c.textContent === "—")).toBe(true);
+    expect(row.textContent).not.toContain("$0");
+  });
+
   it("adds to a year, and edits and deletes a line, through its callbacks", async () => {
     const user = userEvent.setup();
     const onAdd = vi.fn();

@@ -87,6 +87,7 @@ async def project_many(
     rows: list[tuple[dict[str, Any], dict[str, Any]]],
     *,
     protected: set[str] | None = None,
+    withhold_amounts: bool = False,
 ) -> list[tuple[dict[str, Any], dict[str, Any], dict[str, Any]]]:
     reference_fields = [
         field for field in config.fields if field.active and field.kind == "card_reference"
@@ -118,6 +119,8 @@ async def project_many(
         for field in config.fields:
             if not field.active or field.kind == "calculated" or field.key not in stored:
                 continue
+            if withhold_amounts and field.kind == "number":
+                continue
             value = stored[field.key]
             if field.kind == "card_reference" and value is not None:
                 card = cards.get(str(value))
@@ -132,9 +135,11 @@ async def project_many(
                 }
             values[field.key] = value
             visible[field.key] = value
-        calculated, _errors = evaluate_row_fields(
-            config, values, standard, unavailable_calculations=protected
-        )
+        calculated: dict[str, Any] = {}
+        if not withhold_amounts:
+            calculated, _errors = evaluate_row_fields(
+                config, values, standard, unavailable_calculations=protected
+            )
         output.append((visible, calculated, references))
     return output
 

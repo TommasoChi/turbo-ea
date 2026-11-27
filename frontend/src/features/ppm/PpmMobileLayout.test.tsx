@@ -87,6 +87,7 @@ describe("PpmOverviewTab financials", () => {
         latestReport={null}
         costLines={[]}
         budgetLines={[]}
+        canViewCosts
       />,
     );
     // The KPI caption said "Total Budget" and the first BudgetBar repeated it
@@ -104,7 +105,7 @@ describe("Task board kanban on mobile", () => {
       PHONE,
       <MemoryRouter>
         <AuthProvider user={null} refreshUser={async () => {}}>
-          <PpmTaskBoard initiativeId="i1" />
+          <PpmTaskBoard initiativeId="i1" canEdit />
         </AuthProvider>
       </MemoryRouter>,
     );

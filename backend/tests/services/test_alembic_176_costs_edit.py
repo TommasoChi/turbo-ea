@@ -32,9 +32,9 @@ def test_noop_for_wildcard_existing_key_and_bad_input():
     assert mig.plan_patch(None) is None
 
 
-def test_costs_view_defaults_unchanged_and_costs_edit_false_for_every_builtin_role():
-    assert BPM_ADMIN_PERMISSIONS["costs.view"] is True
-    assert MEMBER_PERMISSIONS["costs.view"] is True
+def test_costs_view_defaults_and_costs_edit_false_for_every_builtin_role():
+    assert BPM_ADMIN_PERMISSIONS["costs.view"] is False
+    assert MEMBER_PERMISSIONS["costs.view"] is False
     assert VIEWER_PERMISSIONS["costs.view"] is False
     for perms in (BPM_ADMIN_PERMISSIONS, MEMBER_PERMISSIONS, VIEWER_PERMISSIONS):
         assert perms["costs.edit"] is False

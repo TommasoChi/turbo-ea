@@ -50,7 +50,7 @@ const onRejection = (reason: unknown) => rejections.push(reason);
 function renderTab(reports: PpmStatusReport[] = REPORTS) {
   const onRefresh = vi.fn();
   const user = userEvent.setup();
-  render(<PpmReportsTab initiativeId="i1" reports={reports} onRefresh={onRefresh} />);
+  render(<PpmReportsTab initiativeId="i1" reports={reports} onRefresh={onRefresh} canEdit />);
   return { user, onRefresh };
 }
 

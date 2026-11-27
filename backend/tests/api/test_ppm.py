@@ -20,6 +20,7 @@ from tests.conftest import (
     create_card_type,
     create_role,
     create_user,
+    create_wbs,
 )
 
 BASE = "/api/v1/ppm"
@@ -792,6 +793,140 @@ class TestTasks:
         )
         assert resp.status_code == 404
 
+    async def _other_initiative_wbs(self, db, ppm_env):
+        other = await create_card(
+            db, card_type="Initiative", name="Other", user_id=ppm_env["admin"].id
+        )
+        return await create_wbs(db, initiative_id=other.id)
+
+    async def test_create_task_in_own_wbs(self, client, db, ppm_env):
+        wbs = await create_wbs(db, initiative_id=ppm_env["initiative"].id)
+        resp = await client.post(
+            f"{BASE}/initiatives/{ppm_env['initiative'].id}/tasks",
+            json={"title": "t", "wbs_id": str(wbs.id)},
+            headers=auth_headers(ppm_env["admin"]),
+        )
+        assert resp.status_code == 200
+        assert resp.json()["wbs_id"] == str(wbs.id)
+
+    @pytest.mark.parametrize("foreign", [True, False])
+    async def test_create_task_rejects_a_wbs_of_another_initiative(
+        self, client, db, ppm_env, foreign
+    ):
+        wbs_id = (await self._other_initiative_wbs(db, ppm_env)).id if foreign else uuid.uuid4()
+        resp = await client.post(
+            f"{BASE}/initiatives/{ppm_env['initiative'].id}/tasks",
+            json={"title": "t", "wbs_id": str(wbs_id)},
+            headers=auth_headers(ppm_env["admin"]),
+        )
+        assert resp.status_code == 400
+        assert resp.json()["detail"] == "Parent WBS item not found in this initiative"
+
+    @pytest.mark.parametrize("foreign", [True, False])
+    async def test_update_task_rejects_a_wbs_of_another_initiative(
+        self, client, db, ppm_env, foreign
+    ):
+        task = await client.post(
+            f"{BASE}/initiatives/{ppm_env['initiative'].id}/tasks",
+            json={"title": "t"},
+            headers=auth_headers(ppm_env["admin"]),
+        )
+        wbs_id = (await self._other_initiative_wbs(db, ppm_env)).id if foreign else uuid.uuid4()
+        resp = await client.patch(
+            f"{BASE}/tasks/{task.json()['id']}",
+            json={"wbs_id": str(wbs_id)},
+            headers=auth_headers(ppm_env["admin"]),
+        )
+        assert resp.status_code == 400
+        assert resp.json()["detail"] == "Parent WBS item not found in this initiative"
+
+    async def test_create_task_rejects_a_milestone_of_its_own_initiative(self, client, db, ppm_env):
+        milestone = await create_wbs(db, initiative_id=ppm_env["initiative"].id, is_milestone=True)
+        resp = await client.post(
+            f"{BASE}/initiatives/{ppm_env['initiative'].id}/tasks",
+            json={"title": "t", "wbs_id": str(milestone.id)},
+            headers=auth_headers(ppm_env["admin"]),
+        )
+        assert resp.status_code == 400
+        assert resp.json()["detail"] == "A milestone cannot contain items"
+
+    async def test_update_task_rejects_a_milestone_of_its_own_initiative(self, client, db, ppm_env):
+        milestone = await create_wbs(db, initiative_id=ppm_env["initiative"].id, is_milestone=True)
+        task = await client.post(
+            f"{BASE}/initiatives/{ppm_env['initiative'].id}/tasks",
+            json={"title": "t"},
+            headers=auth_headers(ppm_env["admin"]),
+        )
+        resp = await client.patch(
+            f"{BASE}/tasks/{task.json()['id']}",
+            json={"wbs_id": str(milestone.id)},
+            headers=auth_headers(ppm_env["admin"]),
+        )
+        assert resp.status_code == 400
+        assert resp.json()["detail"] == "A milestone cannot contain items"
+
+    async def test_update_task_keeps_its_wbs_when_the_wbs_later_became_a_milestone(
+        self, client, db, ppm_env
+    ):
+        wbs = await create_wbs(db, initiative_id=ppm_env["initiative"].id)
+        headers = auth_headers(ppm_env["admin"])
+        task = (
+            await client.post(
+                f"{BASE}/initiatives/{ppm_env['initiative'].id}/tasks",
+                json={"title": "old", "wbs_id": str(wbs.id)},
+                headers=headers,
+            )
+        ).json()
+        wbs.is_milestone = True
+        await db.flush()
+        same = await client.patch(
+            f"{BASE}/tasks/{task['id']}",
+            json={"title": "new", "wbs_id": str(wbs.id)},
+            headers=headers,
+        )
+        other = await create_wbs(db, initiative_id=ppm_env["initiative"].id, is_milestone=True)
+        moved = await client.patch(
+            f"{BASE}/tasks/{task['id']}", json={"wbs_id": str(other.id)}, headers=headers
+        )
+        assert (same.status_code, same.json().get("title")) == (200, "new")
+        assert moved.status_code == 400
+
+    async def test_task_with_a_malformed_wbs_id_is_a_400_not_a_500(self, client, ppm_env):
+        init_id = ppm_env["initiative"].id
+        headers = auth_headers(ppm_env["admin"])
+        created = await client.post(
+            f"{BASE}/initiatives/{init_id}/tasks",
+            json={"title": "t", "wbs_id": "abc"},
+            headers=headers,
+        )
+        task = await client.post(
+            f"{BASE}/initiatives/{init_id}/tasks", json={"title": "t"}, headers=headers
+        )
+        updated = await client.patch(
+            f"{BASE}/tasks/{task.json()['id']}", json={"wbs_id": "abc"}, headers=headers
+        )
+        assert (created.status_code, updated.status_code) == (400, 400)
+
+    async def test_update_task_moves_to_own_wbs_and_clears_it(self, client, db, ppm_env):
+        wbs = await create_wbs(db, initiative_id=ppm_env["initiative"].id)
+        task = (
+            await client.post(
+                f"{BASE}/initiatives/{ppm_env['initiative'].id}/tasks",
+                json={"title": "t"},
+                headers=auth_headers(ppm_env["admin"]),
+            )
+        ).json()
+        headers = auth_headers(ppm_env["admin"])
+        moved = await client.patch(
+            f"{BASE}/tasks/{task['id']}", json={"wbs_id": str(wbs.id)}, headers=headers
+        )
+        assert moved.json()["wbs_id"] == str(wbs.id)
+        cleared = await client.patch(
+            f"{BASE}/tasks/{task['id']}", json={"wbs_id": None}, headers=headers
+        )
+        assert cleared.status_code == 200
+        assert cleared.json()["wbs_id"] is None
+
 
 # ── Task Comments ─────────────────────────────────────────────────
 
@@ -834,7 +969,7 @@ class TestTaskComments:
             db,
             key="member",
             label="Member",
-            permissions={"ppm.view": True, "ppm.manage": True},
+            permissions={"ppm.view": True, "ppm.manage": True, "inventory.edit": True},
         )
         member = await create_user(db, email="member@test.com", role="member")
         task_id = await self._create_task(client, ppm_env)
@@ -860,7 +995,7 @@ class TestTaskComments:
             db,
             key="member",
             label="Member",
-            permissions={"ppm.view": True, "ppm.manage": True},
+            permissions={"ppm.view": True, "ppm.manage": True, "inventory.edit": True},
         )
         member = await create_user(db, email="member@test.com", role="member")
         task_id = await self._create_task(client, ppm_env)
@@ -2005,3 +2140,45 @@ class TestPermissions:
             headers=auth_headers(ppm_env["viewer"]),
         )
         assert resp.status_code == 403
+
+
+class TestRowDeletedDuringUpdate:
+    """A row deleted between the first read and the locked refresh answers 404, not 500."""
+
+    @pytest.mark.parametrize(
+        ("path", "model_name", "create_body"),
+        [
+            ("costs", "PpmCostLine", {"category": "capex", "description": "C", "planned": 1}),
+            ("budgets", "PpmBudgetLine", {"fiscal_year": 2026, "category": "capex", "amount": 1}),
+        ],
+    )
+    async def test_patch_answers_404(
+        self, client, ppm_env, monkeypatch, path, model_name, create_body, ppm_budget
+    ):
+        from sqlalchemy.exc import InvalidRequestError
+        from sqlalchemy.ext.asyncio import AsyncSession
+
+        from app.models import ppm_cost_line
+
+        headers = auth_headers(ppm_env["admin"])
+        init_id = str(ppm_env["initiative"].id)
+        if path == "costs":
+            create_body = {**create_body, "budget_line_id": ppm_budget}
+        created = await client.post(
+            f"{BASE}/initiatives/{init_id}/{path}", json=create_body, headers=headers
+        )
+        assert created.status_code == 200, created.text
+        row_id = created.json()["id"]
+        model = getattr(ppm_cost_line, model_name)
+        real_refresh = AsyncSession.refresh
+
+        async def refresh(self, instance, *args, **kwargs):
+            if isinstance(instance, model):
+                raise InvalidRequestError("Could not refresh instance")
+            return await real_refresh(self, instance, *args, **kwargs)
+
+        monkeypatch.setattr(AsyncSession, "refresh", refresh)
+
+        resp = await client.patch(f"{BASE}/{path}/{row_id}", json={}, headers=headers)
+
+        assert resp.status_code == 404

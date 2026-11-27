@@ -45,6 +45,8 @@ interface Props {
   wbsList?: PpmWbs[];
   defaultWbsId?: string;
   defaultStartDate?: string;
+  /** Details only: every field disabled, no Save, Delete or comment input. */
+  readOnly?: boolean;
   onClose: () => void;
   onSaved: () => void;
 }
@@ -64,6 +66,7 @@ export default function PpmTaskDialog({
   wbsList,
   defaultWbsId,
   defaultStartDate,
+  readOnly,
   onClose,
   onSaved,
 }: Props) {
@@ -190,7 +193,7 @@ export default function PpmTaskDialog({
       disableRestoreFocus
     >
       <DialogTitle>
-        {isEdit ? t("editTask") : t("createTask")}
+        {readOnly && task ? task.title : isEdit ? t("editTask") : t("createTask")}
       </DialogTitle>
       <DialogContent>
         <Box display="flex" flexDirection="column" gap={2} mt={1}>
@@ -200,7 +203,8 @@ export default function PpmTaskDialog({
             onChange={(e) => setTitle(e.target.value)}
             fullWidth
             required
-            autoFocus={!fullScreen}
+            autoFocus={!fullScreen && !readOnly}
+            disabled={readOnly}
           />
           <TextField
             label={t("taskDescription")}
@@ -209,6 +213,7 @@ export default function PpmTaskDialog({
             fullWidth
             multiline
             rows={3}
+            disabled={readOnly}
           />
 
           <Box
@@ -219,6 +224,7 @@ export default function PpmTaskDialog({
             <FormControl fullWidth size="small">
               <InputLabel>{t("taskStatus")}</InputLabel>
               <Select
+                disabled={readOnly}
                 value={status}
                 label={t("taskStatus")}
                 onChange={(e) =>
@@ -241,6 +247,7 @@ export default function PpmTaskDialog({
             <FormControl fullWidth size="small">
               <InputLabel>{t("taskPriority")}</InputLabel>
               <Select
+                disabled={readOnly}
                 value={priority}
                 label={t("taskPriority")}
                 onChange={(e) =>
@@ -261,6 +268,7 @@ export default function PpmTaskDialog({
 
           <Autocomplete
             options={users}
+            disabled={readOnly}
             getOptionLabel={(opt) => opt.display_name}
             value={selectedUser}
             onChange={(_e, val) => setAssigneeId(val?.id || "")}
@@ -286,6 +294,7 @@ export default function PpmTaskDialog({
               onChange={(v) => setStartDate(v)}
               fullWidth
               size="small"
+              disabled={readOnly}
             />
             <DateField
               label={t("taskDueDate")}
@@ -293,6 +302,7 @@ export default function PpmTaskDialog({
               onChange={(v) => setDueDate(v)}
               fullWidth
               size="small"
+              disabled={readOnly}
             />
           </Box>
 
@@ -300,6 +310,7 @@ export default function PpmTaskDialog({
             <FormControl fullWidth size="small">
               <InputLabel>{t("wbs")}</InputLabel>
               <Select
+                disabled={readOnly}
                 value={wbsId}
                 label={t("wbs")}
                 onChange={(e) => setWbsId(e.target.value)}
@@ -366,16 +377,18 @@ export default function PpmTaskDialog({
                       <LinkifiedText text={c.content} />
                     </Typography>
                   </Box>
-                  <IconButton
-                    size="small"
-                    onClick={() => handleDeleteComment(c.id)}
-                  >
-                    <MaterialSymbol icon="close" size={14} />
-                  </IconButton>
+                  {!readOnly && (
+                    <IconButton
+                      size="small"
+                      onClick={() => handleDeleteComment(c.id)}
+                    >
+                      <MaterialSymbol icon="close" size={14} />
+                    </IconButton>
+                  )}
                 </Box>
               ))}
 
-              {/* Add comment */}
+              {!readOnly && (
               <Box display="flex" gap={1} alignItems="flex-end">
                 <TextField
                   size="small"
@@ -402,6 +415,7 @@ export default function PpmTaskDialog({
                   <MaterialSymbol icon="send" size={18} />
                 </Button>
               </Box>
+              )}
             </>
           )}
         </Box>
@@ -438,7 +452,7 @@ export default function PpmTaskDialog({
         </Alert>
       )}
       <DialogActions>
-        {isEdit && (
+        {isEdit && !readOnly && (
           <Button
             color="error"
             onClick={() => setConfirmDelete(true)}
@@ -450,6 +464,7 @@ export default function PpmTaskDialog({
         <Button onClick={onClose}>
           {t("common:actions.cancel", "Cancel")}
         </Button>
+        {!readOnly && (
         <Button
           variant="contained"
           onClick={handleSave}
@@ -460,6 +475,7 @@ export default function PpmTaskDialog({
         >
           {isEdit ? t("common:actions.save", "Save") : t("createTask")}
         </Button>
+        )}
       </DialogActions>
     </Dialog>
   );

@@ -32,6 +32,8 @@ interface Props {
   budgetLines: PpmBudgetLine[];
   /** The initiatives beneath this one (`null` while unknown or unreadable). */
   rollup: PpmRollupOut | null;
+  /** Without cost access the Financials panel is not shown. */
+  canViewCosts: boolean;
 }
 
 /** The "beneath this initiative" block under the Financials bars. */
@@ -43,6 +45,7 @@ export default function PpmOverviewTab({
   costLines,
   budgetLines,
   rollup,
+  canViewCosts,
 }: Props) {
   const { t } = useTranslation("ppm");
   const theme = useTheme();
@@ -127,7 +130,7 @@ export default function PpmOverviewTab({
       </Paper>
 
       {/* Financials — KPIs + Budget Bars combined */}
-      <Paper sx={{ p: 2.5 }}>
+      {canViewCosts && <Paper sx={{ p: 2.5 }}>
         <Typography variant="subtitle1" fontWeight={600} mb={2}>
           {t("financials")}
         </Typography>
@@ -209,7 +212,8 @@ export default function PpmOverviewTab({
               {t("beneathThisInitiative", { count: rollup.descendant_count })}
             </Typography>
             {/* When both sides are already the figures beneath, the KPIs say it. */}
-            {!(totals.budget.derived && totals.actual.derived) && (
+            {rollup.total_planned != null && rollup.total_actual != null
+              && !(totals.budget.derived && totals.actual.derived) && (
               <Typography variant="body2" color="text.secondary">
                 {t("beneathFigures", {
                   budget: fmt.format(rollup.total_planned),
@@ -227,7 +231,7 @@ export default function PpmOverviewTab({
             )}
           </Box>
         )}
-      </Paper>
+      </Paper>}
 
       {/* Timeline + Status */}
       <Paper sx={{ p: 2.5 }}>

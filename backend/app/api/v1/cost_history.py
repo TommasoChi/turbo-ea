@@ -61,21 +61,22 @@ class CostHistoryList(BaseModel):
     rows: list[CostHistoryRow]
 
 
-async def _load_card_for_edit(
+async def _load_card_for_costs(
     db: AsyncSession, user: User, card_id: str, *, write: bool = False
 ) -> Card:
+    """Reading takes the right to see the card's costs, writing the right to edit them
+    (`costs.edit` or a `card.edit_costs` stakeholder), never `card.edit` or `inventory.edit`."""
     card_uuid = parse_uuid(card_id)
     await require_card_readable(db, user, card_uuid, mode="module")
-    if not await PermissionService.check_permission(
-        db, user, "inventory.edit", card_uuid, "card.edit"
-    ):
-        raise HTTPException(403, "Not enough permissions")
     card = (await db.execute(select(Card).where(Card.id == card_uuid))).scalar_one_or_none()
     if not card:
         raise HTTPException(404, "Card not found")
-    # Past-year costs feed the cost reports: writing them takes the cost permission, as for
-    # the cost items (`costs.edit` or a `card.edit` stakeholder), never `inventory.edit` alone.
-    if write and not await PermissionService.can_edit_costs(db, user, card.id):
+    allowed = (
+        await PermissionService.can_edit_costs(db, user, card.id)
+        if write
+        else await PermissionService.can_view_costs(db, user, card.id)
+    )
+    if not allowed:
         raise HTTPException(403, "Not enough permissions")
     return card
 
@@ -98,9 +99,7 @@ async def list_cost_history(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    card = await _load_card_for_edit(db, user, card_id)
-    if not await PermissionService.can_view_costs(db, user, card.id):
-        raise HTTPException(403, "Not enough permissions")
+    card = await _load_card_for_costs(db, user, card_id)
     rows = (
         (await db.execute(select(CardCostHistory).where(CardCostHistory.card_id == card.id)))
         .scalars()
@@ -121,7 +120,7 @@ async def upsert_cost_history(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    card = await _load_card_for_edit(db, user, card_id, write=True)
+    card = await _load_card_for_costs(db, user, card_id, write=True)
     _reject_cost_item_type(card)
     oldest, newest = fiscal_year_window(await get_fiscal_year_start(db))
     if not oldest <= body.fiscal_year <= newest:
@@ -176,7 +175,7 @@ async def delete_cost_history(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    card = await _load_card_for_edit(db, user, card_id, write=True)
+    card = await _load_card_for_costs(db, user, card_id, write=True)
     _reject_cost_item_type(card)
     row = (
         await db.execute(

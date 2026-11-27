@@ -78,7 +78,7 @@ function renderBoard(entry = "/ppm/i1?groupWbs=1") {
   return render(
     <MemoryRouter initialEntries={[entry]}>
       <AuthProvider user={ME} refreshUser={async () => {}}>
-        <PpmTaskBoard initiativeId="i1" />
+        <PpmTaskBoard initiativeId="i1" canEdit />
       </AuthProvider>
     </MemoryRouter>,
   );

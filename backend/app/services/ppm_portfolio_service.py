@@ -386,14 +386,14 @@ async def build_initiative_rollup(
     type_schema = await db.scalar(select(CardType).where(CardType.key == INITIATIVE_TYPE))
     ids, dates = await _visible_descendant_dates(db, root, read_scope, type_schema)
     cost_access = await PermissionService.card_ids_with_cost_access(db, user, [root.id, *ids])
-    cost_ids = (
-        [card_id for card_id in ids if card_id in cost_access] if root.id in cost_access else []
-    )
-    cost_rows = await load_cost_rows(db, [root.id, *cost_ids] if root.id in cost_access else [])
+    start, end = date_span(ids, dates)
+    if root.id not in cost_access:
+        return PpmRollupOut(descendant_count=len(ids), start_date=start, end_date=end)
+    cost_ids = [card_id for card_id in ids if card_id in cost_access]
+    cost_rows = await load_cost_rows(db, [root.id, *cost_ids])
     own = cost_presence_from(cost_rows).get(root.id, LinePresence(False, False))
     aggregates = cost_aggregates_from(cost_rows)
     figures = sum_figures(cost_ids, aggregates)
-    start, end = date_span(ids, dates)
     ppm_map = await build_ppm_map(db, cost_ids, start_month=await get_fiscal_year_start(db))
     return PpmRollupOut(
         descendant_count=len(ids),
@@ -729,6 +729,14 @@ async def build_gantt_items(
                     "opex_actual": None,
                 }
             )
+        cost_amounts: dict[str, Any] = (
+            {
+                key: costs.get(key, 0)
+                for key in ("capex_planned", "capex_actual", "opex_planned", "opex_actual")
+            }
+            if card.id in cost_access
+            else {}
+        )
         items.append(
             PpmGanttItem(
                 id=str(card.id),
@@ -739,10 +747,7 @@ async def build_gantt_items(
                 **date_kwargs,
                 cost_budget=(budget_total or None) if card.id in cost_access else None,
                 cost_actual=(actual_total or None) if card.id in cost_access else None,
-                capex_planned=costs.get("capex_planned", 0),
-                capex_actual=costs.get("capex_actual", 0),
-                opex_planned=costs.get("opex_planned", 0),
-                opex_actual=costs.get("opex_actual", 0),
+                **cost_amounts,
                 group_id=str(group_info[0]) if group_info else None,
                 group_name=group_info[1] if group_info else None,
                 group_anchor=anchors.get(card.id) == card.id,

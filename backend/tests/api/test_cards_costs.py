@@ -33,7 +33,7 @@ from tests.conftest import (
 @pytest.fixture
 async def cost_env(db):
     await create_role(db, key="admin", permissions={"*": True})
-    await create_role(db, key="member", permissions=MEMBER_PERMISSIONS)
+    await create_role(db, key="member", permissions={**MEMBER_PERMISSIONS, "costs.view": True})
     await create_role(db, key="viewer", permissions=VIEWER_PERMISSIONS)
     await create_card_type(
         db,
@@ -83,7 +83,7 @@ class TestGetCardCostStripping:
         assert r.json()["attributes"].get("costTotalAnnual") == 1234
 
     async def test_member_sees_cost_via_app_perm(self, client, db, cost_env):
-        # MEMBER_PERMISSIONS grants costs.view by default in this release.
+        # The cost_env member role is granted costs.view explicitly.
         r = await client.get(
             f"/api/v1/cards/{cost_env['card'].id}",
             headers=auth_headers(cost_env["member"]),
@@ -246,7 +246,12 @@ class TestPatchDropsCostsWhenForbidden:
             card_type_key="Provider",
             key="full_editor",
             label="Full Editor",
-            permissions={"card.view": True, "card.edit": True, "card.view_costs": True},
+            permissions={
+                "card.view": True,
+                "card.edit": True,
+                "card.view_costs": True,
+                "card.edit_costs": True,
+            },
             color="#000",
             sort_order=0,
             is_archived=False,
@@ -313,7 +318,12 @@ class TestPatchDropsCostsWhenForbidden:
             card_type_key="Provider",
             key="full_editor",
             label="Full Editor",
-            permissions={"card.view": True, "card.edit": True, "card.view_costs": True},
+            permissions={
+                "card.view": True,
+                "card.edit": True,
+                "card.view_costs": True,
+                "card.edit_costs": True,
+            },
         )
         db.add(
             Stakeholder(

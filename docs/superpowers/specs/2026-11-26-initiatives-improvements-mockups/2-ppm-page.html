@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Mockup 2 - Initiative PPM page</title><style>
+/* Shared look of the initiatives-improvements mockups. Static, no scripts needed except the legend toggles. */
+:root{--bg:#f4f5f7;--card:#fff;--ink:#1f2933;--muted:#6b7785;--line:#e2e6ea;--accent:#e35205;--navy:#16213e;
+  --good:#2e9e5b;--warn:#e0a100;--bad:#d64545;--c1:#2f6fed;--c2:#e35205;--c3:#16a085;--c4:#8e44ad;--c5:#e0a100;--c6:#7f8c8d;--other:#b8c0c8}
+@media (prefers-color-scheme:dark){:root{--bg:#14181d;--card:#1d232a;--ink:#e8ecef;--muted:#98a3ad;--line:#2c343c;--other:#56626d}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 system-ui,Segoe UI,Roboto,sans-serif;padding:16px}
+h1{font-size:18px;margin:0 0 4px}h2{font-size:15px;margin:0 0 8px}h3{font-size:13px;margin:0 0 2px}
+.note{background:#fff8e1;border:1px dashed #e0a100;color:#5c4400;padding:6px 10px;border-radius:6px;font-size:12px;margin:8px 0}
+@media (prefers-color-scheme:dark){.note{background:#2b2410;color:#e8d9a6}}
+.tag{display:inline-block;background:var(--accent);color:#fff;border-radius:4px;font-size:11px;padding:0 6px;margin-right:4px;font-weight:600}
+.page{max-width:1180px;margin:0 auto}
+.crumb{color:var(--muted);font-size:12px;margin-bottom:6px}
+.paper{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px;margin-bottom:12px}
+.row{display:flex;gap:12px;flex-wrap:wrap}.row>*{flex:1 1 0;min-width:240px}
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin-bottom:12px;flex-wrap:wrap}
+.tabs span{padding:8px 12px;color:var(--muted);font-size:13px}.tabs .on{color:var(--accent);border-bottom:2px solid var(--accent);font-weight:600}
+.btn{display:inline-block;border:1px solid var(--line);border-radius:6px;padding:3px 10px;font-size:12px;background:var(--card)}
+.btn.p{background:var(--accent);border-color:var(--accent);color:#fff}
+.dot{display:inline-block;width:11px;height:11px;border-radius:50%;margin-right:4px;vertical-align:-1px}
+.g{background:var(--good)}.a{background:var(--warn)}.r{background:var(--bad)}
+.field{font-size:12px;color:var(--muted)}.val{font-size:14px;color:var(--ink)}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-bottom:12px}
+.kpi{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+.kpi b{display:block;font-size:20px;line-height:1.2}.kpi small{color:var(--muted);font-size:11px}
+.kpi .pos{color:var(--good)}.kpi .neg{color:var(--warn)}
+.i{display:inline-block;width:14px;height:14px;line-height:14px;text-align:center;border:1px solid var(--muted);border-radius:50%;font-size:10px;color:var(--muted);margin-left:4px;font-style:normal}
+.box{border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:13px;min-height:80px}
+.box h3{color:var(--muted);font-weight:600;display:flex;justify-content:space-between}
+.cnt{font-weight:400;font-size:11px}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{padding:6px 10px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}
+th{color:var(--muted);font-weight:600;font-size:12px}td.n,th.n{text-align:right}
+.scroll{overflow-x:auto}
+.legend{display:flex;gap:10px;flex-wrap:wrap;font-size:12px;margin-top:6px}
+.legend label{cursor:pointer;user-select:none;display:inline-flex;align-items:center;gap:4px}
+.legend i{width:10px;height:10px;border-radius:2px;display:inline-block}
+.legend input{display:none}.legend input:not(:checked)+span{opacity:.35;text-decoration:line-through}
+.sw{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px}
+.bar{height:18px;background:var(--line);border-radius:4px;position:relative;overflow:hidden}
+.bar>i{position:absolute;left:0;top:0;bottom:0}
+.toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px}
+.chip{border:1px solid var(--line);border-radius:14px;padding:2px 10px;font-size:12px;background:var(--card)}
+.chip.on{border-color:var(--accent);color:var(--accent)}
+.mm{font-size:12px;color:var(--muted);margin-top:4px}
+.cap{font-size:11px;color:var(--muted);margin:-2px 0 6px}
+svg text{fill:var(--ink);font-size:11px}svg .m{fill:var(--muted)}
+</style></head><body><div class="page">
+<h1>Mockup 2 &middot; Initiative PPM page <span class="field">/ppm/&lt;id&gt;</span></h1>
+<div class="note">Static mockup, illustrative figures. Part A: Overview (<span class="tag">R7</span>). Part B: Budget &amp; Costs tab (<span class="tag">R8</span><span class="tag">R9</span><span class="tag">R10</span><span class="tag">R20</span>). Without cost access the amounts, the cost sections and the Budget &amp; Costs tab are hidden with no message (<span class="tag">R22</span>).</div>
+
+<h2>Part A &middot; Overview</h2>
+<div class="paper"><div class="crumb">&larr; Back to Portfolio (<code>/ppm?tab=portfolio</code>)</div>
+<h1>Digital Workplace Renewal</h1>
+<div class="tabs"><span class="on">Overview</span><span>Status Reports</span><span>Budget &amp; Costs</span><span>Risk Management</span><span>Tasks</span><span>Gantt</span><span>Card Details</span></div>
+<div class="paper"><h3>1 &middot; Description</h3>Renewal of the digital workplace: devices, collaboration suite and the migration of the legacy file shares.</div>
+<div class="paper"><h3>2 &middot; Timeline, Completion to the right of the dates</h3>
+ <div class="row" style="align-items:center"><div style="flex:3"><div class="row" style="gap:6px"><div><span class="field">Start Date</span><br>01 Feb 2026</div><div><span class="field">Actual Start</span><br>09 Feb 2026</div><div><span class="field">End Date</span><br>30 Nov 2026</div><div><span class="field">Actual End</span><br>&ndash;</div></div></div>
+ <div style="flex:1;text-align:center"><span class="field">Completion</span><br><b style="font-size:24px;color:var(--c1)">62%</b></div></div></div>
+<div class="paper"><h3>3 &middot; Health Summary (same component as the card page, mockup 1)</h3><span class="dot g"></span>Schedule <span class="dot a"></span>Cost <span class="dot g"></span>Scope &middot; Report date 23 Nov 2026 &middot; three boxes Summary / Accomplishments / Next Steps</div>
+<div class="paper"><h3>4 &middot; Risk Management (same component as the card page, mockup 1)</h3>Tiles Total / Open / High open, donut by band, status bars, heat map, Manage.</div>
+<div class="paper"><h3>5 &middot; Financials (as today, with the same BudgetBar and "Total Cost")</h3>
+ <div class="bar" style="height:22px"><i style="width:100%;background:var(--other)"></i><i style="width:81.7%;background:var(--c1)"></i></div><div class="mm">Total Budget &euro; 1,200,000 &middot; Total Cost &euro; 980,000</div></div>
+</div>
+
+<h2 style="margin-top:20px">Part B &middot; Budget &amp; Costs tab</h2>
+<div class="paper">
+<div class="tabs"><span>Overview</span><span>Status Reports</span><span class="on">Budget &amp; Costs</span><span>Risk Management</span><span>Tasks</span><span>Gantt</span><span>Card Details</span></div>
+
+<div class="kpis" style="grid-template-columns:repeat(auto-fit,minmax(170px,1fr))">
+ <div class="kpi"><small>Total Budget &middot; click for Capex / Opex</small><b>&euro; 1,200,000</b></div>
+ <div class="kpi"><small>Total Cost</small><b>&euro; 980,000</b></div>
+ <div class="kpi"><small>Variance (cost &minus; budget)</small><b class="pos">&minus;&euro; 220,000 &middot; &minus;18.3%</b><small>Green: below budget. Amber when above.</small></div>
+ <div class="kpi"><small>Total Invoiced</small><b>&euro; 760,000</b><small>77.6% of Total Cost</small></div>
+ <div class="kpi"><small>Remaining to Invoice</small><b>&euro; 220,000</b><small>22.4% of Total Cost</small></div>
+</div>
+<div class="kpis" style="grid-template-columns:repeat(auto-fit,minmax(170px,1fr))">
+ <div class="kpi"><small>CPI (estimate) <i class="i">i</i></small><b style="color:var(--warn)">0.76</b><small>Spending above the work done</small></div>
+ <div class="kpi"><small>EAC (estimate) <i class="i">i</i></small><b>&euro; 1,580,000</b></div>
+ <div class="kpi"><small>Variance at completion (estimate) <i class="i">i</i></small><b style="color:var(--bad)">&minus;&euro; 381,000</b><small>Expected overrun</small></div>
+</div>
+<div class="note"><b>(i) popup text.</b> EV = Completion &times; Budget = 62% &times; 1,200,000 = 744,000. CPI = EV &divide; Cost = 744,000 &divide; 980,000 = 0.76 (below 1: spending exceeds the work done). EAC = Budget &divide; CPI = 1,580,000. Variance at completion = Budget &minus; EAC = &minus;380,000 (negative: expected overrun). Estimates: Completion is not an accounting value, lifetime totals, they do not follow the fiscal year. "n/a" when Completion, Cost or Budget is missing.</div>
+<div class="paper" style="max-width:420px"><h3>Capex / Opex popup (click on Total Budget)</h3>
+ <table><tr><th></th><th class="n">Budget</th><th class="n">Cost</th><th class="n">Variance</th></tr><tr><td>Capex</td><td class="n">1,200,000</td><td class="n">980,000</td><td class="n">&minus;220,000 (&minus;18.3%)</td></tr><tr><td>Opex</td><td class="n">0</td><td class="n">0</td><td class="n">0</td></tr></table></div>
+
+<div class="row">
+ <div class="paper"><h3>Where does the cost go, by parent Provider</h3><div class="cap">Donut, 6 slices at most plus Other</div>
+  <svg width="100%" height="170" viewBox="0 0 220 170" role="img" aria-label="Cost by parent Provider"><g transform="translate(110,85) rotate(-90)"><circle r="52" fill="none" stroke="var(--c1)" stroke-width="22" stroke-dasharray="124 327"/><circle r="52" fill="none" stroke="var(--c2)" stroke-width="22" stroke-dasharray="85 327" stroke-dashoffset="-124"/><circle r="52" fill="none" stroke="var(--c3)" stroke-width="22" stroke-dasharray="59 327" stroke-dashoffset="-209"/><circle r="52" fill="none" stroke="var(--other)" stroke-width="22" stroke-dasharray="59 327" stroke-dashoffset="-268"/></g><text x="110" y="82" text-anchor="middle" class="m">Total cost</text><text x="110" y="100" text-anchor="middle" style="font-weight:700;font-size:14px">&euro; 980k</text></svg>
+  <div class="legend"><label><input type="checkbox" checked><span><i style="background:var(--c1)"></i> Dell 38%</span></label><label><input type="checkbox" checked><span><i style="background:var(--c2)"></i> Microsoft 26%</span></label><label><input type="checkbox" checked><span><i style="background:var(--c3)"></i> Aruba Cloud 18%</span></label><label><input type="checkbox" checked><span><i style="background:var(--other)"></i> Other 18%</span></label></div></div>
+ <div class="paper"><h3>Which Providers receive the money</h3><div class="cap">Bars, same colour as the parent in the donut</div>
+  <svg width="100%" height="170" viewBox="0 0 260 170"><g class="m"><text x="0" y="24">Dell Italia</text><text x="0" y="58">Microsoft</text><text x="0" y="92">Aruba Cloud</text><text x="0" y="126">Dell Services</text><text x="0" y="160">Others</text></g>
+  <rect x="84" y="10" width="130" height="20" rx="3" fill="var(--c1)"/><text x="220" y="24">262k</text><rect x="84" y="44" width="89" height="20" rx="3" fill="var(--c2)"/><text x="179" y="58">255k</text><rect x="84" y="78" width="60" height="20" rx="3" fill="var(--c3)"/><text x="150" y="92">176k</text><rect x="84" y="112" width="38" height="20" rx="3" fill="var(--c1)" opacity=".6"/><text x="128" y="126">110k</text><rect x="84" y="146" width="38" height="20" rx="3" fill="var(--other)"/><text x="128" y="160">177k</text></svg></div>
+ <div class="paper"><h3>Are we invoiced as we spend? (Cost vs invoiced)</h3><div class="cap">Budget as reference line</div>
+  <svg width="100%" height="170" viewBox="0 0 220 170"><line x1="20" y1="22" x2="210" y2="22" stroke="var(--muted)" stroke-dasharray="4 3"/><text x="210" y="16" text-anchor="end" class="m">Budget 1.2M</text>
+  <rect x="50" y="42" width="50" height="108" rx="3" fill="var(--c1)"/><text x="75" y="162" text-anchor="middle">Cost</text><text x="75" y="36" text-anchor="middle">980k</text>
+  <rect x="130" y="66" width="50" height="84" rx="3" fill="var(--c3)"/><text x="155" y="162" text-anchor="middle">Invoiced</text><text x="155" y="60" text-anchor="middle">760k</text></svg>
+  <div class="legend"><label><input type="checkbox" checked><span><i style="background:var(--c1)"></i> Cost</span></label><label><input type="checkbox" checked><span><i style="background:var(--c3)"></i> Invoiced</span></label></div></div>
+</div>
+<div class="cap">"Spend over time" is not shown (its code stays, unmounted). Every legend is clickable: a click hides or shows the series.</div>
+
+<h3 style="margin-top:12px">Planned Budget <span class="tag">R10</span></h3>
+<div class="cap">Description, FY, Category and Provider are columns; "Origine Costi", the move icon and "Initiative total invoiced" are gone; natural widths with a horizontal scroll bar.</div>
+<div class="scroll"><table>
+<tr><th>Item</th><th>Description</th><th>FY</th><th>Category</th><th>Provider</th><th class="n">Planned Budget</th><th class="n">Cost Items</th><th class="n">Remaining Budget</th><th class="n">Invoiced</th><th class="n">Remaining to invoice</th></tr>
+<tr><td>&#9662; Devices</td><td>New laptops and docks</td><td>2026</td><td>CAPEX</td><td>Dell Italia</td><td class="n">600,000</td><td class="n">372,000</td><td class="n">228,000</td><td class="n">300,000</td><td class="n">72,000</td></tr>
+<tr><td>&#9662; Collaboration suite</td><td>Licences and migration</td><td>2026</td><td>CAPEX</td><td>Microsoft</td><td class="n">400,000</td><td class="n">255,000</td><td class="n">145,000</td><td class="n">230,000</td><td class="n">25,000</td></tr>
+<tr><td>&#9662; Hosting</td><td>File share migration</td><td>2026</td><td>CAPEX</td><td>Aruba Cloud</td><td class="n">200,000</td><td class="n">353,000</td><td class="n" style="color:var(--bad)">&minus;153,000</td><td class="n">230,000</td><td class="n">123,000</td></tr>
+</table></div>
+</div></div></body></html>

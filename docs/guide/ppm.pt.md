@@ -305,12 +305,35 @@ Quando o PML está ativado, os cards de **Iniciativa** exibem uma aba **PML** co
 
 Por outro lado, a aba **Detalhes do Card** dentro da visualização detalhada PML da iniciativa mostra as seções padrão do card sem a aba PML, evitando navegação circular.
 
-## Permissões
+## Permissões { #permissions }
 
 | Permissão | Descrição |
 |-----------|-----------|
 | `ppm.view` | Visualizar o painel PML, diagrama de Gantt e relatórios de iniciativas, e ler os cartões de iniciativa. Concedido a todos os papéis por padrão |
-| `ppm.manage` | Criar e gerenciar relatórios de status, tarefas, custos, riscos e itens WBS. Concedido aos papéis Admin, Admin BPM e Membro |
+| `ppm.manage` | Criar e gerir relatórios de estado, tarefas, orçamentos, itens de custo, riscos e elementos WBS, nas iniciativas em que as permissões de cartão abaixo também o permitam. Concedido aos papéis Admin e PPM Manager |
 | `reports.ppm_dashboard` | Visualizar o painel do portfólio PML. Concedido a todos os papéis por padrão |
 
-O orçamento e os itens de custo seguem as permissões PML e a visibilidade da iniciativa. Os detalhes e o total das faturas e o indicador de custos do cronograma também exigem acesso aos custos da iniciativa. Registar ou mover faturas requer ainda a permissão de gestão PML.
+Aplicam-se duas camadas. A permissão da aplicação abre uma função; a permissão do cartão diz em que iniciativas se aplica. Um cartão que não pode ler não existe para si.
+
+- **Gerir** relatórios de estado, riscos, tarefas e o Gantt exige `ppm.manage` **e** direitos de edição no cartão (`inventory.edit` ou um papel de parte interessada com **card.edit**).
+- Os custos (linhas de orçamento, itens de custo, faturas) escrevem-se com `ppm.manage` **e** direitos de edição de custos no cartão (`costs.edit` ou um papel de parte interessada com **card.edit_costs**), e os custos têm de ser visíveis.
+- Um utilizador sem acesso aos custos (`costs.view`, ou um papel de parte interessada com **card.view_costs**) não vê **nenhum montante** na iniciativa: as linhas, descrições, anos, fornecedores e datas permanecem, enquanto os montantes, totais, subtotais, agregações e valores personalizados calculados ou numéricos são omitidos. O separador **Orçamento e custos** fica oculto, sem mensagem, e o portefólio não mostra valores. O relatório de custos lista apenas as iniciativas cujos custos pode ver.
+- As rotas de faturas respondem «não encontrado» (404) a um utilizador sem acesso aos custos.
+- Moderar (editar ou eliminar) os comentários de outras pessoas exige direitos de edição no cartão.
+- Os botões Gerir da iniciativa seguem estes direitos, e o botão **Gerir** dos custos na página do cartão exige `ppm.manage` e direitos de edição de custos: um utilizador que apenas vê os custos não o vê.
+
+| Função | Permissões necessárias |
+|---|---|
+| Ver o cartão (dados gerais) | `card.view` |
+| Ver os custos do cartão | `card.view` + `view_costs` |
+| Ver o PML sem custos (relatórios de estado, riscos, tarefas, Gantt) | `card.view` + `ppm.view` |
+| Ver os custos do PML (orçamento, itens de custo, faturas, montantes) | `card.view` + `view_costs` + `ppm.view` |
+| Editar os dados do cartão | `card.view` + `card.edit` |
+| Editar o PML sem custos | `card.view` + `card.edit` + `ppm.view` + `ppm.manage` |
+| Editar os custos do PML | `card.view` + `view_costs` + `edit_costs` + `ppm.view` + `ppm.manage` |
+| Produzir o relatório de custos | `ppm.view`; lista apenas cartões com `card.view` + `view_costs` |
+| Abrir as páginas do PML | `ppm.view` |
+
+`view_costs` é `costs.view` ou **card.view_costs**; `edit_costs` é `costs.edit` ou **card.edit_costs**. Nas Aplicações e Componentes de TI, os itens de custo anuais editam-se com `card.view` + `view_costs` + `edit_costs`, sem permissão PML.
+
+O papel de parte interessada **Controlador de custos** lê a iniciativa e os seus relatórios de estado, riscos e Gantt, e edita apenas os custos; atribua aos seus titulares o papel da aplicação **PPM Manager**. Um Responsável ou um Gerente de projeto TI continua a gerir a iniciativa e os seus custos. **No orçamento** na Cronologia protegida também exige visibilidade dos custos.

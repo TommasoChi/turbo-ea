@@ -122,6 +122,7 @@ function renderTab(risks: PpmRisk[] = RISKS, initiativeName?: string) {
     <PpmRiskTab
       initiativeId="i1"
       risks={risks}
+      canEdit
       onRefresh={onRefresh}
       initiativeName={initiativeName}
     />,
@@ -605,5 +606,39 @@ describe("PpmRiskTab — toolbar", () => {
     expect(kpi("Total Risks")).toBe("3");
     expect(kpi("Open")).toBe("1");
     expect(kpi("High Risks")).toBe("1");
+  });
+});
+
+describe("PpmRiskTab — read-only", () => {
+  it("offers no add, import, edit or delete without canEdit, but keeps the register and Export", () => {
+    render(<PpmRiskTab initiativeId="i1" risks={RISKS} canEdit={false} onRefresh={vi.fn()} />);
+    expect(screen.getByText("Vendor lock-in")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Export$/ })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Add Risk$/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Import$/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Edit" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Delete" })).not.toBeInTheDocument();
+  });
+
+  it("does not offer the Actions column in the Columns chooser without canEdit", async () => {
+    const user = userEvent.setup();
+    render(<PpmRiskTab initiativeId="i1" risks={RISKS} canEdit={false} onRefresh={vi.fn()} />);
+    await user.click(screen.getByRole("tab", { name: /Columns/i }));
+    expect(screen.queryByRole("checkbox", { name: "Actions" })).not.toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: "Mitigation" })).toBeInTheDocument();
+  });
+
+  it("offers it with canEdit", async () => {
+    const user = userEvent.setup();
+    renderTab();
+    await user.click(screen.getByRole("tab", { name: /Columns/i }));
+    expect(screen.getByRole("checkbox", { name: "Actions" })).toBeInTheDocument();
+  });
+
+  it("offers them with canEdit", () => {
+    renderTab();
+    expect(screen.getByRole("button", { name: /Add Risk$/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Import$/ })).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "Edit" })).toHaveLength(3);
   });
 });
