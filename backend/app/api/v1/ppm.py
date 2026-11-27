@@ -1212,6 +1212,11 @@ async def get_financials(
         _default_values, _default_calculated, default_references = projected.pop()
         definitions[section] = {
             "visible_columns": config.visible_columns,
+            **(
+                {"provider_field_key": cost_config.provider_source.budget_field_key}
+                if section == "budget" and cost_config.provider_source
+                else {}
+            ),
             "fields": [
                 {
                     "key": field.key,

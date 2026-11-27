@@ -473,3 +473,19 @@ async def test_editor_cannot_replace_invisible_provider_child(client, db, provid
     saved = await client.get(f"{env['base']}/costs", headers=env["headers"])
     assert saved.status_code == 200
     assert saved.json()[0]["provider_child_id"] == str(env["child"].id)
+
+
+async def test_budget_field_definitions_name_the_provider_field(client, provider_setup):
+    env = provider_setup
+    response = await client.get(f"{env['base']}/financials", headers=env["headers"])
+    assert response.status_code == 200, response.text
+    definitions = response.json()["field_definitions"]
+    assert definitions["budget"]["provider_field_key"] == "origin"
+    assert "provider_field_key" not in definitions["cost_item"]
+
+
+async def test_budget_field_definitions_omit_the_key_without_a_provider_source(client, ppm_env):
+    base = f"/api/v1/ppm/initiatives/{ppm_env['initiative'].id}"
+    response = await client.get(f"{base}/financials", headers=auth_headers(ppm_env["admin"]))
+    assert response.status_code == 200, response.text
+    assert "provider_field_key" not in response.json()["field_definitions"]["budget"]
