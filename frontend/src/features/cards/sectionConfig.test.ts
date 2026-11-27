@@ -507,4 +507,25 @@ describe("Initiative summary layout", () => {
     });
     expect(initiativeSummaryAnchors([], new Set()).schedule).toBeUndefined();
   });
+
+  it("initiativeSummaryGroups puts the Timeline group before the Cost group", () => {
+    const costFirst: SectionDef = {
+      section: "Cost & Timeline",
+      fields: [
+        { key: "costBudget", type: "cost", label: "Budget" },
+        { key: "costActual", type: "cost", label: "Actual Cost" },
+        { key: "startDate", type: "date", label: "Start Date" },
+        { key: "actualStart", type: "date", label: "Actual Start" },
+        { key: "endDate", type: "date", label: "End Date" },
+        { key: "actualEnd", type: "date", label: "Actual End" },
+      ],
+    };
+    const grouped = initiativeSummaryGroups(costFirst, "Cost", "Timeline");
+    expect(grouped.fields.map((field) => field.key)).toEqual([
+      "startDate", "actualStart", "endDate", "actualEnd", "costBudget", "costActual",
+    ]);
+    expect(grouped.fields.map((field) => field.group)).toEqual([
+      "Timeline", "Timeline", "Timeline", "Timeline", "Cost", "Cost",
+    ]);
+  });
 });

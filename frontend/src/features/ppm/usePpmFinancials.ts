@@ -28,6 +28,14 @@ export function usePpmSchedule(initiativeId: string | null | undefined, refetchK
   return useInitiativeQuery<PmlInitiativeSchedule>(initiativeId, "schedule", refetchKey);
 }
 
+export function usePpmCompletion(initiativeId: string | null | undefined, refetchKey?: number) {
+  const { data, loading, error } = useApiQuery<{ completion: number; wbs_count: number }>(
+    initiativeId ? "/ppm/initiatives/" + encodeURIComponent(initiativeId) + "/completion" : null,
+    { keepPreviousData: false, refetchKey },
+  );
+  return { data, loading, error };
+}
+
 // The portfolio's "latest": report_date, then created_at, then id, all descending.
 function isNewerReport(a: PpmStatusReport, b: PpmStatusReport): boolean {
   return (

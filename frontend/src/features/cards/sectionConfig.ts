@@ -208,15 +208,15 @@ const INITIATIVE_DATE_FIELDS = ["startDate", "actualStart", "endDate", "actualEn
 
 export function initiativeSummaryGroups(section: SectionDef, cost: string, timeline: string): SectionDef {
   if (section.section !== "Cost & Timeline") return section;
-  return {
-    ...section,
-    fields: section.fields.map((field) => {
-      if (field.group) return field;
-      if (INITIATIVE_COST_FIELDS.includes(field.key)) return { ...field, group: cost };
-      if (INITIATIVE_DATE_FIELDS.includes(field.key)) return { ...field, group: timeline };
-      return field;
-    }),
-  };
+  const fields = section.fields.map((field) => {
+    if (field.group) return field;
+    if (INITIATIVE_COST_FIELDS.includes(field.key)) return { ...field, group: cost };
+    if (INITIATIVE_DATE_FIELDS.includes(field.key)) return { ...field, group: timeline };
+    return field;
+  });
+  // Timeline first whatever the seed order: the cost fields close the section.
+  const isCost = (field: { key: string }) => INITIATIVE_COST_FIELDS.includes(field.key);
+  return { ...section, fields: [...fields.filter((f) => !isCost(f)), ...fields.filter(isCost)] };
 }
 
 export function initiativeSummaryAnchors(sections: SectionDef[], hidden: Set<string>) {
