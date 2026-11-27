@@ -42,7 +42,9 @@ vi.mock("@/features/cards/sections", () => ({
   ),
   DescriptionSection: () => <div data-testid="description-section" />,
   LifecycleSection: () => <div data-testid="lifecycle-section" />,
-  AttributeSection: () => <div data-testid="attribute-section" />,
+  AttributeSection: ({ canViewCosts }: { canViewCosts?: boolean }) => (
+    <div data-testid="attribute-section" data-can-view-costs={String(canViewCosts)} />
+  ),
   HierarchySection: () => <div data-testid="hierarchy-section" />,
   SuccessorsSection: () => <div data-testid="successors-section" />,
   TagsSection: () => <div data-testid="tags-section" />,
@@ -50,7 +52,9 @@ vi.mock("@/features/cards/sections", () => ({
   LayeredDependencySection: () => <div data-testid="ldv-section" />,
   CommentsTab: () => <div data-testid="comments-tab" />,
   TodosTab: () => <div data-testid="todos-tab" />,
-  StakeholdersTab: () => <div data-testid="stakeholders-tab" />,
+  StakeholdersTab: ({ canManageStakeholders }: { canManageStakeholders?: boolean }) => (
+    <div data-testid="stakeholders-tab" data-can-manage={String(canManageStakeholders)} />
+  ),
   ResourcesTab: () => <div data-testid="resources-tab" />,
   AdrsTab: () => <div data-testid="adrs-tab" />,
   HistoryTab: () => <div data-testid="history-tab" />,
@@ -317,6 +321,51 @@ describe("CardDetail", () => {
 
     await screen.findByText("My Application");
     expect(document.querySelector("[data-origin]")).toBeNull();
+  });
+
+  it("offers no stakeholder assignment while the permissions are unknown or without the right", async () => {
+    // A Member lacks stakeholders.manage: neither the not-yet-loaded state nor
+    // a rejected permissions request may offer the assignment controls.
+    vi.mocked(api.get).mockImplementation((path: string) => {
+      if (path.includes("/my-permissions")) return Promise.reject(new Error("boom"));
+      return Promise.resolve(mockCard);
+    });
+
+    renderCardDetail();
+
+    await userEvent.click(await screen.findByRole("tab", { name: /stakeholders/i }));
+    expect(await screen.findByTestId("stakeholders-tab")).toHaveAttribute(
+      "data-can-manage",
+      "false",
+    );
+  });
+
+  it("offers no cost field while the permissions are unknown or rejected", async () => {
+    const type = {
+      ...APPLICATION_TYPE,
+      fields_schema: [
+        { section: "Details", fields: [{ key: "costBudget", label: "Budget", type: "cost" }] },
+      ],
+    };
+    vi.mocked(useMetamodel).mockReturnValue({
+      types: [type],
+      relationTypes: [],
+      loading: false,
+      getType: () => type,
+      getRelationsForType: () => [],
+      invalidateCache: vi.fn(),
+    } as unknown as ReturnType<typeof useMetamodel>);
+    vi.mocked(api.get).mockImplementation((path: string) => {
+      if (path.includes("/my-permissions")) return Promise.reject(new Error("boom"));
+      return Promise.resolve(mockCard);
+    });
+
+    renderCardDetail();
+
+    const sections = await screen.findAllByTestId("attribute-section");
+    for (const section of sections) {
+      expect(section).toHaveAttribute("data-can-view-costs", "false");
+    }
   });
 
   it("renders standard tabs (Card, Comments, Todos, Stakeholders, History)", async () => {

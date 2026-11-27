@@ -476,6 +476,7 @@ export default function CardDetailContent({
             card={card}
             onSave={saveFrom(sectionAnchor("description"))}
             canEdit={perms.can_edit}
+            canEditCosts={perms.can_edit_costs}
             initialExpanded={exp}
             extraFields={
               descExtraFields.length > 0 ? descExtraFields : undefined
@@ -647,6 +648,7 @@ export default function CardDetailContent({
             initialExpanded={exp}
             hiddenFieldKeys={hiddenFieldKeys}
             canViewCosts={perms.can_view_costs}
+            canEditCosts={perms.can_edit_costs}
             onDirtyChange={dirtyCb(key)}
             expandOn={expandOn(customSectionAnchor(section.section))}
             editOn={editOn(customSectionAnchor(section.section))}
@@ -936,7 +938,6 @@ export default function CardDetailContent({
       {canShowManage && manageTab && (
         <Suspense fallback={null}>
           <PpmManageDialog
-            canEdit={canManageTab}
             card={card}
             tab={manageTab.tab}
             onChanged={() => {

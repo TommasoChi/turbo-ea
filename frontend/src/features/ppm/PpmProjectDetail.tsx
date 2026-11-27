@@ -27,6 +27,7 @@ import PpmRiskTab from "./PpmRiskTab";
 import PpmTaskBoard from "./PpmTaskBoard";
 import PpmGanttTab from "./PpmGanttTab";
 import CardDetailContent from "@/features/cards/CardDetailContent";
+import { CLOSED_CARD_PERMISSIONS } from "@/features/cards/defaultPermissions";
 import type {
   Card,
   CardEffectivePermissions,
@@ -49,28 +50,6 @@ const PPM_TAB_LABEL_KEYS = [
   "gantt",
   "cardDetails",
 ];
-
-// Closed: nothing writable and no costs until the initiative's own permissions
-// have arrived, and for good when they cannot be read.
-const DEFAULT_PERMS: CardEffectivePermissions["effective"] = {
-  can_view: true,
-  can_edit: false,
-  can_archive: false,
-  can_delete: false,
-  can_approval_status: false,
-  can_manage_stakeholders: false,
-  can_manage_relations: false,
-  can_manage_documents: false,
-  can_manage_comments: false,
-  can_create_comments: false,
-  can_bpm_edit: false,
-  can_bpm_manage_drafts: false,
-  can_bpm_approve: false,
-  can_manage_adr_links: false,
-  can_manage_diagram_links: false,
-  can_view_costs: false,
-  can_edit_costs: false,
-};
 
 export default function PpmProjectDetail() {
   const { id } = useParams<{ id: string }>();
@@ -106,7 +85,7 @@ export default function PpmProjectDetail() {
   // What the initiatives beneath this one add up to: shown on a side this
   // initiative has no lines of its own for. `null` when it could not be read.
   const [rollup, setRollup] = useState<PpmRollupOut | null>(null);
-  const [perms, setPerms] = useState<CardEffectivePermissions["effective"]>(DEFAULT_PERMS);
+  const [perms, setPerms] = useState<CardEffectivePermissions["effective"]>(CLOSED_CARD_PERMISSIONS);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const user = useOptionalAuthUser();
@@ -130,7 +109,7 @@ export default function PpmProjectDetail() {
     setBudgetLines([]);
     setRisks([]);
     setRollup(null);
-    setPerms(DEFAULT_PERMS);
+    setPerms(CLOSED_CARD_PERMISSIONS);
     setError("");
     // Stryker restore all
     setLoading(true);
@@ -179,7 +158,7 @@ export default function PpmProjectDetail() {
         setRisks(ri);
         setRollup(ru);
         // Stryker restore ObjectLiteral
-        setPerms(pm?.effective ?? DEFAULT_PERMS);
+        setPerms(pm?.effective ?? CLOSED_CARD_PERMISSIONS);
       } catch (e) {
         // Superseded (or aborted because it was): the newer load owns the page.
         if (!isCurrent()) return;

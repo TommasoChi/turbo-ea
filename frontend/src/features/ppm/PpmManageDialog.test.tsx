@@ -1,6 +1,6 @@
 /**
- * PpmManageDialog — the tab it opens gets the right to write that the opener
- * decided: the cost tab its own, the reports and Gantt tabs theirs.
+ * PpmManageDialog — it opens only for a reader who may manage the tab, so the
+ * tab it shows is always editable.
  */
 import { render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -32,12 +32,7 @@ describe("PpmManageDialog", () => {
     ["gantt", "gantt"],
     ["reports", "reports"],
   ] as const)("hands the %s tab canEdit", async (tab, id) => {
-    render(<PpmManageDialog card={CARD} tab={tab} canEdit onClose={vi.fn()} onChanged={vi.fn()} />);
+    render(<PpmManageDialog card={CARD} tab={tab} onClose={vi.fn()} onChanged={vi.fn()} />);
     expect(await screen.findByTestId(id)).toHaveTextContent("true");
-  });
-
-  it("hands the tab canEdit false when the opener says so", async () => {
-    render(<PpmManageDialog card={CARD} tab="gantt" canEdit={false} onClose={vi.fn()} onChanged={vi.fn()} />);
-    expect(await screen.findByTestId("gantt")).toHaveTextContent("false");
   });
 });

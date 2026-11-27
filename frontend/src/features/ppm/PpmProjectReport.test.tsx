@@ -337,6 +337,31 @@ describe("PpmProjectReport — loading", () => {
     }
   });
 
+  it("shows the costs section when the address carries the id in upper case", async () => {
+    const upper = "/ppm/initiatives/I1";
+    mockApi.on("get", "/cards/I1", CARD);
+    mockApi.on("get", "/cards/I1/my-permissions", { effective: { can_view_costs: true } });
+    mockApi.on("get", `${upper}/schedule`, { initiative_id: "i1", plan_derived: false });
+    mockApi.on("get", `${upper}/reports`, REPORTS);
+    mockApi.on("get", `${upper}/costs`, COSTS);
+    mockApi.on("get", `${upper}/budgets`, BUDGETS);
+    mockApi.on("get", `${upper}/risks`, RISKS);
+    mockApi.on("get", `${upper}/rollup`, NO_ROLLUP);
+    mockApi.on("get", `${upper}/completion`, { completion: 42.4, wbs_count: 1 });
+    mockApi.on("get", `${upper}/wbs`, WBS);
+    mockApi.on("get", `${upper}/tasks`, TASKS);
+    mockApi.on("get", `${upper}/financials`, FINANCIALS);
+    render(
+      <MemoryRouter initialEntries={["/ppm/I1/report"]}>
+        <Routes>
+          <Route path="/ppm/:id/report" element={<PpmProjectReport />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+    await loaded();
+    expect(section("costs")).not.toBeNull();
+  });
+
   it("titles the report with the initiative and its type's icon", async () => {
     renderPage();
     await loaded();

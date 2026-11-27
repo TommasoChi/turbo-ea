@@ -54,6 +54,7 @@ import {
 import { useGamificationEnabled } from "@/hooks/useGamificationEnabled";
 import OriginChip from "@/components/OriginChip";
 import CardDetailContent from "@/features/cards/CardDetailContent";
+import { DEFAULT_CARD_PERMISSIONS } from "@/features/cards/defaultPermissions";
 import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
 import type {
   Card,
@@ -61,27 +62,6 @@ import type {
   AiSuggestResponse,
 } from "@/types";
 import { brand, FAVORITE_COLOR, SEVERITY_COLORS, WARNING_STRONG_COLOR } from "@/theme/tokens";
-
-// ── Default permissions (allow everything until loaded) ─────────
-const DEFAULT_PERMISSIONS: CardEffectivePermissions["effective"] = {
-  can_view: true,
-  can_edit: true,
-  can_archive: true,
-  can_delete: true,
-  can_approval_status: true,
-  can_manage_stakeholders: true,
-  can_manage_relations: true,
-  can_manage_documents: true,
-  can_manage_comments: true,
-  can_create_comments: true,
-  can_bpm_edit: true,
-  can_bpm_manage_drafts: true,
-  can_bpm_approve: true,
-  can_manage_adr_links: true,
-  can_manage_diagram_links: true,
-  can_view_costs: true,
-  can_edit_costs: false,
-};
 
 // ── Main Detail Page ────────────────────────────────────────────
 export default function CardDetail() {
@@ -104,7 +84,7 @@ export default function CardDetail() {
   const [initialTab, setInitialTab] = useState<number | string>(0);
   const [initialSubTab, setInitialSubTab] = useState<number | undefined>(undefined);
   const [error, setError] = useState("");
-  const [perms, setPerms] = useState<CardEffectivePermissions["effective"]>(DEFAULT_PERMISSIONS);
+  const [perms, setPerms] = useState<CardEffectivePermissions["effective"]>(DEFAULT_CARD_PERMISSIONS);
   const [archiveDialogOpen, setArchiveDialogOpen] = useState(false);
   // A data-quality jump from the pill (#1334), tied to the card it was asked
   // on so it never replays on the next card this view shows.
@@ -223,7 +203,7 @@ export default function CardDetail() {
   // Fetch effective permissions for this card
   useEffect(() => {
     if (!id) return;
-    setPerms(DEFAULT_PERMISSIONS);
+    setPerms(DEFAULT_CARD_PERMISSIONS);
     api
       .get<CardEffectivePermissions>(`/cards/${id}/my-permissions`)
       .then((res) => setPerms(res.effective))

@@ -101,6 +101,8 @@ interface Completion {
 }
 
 interface ReportData {
+  /** The id this load was made for: the address may spell it in another case than the card does. */
+  loadedId: string;
   card: Card;
   reports: PpmStatusReport[];
   costLines: PpmCostLine[];
@@ -177,7 +179,7 @@ export default function PpmProjectReport() {
 
   const [data, setData] = useState<ReportData | null>(null);
   // The amounts are not even asked for without cost access.
-  const financials = usePpmFinancials(data?.canViewCosts && data.card.id === id ? id : null);
+  const financials = usePpmFinancials(data?.canViewCosts && data.loadedId === id ? id : null);
   const [loading, setLoading] = useState(true);
   // Stryker disable next-line StringLiteral: equivalent: loading starts true and the effect clears error before it can clear loading, so the initial error is never rendered
   const [error, setError] = useState("");
@@ -185,7 +187,7 @@ export default function PpmProjectReport() {
   const chartRef = useRef<HTMLDivElement>(null);
   const theme = useTheme();
 
-  usePageSubject(data && data.card.id === id ? data.card.name : undefined);
+  usePageSubject(data && data.loadedId === id ? data.card.name : undefined);
   usePageSection(t("pdfDocumentTitle"));
 
   useAbortableEffect(
@@ -211,6 +213,7 @@ export default function PpmProjectReport() {
           ]);
         if (!isCurrent()) return;
         setData({
+          loadedId: id,
           card,
           reports,
           costLines,
@@ -248,7 +251,7 @@ export default function PpmProjectReport() {
     </Tooltip>
   );
 
-  if (loading || schedule.loading || (data && data.card.id !== id)) {
+  if (loading || schedule.loading || (data && data.loadedId !== id)) {
     return (
       <Box display="flex" justifyContent="center" alignItems="center" minHeight={240}>
         <CircularProgress />

@@ -1019,6 +1019,7 @@ function MappingDialog({ open, mapping, connections, onClose, onSaved }: Mapping
                       value={fm.default_value}
                       onChange={(v) => updateFieldMapping(idx, "default_value", v)}
                       currencySymbol={currencySymbol}
+                      canEditCosts
                     />
                   ) : (
                     <TextField

@@ -2883,8 +2883,9 @@ export interface PpmRollupOut {
   total_actual?: number;
   start_date: string | null;
   end_date: string | null;
-  has_budget_lines: boolean;
-  has_cost_lines: boolean;
+  /** Absent with the amounts when they are withheld from the reader. */
+  has_budget_lines?: boolean;
+  has_cost_lines?: boolean;
   by_year?: PpmRollupYear[];
 }
 

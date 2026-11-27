@@ -1088,6 +1088,9 @@ export default function InventoryPage() {
   const canOdataBookmarks = !!(user?.permissions?.["*"] || user?.permissions?.["bookmarks.odata"]);
   const canManageBookmarks = !!(user?.permissions?.["*"] || user?.permissions?.["bookmarks.manage"]);
   const canViewCostsGlobally = !!(user?.permissions?.["*"] || user?.permissions?.["costs.view"]);
+  // App level only: a stakeholder's per-card edit right is unknown to the grid
+  // and enforced by the server.
+  const canEditCostsGlobally = !!(user?.permissions?.["*"] || user?.permissions?.["costs.edit"]);
   const canManageStakeholders = !!(user?.permissions?.["*"] || user?.permissions?.["stakeholders.manage"]);
   const { symbol: currencySymbol } = useCurrency();
   const gridRef = useRef<AgGridReact>(null);
@@ -3413,8 +3416,9 @@ export default function InventoryPage() {
         for (const field of section.fields) {
           if (isWriteLockedField(field) || calculatedKeys.has(field.key)) continue;
           // Same gate the grid columns and the export use: a user without
-          // costs.view must not be able to overwrite figures they cannot see.
-          if (field.type === "cost" && !canViewCostsGlobally) continue;
+          // costs.view must not be able to overwrite figures they cannot see,
+          // and the server drops a cost written without costs.edit.
+          if (field.type === "cost" && !(canViewCostsGlobally && canEditCostsGlobally)) continue;
           fields.push({
             key: `attr_${field.key}`,
             label: fieldLabel(field),
@@ -3467,7 +3471,7 @@ export default function InventoryPage() {
       }
     }
     return fields;
-  }, [typeConfig, selectedType, relationTypes, visibleTypeKeys, types, t, fieldLabel, relLabel, typeLabel, canViewCostsGlobally, calculatedKeys]);
+  }, [typeConfig, selectedType, relationTypes, visibleTypeKeys, types, t, fieldLabel, relLabel, typeLabel, canViewCostsGlobally, canEditCostsGlobally, calculatedKeys]);
 
   const currentMassField = massEditableFields.find((f) => f.key === massEditField);
 
@@ -4491,7 +4495,11 @@ export default function InventoryPage() {
             headerTooltip: fieldHelp(field) || undefined,
             width: 150,
             hide: !selectedColumns.has(colKey),
-            editable: gridEditMode && !isWriteLockedField(field) && !calculatedKeys.has(field.key),
+            editable:
+              gridEditMode &&
+              !isWriteLockedField(field) &&
+              !calculatedKeys.has(field.key) &&
+              (field.type !== "cost" || canEditCostsGlobally),
             valueGetter: (p: { data: Card }) =>
               (p.data?.attributes || {})[field.key] ?? "",
             valueSetter: (p) => {
@@ -4893,7 +4901,7 @@ export default function InventoryPage() {
     const out = ordered.slice();
     out.splice(at + 1, 0, ...columnFreeze.applyFrozen(viaCols));
     return out;
-  }, [viaColumnInfo, viaMatches, viaLoading, viaFailed, columnFreeze, gridColumnOrder, types, typeConfig, commonFields, gridEditMode, relationSides, relatedRefsOnSide, relationsLoading, selectedType, parentPaths, cardsById, parentNameOf, descendantIndex, filters.showArchived, selectedColumns, userNameMap, t, i18n.language, formatDate, formatDateTime, originLabel, canViewCostsGlobally, canManageStakeholders, canEditLogos, logoColumnAvailable, openLogoMenu, tagGroups, stakeholderRoles, typeLabel, fieldHelp, roleDescription, eolColumnAvailable, eolColumnForced, eolOf, eolLoading, tReports, calculatedKeys, treeActive]);
+  }, [viaColumnInfo, viaMatches, viaLoading, viaFailed, columnFreeze, gridColumnOrder, types, typeConfig, commonFields, gridEditMode, relationSides, relatedRefsOnSide, relationsLoading, selectedType, parentPaths, cardsById, parentNameOf, descendantIndex, filters.showArchived, selectedColumns, userNameMap, t, i18n.language, formatDate, formatDateTime, originLabel, canViewCostsGlobally, canEditCostsGlobally, canManageStakeholders, canEditLogos, logoColumnAvailable, openLogoMenu, tagGroups, stakeholderRoles, typeLabel, fieldHelp, roleDescription, eolColumnAvailable, eolColumnForced, eolOf, eolLoading, tReports, calculatedKeys, treeActive]);
 
   // Feeds the Columns tab's "Column order" section: only the columns actually
   // on screen, built from the grid's own defs. On this page that matters twice
@@ -5204,6 +5212,7 @@ export default function InventoryPage() {
           onChange={setMassEditValue}
           currencySymbol={currencySymbol}
           canViewCosts={canViewCostsGlobally}
+          canEditCosts={canEditCostsGlobally}
         />
         <Typography variant="caption" color="text.secondary" sx={{ mt: 1.5, display: "block" }}>
           {t("massEdit.attr.hint", { count: selectedIds.length })}

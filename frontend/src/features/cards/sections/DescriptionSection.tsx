@@ -42,6 +42,7 @@ function DescriptionSection({
   card,
   onSave,
   canEdit = true,
+  canEditCosts = false,
   initialExpanded = true,
   extraFields,
   currencyFmt,
@@ -55,6 +56,7 @@ function DescriptionSection({
   card: Card;
   onSave: (u: Record<string, unknown>) => Promise<void>;
   canEdit?: boolean;
+  canEditCosts?: boolean;
   initialExpanded?: boolean;
   extraFields?: FieldDef[];
   currencyFmt?: CurrencyFormatter;
@@ -255,7 +257,7 @@ function DescriptionSection({
                 </Box>
               ) : (
                 <Box key={field.key} data-field-key={field.key} sx={{ mb: 2 }}>
-                  <FieldEditor field={field} value={attrs[field.key]} onChange={(v) => setAttrs((prev) => ({ ...prev, [field.key]: v }))} error={fieldErrors[field.key]} />
+                  <FieldEditor field={field} value={attrs[field.key]} onChange={(v) => setAttrs((prev) => ({ ...prev, [field.key]: v }))} error={fieldErrors[field.key]} canEditCosts={canEditCosts} />
                 </Box>
               ),
             )}

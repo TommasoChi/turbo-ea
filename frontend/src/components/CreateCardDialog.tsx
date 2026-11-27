@@ -212,18 +212,25 @@ export default function CreateCardDialog({
   // Collect all required fields across all sections for the selected type.
   // A field of an inactive or unlicensed extension (`ext_locked`) is never
   // offered: the backend refuses to fill it in on create.
+  // A cost field is offered only to a creator holding costs.view and costs.edit
+  // for the type: a new card has no stakeholder role, and the server drops the
+  // value of anyone else.
+  const canSetCosts =
+    hasTypePermission(user, "costs.view", selectedType || null) &&
+    hasTypePermission(user, "costs.edit", selectedType || null);
   const requiredFields = useMemo(() => {
     if (!typeConfig) return [];
     const fields: (FieldDef & { sectionName: string })[] = [];
     for (const section of typeConfig.fields_schema) {
       for (const field of section.fields) {
+        if (field.type === "cost" && !canSetCosts) continue;
         if (field.required && !field.ext_locked && !hiddenFieldKeys.has(field.key)) {
           fields.push({ ...field, sectionName: section.section });
         }
       }
     }
     return fields;
-  }, [typeConfig, hiddenFieldKeys]);
+  }, [typeConfig, hiddenFieldKeys, canSetCosts]);
 
   // Fetch tag groups when the dialog opens. A failed reload keeps the groups
   // already held and says so, rather than silently dropping the picker.
