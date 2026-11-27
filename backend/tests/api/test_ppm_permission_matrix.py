@@ -45,6 +45,12 @@ PROFILES = {
     "member": (MEMBER_PERMISSIONS, None, False, False),
     "bpm_admin": (BPM_ADMIN_PERMISSIONS, None, False, False),
     "viewer": (VIEWER_PERMISSIONS, None, False, False),
+    "ppm_manager_with_inventory_edit_only": (
+        {**PPM_MANAGER_APP_PERMISSIONS, "inventory.edit": True},
+        None,
+        True,
+        False,
+    ),
     "only_view_costs": ({"ppm.view": True, "costs.view": True}, None, False, False),
     "only_edit_costs": ({"ppm.view": True, "costs.edit": True}, None, False, False),
     "manage_and_edit_costs_without_view": (
@@ -239,8 +245,12 @@ async def test_manage_routes(client, db, env, profile, route):
         assert resp.status_code == 403, resp.text
 
 
-# An invoice is invisible to a user who cannot see the costs: 404, not 403.
-INVOICE_HIDDEN = {"ppm_manager_no_stakeholder", "manage_and_edit_costs_without_view"}
+# Invoice rows answer 404 without cost visibility, by design; the spec says so.
+INVOICE_HIDDEN = {
+    "ppm_manager_no_stakeholder",
+    "manage_and_edit_costs_without_view",
+    "ppm_manager_with_inventory_edit_only",
+}
 
 
 @pytest.mark.parametrize("profile", list(PROFILES))
@@ -256,22 +266,25 @@ async def test_cost_routes(client, db, env, profile, route):
         assert resp.status_code == 403, resp.text
 
 
-async def test_cost_routes_are_not_blocked_by_card_edit_alone(client, db, env):
-    """card.edit without card.edit_costs does not open the cost routes."""
+@pytest.mark.parametrize("route", COST_ROUTES)
+async def test_card_edit_without_edit_costs_does_not_open_cost_routes(client, db, env, route):
     await create_role(db, key="editor", label="e", permissions=PPM_MANAGER_APP_PERMISSIONS)
     await create_stakeholder_role_def(
         db,
         card_type_key="Initiative",
         key="editorOnly",
-        permissions={"card.view": True, "card.edit": True, "card.view_costs": True},
+        permissions={
+            "card.view": True,
+            "card.edit": True,
+            "card.view_costs": True,
+            "card.edit_costs": False,
+        },
     )
     user = await create_user(db, email="editor@matrix.test", role="editor")
     db.add(Stakeholder(card_id=env["card"].id, user_id=user.id, role="editorOnly"))
     await db.flush()
-    cost = await _call(client, user, _cost_routes(env)["update_cost_line"])
-    manage = await _call(client, user, _manage_routes(env)["update_task"])
-    assert cost.status_code == 403
-    assert manage.status_code == 200
+    assert (await _call(client, user, _cost_routes(env)[route])).status_code == 403
+    assert (await _call(client, user, _manage_routes(env)["update_task"])).status_code == 200
 
 
 @pytest.mark.parametrize("kind", ["manage", "cost"])
@@ -295,6 +308,34 @@ async def test_hidden_initiative_is_404_before_any_403(client, db, env, kind):
     routes = _manage_routes(env) if kind == "manage" else _cost_routes(env)
     for route in routes.values():
         assert (await _call(client, user, route)).status_code == 404, route
+
+
+async def _foreign_comment(db, env):
+    from app.models.ppm_task_comment import PpmTaskComment
+
+    comment = PpmTaskComment(task_id=env["task"].id, user_id=env["admin"].id, content="other")
+    db.add(comment)
+    await db.flush()
+    return comment
+
+
+@pytest.mark.parametrize("verb", ["PATCH", "DELETE"])
+@pytest.mark.parametrize("profile", list(PROFILES))
+async def test_moderating_someone_elses_comment_needs_manage_and_card_edit(
+    client, db, env, profile, verb
+):
+    user = await _user_for(db, env, profile)
+    comment = await _foreign_comment(db, env)
+    resp = await client.request(
+        verb,
+        f"{BASE}/task-comments/{comment.id}",
+        json={"content": "x"} if verb == "PATCH" else None,
+        headers=auth_headers(user),
+    )
+    if PROFILES[profile][2]:
+        assert _ok(resp.status_code), resp.text
+    else:
+        assert resp.status_code == 403, resp.text
 
 
 async def test_author_of_a_comment_edits_and_deletes_it_without_manage(client, db, env):

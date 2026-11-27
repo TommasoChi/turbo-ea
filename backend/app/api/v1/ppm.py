@@ -136,12 +136,22 @@ async def _require_cost_write(db: AsyncSession, user: User, initiative_id: str) 
     return card
 
 
-async def _ensure_task_readable(db: AsyncSession, user: User, task_id) -> None:
-    """404 when the task does not exist or its Initiative is hidden from ``user``."""
+async def _ensure_task_readable(db: AsyncSession, user: User, task_id) -> PpmTask:
+    """The task; 404 when it does not exist or its Initiative is hidden from ``user``."""
     task = await db.get(PpmTask, uuid.UUID(str(task_id)))
     if task is None:
         raise HTTPException(status_code=404, detail="Task not found")
     await _ensure_initiative_readable(db, user, task.initiative_id)
+    return task
+
+
+async def _can_moderate_comment(db: AsyncSession, user: User, task: PpmTask) -> bool:
+    """A manager may edit or delete others' comments: ``ppm.manage`` and ``card.edit``."""
+    return await PermissionService.check_permission(
+        db, user, "ppm.manage"
+    ) and await PermissionService.check_permission(
+        db, user, "inventory.edit", task.initiative_id, "card.edit"
+    )
 
 
 async def _ensure_initiative_readable(
@@ -690,6 +700,7 @@ async def update_cost_line(
     initiative_id = str(cl.initiative_id)
     card = await _require_cost_write(db, user, initiative_id)
     await lock_field_settings(db)
+    await db.refresh(cl)
     config = await load_section(db, "cost_item")
     old_values = dict(cl.field_values or {})
     submitted = body.model_dump(exclude_unset=True).get("field_values", {})
@@ -952,6 +963,7 @@ async def update_budget_line(
     initiative_id = str(bl.initiative_id)
     card = await _require_cost_write(db, user, initiative_id)
     await lock_field_settings(db)
+    await db.refresh(bl)
     config = await load_section(db, "budget")
     cost_config = await load_section(db, "cost_item")
     old_values = dict(bl.field_values or {})
@@ -1237,6 +1249,7 @@ async def update_invoice(
     row = await ppm_financials.invoice_for_user(db, user, invoice_id)
     card = await _require_cost_write(db, user, str(row.initiative_id))
     await lock_field_settings(db)
+    await db.refresh(row)
     config = await load_section(db, "invoice")
     old_values = dict(row.field_values or {})
     submitted = body.model_dump(exclude_unset=True).get("field_values", {})
@@ -1728,10 +1741,9 @@ async def update_task_comment(
     comment = result.scalar_one_or_none()
     if not comment:
         raise HTTPException(status_code=404, detail="Comment not found")
-    await _ensure_task_readable(db, user, comment.task_id)
-    # Only author or ppm.manage can edit
-    has_manage = await PermissionService.check_permission(db, user, "ppm.manage")
-    if comment.user_id != user.id and not has_manage:
+    task = await _ensure_task_readable(db, user, comment.task_id)
+    # Only the author, or a manager who may edit the Initiative, can edit
+    if comment.user_id != user.id and not await _can_moderate_comment(db, user, task):
         raise HTTPException(status_code=403, detail="Not allowed")
     comment.content = body.content
     await db.commit()
@@ -1749,9 +1761,8 @@ async def delete_task_comment(
     comment = result.scalar_one_or_none()
     if not comment:
         raise HTTPException(status_code=404, detail="Comment not found")
-    await _ensure_task_readable(db, user, comment.task_id)
-    has_manage = await PermissionService.check_permission(db, user, "ppm.manage")
-    if comment.user_id != user.id and not has_manage:
+    task = await _ensure_task_readable(db, user, comment.task_id)
+    if comment.user_id != user.id and not await _can_moderate_comment(db, user, task):
         raise HTTPException(status_code=403, detail="Not allowed")
     await db.delete(comment)
     await db.commit()
