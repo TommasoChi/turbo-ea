@@ -161,8 +161,11 @@ export default function CardDetailContent({
   const [scheduleRevision, setScheduleRevision] = useState(0);
   const [manageTab, setManageTab] = useState<{ cardId: string; tab: "cost" | "gantt" | "reports" } | null>(null);
   const showInitiativeSummaries = !boScoped && card.type === "Initiative" && ppmEnabled && can("ppm.view");
+  // Costs are managed with the right to edit them, everything else with card edit.
+  const canManageCosts = can("ppm.manage") && perms.can_edit_costs;
+  const canManageCard = can("ppm.manage") && perms.can_edit;
   const canShowManage = !!manageTab && manageTab.cardId === card.id && showInitiativeSummaries
-    && (manageTab.tab === "cost" ? perms.can_view_costs : can("ppm.manage"));
+    && (manageTab.tab === "cost" ? canManageCosts : canManageCard);
   if (manageTab && !canShowManage) setManageTab(null);
 
   // Card-scoped Risks / Compliance counts. `null` = still loading → render the
@@ -610,12 +613,12 @@ export default function CardDetailContent({
             card={card}
             renderGroupAction={summaryAnchors ? (keys) => (
               <>
-                {perms.can_view_costs && summaryAnchors.financial && keys.includes(summaryAnchors.financial) && (
+                {canManageCosts && summaryAnchors.financial && keys.includes(summaryAnchors.financial) && (
                   <Button size="small" aria-label={t("ppm:manageSection", { section: t("ppm:budgetAndCosts") })} onClick={() => setManageTab({ cardId: card.id, tab: "cost" })}>
                     {t("ppm:manage")}
                   </Button>
                 )}
-                {can("ppm.manage") && summaryAnchors.schedule && keys.includes(summaryAnchors.schedule) && (
+                {canManageCard && summaryAnchors.schedule && keys.includes(summaryAnchors.schedule) && (
                   <Button size="small" aria-label={t("ppm:manageSection", { section: t("ppm:summaryTimeline") })} onClick={() => setManageTab({ cardId: card.id, tab: "gantt" })}>
                     {t("ppm:manage")}
                   </Button>
@@ -631,7 +634,7 @@ export default function CardDetailContent({
                 )}
                 {summaryAnchors.schedule && keys.includes(summaryAnchors.schedule) && (
                   <Box key="schedule-summary">
-                    <InitiativeTimelineSummary card={card} revision={scheduleRevision} onManage={can("ppm.manage") ? () => setManageTab({ cardId: card.id, tab: "reports" }) : undefined} />
+                    <InitiativeTimelineSummary card={card} revision={scheduleRevision} onManage={canManageCard ? () => setManageTab({ cardId: card.id, tab: "reports" }) : undefined} />
                   </Box>
                 )}
               </>
@@ -932,6 +935,7 @@ export default function CardDetailContent({
       {canShowManage && manageTab && (
         <Suspense fallback={null}>
           <PpmManageDialog
+            canEdit={manageTab.tab === "cost" ? canManageCosts : canManageCard}
             card={card}
             tab={manageTab.tab}
             onChanged={() => {

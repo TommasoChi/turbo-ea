@@ -18,11 +18,13 @@ const PpmReportsTab = lazy(() => import("./PpmReportsTab"));
 interface Props {
   card: Card;
   tab: "cost" | "gantt" | "reports";
+  /** What the opener allowed for this tab: costs have their own right, the others card edit. */
+  canEdit: boolean;
   onClose: () => void;
   onChanged: () => void;
 }
 
-export default function PpmManageDialog({ card, tab, onClose, onChanged }: Props) {
+export default function PpmManageDialog({ card, tab, canEdit, onClose, onChanged }: Props) {
   const { t } = useTranslation(["ppm", "common"]);
   const rollup = useApiQuery<PpmRollupOut>(
     tab === "cost" ? "/ppm/initiatives/" + encodeURIComponent(card.id) + "/rollup" : null,
@@ -59,6 +61,7 @@ export default function PpmManageDialog({ card, tab, onClose, onChanged }: Props
               initiativeId={card.id}
               costLines={[]}
               rollup={rollup.data ?? null}
+              canEdit={canEdit}
               onRefresh={onChanged}
             />
           ) : tab === "reports" ? (
@@ -66,6 +69,7 @@ export default function PpmManageDialog({ card, tab, onClose, onChanged }: Props
               <PpmReportsTab
                 initiativeId={card.id}
                 reports={reports.data}
+                canEdit={canEdit}
                 onRefresh={() => {
                   reports.refetch();
                   onChanged();
@@ -75,7 +79,7 @@ export default function PpmManageDialog({ card, tab, onClose, onChanged }: Props
               <CircularProgress />
             ) : null
           ) : (
-            <PpmGanttTab initiativeId={card.id} card={card} />
+            <PpmGanttTab initiativeId={card.id} card={card} canEdit={canEdit} />
           )}
         </Suspense>
       </DialogContent>

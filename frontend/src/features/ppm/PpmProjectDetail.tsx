@@ -18,6 +18,8 @@ import { api, ApiError } from "@/api/client";
 import { useCardSubtypeLabel } from "@/hooks/useCardSubtypeLabel";
 import { usePageSection, usePageSubject } from "@/hooks/usePageTitle";
 import { useLatestRequest } from "@/hooks/useLatestRequest";
+import { useOptionalAuthUser } from "@/hooks/AuthContext";
+import { hasPermission } from "@/components/RequirePermission";
 import PpmOverviewTab from "./PpmOverviewTab";
 import PpmReportsTab from "./PpmReportsTab";
 import PpmCostTab from "./PpmCostTab";
@@ -36,6 +38,7 @@ import type {
 } from "@/types";
 
 const TAB_KEYS = ["overview", "reports", "cost", "risks", "tasks", "gantt", "details"];
+const COST_TAB = TAB_KEYS.indexOf("cost");
 // The `ppm`-namespace key each tab renders its label from, in TAB_KEYS order.
 const PPM_TAB_LABEL_KEYS = [
   "overview",
@@ -65,6 +68,7 @@ const DEFAULT_PERMS: CardEffectivePermissions["effective"] = {
   can_manage_adr_links: true,
   can_manage_diagram_links: true,
   can_view_costs: true,
+  can_edit_costs: false,
 };
 
 export default function PpmProjectDetail() {
@@ -94,7 +98,6 @@ export default function PpmProjectDetail() {
   // «Apollo Migration · Budget & Costs | Turbo EA» — an initiative page is the
   // one place both slots are live at once.
   usePageSubject(card?.name);
-  usePageSection(t(PPM_TAB_LABEL_KEYS[tab]));
   const [reports, setReports] = useState<PpmStatusReport[]>([]);
   const [costLines, setCostLines] = useState<PpmCostLine[]>([]);
   const [budgetLines, setBudgetLines] = useState<PpmBudgetLine[]>([]);
@@ -105,6 +108,14 @@ export default function PpmProjectDetail() {
   const [perms, setPerms] = useState<CardEffectivePermissions["effective"]>(DEFAULT_PERMS);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const user = useOptionalAuthUser();
+  const canManage = hasPermission(user?.permissions, "ppm.manage");
+  const canEdit = canManage && perms.can_edit;
+  const canEditCosts = canManage && perms.can_edit_costs;
+  // The Budget & Costs tab is not offered without cost access; the others keep
+  // their index, so a `tab` parameter still lands where it did.
+  const activeTab = tab === COST_TAB && !perms.can_view_costs ? 0 : tab;
+  usePageSection(t(PPM_TAB_LABEL_KEYS[activeTab]));
 
   // Another initiative: nothing of the previous one stays on screen while the
   // next one loads. Reset during render, so not even one frame shows it.
@@ -277,60 +288,63 @@ export default function PpmProjectDetail() {
 
       {/* Tabs */}
       <Tabs
-        value={tab}
+        value={activeTab}
         onChange={handleTabChange}
         variant="scrollable"
         scrollButtons="auto"
         allowScrollButtonsMobile
         sx={{ mb: 3 }}
       >
-        <Tab label={t("overview")} />
-        <Tab label={t("statusReports")} />
-        <Tab label={t("budgetAndCosts")} />
-        <Tab label={t("riskManagement")} />
-        <Tab label={t("tasks")} />
-        <Tab label={t("gantt")} />
-        <Tab label={t("cardDetails")} />
+        {PPM_TAB_LABEL_KEYS.map(
+          (labelKey, index) =>
+            (index !== COST_TAB || perms.can_view_costs) && (
+              <Tab key={labelKey} value={index} label={t(labelKey)} />
+            ),
+        )}
       </Tabs>
 
       {/* Tab Content */}
-      {tab === 0 && (
+      {activeTab === 0 && (
         <PpmOverviewTab
           card={card}
           latestReport={latestReport}
           costLines={costLines}
           budgetLines={budgetLines}
           rollup={rollup}
+          canViewCosts={perms.can_view_costs}
         />
       )}
-      {tab === 1 && (
+      {activeTab === 1 && (
         <PpmReportsTab
           initiativeId={id!}
           reports={reports}
+          canEdit={canEdit}
           onRefresh={loadData}
         />
       )}
-      {tab === 2 && (
+      {activeTab === 2 && (
         <PpmCostTab
           key={id}
           initiativeId={id!}
           costLines={costLines}
           rollup={rollup}
+          canEdit={canEditCosts}
           onRefresh={loadData}
         />
       )}
-      {tab === 3 && (
+      {activeTab === 3 && (
         <PpmRiskTab
           initiativeId={id!}
           risks={risks}
+          canEdit={canEdit}
           onRefresh={loadData}
           // Stryker disable next-line OptionalChaining: equivalent: card is non-null here, the page returned the error view above when it is null
           initiativeName={card?.name}
         />
       )}
-      {tab === 4 && <PpmTaskBoard initiativeId={id!} />}
-      {tab === 5 && <PpmGanttTab initiativeId={id!} card={card ?? undefined} />}
-      {tab === 6 && (
+      {activeTab === 4 && <PpmTaskBoard initiativeId={id!} canEdit={canEdit} />}
+      {activeTab === 5 && <PpmGanttTab initiativeId={id!} card={card ?? undefined} canEdit={canEdit} />}
+      {activeTab === 6 && (
         <CardDetailContent
           key={card.id}
           card={card}

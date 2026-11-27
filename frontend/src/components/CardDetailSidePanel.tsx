@@ -56,6 +56,7 @@ const DEFAULT_PERMISSIONS: CardEffectivePermissions["effective"] = {
   can_bpm_approve: true,
   can_manage_diagram_links: true,
   can_view_costs: true,
+  can_edit_costs: false,
 };
 
 interface Props {

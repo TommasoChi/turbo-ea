@@ -1417,3 +1417,56 @@ describe("PpmProjectReport — invoiced financial hierarchy", () => {
     expect(document.querySelector(".report-print-params")).toHaveTextContent("2088");
     expect(section("overview")).toHaveTextContent("2088");
   });
+
+describe("PpmProjectReport — without cost access", () => {
+  const WITHHELD_ROLLUP = {
+    descendant_count: 2,
+    start_date: "2025-02-01",
+    end_date: "2025-12-31",
+    has_budget_lines: true,
+    has_cost_lines: true,
+  };
+
+  beforeEach(() => {
+    mockApi.on("get", "/cards/i1/my-permissions", { effective: { can_view_costs: false, can_edit_costs: false } });
+    mockApi.on("get", `${BASE}/rollup`, WITHHELD_ROLLUP);
+  });
+
+  it("leaves the cost section and its chip out, and the money out of the overview", async () => {
+    renderPage();
+    await loaded();
+    expect(section("costs")).toBeNull();
+    expect(screen.queryByRole("button", { name: /Budget & Costs/ })).not.toBeInTheDocument();
+    const overview = section("overview")!;
+    expect(within(overview).queryByText("Total Budget")).not.toBeInTheDocument();
+    expect(within(overview).queryByText("Financials")).not.toBeInTheDocument();
+    expect(within(overview).getByText("Completion")).toBeInTheDocument();
+    expect(screen.queryByText(/NaN/)).not.toBeInTheDocument();
+    expect(section("risks")).not.toBeNull();
+  });
+
+  it("does not forget a remembered cost section in the browser's choice", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await loaded();
+    await user.click(screen.getByRole("button", { name: /Risk Management/ }));
+    expect(JSON.parse(localStorage.getItem(REPORT_PREFS_KEY)!)).toContain("costs");
+  });
+
+  it("shows the cost section when the permissions say costs are visible", async () => {
+    mockApi.on("get", "/cards/i1/my-permissions", { effective: { can_view_costs: true } });
+    mockApi.on("get", `${BASE}/rollup`, NO_ROLLUP);
+    renderPage();
+    await loaded();
+    expect(section("costs")).not.toBeNull();
+    expect(within(section("overview")!).getByText("Total Budget")).toBeInTheDocument();
+  });
+
+  it("shows no NaN for a roll-up without amounts when costs are visible", async () => {
+    mockApi.on("get", "/cards/i1/my-permissions", { effective: { can_view_costs: true } });
+    renderPage();
+    await loaded();
+    expect(screen.getByTestId("report-beneath")).not.toHaveTextContent("NaN");
+    expect(screen.queryByText(/NaN/)).not.toBeInTheDocument();
+  });
+});

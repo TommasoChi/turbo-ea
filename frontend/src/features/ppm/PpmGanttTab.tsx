@@ -125,7 +125,8 @@ interface DependencyArrowOverlayProps {
     toY: number,
     clickSafe?: boolean,
   ) => string;
-  onClick: (depId: string) => void;
+  /** Absent: the arrows are only drawn, none can be deleted. */
+  onClick?: (depId: string) => void;
   color: string;
   dangerColor: string;
 }
@@ -184,22 +185,24 @@ export function DependencyArrowOverlay({
         const clickD = buildPath(a.fromX, a.fromY, a.toX, a.toY, true);
         const isHover = hoverId === a.id;
         return (
-          <g key={a.id} style={{ pointerEvents: "auto", cursor: "pointer" }}>
+          <g key={a.id} style={{ pointerEvents: onClick ? "auto" : "none", cursor: "pointer" }}>
             {/* Wide invisible hit target — inset to avoid the bar edges. */}
-            {/* biome-ignore lint/a11y/useSemanticElements: an SVG path cannot be a native button, so role="button" with a key handler is the only form */}
-            <path
-              d={clickD}
-              fill="none"
-              stroke="transparent"
-              strokeWidth={12}
-              role="button"
-              tabIndex={0}
-              aria-label={t("deleteDependencyArrow")}
-              onClick={() => onClick(a.id)}
-              onKeyDown={onActivateKey(() => onClick(a.id))}
-              onMouseEnter={() => setHoverId(a.id)}
-              onMouseLeave={() => setHoverId(null)}
-            />
+            {onClick && (
+              // biome-ignore lint/a11y/useSemanticElements: an SVG path cannot be a native button, so role="button" with a key handler is the only form
+              <path
+                d={clickD}
+                fill="none"
+                stroke="transparent"
+                strokeWidth={12}
+                role="button"
+                tabIndex={0}
+                aria-label={t("deleteDependencyArrow")}
+                onClick={() => onClick(a.id)}
+                onKeyDown={onActivateKey(() => onClick(a.id))}
+                onMouseEnter={() => setHoverId(a.id)}
+                onMouseLeave={() => setHoverId(null)}
+              />
+            )}
             {/* Visible arrow */}
             <path
               d={visibleD}
@@ -246,9 +249,11 @@ function SortableHeader({ label, sortKey }: { label: string; sortKey: GanttSortK
 interface Props {
   initiativeId: string;
   card?: { attributes?: Record<string, unknown> };
+  /** ppm.manage and edit on the initiative: without it the chart is only read. */
+  canEdit: boolean;
 }
 
-export default function PpmGanttTab({ initiativeId, card }: Props) {
+export default function PpmGanttTab({ initiativeId, card, canEdit }: Props) {
   const { t, i18n } = useTranslation("ppm");
   const theme = useTheme();
   const isNarrow = useMediaQuery(theme.breakpoints.down("md"));
@@ -846,6 +851,18 @@ export default function PpmGanttTab({ initiativeId, card }: Props) {
     [t, openDialogForId, loadData, openNewTask, openNewWbs],
   );
 
+  /** What the chart is handed: read-only, no bar can be dragged or linked and
+   *  the "+" row that creates one is gone. */
+  const chartTasks: TaskOrEmpty[] = useMemo(
+    () =>
+      canEdit
+        ? ganttTasks
+        : ganttTasks
+            .filter((row) => row.type !== "empty")
+            .map((row) => ({ ...row, isDisabled: true, isRelationDisabled: true })),
+    [canEdit, ganttTasks],
+  );
+
   /** State for inline completion slider popover. */
   const [completionAnchor, setCompletionAnchor] =
     useState<HTMLElement | null>(null);
@@ -897,7 +914,7 @@ export default function PpmGanttTab({ initiativeId, card }: Props) {
           setEmptyRowMenuAnchor(e.currentTarget);
           return;
         }
-        openDialogForId(task.id);
+        if (canEdit) openDialogForId(task.id);
       };
       return (
         <div
@@ -952,7 +969,7 @@ export default function PpmGanttTab({ initiativeId, card }: Props) {
     };
     Cell.displayName = "NameCell";
     return Cell;
-  }, [openDialogForId]);
+  }, [openDialogForId, canEdit]);
 
   /** Custom column: completion % chip — click to edit with slider popover.
    *  Parent WBS items (with children) show a read-only calculated value. */
@@ -969,10 +986,10 @@ export default function PpmGanttTab({ initiativeId, card }: Props) {
             alignItems: "center",
             justifyContent: "center",
             height: "100%",
-            cursor: isCalculated ? "default" : "pointer",
+            cursor: isCalculated || !canEdit ? "default" : "pointer",
           }}
           onClick={
-            isCalculated
+            isCalculated || !canEdit
               ? undefined
               : (e) => {
                   e.stopPropagation();
@@ -999,7 +1016,7 @@ export default function PpmGanttTab({ initiativeId, card }: Props) {
     };
     Cell.displayName = "CompletionCell";
     return Cell;
-  }, [rowMeta]);
+  }, [rowMeta, canEdit]);
 
   /** Custom column: assignee name. */
   const AssigneeCell = useMemo(() => {
@@ -1592,30 +1609,34 @@ export default function PpmGanttTab({ initiativeId, card }: Props) {
         flexWrap="wrap"
         px={{ xs: 1.5, sm: 3 }}
       >
-        <Button
-          variant="contained"
-          size="small"
-          startIcon={<MaterialSymbol icon="add" size={18} />}
-          onClick={() => openNewWbs(false)}
-        >
-          {t("addWbs")}
-        </Button>
-        <Button
-          variant="outlined"
-          size="small"
-          startIcon={<MaterialSymbol icon="flag" size={18} />}
-          onClick={() => openNewWbs(true)}
-        >
-          {t("addMilestone")}
-        </Button>
-        <Button
-          variant="outlined"
-          size="small"
-          startIcon={<MaterialSymbol icon="add_task" size={18} />}
-          onClick={() => openNewTask("")}
-        >
-          {t("createTask")}
-        </Button>
+        {canEdit && (
+          <>
+            <Button
+              variant="contained"
+              size="small"
+              startIcon={<MaterialSymbol icon="add" size={18} />}
+              onClick={() => openNewWbs(false)}
+            >
+              {t("addWbs")}
+            </Button>
+            <Button
+              variant="outlined"
+              size="small"
+              startIcon={<MaterialSymbol icon="flag" size={18} />}
+              onClick={() => openNewWbs(true)}
+            >
+              {t("addMilestone")}
+            </Button>
+            <Button
+              variant="outlined"
+              size="small"
+              startIcon={<MaterialSymbol icon="add_task" size={18} />}
+              onClick={() => openNewTask("")}
+            >
+              {t("createTask")}
+            </Button>
+          </>
+        )}
         <Box flex={1} />
         <Tooltip title={t("today")}>
           <IconButton size="small" onClick={() => setViewDate(new Date())}>
@@ -1814,12 +1835,13 @@ export default function PpmGanttTab({ initiativeId, card }: Props) {
       >
         <GanttSortContext.Provider value={sortContext}>
           <Gantt
-            tasks={ganttTasks}
+            tasks={chartTasks}
+            canMoveTasks={canEdit}
             viewMode={viewMode}
             viewDate={viewDate}
             columns={ganttColumns}
             canResizeColumns
-            onDoubleClick={handleDoubleClick}
+            onDoubleClick={canEdit ? handleDoubleClick : undefined}
             onDateChange={handleDateChange}
             onProgressChange={handleProgressChange}
             onChangeExpandState={handleExpanderClick}
@@ -1827,7 +1849,7 @@ export default function PpmGanttTab({ initiativeId, card }: Props) {
             onMoveTaskBefore={handleMoveTaskBefore}
             onMoveTaskAfter={handleMoveTaskAfter}
             onMoveTaskInside={handleMoveTaskInside}
-            contextMenuOptions={contextMenuOptions}
+            contextMenuOptions={canEdit ? contextMenuOptions : []}
             enableTableListContextMenu={2}
             roundDate={roundToDay}
             dateMoveStep={{ value: 1, timeUnit: GanttDateRoundingTimeUnit.DAY }}
@@ -1890,7 +1912,7 @@ export default function PpmGanttTab({ initiativeId, card }: Props) {
             <DependencyArrowOverlay
               arrows={arrowGeometry}
               buildPath={buildGanttArrowPath}
-              onClick={handleArrowClick}
+              onClick={canEdit ? handleArrowClick : undefined}
               color={
                 theme.palette.mode === "dark"
                   ? alpha(theme.palette.common.white, 0.38)

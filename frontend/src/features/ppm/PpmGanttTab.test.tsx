@@ -143,7 +143,7 @@ function serve(wbsList: PpmWbs[], tasks: PpmTask[], deps: PpmDependency[] = []) 
 
 async function renderTab() {
   const user = userEvent.setup();
-  render(<PpmGanttTab initiativeId={INIT} />);
+  render(<PpmGanttTab initiativeId={INIT} canEdit />);
   await screen.findByTestId("gantt");
   return user;
 }
@@ -582,7 +582,7 @@ describe("PpmGanttTab — chart colours", () => {
     serve([], []);
     render(
       <ThemeProvider theme={theme}>
-        <PpmGanttTab initiativeId={INIT} />
+        <PpmGanttTab initiativeId={INIT} canEdit />
       </ThemeProvider>,
     );
     const rules = rulesOf((await screen.findByTestId("gantt")).parentElement!);

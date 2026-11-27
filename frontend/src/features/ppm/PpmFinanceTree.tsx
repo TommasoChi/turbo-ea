@@ -521,28 +521,28 @@ export default function PpmFinanceTree({
               <TableCell>
                 <strong>{t("financeTree.total")}</strong>
               </TableCell>
-              <TableCell>{amount(data.budget_totals.amount)}</TableCell>
+              <TableCell>{amount(data.budget_totals?.amount)}</TableCell>
               <TableCell>
-                {amount(data.budget_totals.total_cost_items)}
+                {amount(data.budget_totals?.total_cost_items)}
               </TableCell>
               <TableCell>
-                {amount(data.budget_totals.remaining_budget)}
+                {amount(data.budget_totals?.remaining_budget)}
               </TableCell>
               <TableCell>
                 {data.invoice_access
-                  ? amount(data.budget_totals.total_invoiced)
+                  ? amount(data.budget_totals?.total_invoiced)
                   : "—"}
               </TableCell>
               <TableCell>
                 {data.invoice_access
-                  ? amount(data.budget_totals.remaining_to_invoice)
+                  ? amount(data.budget_totals?.remaining_to_invoice)
                   : "—"}
               </TableCell>
               {!readOnly && <TableCell />}
             </TableRow>
             {rollup &&
               !data.budget_lines.length &&
-              rollup.by_year
+              (rollup.by_year ?? [])
                 .filter((year) => year.capex_budget || year.opex_budget)
                 .map((year) => (
                   <TableRow key={"derived-budget-" + year.year}>
@@ -562,7 +562,7 @@ export default function PpmFinanceTree({
                 ))}
             {rollup &&
               !data.cost_items.length &&
-              rollup.by_year
+              (rollup.by_year ?? [])
                 .filter((year) => year.capex_actual || year.opex_actual)
                 .map((year) => (
                   <TableRow key={"derived-actual-" + year.year}>

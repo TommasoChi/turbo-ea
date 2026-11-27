@@ -450,7 +450,9 @@ const StakeholderRolePanel = forwardRef<StakeholderRolePanelHandle, StakeholderR
             <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1.2 }}>
               {permKey === "card.view_licenses"
                 ? t("metamodel.stakeholderPanel.viewLicensesDescription")
-                : permDesc}
+                : permKey === "card.edit_costs"
+                  ? t("metamodel.stakeholderPanel.editCostsDescription")
+                  : permDesc}
             </Typography>
           </Box>
         </Box>

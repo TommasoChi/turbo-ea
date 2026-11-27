@@ -117,6 +117,7 @@ const perms = {
   can_view: true,
   can_edit: true,
   can_view_costs: true,
+  can_edit_costs: true,
 } as unknown as Parameters<typeof CardDetailContent>[0]["perms"];
 
 /** A headless provider that reports `keys` hidden for extension `daaf` on mount. */
@@ -290,7 +291,7 @@ describe("CardDetailContent extension header slot", () => {
 });
 
 describe("CardDetailContent Initiative summaries", () => {
-  function initiative(summaryConfig = {}, canViewCosts = true, schedule = {}) {
+  function initiative(summaryConfig = {}, canViewCosts = true, schedule = {}, permsOverride: Record<string, boolean> = {}) {
     const type = {
       ...APP_TYPE, key: "Initiative",
       fields_schema: [{
@@ -318,7 +319,7 @@ describe("CardDetailContent Initiative summaries", () => {
       endDate: "2026-09-30", actualEnd: "2026-10-15",
     } };
     vi.mocked(api.patch).mockResolvedValue(record);
-    return render(<MemoryRouter><CardDetailContent card={record} perms={{ ...perms, can_view_costs: canViewCosts }}
+    return render(<MemoryRouter><CardDetailContent card={record} perms={{ ...perms, can_view_costs: canViewCosts, ...permsOverride }}
       onCardUpdate={() => {}} showLdvSection={false} showPpmTab={false} /></MemoryRouter>);
   }
 
@@ -373,6 +374,39 @@ describe("CardDetailContent Initiative summaries", () => {
     expect(screen.getByText("Health Summary")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /manage timeline/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /manage health summary/i })).not.toBeInTheDocument();
+  });
+
+  it("offers Timeline and Health Summary management only with card edit", async () => {
+    pml.enabled = true;
+    initiative({}, true, {}, { can_edit: false });
+    expect(await screen.findByTestId("initiative-timeline")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /manage timeline/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /manage health summary/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /manage budget & costs/i })).toBeInTheDocument();
+  });
+
+  it("offers the cost Manage only to who can edit costs, and keeps Timeline for a card editor", async () => {
+    pml.enabled = true;
+    initiative({}, true, {}, { can_edit_costs: false });
+    expect(await screen.findByRole("button", { name: /manage timeline/i })).toBeInTheDocument();
+    expect(screen.getByTestId("initiative-financials")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /manage budget & costs/i })).not.toBeInTheDocument();
+  });
+
+  it("offers the cost Manage to a cost editor without card edit, and no other Manage", async () => {
+    pml.enabled = true;
+    initiative({}, true, {}, { can_edit: false, can_edit_costs: true });
+    expect(await screen.findByRole("button", { name: /manage budget & costs/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /manage timeline/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /manage health summary/i })).not.toBeInTheDocument();
+  });
+
+  it("offers no cost Manage without ppm.manage even for a cost editor", async () => {
+    pml.enabled = true;
+    pml.canManage = false;
+    initiative();
+    expect(await screen.findByTestId("initiative-financials")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /manage budget & costs/i })).not.toBeInTheDocument();
   });
 
   it("shows cost health even when the other health values are missing", async () => {

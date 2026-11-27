@@ -80,6 +80,7 @@ const DEFAULT_PERMISSIONS: CardEffectivePermissions["effective"] = {
   can_manage_adr_links: true,
   can_manage_diagram_links: true,
   can_view_costs: true,
+  can_edit_costs: false,
 };
 
 // ── Main Detail Page ────────────────────────────────────────────

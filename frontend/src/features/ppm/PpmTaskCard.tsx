@@ -28,10 +28,12 @@ interface Props {
   wbsName?: string;
   onClick: () => void;
   onMarkDone?: (taskId: string) => void;
+  /** No drag and no quick completion: the board is only read. */
+  readOnly?: boolean;
   isDragOverlay?: boolean;
 }
 
-export default function PpmTaskCard({ task, wbsName, onClick, onMarkDone, isDragOverlay }: Props) {
+export default function PpmTaskCard({ task, wbsName, onClick, onMarkDone, isDragOverlay, readOnly }: Props) {
   const theme = useTheme();
   const { t } = useTranslation("ppm");
   const { formatDate } = useDateFormat();
@@ -42,7 +44,7 @@ export default function PpmTaskCard({ task, wbsName, onClick, onMarkDone, isDrag
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: task.id });
+  } = useSortable({ id: task.id, disabled: readOnly });
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -67,7 +69,7 @@ export default function PpmTaskCard({ task, wbsName, onClick, onMarkDone, isDrag
       sx={{
         p: 1.5,
         mb: 1,
-        cursor: "grab",
+        cursor: readOnly ? "default" : "grab",
         borderLeft: `3px solid ${
           PRIORITY_COLORS[task.priority as keyof typeof PRIORITY_COLORS] || theme.palette.grey[400]
         }`,
@@ -77,7 +79,7 @@ export default function PpmTaskCard({ task, wbsName, onClick, onMarkDone, isDrag
       }}
     >
       <Box display="flex" alignItems="flex-start" gap={0.5}>
-        {onMarkDone && !isDragOverlay && (
+        {onMarkDone && !readOnly && !isDragOverlay && (
           <Tooltip title={isDone ? t("statusDone") : t("markDone")}>
             <IconButton
               size="small"

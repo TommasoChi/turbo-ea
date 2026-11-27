@@ -143,7 +143,7 @@ function serve(
   mockApi.on(
     "get",
     `/cards/${id}/my-permissions`,
-    o.perms ?? { effective: { can_view: true, can_edit: o.canEdit ?? true } },
+    o.perms ?? { effective: { can_view: true, can_edit: o.canEdit ?? true, can_view_costs: true } },
   );
 }
 

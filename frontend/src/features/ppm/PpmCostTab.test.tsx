@@ -8,7 +8,6 @@ vi.mock("./usePpmFinancials", () => ({
   usePpmFinancialAmount: () => (value: string | number | null | undefined) => value == null ? "—" : "$" + String(value),
 }));
 vi.mock("@/hooks/useCurrency", () => ({ useCurrency: () => ({ fmt: { format: (value: number) => "$" + value.toFixed(0) } }) }));
-vi.mock("@/hooks/AuthContext", () => ({ useOptionalAuthUser: () => ({ permissions: { "ppm.manage": true } }) }));
 vi.mock("./PpmCostCharts", () => ({ default: ({ costLines, budgetLines }: { costLines: unknown[]; budgetLines: unknown[] }) => <div data-testid="chart">{costLines.length}/{budgetLines.length}</div> }));
 vi.mock("./PpmFinancialRowForm", () => ({ default: () => null }));
 
@@ -30,7 +29,7 @@ beforeEach(() => { query.data = financials; query.error = null; query.loading = 
 
 describe("PpmCostTab financial projection", () => {
   it("uses exact server budget and invoice amounts and supplies the chart with current rows", async () => {
-    render(<PpmCostTab initiativeId="i1" costLines={[]} rollup={null} onRefresh={vi.fn()} />);
+    render(<PpmCostTab initiativeId="i1" costLines={[]} rollup={null} onRefresh={vi.fn()} canEdit />);
     expect(screen.getAllByText("$100.13").length).toBeGreaterThan(0);
     expect(screen.getAllByText("$30.11").length).toBeGreaterThan(0);
     expect(await screen.findByTestId("chart")).toHaveTextContent("1/1");
@@ -41,7 +40,7 @@ describe("PpmCostTab financial projection", () => {
   it("does not display the prior initiative while the current query is unavailable", () => {
     query.data = undefined;
     query.loading = true;
-    render(<PpmCostTab initiativeId="i2" costLines={[]} rollup={null} onRefresh={vi.fn()} />);
+    render(<PpmCostTab initiativeId="i2" costLines={[]} rollup={null} onRefresh={vi.fn()} canEdit />);
     expect(screen.queryByText("Software")).not.toBeInTheDocument();
     expect(screen.queryByText("$100.13")).not.toBeInTheDocument();
     expect(screen.getByRole("progressbar")).toBeInTheDocument();
@@ -50,8 +49,28 @@ describe("PpmCostTab financial projection", () => {
   it("hides financial data when the current request fails", () => {
     query.data = undefined;
     query.error = new Error("Denied");
-    render(<PpmCostTab initiativeId="i2" costLines={[]} rollup={null} onRefresh={vi.fn()} />);
+    render(<PpmCostTab initiativeId="i2" costLines={[]} rollup={null} onRefresh={vi.fn()} canEdit />);
     expect(screen.getByRole("alert")).toHaveTextContent("Denied");
     expect(screen.queryByText("Software")).not.toBeInTheDocument();
+  });
+});
+
+describe("PpmCostTab write access", () => {
+  it("offers adding a budget line when canEdit", () => {
+    render(<PpmCostTab initiativeId="i1" costLines={[]} rollup={null} onRefresh={vi.fn()} canEdit />);
+    expect(screen.getByRole("button", { name: "Add Budget Line" })).toBeInTheDocument();
+  });
+
+  it("is read-only without canEdit, whatever the user's app permissions", () => {
+    render(<PpmCostTab initiativeId="i1" costLines={[]} rollup={null} onRefresh={vi.fn()} canEdit={false} />);
+    expect(screen.queryByRole("button", { name: "Add Budget Line" })).not.toBeInTheDocument();
+    expect(screen.getAllByText("$100.13").length).toBeGreaterThan(0);
+  });
+
+  it("renders when the server sends no budget totals", () => {
+    query.data = { ...financials, budget_totals: null };
+    render(<PpmCostTab initiativeId="i1" costLines={[]} rollup={null} onRefresh={vi.fn()} canEdit={false} />);
+    expect(screen.queryByText(/NaN/)).not.toBeInTheDocument();
+    expect(screen.getByText("Software")).toBeInTheDocument();
   });
 });

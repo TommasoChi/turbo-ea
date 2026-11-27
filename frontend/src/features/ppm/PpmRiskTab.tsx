@@ -34,11 +34,13 @@ interface Props {
   initiativeId: string;
   risks: PpmRisk[];
   onRefresh: () => void;
+  /** ppm.manage and edit on the initiative. */
+  canEdit: boolean;
   /** The initiative's name, for the export's file name. */
   initiativeName?: string;
 }
 
-export default function PpmRiskTab({ initiativeId, risks, onRefresh, initiativeName }: Props) {
+export default function PpmRiskTab({ initiativeId, risks, onRefresh, initiativeName, canEdit }: Props) {
   const { t } = useTranslation("ppm");
   const [importOpen, setImportOpen] = useState(false);
   const fullScreen = useFullScreenDialog();
@@ -183,6 +185,7 @@ export default function PpmRiskTab({ initiativeId, risks, onRefresh, initiativeN
       <PpmRiskGrid
         risks={risks}
         initiativeName={initiativeName}
+        readOnly={!canEdit}
         onAdd={() => handleOpen()}
         onEdit={handleOpen}
         onDelete={handleDelete}
@@ -198,7 +201,7 @@ export default function PpmRiskTab({ initiativeId, risks, onRefresh, initiativeN
       />
 
       {/* Dialog */}
-      {dialog.open && (
+      {canEdit && dialog.open && (
         <Dialog
           open
           onClose={() => setDialog({ open: false })}
