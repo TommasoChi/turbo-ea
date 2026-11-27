@@ -249,7 +249,7 @@ class PermissionService:
     def direct_stakeholder_card_roles(user_id: UUID) -> Select:
         return (
             PermissionService.direct_stakeholder_roles(user_id)
-            .join(Card, Stakeholder.card_id == Card.id)
+            .join(Card)
             .with_only_columns(Stakeholder.card_id, Card.type, Stakeholder.role)
         )
 
