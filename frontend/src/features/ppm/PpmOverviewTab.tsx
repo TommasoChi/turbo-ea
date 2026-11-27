@@ -93,9 +93,6 @@ export default function PpmOverviewTab({
     >
       {/* Health Summary */}
       <Paper sx={{ p: 2.5 }}>
-        <Typography variant="subtitle1" fontWeight={600} mb={2}>
-          {t("healthSummary")}
-        </Typography>
         <PpmHealthSummary
           report={latestReport}
           costHealth={schedule.data?.cost_health}

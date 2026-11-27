@@ -1,7 +1,7 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { api } from "@/api/client";
-import { financialAmountFormatter, usePpmFinancials, usePpmSchedule } from "./usePpmFinancials";
+import { financialAmountFormatter, usePpmFinancials, usePpmLatestReport, usePpmSchedule } from "./usePpmFinancials";
 
 vi.mock("@/api/client", () => ({
   api: { get: vi.fn() },
@@ -60,5 +60,36 @@ describe("financial amounts", () => {
     expect(format("9007199254740993.001")).toBe("$9,007,199,254,740,993.001");
     expect(format(null)).toBe("—");
     expect(financialAmountFormatter("EUR", "it-IT")("12030.04")).toBe("12.030,04\u00a0€");
+  });
+});
+
+describe("usePpmLatestReport", () => {
+  it("returns the most recent report and ignores a previous initiative's answer", async () => {
+    get
+      .mockResolvedValueOnce([
+        { id: "a", report_date: "2026-01-01" },
+        { id: "b", report_date: "2026-03-01" },
+        { id: "c", report_date: "2026-02-01" },
+      ])
+      .mockResolvedValueOnce([]);
+    const { result, rerender } = renderHook(({ id }) => usePpmLatestReport(id), {
+      initialProps: { id: "i1" },
+    });
+    await waitFor(() => expect(result.current.data?.id).toBe("b"));
+    expect(get).toHaveBeenCalledWith("/ppm/initiatives/i1/reports", { signal: expect.any(AbortSignal) });
+    rerender({ id: "i2" });
+    expect(result.current.data).toBeNull();
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.data).toBeNull();
+  });
+
+  it("reloads when refetchKey changes", async () => {
+    get.mockResolvedValue([]);
+    const { rerender } = renderHook(({ key }) => usePpmLatestReport("i1", key), {
+      initialProps: { key: 0 },
+    });
+    await waitFor(() => expect(get).toHaveBeenCalledTimes(1));
+    rerender({ key: 1 });
+    await waitFor(() => expect(get).toHaveBeenCalledTimes(2));
   });
 });

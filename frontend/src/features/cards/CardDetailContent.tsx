@@ -7,7 +7,6 @@ import Tabs from "@mui/material/Tabs";
 import Tab from "@mui/material/Tab";
 import Badge from "@mui/material/Badge";
 import Button from "@mui/material/Button";
-import Typography from "@mui/material/Typography";
 import Alert from "@mui/material/Alert";
 import { useTranslation } from "react-i18next";
 import { missingRequiredFields } from "@/features/cards/sections/cardDetailUtils";
@@ -969,7 +968,6 @@ function InitiativeFinancialSummary({ initiativeId, revision }: { initiativeId: 
 }
 
 function InitiativeTimelineSummary({ card, revision, onManage }: { card: Card; revision: number; onManage?: () => void }) {
-  const { t: tPpm } = useTranslation("ppm");
   const { data } = usePpmSchedule(card.id, revision);
   if (!data) return null;
   const report = data.schedule_health || data.scope_health || data.cost_health ? data : null;
@@ -977,13 +975,7 @@ function InitiativeTimelineSummary({ card, revision, onManage }: { card: Card; r
     <Suspense fallback={null}>
       <PpmInitiativeTimeline schedule={data} name={card.name} showDates={false} />
       <Box sx={{ mt: 2 }}>
-        <Box display="flex" justifyContent="space-between" alignItems="center" sx={{ borderBottom: 1, borderColor: "divider", pb: 0.5, mb: 1 }}>
-          <Typography variant="subtitle2" fontWeight={600}>{tPpm("healthSummary")}</Typography>
-          {onManage && <Button size="small" aria-label={tPpm("manageSection", { section: tPpm("healthSummary") })} onClick={onManage}>
-            {tPpm("manage")}
-          </Button>}
-        </Box>
-        <PpmHealthSummary report={report} costHealth={data.cost_health} />
+        <PpmHealthSummary report={report} costHealth={data.cost_health} onManage={onManage} />
       </Box>
     </Suspense>
   );

@@ -269,7 +269,7 @@ describe("PpmOverviewTab — health summary", () => {
   it("hides the cost health when the protected schedule omits it", async () => {
     render(<PpmOverviewTab card={CARD} latestReport={report({})} costLines={[]} budgetLines={[]} rollup={null} canViewCosts />);
     await screen.findByText("Start Date");
-    const summary = screen.getByText("Health Summary").parentElement!;
+    const summary = screen.getByText("Health Summary").parentElement!.parentElement!;
     expect(within(summary).queryByText("Cost")).not.toBeInTheDocument();
     expect(within(summary).getByText("Schedule")).toBeInTheDocument();
   });
