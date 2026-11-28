@@ -16524,6 +16524,7 @@
           "accomplishments": {
             "anyOf": [
               {
+                "maxLength": 250,
                 "type": "string"
               },
               {
@@ -16545,6 +16546,7 @@
           "next_steps": {
             "anyOf": [
               {
+                "maxLength": 250,
                 "type": "string"
               },
               {
@@ -16581,6 +16583,7 @@
           "summary": {
             "anyOf": [
               {
+                "maxLength": 250,
                 "type": "string"
               },
               {
@@ -16716,6 +16719,7 @@
           "accomplishments": {
             "anyOf": [
               {
+                "maxLength": 250,
                 "type": "string"
               },
               {
@@ -16743,6 +16747,7 @@
           "next_steps": {
             "anyOf": [
               {
+                "maxLength": 250,
                 "type": "string"
               },
               {
@@ -16798,6 +16803,7 @@
           "summary": {
             "anyOf": [
               {
+                "maxLength": 250,
                 "type": "string"
               },
               {

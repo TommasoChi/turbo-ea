@@ -989,6 +989,7 @@ export default function CardDetail() {
           card={card}
           perms={perms}
           inheritedRoles={loadedPermissions && loadedPermissions.id === id && loadedPermissions.identity === identity ? loadedPermissions.inheritedRoles : undefined}
+          showPpmSummary
           onCardUpdate={setCard}
           onSaveOrigin={reportSaveOrigin}
           onDirtyChange={setSectionsDirty}

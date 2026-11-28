@@ -204,19 +204,19 @@ export function allFieldsHidden(section: SectionDef, hidden: Set<string>): boole
 }
 
 const INITIATIVE_COST_FIELDS = ["costBudget", "costActual"];
-const INITIATIVE_DATE_FIELDS = ["startDate", "actualStart", "endDate", "actualEnd"];
+export const INITIATIVE_DATE_FIELDS = ["startDate", "actualStart", "endDate", "actualEnd"];
 
 export function initiativeSummaryGroups(section: SectionDef, cost: string, timeline: string): SectionDef {
   if (section.section !== "Cost & Timeline") return section;
-  return {
-    ...section,
-    fields: section.fields.map((field) => {
-      if (field.group) return field;
-      if (INITIATIVE_COST_FIELDS.includes(field.key)) return { ...field, group: cost };
-      if (INITIATIVE_DATE_FIELDS.includes(field.key)) return { ...field, group: timeline };
-      return field;
-    }),
-  };
+  const fields = section.fields.map((field) => {
+    if (field.group) return field;
+    if (INITIATIVE_COST_FIELDS.includes(field.key)) return { ...field, group: cost };
+    if (INITIATIVE_DATE_FIELDS.includes(field.key)) return { ...field, group: timeline };
+    return field;
+  });
+  // Timeline, then Cost, whatever the seed order: the dates lead, the rest keeps its order.
+  const isDate = (field: { key: string }) => INITIATIVE_DATE_FIELDS.includes(field.key);
+  return { ...section, fields: [...fields.filter(isDate), ...fields.filter((f) => !isDate(f))] };
 }
 
 export function initiativeSummaryAnchors(sections: SectionDef[], hidden: Set<string>) {

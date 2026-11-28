@@ -1,7 +1,7 @@
 ---
 name: docs-keeper
 description: Verifies the Turbo EA user manual after /translate and before the tests of the diff. Runs scripts/docs/docker-docs.sh (mkdocs strict, manual <-> pages.ts contract, optional screenshot capture on an isolated demo stack) and fixes docs/ and scripts/screenshots/pages.ts. Never commits, pushes or opens a PR.
-model: sonnet
+model: haiku
 effort: medium
 tools: Read, Edit, Write, Bash, Grep, Glob
 ---

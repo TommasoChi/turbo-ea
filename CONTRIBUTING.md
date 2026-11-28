@@ -216,7 +216,7 @@ Files use a **suffix-based** naming scheme: `page.md` is English (default), `pag
 
 #### Translating with `/translate`
 
-Author English only — the `en/*.json` locale files, the English `label`s in `backend/app/services/seed.py`, the English doc page and the `en` screenshot filename — and let the `/translate` Claude Code skill fill the nine other locales before you open the PR. The skill runs on a Sonnet subagent (`.claude/agents/translator.md`) and drives `scripts/i18n/check_locales.py`, which you can also run by hand:
+Author English only — the `en/*.json` locale files, the English `label`s in `backend/app/services/seed.py`, the English doc page and the `en` screenshot filename — and let the `/translate` Claude Code skill fill the nine other locales before you open the PR. The skill runs on a Haiku subagent (`.claude/agents/translator.md`) and drives `scripts/i18n/check_locales.py`, which you can also run by hand:
 
 - `python scripts/i18n/check_locales.py report [--base origin/main] [--json]` — every gap per locale: missing keys (nested-aware), placeholder mismatches, empty values, values equal to English among the keys this branch changed (*suspect*, non-fatal), doc pages with no or stale siblings and screenshot entries missing a translated filename (both non-fatal). Exits 1 on a missing key or a placeholder mismatch.
 - `python scripts/i18n/check_locales.py todo <locale> --out <file.json>` — the keys that locale still needs, as `{"<namespace>:<key>": "<English value>"}`.

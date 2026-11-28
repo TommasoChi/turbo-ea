@@ -79,13 +79,18 @@ Klicken Sie auf eine Initiative, um deren Detailseite mit sieben Tabs zu öffnen
 
 ![PML Initiativ-Übersicht](../assets/img/de/41_ppm_uebersicht.png)
 
-Die Übersicht zeigt eine Zusammenfassung der Gesundheit und Finanzen der Initiative:
+Die Übersicht zeigt eine Zusammenfassung der Gesundheit und Finanzen der Initiative, in einer Spalte in dieser Reihenfolge:
 
-- **Gesundheitsübersicht** — Zeitplan-, Kosten- und Umfangsindikatoren aus dem letzten Statusbericht
-- **Budget vs. Ist** — Kombinierte KPI-Karte mit Gesamtbudget und tatsächlichen Ausgaben mit Abweichung
+- **Beschreibung** — Wird angezeigt, wenn die Initiative eine hat
+- **Zeitachse** — Plan- und Ist-Termine und zwei Spuren auf derselben Quartalsskala, mit dem Ring **Fertigstellung** neben den Terminen
+- **Gesundheitsübersicht** — Das Berichtsdatum, die Zeit-, Kosten- und Umfangsindikatoren und drei Texte (Zusammenfassung, Errungenschaften, nächste Schritte) aus dem letzten Statusbericht, je nach Sichtbarkeitsberechtigung. **Verwalten** öffnet den Editor für Statusberichte für einen neuen Bericht
+- **Risikomanagement** — Die aktiven Risiken (offen und in Minderung): Kacheln, ein Donut nach Bewertungsstufe, dessen Legende Sie anklicken, um eine Stufe aus- oder einzublenden, ein Diagramm nach Status und eine kompakte Heatmap. **Verwalten** öffnet das Popup **Verwalten** auf dem Tab **Risiken**
+- **Finanzen** — Budget vs. Ist für Gesamt, CapEx und OpEx, mit Abweichung; wird Lesern angezeigt, die Kosten sehen dürfen
+
+Die Schaltflächen **Verwalten** erfordern die PML-Verwaltungsberechtigung und Bearbeitungsrechte für die Karte. Der Zurück-Pfeil der Seite, in der Kopfzeile und auf dem Smartphone, führt zum Tab **Portfolio** zurück.
+
 - **Werte von darunter** — Hat die Initiative keine eigenen Budgetzeilen, zeigen ihr Gesamtbudget, ihre Budgetbalken und die Abweichung stattdessen das Budget der Initiativen darunter: kursiv, mit einem ↳-Pfeil markiert, mit umrandeter Budgetspur und einem Tooltip, der nennt, wie viele Initiativen erfasst sind. Hat sie keine eigenen Kostenzeilen, stammen ihre Ist-Kosten auf dieselbe Weise von darunter, mit umrandeten Ausgabenbalken. Beide Seiten werden getrennt entschieden, und die erste eigene Zeile schaltet diese Seite auf die eigenen Werte der Initiative zurück.
 - **Unter dieser Initiative** — Hat die Initiative untergeordnete Initiativen, nennt eine Zeile unter den Budgetbalken deren Anzahl, ihr summiertes Budget und ihre Ist-Ausgaben sowie die Spanne ihrer Termine. Sie steht neben den eigenen Werten der Initiative und wird nie zu ihnen addiert. Stammen Budget und Ist-Kosten bereits beide von darunter, nennt die Zeile nur noch die Anzahl und die Terminspanne.
-- **Letzte Aktivität** — Zusammenfassung des letzten Statusberichts
 
 ### Statusberichte-Tab
 
@@ -103,20 +108,23 @@ Monatliche Statusberichte verfolgen die Projektgesundheit über die Zeit. Jeder 
 | **Errungenschaften** | Was in diesem Zeitraum erreicht wurde |
 | **Nächste Schritte** | Geplante Aktivitäten für den nächsten Zeitraum |
 
+Jeder der drei Texte ist auf 250 Zeichen begrenzt. Der Editor zeigt einen Zähler und lässt nicht mehr zu.
+
 ### Budget & Kosten-Tab
 
 ![PML Budget und Kosten](../assets/img/de/43_ppm_budget_kosten.png)
 
-Das **Geplante Budget** zeigt Budgetzeilen nach Geschäftsjahr und Kategorie (CapEx oder OpEx). Klappen Sie eine Budgetzeile für ihre **Kostenpositionen** aus und eine Position für ihre Rechnungen unter **Fakturierter Ist-Betrag**. Das Geschäftsjahr beginnt nach den [Einstellungen](../admin/settings.md#beginn-des-geschäftsjahres).
+Das **Geplante Budget** zeigt jede Budgetzeile mit den Spalten **Geschäftsjahr**, **Kategorie** (CapEx oder OpEx) und **Provider**. Die Tabellen scrollen seitlich, wenn sie breiter als die Seite sind. Klappen Sie eine Budgetzeile für ihre **Kostenpositionen** aus und eine Position für ihre Rechnungen unter **Fakturierter Ist-Betrag**. Das Geschäftsjahr beginnt nach den [Einstellungen](../admin/settings.md#beginn-des-geschäftsjahres).
 
 Erfassen Sie Budget-, Kosten- und Rechnungsbeträge ohne Umsatzsteuer. Die Rechnungsübersicht erfasst bereits ausgestellte Rechnungen.
 
-- Legen Sie Kostenpositionen aus ihrer Budgetzeile an. Unter **Kosten ohne Budget** lassen sich ältere Positionen zuordnen. Kostenpositionen können zwischen Zeilen derselben Initiative verschoben werden.
-- Geben Sie Rechnungsdatum, Belegreferenz und Betrag ein. Verteilen Sie eine Rechnung über mehrere Kostenpositionen, indem Sie unter jeder Position den zugehörigen Teilbetrag erfassen. Eine Rechnung kann zu einer anderen Kostenposition derselben Initiative verschoben werden.
-- Die Kostenposition zeigt Ist-Kosten, fakturierten und noch zu fakturierenden Betrag. Der Rest sind die Ist-Kosten abzüglich des fakturierten Betrags und kann negativ sein. Das Budget summiert seine Kostenpositionen mit Zwischensummen je Geschäftsjahr und Kategorie. Die Initiative zählt auch Rechnungen auf Positionen ohne Budget.
-- Die dokumentierten Budget- und Kostenbeträge bestimmen die Budget- und Ist-Zahlen sowie die Diagramme. Das Erfassen oder Verschieben einer Rechnung ändert nur die Rechnungszahlen.
+- Die Tabellen für Budget, Kostenpositionen und Rechnungen bieten nur Anlegen, Bearbeiten und Löschen.
+- Legen Sie Kostenpositionen aus ihrer Budgetzeile an. Ältere Positionen ohne Budget stehen unter **Kosten ohne Budget**.
+- Geben Sie Rechnungsdatum, Belegreferenz und Betrag ein. Verteilen Sie eine Rechnung über mehrere Kostenpositionen, indem Sie unter jeder Position den zugehörigen Teilbetrag erfassen.
+- Die Kostenposition zeigt Ist-Kosten, fakturierten und noch zu fakturierenden Betrag. Der Rest sind die Ist-Kosten abzüglich des fakturierten Betrags und kann negativ sein. Das Budget summiert seine Kostenpositionen mit Zwischensummen je Geschäftsjahr und Kategorie.
+- Die dokumentierten Budget- und Kostenbeträge bestimmen die Budget- und Ist-Zahlen sowie die Diagramme. Das Erfassen einer Rechnung ändert nur die Rechnungszahlen.
 
-Kostenpositionen übernehmen den konfigurierten Anbieter aus ihrer Budgetzeile. Soweit erlaubt, kann ein direkt untergeordneter Anbieter gewählt werden. Weitere Felder und Berechnungen finden Sie in [Budget und Kosten konfigurieren](../admin/settings.md#pml-budget-costs).
+Ist für das Budget ein Anbieter konfiguriert, erscheint er in der Spalte **Provider**; Kostenpositionen übernehmen ihn und können, soweit erlaubt, einen direkt untergeordneten Anbieter wählen. Das Feld wird unter den weiteren Feldern nicht wiederholt. Weitere Felder und Berechnungen finden Sie in [Budget und Kosten konfigurieren](../admin/settings.md#pml-budget-costs).
 
 Wenn eine Initiative keine eigenen Budget- oder Kostenpositionen hat, kann der jeweilige Betrag aus sichtbaren untergeordneten Initiativen kommen. Budget und Kosten werden unabhängig voneinander bestimmt. Abgeleitete Zeilen zeigen einen Strich für zugeordnete Kosten und Rechnungen. Die Summen aktualisieren `costBudget` und `costActual` auf der Karte. Wenn PML-Kostenpositionen vorliegen, sind diese Felder dort schreibgeschützt.
 
@@ -266,7 +274,7 @@ Interaktion mit dem Gantt-Diagramm:
 
 Der letzte Tab zeigt die vollständige Kartendetailansicht mit allen Standardabschnitten.
 
-Unter **Kosten und Zeitplan** vergleichen überlagerte Balken Budget und Ist-Kosten für Gesamt, CapEx und OpEx. Der fakturierte Gesamtbetrag der Initiative erscheint separat gemäß Berechtigung. Die Zeitachse zeigt sichtbare Plan- und Ist-Termine und die neuesten Indikatoren zu Zeit, Kosten und Leistungsumfang.
+Unter **Kosten und Zeitplan** steht die **Zeitachse** an erster Stelle, mit der **Fertigstellung** neben den sichtbaren Plan- und Ist-Terminen. **Budget** und **Ist-Kosten** stehen nebeneinander mit einem **Gesamtbudget**-Balken, für Leser, die Kosten sehen dürfen. **Gesundheitsübersicht** und **Risikomanagement** folgen, wie im Übersicht-Tab. Siehe [Initiativübersicht](card-details.md#initiative-summary-initiative-cards).
 
 ### Initiativbericht
 
@@ -278,9 +286,9 @@ Die Schaltfläche **Bericht** in der Kopfzeile der Initiative, neben dem Unterty
 
 | Abschnitt | Was angezeigt wird |
 |-----------|--------------------|
-| **Übersicht** | Kacheln für **Gesamtbudget**, **Ist-Kosten gesamt**, **Abweichung** und **Fertigstellung**; die **Gesundheitsübersicht** mit den drei Bewertungen des neuesten Statusberichts in Farbe und in Worten; die Balken unter **Finanzen** für Gesamt, CapEx und OpEx; der Bereich **Zeitachse** mit sichtbaren Plan- und Ist-Terminen, Untertyp und Initiativstatus; und die Beschreibung. Werte, die aus den untergeordneten Initiativen stammen, sind gekennzeichnet, mit einem erläuternden Hinweis |
+| **Übersicht** | Kacheln für **Gesamtbudget**, **Ist-Kosten gesamt**, **Abweichung** und **Fertigstellung**; die **Gesundheitsübersicht** mit den drei Bewertungen des neuesten Statusberichts in Farbe und in Worten, mit Berichtsdatum und Texten; die Balken unter **Finanzen** für Gesamt, CapEx und OpEx; der Bereich **Zeitachse** mit sichtbaren Plan- und Ist-Terminen, Untertyp und Initiativstatus; und die Beschreibung. Werte, die aus den untergeordneten Initiativen stammen, sind gekennzeichnet, mit einem erläuternden Hinweis |
 | **Statusberichte** | Der neueste Bericht vollständig, mit seinen Bewertungen, dann die früheren Berichte in einer Tabelle mit Datum, Berichterstatter und Gesundheitsbewertungen |
-| **Budget & Kosten** | Kacheln für Gesamtbudget, Ist-Kosten und Abweichung sowie für die CapEx- und OpEx-Ausgaben gegenüber ihrem Budget; die Diagramme **Ausgaben im Zeitverlauf** für das in ihrem Chip genannte Geschäftsjahr und für das gesamte Projekt; Ausgeklappte Hierarchie **Geplantes Budget → Kostenpositionen → Fakturierter Ist-Betrag** mit Zwischensummen je Geschäftsjahr und dem fakturierten Gesamtbetrag der Initiative |
+| **Budget & Kosten** | Kacheln für Gesamtbudget, Ist-Kosten und Abweichung sowie für die CapEx- und OpEx-Ausgaben gegenüber ihrem Budget; die Diagramme **Ausgaben im Zeitverlauf** für das in ihrem Chip genannte Geschäftsjahr und für das gesamte Projekt; Ausgeklappte Hierarchie **Geplantes Budget → Kostenpositionen → Fakturierter Ist-Betrag** mit Zwischensummen je Geschäftsjahr |
 | **Risikomanagement** | Kacheln für **Risiken gesamt**, **Offen** und **Hohe Risiken**; die **Risiko-Heatmap** von Wahrscheinlichkeit gegen Auswirkung, jede Zelle nach Bewertungsstufe gefärbt und mit der Anzahl der Risiken darin, daneben eine Zählung **Nach Status**; dann jedes Risiko mit seiner Bewertung (und Wahrscheinlichkeit × Auswirkung), Status, Verantwortlichem, vollständiger Beschreibung und vollständiger Gegenmaßnahme, die höchste Bewertung zuerst |
 | **Aufgaben & Zeitplan** | Eine Tabelle der Arbeitspakete, jeweils mit ihren Aufgaben darunter, dann die Aufgaben ohne Arbeitspaket, neben einer Zeitleiste auf Quartalsskala: ein Balken für jedes Arbeitspaket, gefüllt entsprechend seiner Fertigstellung, ein Balken für jede Aufgabe in ihrer Statusfarbe, eine Raute für einen Meilenstein (wie im Gantt-Diagramm), ein Punkt für ein Element mit nur einem Datum und eine Linie für heute, wenn es im Zeitraum liegt. Jede Zeile zeigt außerdem ihren Fortschritt oder Status und ihre Priorität, und eine Legende erklärt die Markierungen |
 

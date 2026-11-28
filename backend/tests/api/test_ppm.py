@@ -9,6 +9,7 @@ edge cases (404s, empty states).
 from __future__ import annotations
 
 import uuid
+from datetime import UTC, date, datetime
 
 import pytest
 
@@ -19,6 +20,7 @@ from tests.conftest import (
     create_card,
     create_card_type,
     create_role,
+    create_status_report,
     create_user,
     create_wbs,
 )
@@ -124,6 +126,40 @@ class TestStatusReports:
         )
         assert len(list_resp.json()) == 0
 
+    async def test_list_orders_same_day_reports_newest_created_first(self, client, db, ppm_env):
+        init = ppm_env["initiative"]
+        older = await create_status_report(
+            db, initiative_id=init.id, report_date=date(2026, 3, 1), summary="older"
+        )
+        older.created_at = datetime(2026, 3, 1, 8, 0, tzinfo=UTC)
+        newer = await create_status_report(
+            db, initiative_id=init.id, report_date=date(2026, 3, 1), summary="newer"
+        )
+        newer.created_at = datetime(2026, 3, 1, 9, 0, tzinfo=UTC)
+        await db.flush()
+
+        resp = await client.get(
+            f"{BASE}/initiatives/{init.id}/reports", headers=auth_headers(ppm_env["admin"])
+        )
+        assert [r["summary"] for r in resp.json()] == ["newer", "older"]
+
+    async def test_list_orders_by_report_date_before_creation_time(self, client, db, ppm_env):
+        init = ppm_env["initiative"]
+        late_date = await create_status_report(
+            db, initiative_id=init.id, report_date=date(2026, 3, 2), summary="late date"
+        )
+        late_date.created_at = datetime(2026, 3, 1, 8, 0, tzinfo=UTC)
+        early_date = await create_status_report(
+            db, initiative_id=init.id, report_date=date(2026, 3, 1), summary="early date"
+        )
+        early_date.created_at = datetime(2026, 3, 5, 8, 0, tzinfo=UTC)
+        await db.flush()
+
+        resp = await client.get(
+            f"{BASE}/initiatives/{init.id}/reports", headers=auth_headers(ppm_env["admin"])
+        )
+        assert [r["summary"] for r in resp.json()] == ["late date", "early date"]
+
     async def test_viewer_can_list_reports(self, client, ppm_env):
         init_id = str(ppm_env["initiative"].id)
         resp = await client.get(
@@ -163,6 +199,56 @@ class TestStatusReports:
             headers=auth_headers(ppm_env["admin"]),
         )
         assert resp.status_code == 404
+
+    @pytest.mark.parametrize("field", ["summary", "accomplishments", "next_steps"])
+    async def test_create_report_rejects_a_text_over_250(self, client, ppm_env, field):
+        resp = await client.post(
+            f"{BASE}/initiatives/{ppm_env['initiative'].id}/reports",
+            json={"report_date": "2026-03-01", field: "x" * 251},
+            headers=auth_headers(ppm_env["admin"]),
+        )
+        assert resp.status_code == 422
+
+    @pytest.mark.parametrize("field", ["summary", "accomplishments", "next_steps"])
+    async def test_create_report_accepts_exactly_250(self, client, ppm_env, field):
+        resp = await client.post(
+            f"{BASE}/initiatives/{ppm_env['initiative'].id}/reports",
+            json={"report_date": "2026-03-01", field: "x" * 250},
+            headers=auth_headers(ppm_env["admin"]),
+        )
+        assert resp.status_code == 200
+        assert resp.json()[field] == "x" * 250
+
+    @pytest.mark.parametrize("field", ["summary", "accomplishments", "next_steps"])
+    async def test_patch_report_rejects_a_changed_text_over_250(self, client, db, ppm_env, field):
+        report = await create_status_report(
+            db, initiative_id=ppm_env["initiative"].id, report_date=date(2026, 3, 1)
+        )
+        resp = await client.patch(
+            f"{BASE}/reports/{report.id}",
+            json={field: "x" * 251},
+            headers=auth_headers(ppm_env["admin"]),
+        )
+        assert resp.status_code == 422
+
+    @pytest.mark.parametrize("field", ["summary", "accomplishments", "next_steps"])
+    async def test_patch_report_without_texts_keeps_a_stored_text_over_250(
+        self, client, db, ppm_env, field
+    ):
+        report = await create_status_report(
+            db,
+            initiative_id=ppm_env["initiative"].id,
+            report_date=date(2026, 3, 1),
+            **{field: "y" * 400},
+        )
+        resp = await client.patch(
+            f"{BASE}/reports/{report.id}",
+            json={"report_date": "2026-03-02"},
+            headers=auth_headers(ppm_env["admin"]),
+        )
+        assert resp.status_code == 200
+        assert resp.json()["report_date"] == "2026-03-02"
+        assert resp.json()[field] == "y" * 400
 
 
 # ── Cost Lines ────────────────────────────────────────────────────

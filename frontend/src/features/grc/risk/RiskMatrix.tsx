@@ -40,6 +40,8 @@ interface BaseProps {
   /** Label for the label column (defaults to the translated "Probability"). */
   probabilityAxisLabel?: string;
   impactAxisLabel?: string;
+  /** `compact` shortens the cells for a summary card; the default is the register's size. */
+  size?: "default" | "compact";
 }
 
 /** The GRC register's 4×4: rows = probability (very_high..low), cols = impact (critical..low). */
@@ -67,7 +69,8 @@ interface CustomAxesProps extends BaseProps {
 export type RiskMatrixProps = DefaultAxesProps | CustomAxesProps;
 
 export default function RiskMatrix(props: RiskMatrixProps) {
-  const { matrix, probabilityAxisLabel, impactAxisLabel } = props;
+  const { matrix, probabilityAxisLabel, impactAxisLabel, size = "default" } = props;
+  const cellPy = size === "compact" ? 0.25 : 1.25;
   const { t } = useTranslation("grc");
 
   const custom = props.rows !== undefined;
@@ -123,6 +126,7 @@ export default function RiskMatrix(props: RiskMatrixProps) {
             cols={cols}
             counts={matrix[rowIdx] ?? []}
             cellColor={cellColor}
+            cellPy={cellPy}
             onSelect={onSelect}
             highlight={highlight}
           />
@@ -138,6 +142,7 @@ function RiskMatrixRow({
   cols,
   counts,
   cellColor,
+  cellPy,
   onSelect,
   highlight,
 }: {
@@ -145,6 +150,7 @@ function RiskMatrixRow({
   cols: readonly RiskMatrixAxisItem[];
   counts: number[];
   cellColor: (rowKey: string, colKey: string) => string;
+  cellPy: number;
   onSelect?: (selection: RiskMatrixSelection | null) => void;
   highlight?: RiskMatrixSelection | null;
 }) {
@@ -152,7 +158,7 @@ function RiskMatrixRow({
     <>
       <Box
         sx={{
-          py: 1.25,
+          py: cellPy,
           px: 1,
           textAlign: "right",
           display: "flex",
@@ -195,7 +201,7 @@ function RiskMatrixRow({
                 : undefined
             }
             sx={{
-              py: 1.25,
+              py: cellPy,
               borderRadius: 1,
               textAlign: "center",
               cursor: onSelect ? "pointer" : "default",

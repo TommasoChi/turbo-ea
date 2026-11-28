@@ -85,6 +85,8 @@ function AttributeSection({
   editOn,
   renderAfterFields,
   renderGroupAction,
+  groupLayout,
+  renderGroupAside,
 }: {
   section: SectionDef & { defaultExpanded?: boolean; columns?: 1 | 2 };
   card: Card;
@@ -103,6 +105,10 @@ function AttributeSection({
   editOn?: SectionEditRequest;
   renderAfterFields?: (fieldKeys: string[]) => ReactNode;
   renderGroupAction?: (fieldKeys: string[]) => ReactNode;
+  /** Read mode: "sideBySide" lays a group's fields in two columns, label above value. */
+  groupLayout?: (fieldKeys: string[]) => "sideBySide" | undefined;
+  /** Read mode: a non-null node sits to the right of the group's fields. */
+  renderGroupAside?: (fieldKeys: string[]) => ReactNode;
 }) {
   const { t } = useTranslation(["cards", "common", "validation"]);
   const { fmt, symbol } = useCurrency();
@@ -308,10 +314,12 @@ function AttributeSection({
   }, [editing, focusKey]);
 
   // Read-only field grid
-  const renderReadGrid = (fields: FieldDef[]) => (
-    <Box sx={{ display: "grid", gridTemplateColumns: "1fr", rowGap: 1, columnGap: 2, "@container (min-width: 480px)": { gridTemplateColumns: "180px 1fr", alignItems: "center" } }}>
+  const renderReadGrid = (fields: FieldDef[], sideBySide = false) => (
+    <Box sx={sideBySide
+      ? { display: "grid", gridTemplateColumns: "1fr 1fr", rowGap: 1, columnGap: 2 }
+      : { display: "grid", gridTemplateColumns: "1fr", rowGap: 1, columnGap: 2, "@container (min-width: 480px)": { gridTemplateColumns: "180px 1fr", alignItems: "center" } }}>
       {fields.map((field) => (
-        <Box key={field.key} sx={{ display: "contents" }}>
+        <Box key={field.key} sx={{ display: sideBySide ? "block" : "contents" }}>
           <Typography variant="body2" color="text.secondary">
             {fieldLabel(field)}
             <HelpTip text={fieldHelp(field)} />
@@ -409,16 +417,24 @@ function AttributeSection({
     <>
       {items.map((item, i) => {
         if (item.kind === "group") {
+          const keys = item.fields.map((field) => field.key);
+          const sideBySide = !isEdit && groupLayout?.(keys) === "sideBySide";
+          const aside = !isEdit && expanded ? renderGroupAside?.(keys) : null;
           return (
             <Box key={`group-${item.name}`} sx={{ mb: 1.5 }}>
               <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: 1, borderColor: "divider", pb: 0.5, mb: 1, mt: i > 0 ? 1 : 0 }}>
                 <Typography variant="subtitle2" sx={{ fontWeight: 600, color: "text.secondary" }}>
                   {rl(item.name, section.groupTranslations?.[item.name])}
                 </Typography>
-                {!isEdit && expanded && renderGroupAction?.(item.fields.map((field) => field.key))}
+                {!isEdit && expanded && renderGroupAction?.(keys)}
               </Box>
-              {isEdit ? renderEditFields(item.fields) : renderReadGrid(item.fields)}
-              {!isEdit && expanded && renderAfterFields?.(item.fields.map((field) => field.key))}
+              {isEdit ? renderEditFields(item.fields) : aside ? (
+                <Box sx={{ display: "flex", gap: 3, alignItems: "flex-start" }}>
+                  <Box sx={{ flex: 1, minWidth: 0 }}>{renderReadGrid(item.fields)}</Box>
+                  <Box data-group-aside sx={{ flexShrink: 0 }}>{aside}</Box>
+                </Box>
+              ) : renderReadGrid(item.fields, sideBySide)}
+              {!isEdit && expanded && renderAfterFields?.(keys)}
             </Box>
           );
         }

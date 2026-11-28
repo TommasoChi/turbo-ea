@@ -33,6 +33,18 @@ vi.mock("@/hooks/useCurrency", () => ({
   useCurrency: vi.fn(),
 }));
 
+vi.mock("@/features/cards/CardDetailContent", async (importOriginal) => {
+  const Actual = (await importOriginal<typeof import("./CardDetailContent")>()).default;
+  return {
+    default: (props: React.ComponentProps<typeof Actual>) => (
+      <>
+        <div data-testid="content-props" data-show-ppm-summary={String(props.showPpmSummary)} />
+        <Actual {...props} />
+      </>
+    ),
+  };
+});
+
 // Stub all card section components to keep tests focused on CardDetail logic
 vi.mock("@/features/cards/sections", () => ({
   DataQualityPill: ({ value, animate }: { value: number; animate?: boolean }) => (
@@ -232,6 +244,14 @@ function renderCardDetail(cardId = "card-1", search = "") {
 // ---------------------------------------------------------------------------
 
 describe("CardDetail", () => {
+  it("asks the card content for the Health Summary and Risk Management sections", async () => {
+    vi.mocked(api.get).mockImplementation((path: string) =>
+      Promise.resolve(path.includes("/my-permissions") ? mockPerms : mockCard),
+    );
+    renderCardDetail();
+    expect(await screen.findByTestId("content-props")).toHaveAttribute("data-show-ppm-summary", "true");
+  });
+
   it("shows loading state before card data loads", () => {
     // Never resolve — keep in loading state
     vi.mocked(api.get).mockReturnValue(new Promise(() => {}));

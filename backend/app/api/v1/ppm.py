@@ -341,7 +341,11 @@ async def list_reports(
     result = await db.execute(
         select(PpmStatusReport)
         .where(PpmStatusReport.initiative_id == initiative_id)
-        .order_by(PpmStatusReport.report_date.desc())
+        .order_by(
+            PpmStatusReport.report_date.desc(),
+            PpmStatusReport.created_at.desc(),
+            PpmStatusReport.id.desc(),
+        )
     )
     reports = result.scalars().all()
     can_view_costs = await PermissionService.can_view_costs(db, user, uuid.UUID(initiative_id))
@@ -1212,6 +1216,11 @@ async def get_financials(
         _default_values, _default_calculated, default_references = projected.pop()
         definitions[section] = {
             "visible_columns": config.visible_columns,
+            **(
+                {"provider_field_key": cost_config.provider_source.budget_field_key}
+                if section == "budget" and cost_config.provider_source
+                else {}
+            ),
             "fields": [
                 {
                     "key": field.key,

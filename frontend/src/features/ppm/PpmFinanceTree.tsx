@@ -36,7 +36,7 @@ import { usePpmFinancialAmount } from "./usePpmFinancials";
 type FinancialRow = PpmFinancialBudget | PpmFinancialCost | PpmInvoice;
 type FormState = {
   kind: "budget" | "cost" | "invoice";
-  mode: "create" | "edit" | "move";
+  mode: "create" | "edit";
   parentId?: string;
   row?: FinancialRow;
 };
@@ -129,9 +129,11 @@ export default function PpmFinanceTree({
   const columns = (kind: "budget" | "cost_item" | "invoice") => {
     const config = data.field_definitions?.[kind];
     return (config?.visible_columns ?? [])
+      .filter((key) => key !== config?.provider_field_key)
       .map((key) => config?.fields.find((field) => field.key === key))
       .filter((field): field is NonNullable<typeof field> => !!field);
   };
+  const budgetColumnCount = readOnly ? 9 : 10;
   const customCells = (
     row: FinancialRow,
     kind: "budget" | "cost_item" | "invoice",
@@ -210,11 +212,6 @@ export default function PpmFinanceTree({
                     () => show("invoice", "edit", invoice, cost.id),
                   )}
                   {action(
-                    t("financeTree.moveInvoice", { name: invoice.invoice_id }),
-                    "drive_file_move",
-                    () => show("invoice", "move", invoice, cost.id),
-                  )}
-                  {action(
                     t("financeTree.deleteInvoice", {
                       name: invoice.invoice_id,
                     }),
@@ -285,22 +282,6 @@ export default function PpmFinanceTree({
                           cost.budget_line_id ?? undefined,
                         ),
                     )}
-                    {action(
-                      t(
-                        cost.budget_line_id
-                          ? "financeTree.moveCost"
-                          : "financeTree.assignCost",
-                        { name: cost.description },
-                      ),
-                      "drive_file_move",
-                      () =>
-                        show(
-                          "cost",
-                          "move",
-                          cost,
-                          cost.budget_line_id ?? undefined,
-                        ),
-                    )}
                     {data.invoice_access &&
                       action(
                         t("financeTree.recordInvoice", {
@@ -367,25 +348,20 @@ export default function PpmFinanceTree({
       {!data.budget_lines.length && (
         <Alert severity="info">{t("financeTree.noBudgets")}</Alert>
       )}
-      {data.invoice_access && (
-        <Typography sx={{ mb: 1 }}>
-          {t("financeTree.initiativeInvoiced")}: {amount(data.actual_invoiced)}
-        </Typography>
-      )}
       <TableContainer
         component={Paper}
         tabIndex={0}
         role="region"
         aria-label={t("financeTree.item")}
-        sx={{ overflowX: "auto" }}
+        sx={{ overflowX: expandAll ? "visible" : "auto" }}
       >
-        <Table
-          size="small"
-          sx={{ tableLayout: "fixed", minWidth: expandAll ? undefined : 900 }}
-        >
+        <Table size="small">
           <TableHead>
             <TableRow>
               <TableCell>{t("financeTree.item")}</TableCell>
+              <TableCell>{t("financeTree.colFiscalYear")}</TableCell>
+              <TableCell>{t("financeTree.colCategory")}</TableCell>
+              <TableCell>{t("financeTree.colProvider")}</TableCell>
               <TableCell>{t("plannedBudget")}</TableCell>
               <TableCell>{t("costItems")}</TableCell>
               <TableCell>{t("financeTree.remainingBudget")}</TableCell>
@@ -402,19 +378,11 @@ export default function PpmFinanceTree({
                 >
                   <TableCell>
                     {expand(budget.id, label(budget))}{" "}
-                    <LinkifiedText text={label(budget)} />{" "}
-                    {budget.description && (
-                      <Typography variant="caption" display="block">
-                        {yearLabel(budget.fiscal_year)} ·{" "}
-                        {budget.category.toUpperCase()}
-                      </Typography>
-                    )}
-                    {budget.provider?.name && (
-                      <Typography variant="caption" display="block">
-                        {budget.provider.name}
-                      </Typography>
-                    )}
+                    <LinkifiedText text={label(budget)} />
                   </TableCell>
+                  <TableCell>{yearLabel(budget.fiscal_year)}</TableCell>
+                  <TableCell>{budget.category.toUpperCase()}</TableCell>
+                  <TableCell>{budget.provider?.name}</TableCell>
                   <TableCell>{amount(budget.amount)}</TableCell>
                   <TableCell>{amount(budget.total_cost_items)}</TableCell>
                   <TableCell>{amount(budget.remaining_budget)}</TableCell>
@@ -448,7 +416,7 @@ export default function PpmFinanceTree({
                 </TableRow>
                 <TableRow>
                   <TableCell
-                    colSpan={readOnly ? 6 : 7}
+                    colSpan={budgetColumnCount}
                     sx={{ py: 0, borderBottom: 0 }}
                   >
                     <Collapse in={open(budget.id)} unmountOnExit>
@@ -479,7 +447,7 @@ export default function PpmFinanceTree({
             ))}
             {legacy.length > 0 && (
               <TableRow>
-                <TableCell colSpan={readOnly ? 6 : 7}>
+                <TableCell colSpan={budgetColumnCount}>
                   {expand("legacy", t("financeTree.unassigned"))}{" "}
                   <strong>{t("financeTree.unassigned")}</strong>
                 </TableCell>
@@ -488,7 +456,7 @@ export default function PpmFinanceTree({
             {legacy.length > 0 && (
               <TableRow>
                 <TableCell
-                  colSpan={readOnly ? 6 : 7}
+                  colSpan={budgetColumnCount}
                   sx={{ py: 0, borderBottom: 0 }}
                 >
                   <Collapse in={open("legacy")} unmountOnExit>
@@ -499,7 +467,7 @@ export default function PpmFinanceTree({
             )}
             {data.budget_subtotals.map((subtotal) => (
               <TableRow key={String(subtotal.fiscal_year) + subtotal.category}>
-                <TableCell>
+                <TableCell colSpan={4}>
                   {yearLabel(subtotal.fiscal_year)} ·{" "}
                   {subtotal.category.toUpperCase()}
                 </TableCell>
@@ -518,7 +486,7 @@ export default function PpmFinanceTree({
               </TableRow>
             ))}
             <TableRow>
-              <TableCell>
+              <TableCell colSpan={4}>
                 <strong>{t("financeTree.total")}</strong>
               </TableCell>
               <TableCell>{amount(data.budget_totals?.amount)}</TableCell>
@@ -546,7 +514,7 @@ export default function PpmFinanceTree({
                 .filter((year) => year.capex_budget || year.opex_budget)
                 .map((year) => (
                   <TableRow key={"derived-budget-" + year.year}>
-                    <TableCell>
+                    <TableCell colSpan={4}>
                       {t("financeTree.descendantBudget")} ·{" "}
                       {yearLabel(year.year)}
                     </TableCell>
@@ -566,7 +534,7 @@ export default function PpmFinanceTree({
                 .filter((year) => year.capex_actual || year.opex_actual)
                 .map((year) => (
                   <TableRow key={"derived-actual-" + year.year}>
-                    <TableCell>
+                    <TableCell colSpan={4}>
                       {t("financeTree.descendantActual")} ·{" "}
                       {yearLabel(year.year)}
                     </TableCell>
@@ -617,22 +585,7 @@ export default function PpmFinanceTree({
             onChanged();
           }}
           onClose={() => setForm(null)}
-          onSaved={(destinationId) => {
-            if (destinationId) {
-              const destinationCost = data.cost_items.find(
-                (cost) => cost.id === destinationId,
-              );
-              setExpanded(
-                (previous) =>
-                  new Set([
-                    ...previous,
-                    destinationId,
-                    ...(destinationCost?.budget_line_id
-                      ? [destinationCost.budget_line_id]
-                      : []),
-                  ]),
-              );
-            }
+          onSaved={() => {
             setForm(null);
             onChanged();
           }}

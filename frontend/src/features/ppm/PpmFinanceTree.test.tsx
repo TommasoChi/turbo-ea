@@ -217,8 +217,8 @@ describe("PpmFinanceTree", () => {
       screen.queryByRole("button", { name: /delete cost item/i }),
     ).not.toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: /move cost item renewal/i }),
-    ).toBeInTheDocument();
+      screen.queryByRole("button", { name: /move cost item/i }),
+    ).not.toBeInTheDocument();
   });
 
   it("expands all rows in read-only print view", () => {
@@ -426,28 +426,182 @@ it("keeps expansion controls for a read-only viewer without editing actions", ()
   ).not.toBeInTheDocument();
 });
 
-it("expands the legacy group and offers an explicit assignment to a budget", () => {
+it("expands the legacy group, whose cost items offer edit and delete only", () => {
   render(<PpmFinanceTree data={data} rollup={null} onChanged={vi.fn()} />);
   expect(screen.queryByText("Legacy")).not.toBeInTheDocument();
   fireEvent.click(
     screen.getByRole("button", { name: /expand costs without a budget/i }),
   );
-  expect(screen.getByText("Legacy")).toBeInTheDocument();
-  fireEvent.click(
-    screen.getByRole("button", { name: /assign legacy to budget/i }),
-  );
-  expect(screen.getByTestId("row-form")).toHaveTextContent("cost:move:");
+  const row = screen.getByText("Legacy").closest("tr")!;
+  expect(
+    within(row).getByRole("button", { name: /edit cost item legacy/i }),
+  ).toBeInTheDocument();
+  expect(
+    within(row).getByRole("button", { name: /delete cost item legacy/i }),
+  ).toBeInTheDocument();
+  expect(
+    within(row).queryByRole("button", { name: /assign|move/i }),
+  ).not.toBeInTheDocument();
 });
 
-it("keeps year and category visible on named budgets and shows the initiative total first", () => {
+it("the budget table shows FY, Category and Provider columns", () => {
   render(<PpmFinanceTree data={data} rollup={null} onChanged={vi.fn()} />);
+  const headers = screen
+    .getAllByRole("columnheader")
+    .map((header) => header.textContent);
+  expect(headers.slice(0, 9)).toEqual([
+    "Budget, costs and invoices",
+    "Fiscal year",
+    "Category",
+    "Provider",
+    "Planned Budget",
+    "Cost Items",
+    "Remaining Budget",
+    "Total invoiced",
+    "Remaining to invoice",
+  ]);
   const budget = screen.getByText("Software").closest("tr");
-  expect(within(budget!).getByText(/2026.*OPEX/)).toBeInTheDocument();
-  const total = screen.getByText(/initiative total invoiced/i);
-  const table = screen.getByRole("table");
+  expect(within(budget!).getByText("FY 2026")).toBeInTheDocument();
+  expect(within(budget!).getByText("OPEX")).toBeInTheDocument();
+  expect(within(budget!).getByText("Aruba Software")).toBeInTheDocument();
+});
+
+it("the Provider cell is empty for a budget without a readable Provider", () => {
+  render(
+    <PpmFinanceTree
+      data={{
+        ...data,
+        budget_lines: [{ ...data.budget_lines[0], provider: null }],
+      }}
+      rollup={null}
+      onChanged={vi.fn()}
+    />,
+  );
+  const cells = within(screen.getByText("Software").closest("tr")!).getAllByRole(
+    "cell",
+  );
+  expect(cells[3]).toBeEmptyDOMElement();
+});
+
+it("the custom field block skips the Provider field named by provider_field_key", () => {
+  const budget = {
+    ...data.budget_lines[0],
+    field_values: { origin: "p", note: "N-1" },
+  };
+  render(
+    <PpmFinanceTree
+      data={{
+        ...data,
+        budget_lines: [budget],
+        field_definitions: {
+          budget: {
+            fields: [
+              { key: "origin", label: "Origin", kind: "text" as const },
+              { key: "note", label: "Note", kind: "text" as const },
+            ],
+            visible_columns: ["origin", "note"],
+            provider_field_key: "origin",
+          },
+        },
+      }}
+      rollup={null}
+      onChanged={vi.fn()}
+    />,
+  );
+  fireEvent.click(screen.getByRole("button", { name: /expand software/i }));
+  const details = screen.getByRole("table", { name: /budget details/i });
   expect(
-    total.compareDocumentPosition(table) & Node.DOCUMENT_POSITION_FOLLOWING,
-  ).toBeTruthy();
+    within(details).getByRole("columnheader", { name: "Note" }),
+  ).toBeInTheDocument();
+  expect(
+    within(details).queryByRole("columnheader", { name: "Origin" }),
+  ).not.toBeInTheDocument();
+});
+
+it("no cost item or invoice has a move or assign action anywhere in the tree", () => {
+  render(<PpmFinanceTree data={data} rollup={null} onChanged={vi.fn()} />);
+  fireEvent.click(screen.getByRole("button", { name: /expand software/i }));
+  fireEvent.click(screen.getByRole("button", { name: /expand renewal/i }));
+  expect(screen.getByText("INV-001")).toBeInTheDocument();
+  expect(
+    screen.queryByRole("button", { name: /move (cost item|invoice)/i }),
+  ).not.toBeInTheDocument();
+  expect(
+    screen.queryByRole("button", { name: /assign renewal/i }),
+  ).not.toBeInTheDocument();
+  for (const text of ["Renewal", "INV-001"]) {
+    expect(screen.getByText(text).closest("tr")).not.toHaveTextContent(
+      "drive_file_move",
+    );
+  }
+  fireEvent.click(
+    screen.getByRole("button", { name: /expand costs without a budget/i }),
+  );
+  expect(screen.getByText("Legacy").closest("tr")).not.toHaveTextContent(
+    "drive_file_move",
+  );
+  expect(document.body).not.toHaveTextContent("drive_file_move");
+});
+
+it.each([
+  ["editable", false],
+  ["read-only", true],
+])("the spanning rows cover every column when %s", (_label, readOnly) => {
+  render(
+    <PpmFinanceTree
+      data={data}
+      rollup={null}
+      readOnly={readOnly}
+      onChanged={vi.fn()}
+    />,
+  );
+  const region = screen.getByRole("region", { name: "Budget, costs and invoices" });
+  const columns = region.querySelector("thead tr")!.children.length;
+  expect(columns).toBe(readOnly ? 9 : 10);
+  const spans = [...region.querySelectorAll<HTMLTableCellElement>("td")]
+    .map((cell) => cell.colSpan)
+    .filter((span) => span > 4);
+  expect(spans).toHaveLength(3);
+  expect(new Set(spans)).toEqual(new Set([columns]));
+});
+
+it("has no Initiative total invoiced line", () => {
+  render(<PpmFinanceTree data={data} rollup={null} onChanged={vi.fn()} />);
+  expect(screen.queryByText(/initiative total invoiced/i)).not.toBeInTheDocument();
+});
+
+it("the Planned Budget totals are unchanged by the new columns", () => {
+  render(<PpmFinanceTree data={data} rollup={null} onChanged={vi.fn()} />);
+  const cells = within(screen.getByText("Total").closest("tr")!).getAllByRole(
+    "cell",
+  );
+  expect(cells[1]).toHaveTextContent(/100[.,]13/);
+  expect(cells[2]).toHaveTextContent(/100[.,]13/);
+  expect(cells[4]).toHaveTextContent(/30[.,]11/);
+  expect(cells[5]).toHaveTextContent(/70[.,]02/);
+});
+
+it("scrolls horizontally on screen, with an auto-layout table", () => {
+  render(<PpmFinanceTree data={data} rollup={null} onChanged={vi.fn()} />);
+  const region = screen.getByRole("region", { name: "Budget, costs and invoices" });
+  expect(getComputedStyle(region).overflowX).toBe("auto");
+  expect(
+    getComputedStyle(within(region).getAllByRole("table")[0]).tableLayout,
+  ).not.toBe("fixed");
+});
+
+it("expandAll renders without a scroll container", () => {
+  render(
+    <PpmFinanceTree
+      data={data}
+      rollup={null}
+      readOnly
+      expandAll
+      onChanged={vi.fn()}
+    />,
+  );
+  const region = screen.getByRole("region", { name: "Budget, costs and invoices" });
+  expect(getComputedStyle(region).overflowX).not.toBe("auto");
 });
 
 it("shows the Cost Item's own category when it differs from its budget", () => {
@@ -471,7 +625,7 @@ it("labels budgets and subtotals with the configured fiscal year span", () => {
   invalidateFiscalYearStart(10);
   try {
     render(<PpmFinanceTree data={data} rollup={null} onChanged={vi.fn()} />);
-    expect(screen.getAllByText(/FY 2025–2026.*OPEX/)).toHaveLength(2);
+    expect(screen.getAllByText(/FY 2025–2026/)).toHaveLength(2);
   } finally {
     resetFiscalYearStart();
   }

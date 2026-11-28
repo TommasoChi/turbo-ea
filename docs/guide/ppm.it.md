@@ -79,13 +79,18 @@ Cliccare su qualsiasi iniziativa per aprire la sua pagina di dettaglio con sette
 
 ![Scheda Panoramica PML](../assets/img/it/41_ppm_panoramica.png)
 
-La panoramica mostra un riepilogo della salute e delle finanze dell'iniziativa:
+La panoramica mostra un riepilogo della salute e delle finanze dell'iniziativa, in una colonna in questo ordine:
 
-- **Riepilogo salute** — Indicatori di calendario, costi e ambito dall'ultimo report di stato
-- **Budget vs. Effettivo** — Card KPI combinata che mostra budget totale e spesa effettiva con varianza
+- **Descrizione** — Mostrata quando l'iniziativa ne ha una
+- **Cronologia** — Date pianificate ed effettive e due tracce sulla stessa scala trimestrale, con l'anello **Completamento** accanto alle date
+- **Riepilogo salute** — La data del report, gli indicatori di tempo, costo e ambito e tre testi (riepilogo, risultati, prossimi passi) dell'ultimo report di stato, secondo i permessi di visibilità. **Gestisci** apre l'editor del report di stato per un nuovo report
+- **Gestione dei rischi** — I rischi attivi (aperti e in mitigazione): riquadri, una ciambella per fascia di punteggio la cui legenda si clicca per nascondere o mostrare una fascia, un grafico per stato e una mappa di calore compatta. **Gestisci** apre il popup **Gestisci** nella scheda **Rischi**
+- **Finanze** — Budget vs. effettivo per totale, CapEx e OpEx, con varianza; mostrate ai lettori che possono vedere i costi
+
+I pulsanti **Gestisci** richiedono il permesso di gestione PML e i diritti di modifica sulla card. La freccia indietro della pagina, nell'intestazione e su un telefono, riporta alla scheda **Portafoglio**.
+
 - **Importi dal basso** — Quando l'iniziativa non ha righe di budget proprie, il budget totale, le barre del budget e la varianza mostrano invece il budget delle iniziative sottostanti: in corsivo, contrassegnati da una freccia ↳, con la traccia del budget a contorno e un tooltip che indica quante iniziative comprendono. Quando non ha righe di costo proprie, il suo consuntivo proviene dal basso allo stesso modo, con le barre della spesa a contorno. I due lati sono decisi separatamente, e la registrazione di una prima riga propria riporta quel lato agli importi propri dell'iniziativa.
 - **Sotto questa iniziativa** — Quando l'iniziativa ha iniziative sottostanti, una riga sotto le barre del budget ne indica il numero, il budget e la spesa effettiva sommati e il periodo coperto dalle loro date. È mostrata accanto agli importi propri dell'iniziativa e non vi si somma mai. Quando il budget e il consuntivo provengono già entrambi dal basso, la riga mantiene solo il numero e il periodo delle date.
-- **Attività recente** — Riepilogo dell'ultimo report di stato
 
 ### Scheda Report di Stato
 
@@ -103,20 +108,23 @@ I report di stato mensili monitorano la salute del progetto nel tempo. Ogni repo
 | **Risultati** | Cosa è stato raggiunto in questo periodo |
 | **Prossimi passi** | Attività pianificate per il prossimo periodo |
 
+Ciascuno dei tre testi è limitato a 250 caratteri. L'editor mostra un contatore e non ne accetta di più.
+
 ### Scheda Budget e Costi
 
 ![Budget e Costi PML](../assets/img/it/43_ppm_budget_costi.png)
 
-**Budget pianificato** mostra le righe per esercizio e categoria (CapEx o OpEx). Espandi una riga di budget per vedere le **Voci di costo**, poi espandi una voce per vedere il **Fatturato effettivo**. L'inizio dell'esercizio dipende dalle [impostazioni](../admin/settings.md#inizio-dellanno-fiscale).
+**Budget pianificato** mostra ogni riga con le colonne **Anno fiscale**, **Categoria** (CapEx o OpEx) e **Provider**. Le tabelle scorrono lateralmente quando sono più larghe della pagina. Espandi una riga di budget per vedere le **Voci di costo**, poi espandi una voce per vedere il **Fatturato effettivo**. L'inizio dell'esercizio dipende dalle [impostazioni](../admin/settings.md#inizio-dellanno-fiscale).
 
 Inserisci gli importi di budget, costi e fatture al netto dell'IVA. Il fatturato effettivo registra fatture già emesse.
 
-- Aggiungi una voce di costo dalla riga di budget. Le voci precedenti senza un budget sono in **Costi senza budget** e possono essere assegnate. Puoi spostare una voce tra righe di budget della stessa iniziativa.
-- Registra data, riferimento e importo della fattura. Se una fattura copre più voci, registra la quota sotto ciascuna voce. Puoi spostare una registrazione su un'altra voce della stessa iniziativa.
-- Ogni voce mostra costo effettivo, fatturato e residuo. Il residuo è il costo effettivo meno il fatturato e può essere negativo. Il budget somma le voci collegate e mostra subtotali per esercizio e categoria. Il totale fatturato dell'iniziativa include anche le fatture delle voci senza budget.
-- Budget, costo effettivo e grafici si basano sugli importi di budget e delle voci di costo. Registrare o spostare una fattura modifica solo i dati di fatturazione.
+- Le tabelle di budget, voci di costo e fatture offrono solo creazione, modifica ed eliminazione.
+- Aggiungi una voce di costo dalla riga di budget. Le righe precedenti senza budget sono elencate in **Costi senza budget**.
+- Registra data, riferimento e importo della fattura. Se una fattura copre più voci, registra la quota sotto ciascuna voce.
+- Ogni voce mostra costo effettivo, fatturato e residuo. Il residuo è il costo effettivo meno il fatturato e può essere negativo. Il budget somma le voci collegate e mostra subtotali per esercizio e categoria.
+- Budget, costo effettivo e grafici si basano sugli importi di budget e delle voci di costo. Registrare una fattura modifica solo i dati di fatturazione.
 
-Se configurato, il Provider della riga di budget viene ereditato dalle voci di costo. È possibile scegliere un Provider figlio diretto consentito. Vedi [Configurare Budget e costi](../admin/settings.md#pml-budget-costs) per i campi aggiuntivi e calcolati.
+Se configurato, il Provider della riga di budget compare nella colonna **Provider** e viene ereditato dalle voci di costo, che possono scegliere un Provider figlio diretto consentito. Il campo non è ripetuto tra i campi aggiuntivi. Vedi [Configurare Budget e costi](../admin/settings.md#pml-budget-costs) per i campi aggiuntivi e calcolati.
 
 Quando l'iniziativa non ha budget o costi propri, il dato corrispondente può provenire dalle iniziative discendenti visibili. I due lati sono indipendenti; le righe derivate mostrano un trattino per costi collegati e fatturazione. I totali del budget e dei costi aggiornano automaticamente `costBudget` e `costActual` sulla scheda. Quando esistono voci di costo PML, questi campi diventano di sola lettura.
 
@@ -266,7 +274,7 @@ Interagisci con il diagramma di Gantt:
 
 L'ultima scheda mostra la vista completa dei dettagli della card, incluse tutte le sezioni standard.
 
-In **Costi e tempistica**, i grafici sovrapposti confrontano budget e costo effettivo per totale, CapEx e OpEx. Il totale del fatturato dell'iniziativa è visibile separatamente secondo i permessi. La timeline presenta le date pianificate ed effettive visibili e gli indicatori di tempo, costo e ambito.
+In **Costi e tempistica** la **Cronologia** viene per prima, con il **Completamento** accanto alle date pianificate ed effettive consentite. **Budget** e **Costo effettivo** sono affiancati con una barra **Budget totale**, per i lettori che possono vedere i costi. Seguono il **Riepilogo salute** e la **Gestione dei rischi**, come nella scheda Panoramica. Vedi [Riepilogo dell'iniziativa](card-details.md#initiative-summary-initiative-cards).
 
 ### Report dell'iniziativa { #initiative-report }
 
@@ -278,9 +286,9 @@ Il pulsante **Report** nell'intestazione dell'iniziativa, accanto al chip del so
 
 | Sezione | Cosa mostra |
 |---------|-------------|
-| **Panoramica** | Riquadri per **Budget totale**, **Consuntivo totale**, **Scostamento** e **Completamento**; il **Riepilogo salute** con i tre indicatori dell'ultimo rapporto di stato a colori e a parole; le barre **Finanze** per totale, CapEx e OpEx; la scheda **Cronologia** con le date pianificate ed effettive visibili, il sottotipo e lo stato dell'iniziativa; e la descrizione. Gli importi presi dalle iniziative sottostanti sono contrassegnati, con una nota che li spiega |
+| **Panoramica** | Riquadri per **Budget totale**, **Consuntivo totale**, **Scostamento** e **Completamento**; il **Riepilogo salute** con i tre indicatori dell'ultimo rapporto di stato a colori e a parole, con la data del report e i testi; le barre **Finanze** per totale, CapEx e OpEx; la scheda **Cronologia** con le date pianificate ed effettive visibili, il sottotipo e lo stato dell'iniziativa; e la descrizione. Gli importi presi dalle iniziative sottostanti sono contrassegnati, con una nota che li spiega |
 | **Rapporti di stato** | L'ultimo rapporto per intero, con i suoi indicatori, poi i rapporti precedenti in una tabella con data, relatore e indicatori di salute |
-| **Budget e costi** | Riquadri per budget, consuntivo e scostamento totali e per la spesa CapEx e OpEx rispetto al relativo budget; i grafici **Spesa nel tempo** per l'anno fiscale indicato nel loro chip e per l'intero progetto; Gerarchia espansa **Budget pianificato → Voci di costo → Fatturato effettivo**, con subtotali per esercizio e totale fatturato dell'iniziativa |
+| **Budget e costi** | Riquadri per budget, consuntivo e scostamento totali e per la spesa CapEx e OpEx rispetto al relativo budget; i grafici **Spesa nel tempo** per l'anno fiscale indicato nel loro chip e per l'intero progetto; Gerarchia espansa **Budget pianificato → Voci di costo → Fatturato effettivo**, con subtotali per esercizio |
 | **Gestione dei rischi** | Riquadri per **Totale rischi**, **Aperto** e **Rischi elevati**; la **Mappa di calore dei rischi** di probabilità rispetto a impatto, con ogni cella colorata per fascia di punteggio e il numero di rischi che contiene, accanto a un conteggio **Per stato**; poi ogni rischio con il punteggio (e probabilità × impatto), lo stato, il responsabile, la descrizione completa e la mitigazione completa, dal punteggio più alto |
 | **Attività e pianificazione** | Una tabella dei pacchetti di lavoro, ciascuno con le sue attività sotto, poi le attività senza pacchetto di lavoro, affiancata da una timeline su scala trimestrale: una barra per ogni pacchetto di lavoro riempita fino al suo completamento, una barra per ogni attività nel colore del suo stato, un rombo per una milestone (come nel diagramma di Gantt), un punto per un elemento con una sola data e una linea per oggi quando cade nell'intervallo. Ogni riga mostra anche l'avanzamento o lo stato e la priorità, e una legenda spiega i simboli |
 

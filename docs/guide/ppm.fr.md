@@ -79,13 +79,18 @@ Cliquez sur n'importe quelle initiative pour ouvrir sa page de détail avec sept
 
 ![Vue d'ensemble de l'initiative PML](../assets/img/fr/41_ppm_vue_ensemble.png)
 
-La vue d'ensemble montre un résumé de la santé et des finances de l'initiative :
+La vue d'ensemble montre un résumé de la santé et des finances de l'initiative, en une colonne dans cet ordre :
 
-- **Résumé de santé** — Indicateurs de calendrier, coût et périmètre du dernier rapport de statut
-- **Budget vs. Réel** — Carte KPI combinée montrant le budget total et les dépenses réelles avec écart
+- **Description** — Affichée lorsque l'initiative en a une
+- **Chronologie** — Dates prévisionnelles et réelles et deux pistes sur la même échelle trimestrielle, avec l'anneau **Achèvement** à côté des dates
+- **Résumé de santé** — La date du rapport, les indicateurs de délai, de coût et de périmètre et trois textes (résumé, réalisations, prochaines étapes) du dernier rapport de statut, selon les permissions de visibilité. **Gérer** ouvre l'éditeur de rapport de statut pour un nouveau rapport
+- **Gestion des risques** — Les risques actifs (ouverts et en cours d'atténuation) : des tuiles, un anneau par tranche de score dont vous cliquez sur la légende pour masquer ou afficher une tranche, un graphique par statut et une carte thermique compacte. **Gérer** ouvre la fenêtre **Gérer** sur son onglet **Risques**
+- **Finances** — Budget vs. réel pour le total, CapEx et OpEx, avec écart ; affichées aux lecteurs autorisés à voir les coûts
+
+Les boutons **Gérer** nécessitent la permission de gestion PML et les droits de modification sur la fiche. La flèche de retour de la page, dans l'en-tête et sur un téléphone, ramène à l'onglet **Portefeuille**.
+
 - **Montants venus d'en dessous** — Lorsque l'initiative n'a aucune ligne de budget propre, son budget total, ses barres de budget et l'écart affichent à la place le budget des initiatives situées en dessous : en italique, marqués d'une flèche ↳, avec la piste de budget en contour et une infobulle indiquant combien d'initiatives sont couvertes. Lorsqu'elle n'a aucune ligne de coût propre, son réel vient d'en dessous de la même façon, avec les barres de dépense en contour. Les deux côtés sont décidés séparément, et la saisie d'une première ligne propre fait revenir ce côté aux montants propres de l'initiative.
 - **Sous cette initiative** — Lorsque l'initiative a des initiatives en dessous d'elle, une ligne sous les barres de budget indique leur nombre, leur budget et leurs dépenses réelles additionnés, ainsi que la période couverte par leurs dates. Elle s'affiche à côté des montants propres de l'initiative et ne s'y ajoute jamais. Lorsque le budget et le réel viennent déjà tous deux d'en dessous, la ligne ne garde que le nombre et la période couverte.
-- **Activité récente** — Résumé du dernier rapport de statut
 
 ### Onglet Rapports de Statut
 
@@ -103,20 +108,23 @@ Les rapports de statut mensuels suivent la santé du projet au fil du temps. Cha
 | **Réalisations** | Ce qui a été accompli pendant cette période |
 | **Prochaines étapes** | Activités planifiées pour la prochaine période |
 
+Chacun des trois textes est limité à 250 caractères. L'éditeur affiche un compteur et refuse davantage.
+
 ### Onglet Budget et Coûts
 
 ![Budget et coûts PML](../assets/img/fr/43_ppm_budget_couts.png)
 
-Le **Budget prévisionnel** présente les lignes par exercice et par catégorie (CapEx ou OpEx). Développez une ligne pour voir ses **Postes de coût**, puis un poste pour consulter le **Facturé réel**. Le début de l'exercice est défini dans les [paramètres](../admin/settings.md#début-de-lexercice-fiscal).
+Le **Budget prévisionnel** présente chaque ligne avec les colonnes **Exercice**, **Catégorie** (CapEx ou OpEx) et **Fournisseur**. Les tableaux défilent latéralement lorsqu'ils sont plus larges que la page. Développez une ligne pour voir ses **Postes de coût**, puis un poste pour consulter le **Facturé réel**. Le début de l'exercice est défini dans les [paramètres](../admin/settings.md#début-de-lexercice-fiscal).
 
 Saisissez les montants du budget, des coûts et des factures hors TVA. Le facturé réel sert à enregistrer les factures déjà émises.
 
-- Ajoutez un poste depuis sa ligne budgétaire. Les anciens postes sont disponibles sous **Coûts sans budget** et peuvent être affectés à une ligne. Déplacez les postes entre les lignes d'une même initiative.
-- Indiquez la date, la référence et le montant de la facture. Si une facture couvre plusieurs postes, enregistrez la part correspondante sous chacun. Une facture peut être déplacée vers un autre poste de la même initiative.
-- Un poste affiche le coût réel, le montant facturé et le reste à facturer. Le reste correspond au coût réel moins le facturé et peut être négatif. Le budget additionne les postes rattachés, avec des sous-totaux par exercice et catégorie. Le total facturé de l'initiative comprend les factures des postes sans budget.
-- Le budget, les coûts réels et les graphiques utilisent les montants du budget et des postes de coût. Enregistrer ou déplacer une facture ne change que les montants facturés.
+- Les tableaux de budget, de postes de coût et de factures n'offrent que la création, la modification et la suppression.
+- Ajoutez un poste depuis sa ligne budgétaire. Les anciennes lignes sans budget sont listées sous **Coûts sans budget**.
+- Indiquez la date, la référence et le montant de la facture. Si une facture couvre plusieurs postes, enregistrez la part correspondante sous chacun.
+- Un poste affiche le coût réel, le montant facturé et le reste à facturer. Le reste correspond au coût réel moins le facturé et peut être négatif. Le budget additionne les postes rattachés, avec des sous-totaux par exercice et catégorie.
+- Le budget, les coûts réels et les graphiques utilisent les montants du budget et des postes de coût. Enregistrer une facture ne change que les montants facturés.
 
-Si un fournisseur est configuré sur la ligne budgétaire, les postes en héritent et peuvent choisir un fournisseur enfant direct autorisé. Consultez la [configuration des budgets et coûts](../admin/settings.md#pml-budget-costs) pour les champs supplémentaires et calculés.
+Si un fournisseur est configuré sur la ligne budgétaire, il apparaît dans la colonne **Fournisseur** et les postes en héritent et peuvent choisir un fournisseur enfant direct autorisé. Le champ n'est pas répété parmi les champs supplémentaires. Consultez la [configuration des budgets et coûts](../admin/settings.md#pml-budget-costs) pour les champs supplémentaires et calculés.
 
 Si l'initiative n'a pas de budget ou de coûts propres, la valeur correspondante peut venir d'initiatives descendantes visibles. Les deux côtés sont indépendants. Les lignes dérivées affichent un tiret pour les coûts liés et la facturation. Les totaux actualisent automatiquement `costBudget` et `costActual` sur la fiche. En présence de postes de coût PML, ces champs sont en lecture seule.
 
@@ -266,7 +274,7 @@ Interagir avec le diagramme de Gantt :
 
 Le dernier onglet affiche la vue complète des détails de la fiche, y compris toutes les sections standard.
 
-Dans **Coûts et calendrier**, les barres superposées comparent budget et coûts réels pour le total, le CapEx et l'OpEx. Le facturé total de l'initiative est affiché séparément selon les droits. La chronologie présente les dates prévisionnelles et réelles visibles ainsi que les indicateurs de délai, de coût et de périmètre.
+Dans **Coûts et calendrier**, la **Chronologie** vient en premier, avec l'**Achèvement** à côté des dates prévisionnelles et réelles autorisées. **Budget** et **Coût réel** sont côte à côte avec une barre **Budget total**, pour les lecteurs autorisés à voir les coûts. Le **Résumé de santé** et la **Gestion des risques** suivent, comme sur l'onglet Vue d'ensemble. Voir [Résumé de l'initiative](card-details.md#initiative-summary-initiative-cards).
 
 ### Rapport d'initiative
 
@@ -278,9 +286,9 @@ Le bouton **Rapport** dans l'en-tête de l'initiative, à côté de la puce du s
 
 | Section | Ce qui est affiché |
 |---------|--------------------|
-| **Vue d'ensemble** | Des tuiles pour **Budget total**, **Réel total**, **Écart** et **Achèvement** ; le **Résumé de santé** avec les trois indicateurs du dernier rapport de statut, en couleur et en toutes lettres ; les barres **Finances** pour le total, CapEx et OpEx ; l'encadré **Chronologie** avec les dates prévisionnelles et réelles visibles, le sous-type et le statut d'initiative ; et la description. Les montants issus des initiatives sous-jacentes sont signalés, avec une note qui les explique |
+| **Vue d'ensemble** | Des tuiles pour **Budget total**, **Réel total**, **Écart** et **Achèvement** ; le **Résumé de santé** avec les trois indicateurs du dernier rapport de statut, en couleur et en toutes lettres, sa date de rapport et ses textes ; les barres **Finances** pour le total, CapEx et OpEx ; l'encadré **Chronologie** avec les dates prévisionnelles et réelles visibles, le sous-type et le statut d'initiative ; et la description. Les montants issus des initiatives sous-jacentes sont signalés, avec une note qui les explique |
 | **Rapports de statut** | Le dernier rapport en entier, avec ses indicateurs, puis les rapports précédents dans un tableau avec la date, l'auteur et les indicateurs de santé |
-| **Budget et coûts** | Des tuiles pour le budget total, le réel et l'écart, et pour les CapEx et OpEx dépensées par rapport à leur budget ; les graphiques **Dépenses dans le temps** pour l'exercice fiscal indiqué dans leur puce et pour le projet entier ; Hiérarchie développée **Budget prévisionnel → Postes de coût → Facturé réel**, sous-totaux par exercice et total facturé pour l'initiative |
+| **Budget et coûts** | Des tuiles pour le budget total, le réel et l'écart, et pour les CapEx et OpEx dépensées par rapport à leur budget ; les graphiques **Dépenses dans le temps** pour l'exercice fiscal indiqué dans leur puce et pour le projet entier ; Hiérarchie développée **Budget prévisionnel → Postes de coût → Facturé réel**, sous-totaux par exercice |
 | **Gestion des risques** | Des tuiles pour **Total des risques**, **Ouvert** et **Risques élevés** ; la **Carte thermique des risques** croisant probabilité et impact, chaque cellule colorée selon la tranche de score et indiquant combien de risques elle contient, à côté d'un décompte **Par statut** ; puis chaque risque avec son score (et probabilité × impact), son statut, son responsable, sa description complète et son atténuation complète, le score le plus élevé en premier |
 | **Tâches et planning** | Un tableau des lots de travail, chacun avec ses tâches en dessous, puis les tâches sans lot de travail, à côté d'une frise chronologique sur une échelle trimestrielle : une barre pour chaque lot de travail, remplie selon son achèvement, une barre pour chaque tâche dans la couleur de son statut, un losange pour un jalon (comme sur le diagramme de Gantt), un point pour un élément n'ayant qu'une seule date, et une ligne pour aujourd'hui lorsqu'il se trouve dans la période. Chaque ligne indique aussi son avancement ou son statut et sa priorité, et une légende explique les repères |
 

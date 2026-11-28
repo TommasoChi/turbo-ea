@@ -2,11 +2,13 @@ import uuid
 from datetime import date as date_type
 from datetime import datetime
 from decimal import Decimal
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, Field, field_validator
 
 # --- Status Reports ---
+
+StatusText = Annotated[str | None, Field(max_length=250)]
 
 
 class PpmStatusReportCreate(BaseModel):
@@ -14,9 +16,9 @@ class PpmStatusReportCreate(BaseModel):
     schedule_health: Literal["onTrack", "atRisk", "offTrack"] = "onTrack"
     cost_health: Literal["onTrack", "atRisk", "offTrack"] = "onTrack"
     scope_health: Literal["onTrack", "atRisk", "offTrack"] = "onTrack"
-    summary: str | None = None
-    accomplishments: str | None = None
-    next_steps: str | None = None
+    summary: StatusText = None
+    accomplishments: StatusText = None
+    next_steps: StatusText = None
 
 
 class PpmStatusReportUpdate(BaseModel):
@@ -24,9 +26,9 @@ class PpmStatusReportUpdate(BaseModel):
     schedule_health: Literal["onTrack", "atRisk", "offTrack"] | None = None
     cost_health: Literal["onTrack", "atRisk", "offTrack"] | None = None
     scope_health: Literal["onTrack", "atRisk", "offTrack"] | None = None
-    summary: str | None = None
-    accomplishments: str | None = None
-    next_steps: str | None = None
+    summary: StatusText = None
+    accomplishments: StatusText = None
+    next_steps: StatusText = None
 
 
 class ReporterOut(BaseModel):

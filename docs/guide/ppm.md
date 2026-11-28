@@ -79,14 +79,18 @@ Click any initiative to open its detail page with seven tabs:
 
 ![PML Initiative Overview](../assets/img/en/41_ppm_overview.png)
 
-The overview shows a summary of the initiative's health and financials:
+The overview shows a summary of the initiative's health and financials, in one column in this order:
 
-- **Health Summary** — Schedule, cost and scope indicators from the latest status report, subject to visibility permissions
-- **Timeline** — Planned and actual dates and two tracks on the same quarterly scale
-- **Budget vs. Actual** — Combined KPI card showing total budget and actual spend with variance
+- **Description** — Shown when the initiative has one
+- **Timeline** — Planned and actual dates and two tracks on the same quarterly scale, with the **Completion** ring next to the dates
+- **Health Summary** — The report date, the schedule, cost and scope indicators and three texts (summary, accomplishments, next steps) from the latest status report, subject to visibility permissions. **Manage** opens the status report editor for a new report
+- **Risk Management** — The active risks (open and mitigating): tiles, a donut by score band whose legend you click to hide or show a band, a chart by status and a compact heat map. **Manage** opens the **Manage** popup on its **Risks** tab
+- **Financials** — Budget vs. actual for Total, CapEx and OpEx, with variance; shown to readers who may see costs
+
+The **Manage** buttons need the PML manage permission and edit rights on the card. The back arrow of the page, in the header and on a phone, returns to the **Portfolio** tab.
+
 - **Figures from beneath** — When the initiative has no budget lines of its own, its total budget, its budget bars and the variance show the budget of the initiatives beneath it instead: in italic, marked with a ↳ arrow, with the budget track outlined and a tooltip saying how many initiatives they cover. When it has no cost lines of its own, its actuals come from beneath the same way, with the spend bars outlined. The two sides are decided separately, and recording a first line of its own switches that side back to the initiative's own figures.
 - **Beneath this initiative** — When the initiative has initiatives beneath it, a line under the budget bars names how many there are, their summed budget and actual spend, and the span of their dates. It is shown beside the initiative's own figures and never added to them. When both the budget and the actuals already come from beneath, the line keeps only the count and the date span.
-- **Recent Activity** — Latest status report summary
 
 ### Status Reports Tab
 
@@ -104,20 +108,23 @@ Monthly status reports track project health over time. Each report includes:
 | **Accomplishments** | What was achieved this period |
 | **Next Steps** | Planned activities for the next period |
 
+Each of the three texts is limited to 250 characters. The editor shows a counter and refuses more.
+
 ### Budget & Costs Tab
 
 ![PML Budget and Costs](../assets/img/en/43_ppm_budget_costs.png)
 
-**Planned Budget** shows each budget line with its fiscal year and category (CapEx or OpEx). Expand a budget line to see its **Cost Items**, then expand a Cost Item to see its **Actual Invoiced** entries. Fiscal years follow the start month configured in [Settings](../admin/settings.md#fiscal-year-start).
+**Planned Budget** shows each budget line with its **FY**, **Category** (CapEx or OpEx) and **Provider** columns. The tables scroll sideways when they are wider than the page. Expand a budget line to see its **Cost Items**, then expand a Cost Item to see its **Actual Invoiced** entries. Fiscal years follow the start month configured in [Settings](../admin/settings.md#fiscal-year-start).
 
 Enter budget, cost and invoice amounts excluding VAT. Use Actual Invoiced to track invoices already issued.
 
-- Add a Cost Item from its budget line. Use **Costs without a budget** to find older rows and assign them to a budget. You can move a Cost Item between budget lines in the same initiative.
-- Record invoices from a Cost Item with the invoice date, document reference and amount excluding VAT. If one invoice covers more than one Cost Item, record the relevant amount under each item. You can move a record to a different Cost Item in the same initiative.
-- Each Cost Item shows its actual cost, total invoiced and the amount remaining to invoice. The remaining amount is actual cost minus invoiced amount and can be negative. A budget adds up its linked Cost Items. Fiscal-year and category subtotals group budget lines. The separate initiative-wide invoiced total includes invoices on cost items awaiting a budget assignment.
-- The budget, actual cost and charts use the amounts recorded in Planned Budget and Cost Items. Recording or moving an invoice changes the invoicing figures while those budget and cost amounts stay the same.
+- The budget, cost item and invoice tables offer create, edit and delete only.
+- Add a Cost Item from its budget line. Older rows without a budget are listed under **Costs without a budget**.
+- Record invoices from a Cost Item with the invoice date, document reference and amount excluding VAT. If one invoice covers more than one Cost Item, record the relevant amount under each item.
+- Each Cost Item shows its actual cost, total invoiced and the amount remaining to invoice. The remaining amount is actual cost minus invoiced amount and can be negative. A budget adds up its linked Cost Items. Fiscal-year and category subtotals group budget lines.
+- The budget, actual cost and charts use the amounts recorded in Planned Budget and Cost Items. Recording an invoice changes the invoicing figures while those budget and cost amounts stay the same.
 
-If your administrator configured a Provider on the budget, a Cost Item inherits it and can select an allowed direct child. Additional fields, including calculated ones, follow the settings for the corresponding row type. See [Configure Budget & Costs](../admin/settings.md#pml-budget-costs).
+If your administrator configured a Provider on the budget, it appears in the **Provider** column and a Cost Item inherits it and can select an allowed direct child. The field is not repeated among the additional fields. Additional fields, including calculated ones, follow the settings for the corresponding row type. See [Configure Budget & Costs](../admin/settings.md#pml-budget-costs).
 
 When an initiative has no budget lines or no Cost Items of its own, the corresponding figures can come from visible initiatives beneath it. Budget and cost fallbacks are independent. These read-only rows show a dash for linked costs and invoicing.
 
@@ -277,7 +284,7 @@ Interact with the Gantt chart using:
 
 ### Card Details Tab
 
-The last tab shows the full card detail view, including all standard sections (description, lifecycle, attributes, relations, stakeholders, comments, history). In **Cost & Timeline**, **Financials** compares Budget and Actual Cost on overlapping bars for Total, CapEx and OpEx. Authorized readers see the initiative-wide **Actual Invoiced** amount separately. **Timeline** displays permitted Plan and Actual dates and the latest **On Time**, **On Cost** and **On Scope** indicators.
+The last tab shows the full card detail view, including all standard sections (description, lifecycle, attributes, relations, stakeholders, comments, history). In **Cost & Timeline**, **Timeline** comes first, with **Completion** next to the permitted Plan and Actual dates. **Budget** and **Actual Cost** sit side by side with one **Total budget** bar, for readers who may see costs. **Health Summary** and **Risk Management** follow, as on the Overview tab. See [Initiative Summary](card-details.md#initiative-summary-initiative-cards).
 
 ### Initiative Report
 
@@ -287,9 +294,9 @@ The **Report** button in the initiative's header, next to the subtype chip (an i
 
 | Section | What it shows |
 |---------|---------------|
-| **Overview** | Tiles for **Total Budget**, **Total Actual**, **Variance** and **Completion**; the **Health Summary** with the three ratings of the latest status report in colour and in words; the **Financials** bars for Total, CapEx and OpEx; the **Timeline** card with the visible planned and actual dates, subtype and initiative status; and the description. Figures taken from the initiatives beneath are marked, with a note explaining them |
+| **Overview** | Tiles for **Total Budget**, **Total Actual**, **Variance** and **Completion**; the **Health Summary** with the three ratings of the latest status report in colour and in words, its report date and texts; the **Financials** bars for Total, CapEx and OpEx; the **Timeline** card with the visible planned and actual dates, subtype and initiative status; and the description. Figures taken from the initiatives beneath are marked, with a note explaining them |
 | **Status Reports** | The latest report in full, with its ratings, then the earlier reports in a table of date, reporter and health ratings |
-| **Budget & Costs** | Tiles for the total budget, actual and variance and for CapEx and OpEx spent against their budget; the **Spend over time** charts for the fiscal year named in their chip and for the whole project; then the expanded **Planned Budget → Cost Items → Actual Invoiced** hierarchy with fiscal-year subtotals and the initiative invoiced total |
+| **Budget & Costs** | Tiles for the total budget, actual and variance and for CapEx and OpEx spent against their budget; the **Spend over time** charts for the fiscal year named in their chip and for the whole project; then the expanded **Planned Budget → Cost Items → Actual Invoiced** hierarchy with fiscal-year subtotals |
 | **Risk Management** | Tiles for **Total Risks**, **Open** and **High Risks**; the **Risk heat map** of probability against impact, each cell coloured by score band and showing how many risks it holds, beside a **By status** count; then every risk with its score (and probability × impact), status, owner, full description and full mitigation, highest score first |
 | **Tasks & Schedule** | A table of work packages, each with its tasks beneath it, then the tasks with no work package, alongside a timeline on a quarter scale: a bar for each work package filled to its completion, a bar for each task in its status colour, a diamond for a milestone (as on the Gantt chart), a dot for an item with only one date, and a line for today when it falls inside the range. Each row also shows its progress or status and its priority, and a legend explains the marks |
 
