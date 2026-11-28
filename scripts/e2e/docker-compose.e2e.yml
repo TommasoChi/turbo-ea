@@ -1,0 +1,14 @@
+# Override for scripts/e2e/docker-e2e.sh: the working tree's own images, never the registry ones,
+# so the browser suite drives the UI and API of the branch under test.
+# Project name, ports, secrets and SEED_DEMO come from the script's environment.
+services:
+  db:
+    image: turboea-e2e-db:local
+  backend:
+    image: turboea-e2e-backend:local
+  frontend:
+    image: turboea-e2e-frontend:local
+  mcp-server:
+    image: turboea-e2e-mcp-server:local
+  nginx:
+    image: turboea-e2e-nginx:local

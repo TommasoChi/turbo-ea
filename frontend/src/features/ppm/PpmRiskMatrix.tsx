@@ -24,7 +24,13 @@ const ROWS = axis(MATRIX_PROBABILITIES);
 const COLS = axis(MATRIX_IMPACTS);
 const cellColor = (p: string, i: string) => riskMatrixCellColor(Number(p), Number(i));
 
-export default function PpmRiskMatrix({ risks }: { risks: readonly PpmRisk[] }) {
+export default function PpmRiskMatrix({
+  risks,
+  size,
+}: {
+  risks: readonly PpmRisk[];
+  size?: "default" | "compact";
+}) {
   const { t } = useTranslation("ppm");
   const matrix = useMemo(() => riskMatrixCounts(risks), [risks]);
   const legendItems = MATRIX_LEGEND_BANDS.map((band) => ({
@@ -40,6 +46,7 @@ export default function PpmRiskMatrix({ risks }: { risks: readonly PpmRisk[] }) 
       legendItems={legendItems}
       probabilityAxisLabel={t("probability")}
       impactAxisLabel={t("impact")}
+      size={size}
     />
   );
 }

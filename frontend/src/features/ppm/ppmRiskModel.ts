@@ -132,6 +132,41 @@ export function riskSummary(risks: readonly PpmRisk[]): {
   };
 }
 
+/** A risk still being worked: open or mitigating. */
+export function isActiveRisk(r: PpmRisk): boolean {
+  return r.status === "open" || r.status === "mitigating";
+}
+
+/** The overview strip: every risk, the active ones and the high-scoring active ones. */
+export function activeRiskSummary(risks: readonly PpmRisk[]): {
+  total: number;
+  open: number;
+  highOpen: number;
+} {
+  const active = risks.filter(isActiveRisk);
+  return {
+    total: risks.length,
+    open: active.length,
+    highOpen: active.filter((r) => scoreBand(r.risk_score) === "high").length,
+  };
+}
+
+/** How many of the given risks fall in each score band. */
+export function riskBandCounts(risks: readonly PpmRisk[]): Record<RiskScoreBand, number> {
+  const counts: Record<RiskScoreBand, number> = { high: 0, medium: 0, low: 0 };
+  for (const r of risks) counts[scoreBand(r.risk_score)] += 1;
+  return counts;
+}
+
+/** The five known statuses in order with their counts, zeros included. */
+export function riskStatusCounts(
+  risks: readonly PpmRisk[],
+): { status: string; count: number }[] {
+  const counts: Record<string, number> = {};
+  for (const r of risks) counts[r.status] = (counts[r.status] ?? 0) + 1;
+  return RISK_STATUSES.map((status) => ({ status, count: counts[status] ?? 0 }));
+}
+
 /** A new array, highest score first, ties by title. The input is left alone. */
 export function sortRisksForPrint(risks: readonly PpmRisk[]): PpmRisk[] {
   return [...risks].sort(

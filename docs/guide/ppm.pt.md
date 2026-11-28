@@ -79,13 +79,18 @@ Clique em qualquer iniciativa para abrir sua página de detalhes com sete abas:
 
 ![Aba Visão Geral PML](../assets/img/pt/41_ppm_visao_geral.png)
 
-A visão geral mostra um resumo da saúde e finanças da iniciativa:
+A visão geral mostra um resumo da saúde e finanças da iniciativa, numa coluna por esta ordem:
 
-- **Resumo de saúde** — Indicadores de cronograma, custos e escopo do último relatório de status
-- **Orçamento vs. Real** — Card de KPI combinado mostrando orçamento total e gasto real com variação
+- **Descrição** — Mostrada quando a iniciativa tem uma
+- **Linha do tempo** — Datas planeadas e reais e duas faixas na mesma escala trimestral, com o anel de **Conclusão** junto às datas
+- **Resumo de saúde** — A data do relatório, os indicadores de prazo, custo e escopo e três textos (resumo, realizações, próximos passos) do último relatório de estado, conforme as permissões de visibilidade. **Gerir** abre o editor de relatórios de estado para um novo relatório
+- **Gestão de riscos** — Os riscos ativos (abertos e em mitigação): mosaicos, um anel por faixa de pontuação cuja legenda se clica para ocultar ou mostrar uma faixa, um gráfico por estado e um mapa de calor compacto. **Gerir** abre a janela **Gerir** no separador **Riscos**
+- **Finanças** — Orçamento vs. real para o total, CapEx e OpEx, com variação; mostradas aos leitores que podem ver custos
+
+Os botões **Gerir** exigem a permissão de gestão PML e direitos de edição no card. A seta de voltar da página, no cabeçalho e num telemóvel, regressa ao separador **Portfólio**.
+
 - **Valores vindos de baixo** — Quando a iniciativa não tem linhas de orçamento próprias, o orçamento total, as barras de orçamento e a variação mostram, em vez disso, o orçamento das iniciativas abaixo dela: em itálico, marcados com uma seta ↳, com a faixa do orçamento contornada e uma dica de ferramenta que indica quantas iniciativas abrangem. Quando não tem linhas de custo próprias, o realizado vem de baixo da mesma forma, com as barras de gasto contornadas. Os dois lados são decididos separadamente, e registrar uma primeira linha própria faz esse lado voltar aos valores próprios da iniciativa.
 - **Abaixo desta iniciativa** — Quando a iniciativa tem iniciativas abaixo dela, uma linha sob as barras de orçamento indica quantas são, o orçamento e o gasto real somados e o período coberto pelas datas delas. Ela aparece ao lado dos valores próprios da iniciativa e nunca é somada a eles. Quando o orçamento e o realizado já vêm ambos de baixo, a linha mantém apenas a quantidade e o período das datas.
-- **Atividade recente** — Resumo do último relatório de status
 
 ### Aba Relatórios de Status
 
@@ -103,20 +108,23 @@ Relatórios de status mensais acompanham a saúde do projeto ao longo do tempo. 
 | **Realizações** | O que foi alcançado neste período |
 | **Próximos passos** | Atividades planejadas para o próximo período |
 
+Cada um dos três textos é limitado a 250 caracteres. O editor mostra um contador e recusa mais.
+
 ### Aba Orçamento e Custos
 
 ![Orçamento e Custos PML](../assets/img/pt/43_ppm_orcamento_custos.png)
 
-O **Orçamento planeado** apresenta as linhas por exercício e categoria (CapEx ou OpEx). Expanda uma linha para ver os **Itens de custo** e um item para ver a **Faturação efetiva**. O início do exercício segue as [definições](../admin/settings.md#início-do-ano-fiscal).
+O **Orçamento planeado** apresenta cada linha com as colunas **Ano fiscal**, **Categoria** (CapEx ou OpEx) e **Fornecedor**. As tabelas deslocam-se lateralmente quando são mais largas do que a página. Expanda uma linha para ver os **Itens de custo** e um item para ver a **Faturação efetiva**. O início do exercício segue as [definições](../admin/settings.md#início-do-ano-fiscal).
 
 Introduza os montantes de orçamento, custos e faturas sem IVA. A faturação efetiva regista faturas já emitidas.
 
-- Adicione um item de custo a partir da respetiva linha do orçamento. Os itens antigos sem orçamento podem ser atribuídos em **Custos sem orçamento**. É possível mover um item entre linhas da mesma iniciativa.
-- Registe a data, referência e montante da fatura. Se uma fatura cobrir vários itens, registe a respetiva parcela em cada um. Pode mover o registo para outro item da mesma iniciativa.
-- O item mostra o custo real, o montante faturado e o saldo a faturar. O saldo é o custo real menos o montante faturado e pode ser negativo. O orçamento soma os itens associados com subtotais por exercício e categoria. O montante faturado da iniciativa inclui faturas de itens sem orçamento.
-- O orçamento, os custos reais e os gráficos usam os montantes registados no orçamento e nos itens de custo. Registar ou mover uma fatura altera apenas a faturação.
+- As tabelas de orçamento, itens de custo e faturas oferecem apenas criar, editar e eliminar.
+- Adicione um item de custo a partir da respetiva linha do orçamento. As linhas antigas sem orçamento estão listadas em **Custos sem orçamento**.
+- Registe a data, referência e montante da fatura. Se uma fatura cobrir vários itens, registe a respetiva parcela em cada um.
+- O item mostra o custo real, o montante faturado e o saldo a faturar. O saldo é o custo real menos o montante faturado e pode ser negativo. O orçamento soma os itens associados com subtotais por exercício e categoria.
+- O orçamento, os custos reais e os gráficos usam os montantes registados no orçamento e nos itens de custo. Registar uma fatura altera apenas a faturação.
 
-Se configurado, o fornecedor da linha do orçamento é herdado pelo item de custo. Pode escolher um fornecedor filho direto autorizado. Consulte [Configurar orçamento e custos](../admin/settings.md#pml-budget-costs) sobre os campos adicionais e calculados.
+Se configurado, o fornecedor da linha do orçamento aparece na coluna **Fornecedor** e é herdado pelo item de custo, que pode escolher um fornecedor filho direto autorizado. O campo não é repetido entre os campos adicionais. Consulte [Configurar orçamento e custos](../admin/settings.md#pml-budget-costs) sobre os campos adicionais e calculados.
 
 Quando a iniciativa não tem orçamento ou custos próprios, o valor correspondente pode vir de iniciativas descendentes visíveis. Os dois lados são independentes, e as linhas derivadas mostram um traço para custos relacionados e faturação. Os totais atualizam `costBudget` e `costActual` no cartão. Se existirem itens de custo PML, os campos são de leitura apenas.
 
@@ -266,7 +274,7 @@ Interaja com o diagrama de Gantt:
 
 A última aba mostra a visualização completa de detalhes do card, incluindo todas as seções padrão.
 
-Em **Custos e cronograma**, barras sobrepostas comparam orçamento e custos reais para Total, CapEx e OpEx. A faturação total da iniciativa é apresentada separadamente conforme as permissões. O cronograma mostra datas planeadas e reais visíveis e os últimos indicadores de prazo, custo e âmbito.
+Em **Custos e cronograma**, a **Linha do tempo** vem primeiro, com a **Conclusão** junto às datas planeadas e reais permitidas. **Orçamento** e **Custo real** ficam lado a lado com uma barra de **Orçamento total**, para os leitores que podem ver custos. O **Resumo de saúde** e a **Gestão de riscos** seguem, como na aba Visão Geral. Consulte [Resumo da iniciativa](card-details.md#initiative-summary-initiative-cards).
 
 ### Relatório da iniciativa { #initiative-report }
 
@@ -278,9 +286,9 @@ O botão **Relatório** no cabeçalho da iniciativa, ao lado do chip do subtipo 
 
 | Secção | O que mostra |
 |--------|--------------|
-| **Visão geral** | Mosaicos para **Orçamento total**, **Real total**, **Variância** e **Conclusão**; o **Resumo de saúde** com os três indicadores do relatório de estado mais recente, a cores e por extenso; as barras de **Finanças** para o total, CapEx e OpEx; o cartão **Linha do tempo** com as datas de início e de fim, o subtipo e o estado da iniciativa; e a descrição. Os valores obtidos das iniciativas subordinadas são assinalados, com uma nota que os explica |
+| **Visão geral** | Mosaicos para **Orçamento total**, **Real total**, **Variância** e **Conclusão**; o **Resumo de saúde** com os três indicadores do relatório de estado mais recente, a cores e por extenso, a data do relatório e os textos; as barras de **Finanças** para o total, CapEx e OpEx; o cartão **Linha do tempo** com as datas de início e de fim, o subtipo e o estado da iniciativa; e a descrição. Os valores obtidos das iniciativas subordinadas são assinalados, com uma nota que os explica |
 | **Relatórios de estado** | O relatório mais recente completo, com os seus indicadores, e, depois, os relatórios anteriores numa tabela com data, relator e indicadores de saúde |
-| **Orçamento e custos** | Mosaicos para o orçamento, o real e a variância totais e para a despesa CapEx e OpEx face ao respetivo orçamento; os gráficos **Gastos ao longo do tempo** para o ano fiscal indicado no respetivo chip e para o projeto inteiro; Hierarquia expandida **Orçamento planeado → Itens de custo → Faturação efetiva**, subtotais por exercício e total faturado da iniciativa |
+| **Orçamento e custos** | Mosaicos para o orçamento, o real e a variância totais e para a despesa CapEx e OpEx face ao respetivo orçamento; os gráficos **Gastos ao longo do tempo** para o ano fiscal indicado no respetivo chip e para o projeto inteiro; Hierarquia expandida **Orçamento planeado → Itens de custo → Faturação efetiva**, subtotais por exercício |
 | **Gestão de riscos** | Mosaicos para **Total de riscos**, **Aberto** e **Riscos elevados**; o **Mapa de calor dos riscos** de probabilidade face ao impacto, com cada célula colorida por faixa de pontuação e a indicar quantos riscos contém, ao lado de uma contagem **Por estado**; depois, cada risco com a pontuação (e probabilidade × impacto), o estado, o responsável, a descrição completa e a mitigação completa, da pontuação mais alta para a mais baixa |
 | **Tarefas e cronograma** | Uma tabela de pacotes de trabalho, cada um com as suas tarefas por baixo, seguidos das tarefas sem pacote de trabalho, ao lado de uma linha temporal numa escala trimestral: uma barra para cada pacote de trabalho preenchida até à sua conclusão, uma barra para cada tarefa na cor do seu estado, um losango para um marco (como no diagrama de Gantt), um ponto para um item com apenas uma data e uma linha para hoje quando cai dentro do intervalo. Cada linha mostra também o progresso ou o estado e a prioridade, e uma legenda explica os símbolos |
 

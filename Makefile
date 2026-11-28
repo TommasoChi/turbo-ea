@@ -1,5 +1,5 @@
 .PHONY: help dev dev-backend dev-frontend lint lint-backend lint-frontend python-check frontend-check \
-	test test-backend test-frontend test-unit e2e e2e-drawio e2e-coverage \
+	test test-backend test-frontend test-unit e2e e2e-drawio e2e-coverage e2e-stack \
 	mutation-diff mutation-backend mutation-mcp mutation-frontend mutation-clean build format typecheck \
 	lock-deps audit docker-up docker-down docker-build pull-prod up-prod down-prod up-dev down-dev build-dev backup
 
@@ -61,6 +61,9 @@ e2e: ## Run the browser smoke suite against a backend on :8000 (start it with SE
 	cd frontend && npm run build
 	$(MAKE) e2e-drawio
 	cd frontend && npx playwright test
+
+e2e-stack: ## Build this tree, start an isolated demo stack (tea-e2e, :18930) and run the PPM browser specs in docker, then remove it (ARGS="e2e/x.spec.ts" to pick specs)
+	bash scripts/e2e/docker-e2e.sh all $(ARGS)
 
 e2e-coverage: ## Run the browser smoke suite with V8 coverage and write frontend/coverage-e2e/lcov.info (backend on :8000 as for e2e)
 	rm -rf frontend/.e2e-coverage frontend/coverage-e2e

@@ -955,6 +955,7 @@ export default function CardDetail() {
           key={card.id}
           card={card}
           perms={perms}
+          showPpmSummary
           onCardUpdate={setCard}
           onSaveOrigin={reportSaveOrigin}
           onDirtyChange={setSectionsDirty}

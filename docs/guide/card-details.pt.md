@@ -293,6 +293,19 @@ Quando o [módulo GRC](grc.md) está habilitado **e** o card tem pelo menos uma 
 
 Para cards de **Processo de Negócio**, uma aba adicional de **Fluxo de Processo** aparece com um visualizador/editor de diagrama BPMN integrado. Veja [BPM](bpm.md) para detalhes sobre gerenciamento de fluxos de processo.
 
+### Resumo da iniciativa (cards de Iniciativa) { #initiative-summary-initiative-cards }
+
+![Página do card de Iniciativa](../assets/img/pt/106_iniciativa_ficha_ppm.png)
+
+Num card de **Iniciativa**, a secção **Custos e cronograma** é um resumo da iniciativa:
+
+- A **Linha do tempo** vem primeiro, com as datas planeadas e reais permitidas e o anel de **Conclusão** junto às datas.
+- **Orçamento** e **Custo real** ficam lado a lado, seguidos de uma barra de **Orçamento total** que os compara. A barra faz parte da vista de custos, pelo que só é mostrada aos leitores que podem ver custos.
+- O **Resumo de saúde** segue a secção. Mostra a data do relatório, os indicadores **No prazo**, **No orçamento** e **No escopo** e três textos do último relatório de estado. Cada texto é limitado a 250 caracteres: o editor de relatórios de estado mostra um contador e recusa mais.
+- A **Gestão de riscos** mostra os riscos ativos (abertos e em mitigação): mosaicos, um anel por faixa de pontuação cuja legenda se clica para ocultar ou mostrar uma faixa, um gráfico por estado e um mapa de calor compacto.
+
+Os botões **Gerir** do Resumo de saúde e da Gestão de riscos exigem a permissão de gestão PML e direitos de edição no card. **Gerir** no Resumo de saúde abre o editor de relatórios de estado para um novo relatório; **Gerir** na Gestão de riscos abre a janela **Gerir** no separador **Riscos**.
+
 ## Aba PML (apenas cards de Iniciativa) { #ppm-tab-initiative-cards-only }
 
 Em **Custos e cronograma**, barras sobrepostas comparam orçamento e custos reais para Total, CapEx e OpEx. A faturação total da iniciativa é apresentada separadamente conforme as permissões. O cronograma mostra datas planeadas e reais visíveis e os últimos indicadores de prazo, custo e âmbito.

@@ -2,7 +2,11 @@ import { useMemo } from "react";
 import { useApiQuery } from "@/hooks/useApiQuery";
 import { useCurrency } from "@/hooks/useCurrency";
 import { currencySymbolOverride } from "@/lib/currency";
-import type { PmlInitiativeSchedule, PpmFinancials } from "@/types";
+import type { PmlInitiativeSchedule, PpmFinancials, PpmRisk, PpmStatusReport } from "@/types";
+
+function initiativePath(initiativeId: string | null | undefined, resource: string): string | null {
+  return initiativeId ? "/ppm/initiatives/" + encodeURIComponent(initiativeId) + "/" + resource : null;
+}
 
 function useInitiativeQuery<T extends { initiative_id: string }>(
   initiativeId: string | null | undefined,
@@ -10,7 +14,7 @@ function useInitiativeQuery<T extends { initiative_id: string }>(
   refetchKey?: number,
 ) {
   const query = useApiQuery<T>(
-    initiativeId ? "/ppm/initiatives/" + encodeURIComponent(initiativeId) + "/" + resource : null,
+    initiativePath(initiativeId, resource),
     { keepPreviousData: false, refetchKey },
   );
   // The API answers with the id in lower case, whatever case the address spelled it in.
@@ -26,6 +30,34 @@ export function usePpmFinancials(initiativeId: string | null | undefined, refetc
 
 export function usePpmSchedule(initiativeId: string | null | undefined, refetchKey?: number) {
   return useInitiativeQuery<PmlInitiativeSchedule>(initiativeId, "schedule", refetchKey);
+}
+
+export function usePpmCompletion(initiativeId: string | null | undefined, refetchKey?: number) {
+  const { data, loading, error } = useApiQuery<{ completion: number; wbs_count: number }>(
+    initiativePath(initiativeId, "completion"),
+    { keepPreviousData: false, refetchKey },
+  );
+  return { data, loading, error };
+}
+
+export function usePpmLatestReport(
+  initiativeId: string | null | undefined,
+  refetchKey?: number,
+) {
+  const { data, loading, error } = useApiQuery<PpmStatusReport[]>(
+    initiativePath(initiativeId, "reports"),
+    { keepPreviousData: false, refetchKey },
+  );
+  // The API lists reports newest first.
+  return { data: error ? null : (data?.[0] ?? null), loading, error };
+}
+
+export function usePpmRisks(initiativeId: string | null | undefined, refetchKey?: number) {
+  const { data, loading, error } = useApiQuery<PpmRisk[]>(
+    initiativePath(initiativeId, "risks"),
+    { keepPreviousData: false, refetchKey },
+  );
+  return { data: error ? null : (data ?? null), loading, error };
 }
 
 export function decimalWithoutExponent(value: string): string {

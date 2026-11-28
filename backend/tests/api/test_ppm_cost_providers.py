@@ -4,7 +4,9 @@ from decimal import Decimal
 
 import pytest
 
+from app.api.v1.ppm_field_settings import load_section
 from tests.api.test_ppm import ppm_env as ppm_env
+from tests.api.test_ppm_amounts_withheld import FIN_BUDGET_AMOUNTS, FIN_COST_AMOUNTS
 from tests.conftest import auth_headers, create_card, create_card_type, create_role, create_user
 
 SETTINGS = "/api/v1/settings/pml/financial-fields"
@@ -473,3 +475,35 @@ async def test_editor_cannot_replace_invisible_provider_child(client, db, provid
     saved = await client.get(f"{env['base']}/costs", headers=env["headers"])
     assert saved.status_code == 200
     assert saved.json()[0]["provider_child_id"] == str(env["child"].id)
+
+
+async def test_budget_field_definitions_name_the_provider_field(client, provider_setup):
+    env = provider_setup
+    response = await client.get(f"{env['base']}/financials", headers=env["headers"])
+    assert response.status_code == 200, response.text
+    definitions = response.json()["field_definitions"]
+    assert definitions["budget"]["provider_field_key"] == "origin"
+    assert "provider_field_key" not in definitions["cost_item"]
+
+
+async def test_budget_field_definitions_omit_the_key_without_a_provider_source(client, db, ppm_env):
+    base = f"/api/v1/ppm/initiatives/{ppm_env['initiative'].id}"
+    # Absence guard: passes before the feature too; the precondition below is what it relies on.
+    headers = auth_headers(ppm_env["admin"])
+    assert (await load_section(db, "cost_item")).provider_source is None
+    response = await client.get(f"{base}/financials", headers=headers)
+    assert response.status_code == 200, response.text
+    assert "provider_field_key" not in response.json()["field_definitions"]["budget"]
+
+
+async def test_budget_provider_field_key_survives_withheld_amounts(client, provider_setup, ppm_env):
+    env = provider_setup
+    response = await client.get(
+        f"{env['base']}/financials", headers=auth_headers(ppm_env["viewer"])
+    )
+    assert response.status_code == 200, response.text
+    data = response.json()
+    assert data["field_definitions"]["budget"]["provider_field_key"] == "origin"
+    (budget,) = data["budget_lines"]
+    assert FIN_BUDGET_AMOUNTS.isdisjoint(budget)
+    assert all(FIN_COST_AMOUNTS.isdisjoint(cost) for cost in data["cost_items"])

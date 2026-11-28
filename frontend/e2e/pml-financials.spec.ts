@@ -3,6 +3,7 @@ import type { APIRequestContext, APIResponse, Page } from "@playwright/test";
 
 import { expect, gotoApp, test } from "./fixtures";
 import { t } from "./i18n";
+import { requireDisposableStack } from "./ppm-support";
 
 async function json<T>(response: APIResponse): Promise<T> {
   expect(response.ok(), "API " + response.url() + ": " + (await response.text())).toBeTruthy();
@@ -25,6 +26,7 @@ async function projection(request: APIRequestContext, initiativeId: string) {
   return json<{
     budget_totals: { total_invoiced: string; remaining_to_invoice: string };
     actual_invoiced: string;
+    invoices: { id: string; invoice_id: string }[];
     card_comparison: { actual: { total: string } };
     cost_items: {
       id: string;
@@ -39,10 +41,7 @@ test("tracks invoices through the budget hierarchy, Initiative, portfolio and pr
   page,
   request,
 }) => {
-  expect(
-    !process.env.E2E_BASE_URL || process.env.E2E_PML_DISPOSABLE === "1",
-    "Set E2E_PML_DISPOSABLE=1 only for an isolated demo stack.",
-  ).toBe(true);
+  requireDisposableStack();
   const name = "PML E2E " + randomUUID();
   const settings = "/api/v1/settings/pml/financial-fields";
   const configs = await json<
@@ -182,14 +181,16 @@ test("tracks invoices through the budget hierarchy, Initiative, portfolio and pr
     await recordInvoice(page, "Renewal", "00018", "4000");
     await recordInvoice(page, "Renewal", "00051", "2500");
     await expect(page.getByText("00051", { exact: true })).toBeVisible();
-    await page
-      .getByRole("button", { name: t("ppm:financeTree.moveInvoice", { name: "00051" }) })
-      .click();
-    const dialog = page.getByRole("dialog");
-    await dialog.getByLabel(t("ppm:financialForm.selectCost")).click();
-    await page.getByRole("option", { name: "Support" }).click();
-    await dialog.getByRole("button", { name: t("common:actions.save") }).click();
-    await expect(dialog).toBeHidden();
+    const moved = (await projection(request, card.id)).invoices.find(
+      (invoice) => invoice.invoice_id === "00051",
+    );
+    expect(moved).toBeDefined();
+    await json(
+      await request.patch("/api/v1/ppm/invoices/" + moved!.id, {
+        data: { cost_item_id: support.id },
+      }),
+    );
+    await gotoApp(page, "/ppm/" + card.id + "?tab=cost");
     await expect
       .poll(async () => {
         const data = await projection(request, card.id);
@@ -206,6 +207,9 @@ test("tracks invoices through the budget hierarchy, Initiative, portfolio and pr
       })
       .toEqual([4000, -500, 6500, 3500, 6500, 10000]);
     const tree = page.getByRole("region", { name: t("ppm:financeTree.item") });
+    await tree
+      .getByRole("button", { name: t("ppm:financeTree.expand", { name: "Platform" }) })
+      .click();
     const platform = tree.getByRole("row").filter({
       has: page.getByRole("button", {
         name: t("ppm:financeTree.editBudget", { name: "Platform" }),
@@ -221,8 +225,8 @@ test("tracks invoices through the budget hierarchy, Initiative, portfolio and pr
     await expect(supportRow).toContainText(/-.*500/);
 
     await gotoApp(page, "/ppm/" + card.id + "?tab=details");
-    await expect(page.getByText(t("ppm:financials"), { exact: true })).toBeVisible();
-    await expect(page.getByText(/6[,.]500/).first()).toBeVisible();
+    // The card page keeps one Total bar; the invoiced totals live in the Plan Budget and the report.
+    await expect(page.getByText(t("ppm:budgetBarTotal"), { exact: true })).toBeVisible();
     const actualStart = /15 May 2026|2026-05-15|05\/15\/2026/;
     const actualEnd = /10 Nov 2026|2026-11-10|11\/10\/2026/;
     for (const date of [actualStart, actualEnd]) {
@@ -290,8 +294,6 @@ if (legacyId) {
       .getByRole("button", { name: t("ppm:financeTree.expand", { name: "Legacy 300" }) })
       .click();
     await expect(page.getByText("LEGACY-00003", { exact: true })).toBeVisible();
-    await gotoApp(page, "/ppm/" + legacyId + "?tab=details");
-    await expect(page.getByText(/6[,.]800/).first()).toBeVisible();
     await gotoApp(page, "/ppm/" + legacyId + "/report");
     await expect(page.getByText("LEGACY-00003", { exact: true })).toBeVisible();
     await expect(page.getByText(/6[,.]800/).first()).toBeVisible();

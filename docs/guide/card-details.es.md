@@ -296,6 +296,19 @@ Cuando el [módulo GRC](grc.md) está habilitado **y** la ficha tiene al menos u
 
 Para las fichas de **Proceso de Negocio**, aparece una pestaña adicional de **Flujo de Proceso** con un visor/editor de diagramas BPMN integrado. Consulte [BPM](bpm.es.md) para más detalles sobre la gestión de flujos de proceso.
 
+### Resumen de la iniciativa (fichas de Iniciativa) { #initiative-summary-initiative-cards }
+
+![Página de la ficha de Iniciativa](../assets/img/es/106_iniciativa_ficha_ppm.png)
+
+En una ficha de **Iniciativa**, la sección **Costes y cronograma** es un resumen de la iniciativa:
+
+- La **Línea de tiempo** va primero, con las fechas planificadas y reales permitidas y el anillo de **Finalización** junto a las fechas.
+- **Presupuesto** y **Coste real** van lado a lado, seguidos de una barra de **Presupuesto total** que los compara. La barra forma parte de la vista de costes, por lo que solo se muestra a los lectores que pueden ver costes.
+- El **Resumen de salud** sigue a la sección. Muestra la fecha del informe, los indicadores **A tiempo**, **En presupuesto** y **En alcance**, y tres textos del último informe de estado. Cada texto está limitado a 250 caracteres: el editor de informes de estado muestra un contador y no admite más.
+- **Gestión de riesgos** muestra los riesgos activos (abiertos y en mitigación): mosaicos, un anillo por franja de puntuación cuya leyenda se pulsa para ocultar o mostrar una franja, un gráfico por estado y un mapa de calor compacto.
+
+Los botones **Gestionar** del Resumen de salud y de la Gestión de riesgos requieren el permiso de gestión de PML y derechos de edición sobre la ficha. **Gestionar** en el Resumen de salud abre el editor de informes de estado para un informe nuevo; **Gestionar** en la Gestión de riesgos abre la ventana **Gestionar** en su pestaña **Riesgos**.
+
 ## Pestaña PML (solo para fichas de Iniciativa) { #ppm-tab-initiative-cards-only }
 
 En **Costes y cronograma**, las barras superpuestas comparan presupuesto y coste real para Total, CapEx y OpEx. El total facturado de la iniciativa aparece por separado según los permisos. El cronograma presenta fechas planificadas y reales visibles, y los últimos indicadores de plazo, coste y alcance.
