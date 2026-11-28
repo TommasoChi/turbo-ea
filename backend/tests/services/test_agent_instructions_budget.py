@@ -7,7 +7,7 @@ it grew to 370 KB (~90k tokens) before the area deep-dives moved into
 the always-loaded file under its cap, every rule file genuinely scoped (a glob
 as wide as ``frontend/src/**`` would load it on every edit and undo the split),
 every pointer in ``CLAUDE.md`` resolving, and the ``/translate`` skill wired to
-its Sonnet translator.
+its Haiku translator.
 """
 
 from __future__ import annotations
