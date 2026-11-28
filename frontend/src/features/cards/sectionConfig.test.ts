@@ -529,4 +529,24 @@ describe("Initiative summary layout", () => {
       "Timeline", "Timeline", "Timeline", "Timeline", "Cost", "Cost", undefined,
     ]);
   });
+
+  it("initiativeSummaryGroups keeps the group of a cost or date field that already has one", () => {
+    const configured: SectionDef = {
+      section: "Cost & Timeline",
+      fields: [
+        { key: "costBudget", type: "cost", label: "Budget", group: "Money" },
+        { key: "costActual", type: "cost", label: "Actual Cost" },
+        { key: "startDate", type: "date", label: "Start Date", group: "Plan" },
+        { key: "endDate", type: "date", label: "End Date" },
+      ],
+    };
+    const grouped = initiativeSummaryGroups(configured, "Cost", "Timeline");
+    const groupOf = Object.fromEntries(grouped.fields.map((f) => [f.key, f.group]));
+    expect(groupOf).toEqual({
+      costBudget: "Money",
+      costActual: "Cost",
+      startDate: "Plan",
+      endDate: "Timeline",
+    });
+  });
 });
