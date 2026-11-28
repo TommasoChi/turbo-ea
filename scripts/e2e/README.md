@@ -35,14 +35,19 @@ screenshots of failures are in `frontend/test-results/` (both git-ignored).
 
 ## Guards
 
-- **Ports**: `E2E_HOST_PORT` and `E2E_TLS_PORT` must be numbers from 1024 to 65535, differ from each
-  other and not be one of `8920 8930 5433 9443 9444 18920 18443 8000 8001 4173`. The script exits
-  before any docker or curl call. `test` also requires the `tea-e2e` nginx container to publish
-  exactly `127.0.0.1:<port>`; a port that merely answers `/api/health` is refused.
+- **Ports**: `E2E_HOST_PORT` and `E2E_TLS_PORT` must be 1 to 5 digits, from 1024 to 65535, differ from
+  each other and not be one of `8920 8930 5433 9443 9444 18920 18443 8000 8001 4173 5173`. They are
+  normalised to decimal first (`08920` is 8920, which docker would publish) and the normalised value
+  is used everywhere. The script exits before any docker or curl call. `test` also requires the
+  `tea-e2e` nginx container to publish exactly `127.0.0.1:<port>`; a port that merely answers
+  `/api/health` is refused.
 - **Specs** (`isDisposableTarget`, `frontend/scripts/disposable-target.ts`, called by
-  `requireDisposableStack()`): a base URL on port 8920, 8930 or 18920 is always refused, flag or not;
-  any other `E2E_BASE_URL` needs `E2E_PML_DISPOSABLE=1`; with `E2E_BASE_URL` unset the suite runs
-  only under `CI` (the CI job: `vite preview` and a throwaway seeded database) or with the flag.
+  `requireDisposableStack()`): an allowlist. A set `E2E_BASE_URL` is accepted only on the stack's own
+  port, `E2E_HOST_PORT` (default 18930; it must be a valid, non-reserved port, and the script passes
+  it into the Playwright container), and only with `E2E_PML_DISPOSABLE=1`. Any other port, and a URL
+  with no explicit port (80/443), is refused even with the flag. With `E2E_BASE_URL` unset the suite
+  runs only when `CI` is exactly `true` or `1` (the CI job: `vite preview` and a throwaway seeded
+  database) or with the flag; `CI=false`, `CI=0` and an empty `CI` do not count.
   `pml-financials.spec.ts` uses the same guard.
 - **Pins**: bumping `@playwright/test` makes the script stop until `PW_PINNED_VERSION`,
   `PW_PINNED_IMAGE` (`docker image inspect --format '{{index .RepoDigests 0}}' <tag>` after a pull)

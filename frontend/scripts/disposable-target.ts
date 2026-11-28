@@ -3,8 +3,17 @@
  * Vitest can test it; `e2e/ppm-support.ts` (`requireDisposableStack`) is its only caller.
  */
 
-/** Never a throwaway stack: the owner's instance, the VAPT stack, the docs stack. */
-const PROTECTED_PORTS = new Set(["8920", "8930", "18920"]);
+const DEFAULT_E2E_PORT = 18930;
+
+/** Mirrors FORBIDDEN_PORTS in scripts/e2e/docker-e2e.sh: other instances and the dev servers. */
+const RESERVED_PORTS = new Set([8920, 8930, 5433, 9443, 9444, 18920, 18443, 8000, 8001, 4173, 5173]);
+
+/** The one port the e2e stack may listen on, or null when E2E_HOST_PORT is not a usable one. */
+function stackPort(raw: string | undefined): number | null {
+  if (raw === undefined) return DEFAULT_E2E_PORT;
+  const port = /^\d{1,5}$/.test(raw) ? Number(raw) : Number.NaN;
+  return port >= 1024 && port <= 65535 && !RESERVED_PORTS.has(port) ? port : null;
+}
 
 export interface DisposableTarget {
   ok: boolean;
@@ -15,7 +24,7 @@ export function isDisposableTarget(env: Record<string, string | undefined>): Dis
   const flag = env.E2E_PML_DISPOSABLE === "1";
   const baseUrl = env.E2E_BASE_URL;
   if (!baseUrl) {
-    return env.CI || flag
+    return env.CI === "true" || env.CI === "1" || flag
       ? { ok: true, reason: "" }
       : {
           ok: false,
@@ -25,13 +34,19 @@ export function isDisposableTarget(env: Record<string, string | undefined>): Dis
   }
   let port: string;
   try {
-    const url = new URL(baseUrl);
-    port = url.port || (url.protocol === "https:" ? "443" : "80");
+    port = new URL(baseUrl).port;
   } catch {
     return { ok: false, reason: `E2E_BASE_URL "${baseUrl}" is not a URL.` };
   }
-  if (PROTECTED_PORTS.has(port)) {
-    return { ok: false, reason: `Port ${port} is not a throwaway stack: refusing to write there.` };
+  const allowed = stackPort(env.E2E_HOST_PORT);
+  if (allowed === null) {
+    return { ok: false, reason: `E2E_HOST_PORT "${env.E2E_HOST_PORT}" is not a usable e2e stack port.` };
+  }
+  if (!port || Number(port) !== allowed) {
+    return {
+      ok: false,
+      reason: `Port ${port || "(default)"} is not the e2e stack's port ${allowed}: refusing to write there.`,
+    };
   }
   return flag
     ? { ok: true, reason: "" }

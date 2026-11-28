@@ -16,8 +16,9 @@
 # (turbo-ea-aruba-*, 8920), the VAPT stack (8930), the test database (5433) or the docs stack
 # (tea-docs, 18920).
 # Ports, bound to loopback only (the demo admin password is public): 127.0.0.1:18930 (HTTP) and
-# 127.0.0.1:18444 (TLS). Override with E2E_HOST_PORT / E2E_TLS_PORT. Both are validated before any
-# docker or curl call: a number from 1024 to 65535 that is not a port of another instance or of the
+# 127.0.0.1:18444 (TLS). Override with E2E_HOST_PORT / E2E_TLS_PORT. Both are validated and
+# normalised to decimal ("08920" is 8920) before any docker or curl call: a number from 1024 to
+# 65535 that is not a port of another instance or of the
 # dev servers (FORBIDDEN_PORTS). `test` also requires the tea-e2e nginx container to publish exactly
 # the chosen port, so a port that merely answers /api/health is never driven.
 # Compose prefers an exported shell variable to --env-file, so stack() runs compose under `env -u`
@@ -28,9 +29,9 @@
 # @playwright/test version of package-lock.json; the script refuses a lockfile that moved on), with
 # npm pinned to the exact version that image resolves. frontend/ is mounted; node_modules lives in
 # the named volume tea-e2e-nm. E2E_PW_IMAGE overrides the image (with a warning).
-# E2E_PML_DISPOSABLE=1 lets the specs write into the throwaway stack (and nowhere else); the specs
-# refuse 8920, 8930 and 18920 whatever it says. Reports land in frontend/playwright-report and
-# frontend/test-results (git-ignored).
+# E2E_PML_DISPOSABLE=1 lets the specs write into the throwaway stack (and nowhere else): the specs
+# accept only E2E_BASE_URL on the stack's own port (E2E_HOST_PORT, passed into the container).
+# Reports land in frontend/playwright-report and frontend/test-results (git-ignored).
 # Cleanup: `down` (the script's `all` mode does it itself); `docker volume rm tea-e2e-nm` also
 # drops the npm cache volume.
 set -euo pipefail
@@ -55,18 +56,24 @@ DEFAULT_SPECS=(e2e/initiative-card-page.spec.ts e2e/ppm-overview.spec.ts e2e/ppm
 usage() { sed -n '3,35p' "$0" | sed 's/^# \{0,1\}//'; exit "${1:-1}"; }
 
 # Ports first: nothing below may reach a docker daemon or a port before they are accepted.
-FORBIDDEN_PORTS=" 8920 8930 5433 9443 9444 18920 18443 8000 8001 4173 "
+FORBIDDEN_PORTS=" 8920 8930 5433 9443 9444 18920 18443 8000 8001 4173 5173 "
+# Sets the variable $1 (reported as $2) to the port in decimal ("08920" is 8920, which docker would publish).
 check_port() {
-    local name="$1" value="$2"
-    if ! [[ "$value" =~ ^[0-9]+$ ]] || [ "$value" -lt 1024 ] || [ "$value" -gt 65535 ]; then
+    local var="$1" name="$2" value="${!1}"
+    if ! [[ "$value" =~ ^[0-9]{1,5}$ ]]; then
+        echo "$name=$value: must be a number between 1024 and 65535"; exit 1
+    fi
+    value=$((10#$value))
+    if [ "$value" -lt 1024 ] || [ "$value" -gt 65535 ]; then
         echo "$name=$value: must be a number between 1024 and 65535"; exit 1
     fi
     case "$FORBIDDEN_PORTS" in
         *" $value "*) echo "$name=$value: refused, that port belongs to another instance or the dev servers"; exit 1 ;;
     esac
+    printf -v "$var" '%s' "$value"
 }
-check_port E2E_HOST_PORT "$HOST_PORT_E2E"
-check_port E2E_TLS_PORT "$TLS_PORT_E2E"
+check_port HOST_PORT_E2E E2E_HOST_PORT
+check_port TLS_PORT_E2E E2E_TLS_PORT
 [ "$HOST_PORT_E2E" != "$TLS_PORT_E2E" ] || { echo "E2E_HOST_PORT and E2E_TLS_PORT must differ"; exit 1; }
 
 [ $# -ge 1 ] || usage
