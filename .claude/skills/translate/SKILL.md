@@ -3,7 +3,7 @@ name: translate
 description: Translate English changes to UI strings, seed labels, manual pages and screenshot filenames through the translator subagent. Fill missing manual translations across the checkout. Run before a PR that touches these sources.
 context: fork
 agent: translator
-model: sonnet
+model: haiku
 background: false
 allowed-tools: Bash(python scripts/i18n/check_locales.py:*) Bash(cd frontend && npx vitest run src/i18n:*) Bash(cd backend && python -m pytest tests/services/test_i18n_seed.py:*)
 ---

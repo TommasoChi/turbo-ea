@@ -1,7 +1,7 @@
 ---
 name: translator
 description: Translates branch changes in UI strings, seed labels, manual pages and screenshot filenames into nine locales. Also fills older gaps in the user manual. Invoked by /translate.
-model: sonnet
+model: haiku
 effort: medium
 tools: Read, Edit, Write, Bash, Grep, Glob
 permissionMode: acceptEdits

@@ -107,10 +107,10 @@ def test_every_rule_file_is_reachable_from_claude_md():
     )
 
 
-def test_translator_agent_runs_on_sonnet_without_claude_md():
+def test_translator_agent_runs_on_haiku_without_claude_md():
     meta = _frontmatter(_AGENT)
     assert meta.get("name") == "translator"
-    assert meta.get("model") == "sonnet"
+    assert meta.get("model") == "haiku"
     assert meta.get("omitClaudeMd") == "true"
 
 
@@ -119,4 +119,4 @@ def test_translate_skill_forks_the_translator():
     assert meta.get("name") == "translate"
     assert meta.get("context") == "fork"
     assert meta.get("agent") == "translator"
-    assert meta.get("model") == "sonnet"
+    assert meta.get("model") == "haiku"
