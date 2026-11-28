@@ -2,7 +2,7 @@
 name: spec-plan-reviewer
 description: Read-only fresh-agent review of a Turbo EA spec (docs/superpowers/specs) or implementation plan (docs/superpowers/plans) before it is presented to the user. Runs the builder check on a spec, and the plan-against-spec check on a plan. Use after the document is written and committed. Never edits, commits, pushes or touches GitHub.
 model: opus
-effort: medium
+effort: high
 tools: Read, Grep, Glob, Bash
 ---
 

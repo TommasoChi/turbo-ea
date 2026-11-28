@@ -7,7 +7,7 @@ it grew to 370 KB (~90k tokens) before the area deep-dives moved into
 the always-loaded file under its cap, every rule file genuinely scoped (a glob
 as wide as ``frontend/src/**`` would load it on every edit and undo the split),
 every pointer in ``CLAUDE.md`` resolving, and the ``/translate`` skill wired to
-its Sonnet translator.
+its Haiku translator.
 """
 
 from __future__ import annotations
@@ -107,11 +107,18 @@ def test_every_rule_file_is_reachable_from_claude_md():
     )
 
 
-def test_translator_agent_runs_on_sonnet_without_claude_md():
+def test_translator_agent_runs_on_haiku_without_claude_md():
     meta = _frontmatter(_AGENT)
     assert meta.get("name") == "translator"
-    assert meta.get("model") == "sonnet"
+    assert meta.get("model") == "haiku"
     assert meta.get("omitClaudeMd") == "true"
+
+
+def test_translator_agent_leaves_git_to_the_caller():
+    # It runs without CLAUDE.md, so its own body must carry the git rule.
+    assert "you never commit, push, tag, label or touch GitHub" in _AGENT.read_text(
+        encoding="utf-8"
+    )
 
 
 def test_translate_skill_forks_the_translator():
@@ -119,4 +126,4 @@ def test_translate_skill_forks_the_translator():
     assert meta.get("name") == "translate"
     assert meta.get("context") == "fork"
     assert meta.get("agent") == "translator"
-    assert meta.get("model") == "sonnet"
+    assert meta.get("model") == "haiku"
