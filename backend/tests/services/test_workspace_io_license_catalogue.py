@@ -728,3 +728,21 @@ def test_clip_keeps_a_name_at_the_limit_and_cuts_a_longer_one_to_the_limit():
     over = clip("a" * (NAME_MAX + 1))
     assert over == "a" * (NAME_MAX - 1) + "…"
     assert len(over) == NAME_MAX
+
+
+async def test_delegated_apply_retains_rejected_license_cell_diagnostic(db):
+    await _seed_two_metrics(db, "license-source@example.com")
+    user = await create_user(db, email="delegated-license@example.com", role="member")
+    bundle = parse_bundle(await build_bundle(db))
+    (row,) = bundle.sheets["CardLicenses"]
+    row["items"] = {"users": {"admin": {"licensed": -1}}, "seats": {"named": CELL}}
+    await db.execute(delete(CardLicense))
+    await db.flush()
+    try:
+        result = await apply_selected(db, bundle, user, sheets={"CardLicenses"}, dry_run=False)
+        assert any(
+            "users:admin" in message and "not a valid license count" in message
+            for message in _section(result, "CardLicenses").errors
+        )
+    finally:
+        bundle.close()

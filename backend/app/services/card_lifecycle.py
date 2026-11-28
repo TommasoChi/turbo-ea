@@ -63,6 +63,7 @@ class ChildStrategyResult:
     #: outright. Only populated where the label was actually cleared, so the
     #: caller emits a `parent_label` change only for children that had one.
     previous_parent_labels: dict[uuid.UUID, str | None] = field(default_factory=dict)
+    previous_cone_states: dict[uuid.UUID, str | None] = field(default_factory=dict)
 
 
 async def collect_descendants(
@@ -95,6 +96,38 @@ async def direct_children(db: AsyncSession, parent_id: uuid.UUID) -> list[Card]:
     """
     res = await db.execute(select(Card).where(Card.parent_id == parent_id))
     return list(res.scalars().all())
+
+
+async def suspend_organization_children(
+    db: AsyncSession,
+    parent: Card,
+    children: list[Card],
+    user_id: uuid.UUID | None,
+    *,
+    dry_run: bool = False,
+) -> None:
+    if parent.type != "Organization":
+        return
+    from app.services.event_bus import event_bus
+
+    for child in children:
+        if child.type != "Organization" or child.organization_cone_state == "orphaned":
+            continue
+        old = child.organization_cone_state
+        child.organization_cone_state = "orphaned"
+        child.updated_by = user_id
+        if dry_run:
+            continue
+        await event_bus.publish(
+            "card.updated",
+            {
+                "id": str(child.id),
+                "changes": {"organization_cone_state": {"old": old, "new": "orphaned"}},
+            },
+            db=db,
+            card_id=child.id,
+            user_id=user_id,
+        )
 
 
 def active_children(children: list[Card]) -> list[Card]:
@@ -148,6 +181,10 @@ async def apply_child_strategy(
             continue
         child.parent_id = new_parent_id
         result.previous_parent_ids[child.id] = old
+        if child.type == "Organization":
+            if child.organization_cone_state != "orphaned":
+                result.previous_cone_states[child.id] = child.organization_cone_state
+                child.organization_cone_state = "orphaned"
         # A link label describes an edge. `reparent` hands the child to the
         # grandparent — still a parent, so the label (the child's role, e.g.
         # "commercial") survives the move. Landing at the top level leaves no

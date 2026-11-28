@@ -15,8 +15,10 @@ from app.core.permissions import (
     ALL_APP_PERMISSION_KEYS,
     APP_PERMISSIONS,
     migrate_legacy_app_permissions,
+    normalize_organization_role_permissions,
 )
 from app.database import get_db
+from app.models.card_type import CardType
 from app.models.role import Role
 from app.models.user import User
 from app.services import audit_changes, audit_log
@@ -245,6 +247,16 @@ async def create_role(
         is_system=False,
     )
     db.add(role)
+    organization = await db.scalar(
+        select(CardType)
+        .where(CardType.key == "Organization")
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    if organization is not None:
+        organization.role_permissions = normalize_organization_role_permissions(
+            organization.role_permissions or {}, {body.key}
+        )
     await audit_log.record(
         db,
         action="admin.role.created",
@@ -257,6 +269,7 @@ async def create_role(
     await db.commit()
     await db.refresh(role)
     PermissionService.invalidate_role_cache(body.key)
+    PermissionService.invalidate_type_permission_cache("Organization")
     return _role_response(role, user_count=0)
 
 

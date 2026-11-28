@@ -1,6 +1,7 @@
 """A configured relation created by a cost write follows the cost-write gate, not
 ``relations.manage``."""
 
+import pytest
 from sqlalchemy import select
 
 from app.core.permissions import COST_CONTROLLER_CARD_PERMISSIONS
@@ -20,14 +21,14 @@ SETTINGS = "/api/v1/settings/pml/financial-fields"
 RELATION = "org_supports_initiative"
 
 
-async def _configured(client, db, ppm_env):
-    await create_card_type(db, key="Organization", label="Organization")
-    organization = await create_card(db, card_type="Organization", name="Supplier")
+async def _configured(client, db, ppm_env, *, peer_type="Application"):
+    await create_card_type(db, key=peer_type, label=peer_type)
+    peer = await create_card(db, card_type=peer_type, name="Supplier")
     await create_relation_type(
         db,
         key=RELATION,
         label="Supports",
-        source_type_key="Organization",
+        source_type_key=peer_type,
         target_type_key="Initiative",
     )
     await create_stakeholder_role_def(
@@ -43,7 +44,7 @@ async def _configured(client, db, ppm_env):
                 "key": "org",
                 "label": "Org",
                 "kind": "card_reference",
-                "card_type": "Organization",
+                "card_type": peer_type,
                 "relation_type": RELATION,
             }
         ],
@@ -57,15 +58,16 @@ async def _configured(client, db, ppm_env):
         "fiscal_year": 2026,
         "category": "opex",
         "amount": 100,
-        "field_values": {"org": str(organization.id)},
+        "field_values": {"org": str(peer.id)},
     }
     return payload
 
 
-async def test_cost_controller_creates_the_configured_relation_without_relations_manage(
-    client, db, ppm_env
+@pytest.mark.parametrize("peer_type", ["Application", "Organization"])
+async def test_cost_controller_configured_relation_respects_organization_boundary(
+    client, db, ppm_env, peer_type
 ):
-    payload = await _configured(client, db, ppm_env)
+    payload = await _configured(client, db, ppm_env, peer_type=peer_type)
     user = await create_ppm_manager_user(db)
     db.add(Stakeholder(card_id=ppm_env["initiative"].id, user_id=user.id, role="costController"))
     await db.flush()
@@ -74,9 +76,14 @@ async def test_cost_controller_creates_the_configured_relation_without_relations
         json=payload,
         headers=auth_headers(user),
     )
-    assert resp.status_code == 200, resp.text
-    relation = await db.scalar(select(Relation).where(Relation.type == RELATION))
-    assert relation is not None
+    if peer_type == "Organization":
+        assert resp.status_code == 403, resp.text
+        await db.rollback()
+        assert (await db.scalars(select(Relation).where(Relation.type == RELATION))).all() == []
+    else:
+        assert resp.status_code == 200, resp.text
+        relation = await db.scalar(select(Relation).where(Relation.type == RELATION))
+        assert relation is not None
 
 
 async def test_a_caller_without_cost_edit_is_refused_and_no_relation_is_created(

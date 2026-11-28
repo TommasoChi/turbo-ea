@@ -809,6 +809,59 @@ async def test_a_global_tags_manager_cannot_tag_or_untag_a_card_hidden_from_them
     assert len(rows) == 1
 
 
+async def test_tags_manager_cannot_change_organization_tags(client, db, tags_env):
+    await create_role(db, key="tagger", permissions={**VIEWER_PERMISSIONS, "tags.manage": True})
+    tagger = await create_user(db, email="org-tagger@test.com", role="tagger")
+    await create_card_type(db, key="Organization", label="Organization")
+    card = await create_card(db, card_type="Organization", name="Position")
+    headers = auth_headers(tags_env["admin"])
+    group = await client.post(
+        "/api/v1/tag-groups", json={"name": "G", "mode": "multi"}, headers=headers
+    )
+    tag = await client.post(
+        f"/api/v1/tag-groups/{group.json()['id']}/tags", json={"name": "T"}, headers=headers
+    )
+    tag_id = tag.json()["id"]
+    add = await client.post(
+        f"/api/v1/cards/{card.id}/tags", json=[tag_id], headers=auth_headers(tagger)
+    )
+    assert add.status_code == 403
+    assert (
+        await client.post(f"/api/v1/cards/{card.id}/tags", json=[tag_id], headers=headers)
+    ).status_code == 201
+    remove = await client.delete(
+        f"/api/v1/cards/{card.id}/tags/{tag_id}", headers=auth_headers(tagger)
+    )
+    assert remove.status_code == 403
+
+
+@pytest.mark.parametrize("delete_group", [False, True])
+async def test_tags_manager_cannot_delete_organization_tag_links(
+    client, db, tags_env, delete_group
+):
+    await create_role(db, key="tagger", permissions={**VIEWER_PERMISSIONS, "tags.manage": True})
+    tagger = await create_user(db, email="org-delete-tagger@test.com", role="tagger")
+    await create_card_type(db, key="Organization", label="Organization")
+    card = await create_card(db, card_type="Organization", name="Position")
+    headers = auth_headers(tags_env["admin"])
+    group = await client.post(
+        "/api/v1/tag-groups", json={"name": "G", "mode": "multi"}, headers=headers
+    )
+    group_id = group.json()["id"]
+    tag = await client.post(
+        f"/api/v1/tag-groups/{group_id}/tags", json={"name": "T"}, headers=headers
+    )
+    tag_id = tag.json()["id"]
+    assert (
+        await client.post(f"/api/v1/cards/{card.id}/tags", json=[tag_id], headers=headers)
+    ).status_code == 201
+    path = f"/api/v1/tag-groups/{group_id}"
+    if not delete_group:
+        path += f"/tags/{tag_id}"
+    response = await client.delete(path, headers=auth_headers(tagger))
+    assert response.status_code == 403
+
+
 # ---------------------------------------------------------------
 # POST /cards/tags/bulk  (add / remove / replace on many cards)
 # ---------------------------------------------------------------

@@ -83,3 +83,5 @@ Il Trasferimento del workspace è protetto da due permessi dedicati, entrambi co
 
 - `admin.export_workspace` — esportare il bundle.
 - `admin.import_workspace` — visualizzare l'anteprima e applicare un'importazione.
+
+Solo Admin può importare modifiche all’organigramma di **Organization**, alle relative assegnazioni di stakeholder o ai ruoli di posizione. Workspace Transfer trasferisce i flag dei ruoli di posizione e lo stato dei rami orfani. Se un bundle non include il flag di un ruolo, il ruolo viene importato con il flag disattivato. Un’importazione non può ricollegare un ramo sospeso per l’ereditarietà della visibilità né modificare l’attivazione dei coni di visibilità nella destinazione. Quando i coni saranno disponibili, Admin può riprendere l’ereditarietà di un ramo orfano ricollegandolo esplicitamente a un padre attivo valido nell’organigramma.

@@ -192,6 +192,7 @@ async def test_the_users_pass_records_into_the_runs_shared_id_map(monkeypatch):
         raise _StopError
 
     monkeypatch.setattr(applier, "_apply_users", spy)
+    actor = SimpleNamespace(id=uuid.uuid4(), role="admin")
     with pytest.raises(_StopError):
-        await applier._run(FakeSession(), _bundle(), None, dry_run=False, sheets={"Users"})
+        await applier._run(FakeSession(), _bundle(), actor, dry_run=False, sheets={"Users"})
     assert isinstance(seen["id_map"], rm.IdMap)

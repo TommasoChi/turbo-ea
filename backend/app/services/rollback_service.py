@@ -577,12 +577,37 @@ async def _apply_archive_card(db: AsyncSession, op: dict[str, Any]) -> dict[str,
     return _ok(op)
 
 
-async def _apply_restore_card_fields(db: AsyncSession, op: dict[str, Any]) -> dict[str, Any]:
+async def _apply_restore_card_fields(
+    db: AsyncSession, op: dict[str, Any], actor_id: uuid.UUID | None = None
+) -> dict[str, Any]:
     if not op.get("card_id"):
         return _skip(op, "missing_card_id")
     card = await _get_card(db, op["card_id"])
     if card is None:
         return _skip(op, "card_not_found")
+    fields = dict(op.get("fields") or {})
+    if card.type == "Organization" and (
+        "parent_id" in fields or "organization_cone_state" in fields
+    ):
+        from app.services.organization_cones import organization_path_is_orphaned
+
+        if await organization_path_is_orphaned(db, card):
+            old_state = card.organization_cone_state
+            fields["organization_cone_state"] = "orphaned"
+            op = {**op, "fields": fields}
+            if old_state != "orphaned":
+                await event_bus.publish(
+                    "card.updated",
+                    {
+                        "id": str(card.id),
+                        "changes": {
+                            "organization_cone_state": {"old": old_state, "new": "orphaned"}
+                        },
+                    },
+                    db=db,
+                    card_id=card.id,
+                    user_id=actor_id,
+                )
     # The "old" snapshot in the event payload was already serialised for
     # JSON (UUIDs as strings, dicts intact). Re-coerce parent_id back to
     # UUID; everything else is set verbatim.
@@ -988,6 +1013,8 @@ async def _apply_inverse(
     applier = _APPLIERS.get(op["op"])
     if applier is None:
         return _skip(op, "unsupported")
+    if op["op"] == "restore_card_fields":
+        return await _apply_restore_card_fields(db, op, actor_id)
     if op["op"] == "delete_card":
         return await _apply_delete_card(db, op, actor_id)
     if op["op"] == "delete_relation":

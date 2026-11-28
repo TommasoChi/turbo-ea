@@ -83,3 +83,5 @@ A Transferência de workspace é controlada por duas permissões dedicadas, amba
 
 - `admin.export_workspace` — exportar o pacote.
 - `admin.import_workspace` — pré-visualizar e aplicar uma importação.
+
+Só Admin pode importar alterações ao organograma de **Organization**, às respetivas atribuições de partes interessadas ou aos papéis de posição. O Workspace Transfer transporta as marcas de papel de posição e o estado dos ramos órfãos. Se um bundle não incluir a marca de um papel, este é importado com a marca desativada. Uma importação não pode voltar a ligar um ramo suspenso para herança de visibilidade nem alterar a ativação dos cones de visibilidade no destino. Quando os cones estiverem disponíveis, Admin pode retomar a herança de um ramo órfão voltando a ligá-lo explicitamente a um pai ativo válido no organograma.

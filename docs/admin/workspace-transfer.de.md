@@ -83,3 +83,5 @@ Der Workspace-Transfer ist durch zwei dedizierte Berechtigungen geschützt, die 
 
 - `admin.export_workspace` — das Bundle exportieren.
 - `admin.import_workspace` — einen Import in der Vorschau anzeigen und anwenden.
+
+Nur Admin kann Änderungen am Organization-Organigramm, seinen Stakeholder-Zuweisungen oder Positionsrollen importieren. Workspace Transfer überträgt Positionsrollen und den Zustand verwaister Zweige. Fehlt einer Rolle im Bundle das Positionsrollen-Flag, wird es beim Import deaktiviert. Ein Import kann einen ausgesetzten Zweig weder für die Berechtigungsvererbung wieder verbinden noch die Aktivierung der Sichtbarkeitskegel im Ziel ändern. Wenn Sichtbarkeitskegel verfügbar sind, kann Admin die Vererbung eines verwaisten Zweigs wieder aufnehmen, indem er ihn im Organigramm ausdrücklich mit einem gültigen aktiven übergeordneten Element verbindet.

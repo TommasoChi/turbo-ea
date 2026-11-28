@@ -364,6 +364,9 @@ async def update_relation(
     rel = await card_write_service.lock_relation_for_write(db, rel)
     if rel is None:
         raise HTTPException(404, "Relation not found")
+    await card_write_service.require_relation_organization_admin(
+        db, card_write_service.WriteActor.from_user(user), (rel.source_id, rel.target_id)
+    )
     update_data = body.model_dump(exclude_unset=True)
     if "attributes" in update_data:
         update_data["attributes"] = card_write_service.relation_attributes_for_write(
@@ -433,6 +436,9 @@ async def delete_relation(
     rel = await card_write_service.lock_relation_for_write(db, rel)
     if rel is None:
         raise HTTPException(404, "Relation not found")
+    await card_write_service.require_relation_organization_admin(
+        db, card_write_service.WriteActor.from_user(user), (rel.source_id, rel.target_id)
+    )
     await card_write_service.delete_relation(db, user.id, rel)
     await db.commit()
 
@@ -695,6 +701,14 @@ async def apply_relation_operations(
                 )
                 if source_id not in readable or target_id not in readable:
                     raise HTTPException(404, "Card not found")
+            actor = (
+                card_write_service.WriteActor.from_user(cost_guard_user)
+                if cost_guard_user is not None
+                else card_write_service.WriteActor(user_id=actor_id, display_name="")
+            )
+            await card_write_service.require_relation_organization_admin(
+                db, actor, (source_id, target_id)
+            )
             endpoints_locked = {source_id, target_id} <= locked_endpoints
             if not endpoints_locked and op.action == "upsert":
                 raise HTTPException(404, "Card not found")

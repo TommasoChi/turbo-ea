@@ -83,3 +83,5 @@ La Transferencia de workspace está protegida por dos permisos dedicados, ambos 
 
 - `admin.export_workspace` — exportar el paquete.
 - `admin.import_workspace` — previsualizar y aplicar una importación.
+
+Solo Admin puede importar cambios en el organigrama de **Organization**, sus asignaciones de partes interesadas o sus roles de puesto. Workspace Transfer conserva los indicadores de rol de puesto y el estado de las ramas huérfanas. Si el paquete no incluye el indicador de un rol, se importa desactivado. Una importación no puede volver a conectar una rama suspendida para restablecer la herencia de permisos ni cambiar la activación de los conos de visibilidad en el destino. Cuando los conos estén disponibles, Admin puede reanudar la herencia de una rama huérfana volviéndola a vincular explícitamente a un elemento superior activo y válido del organigrama.

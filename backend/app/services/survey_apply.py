@@ -309,6 +309,8 @@ async def apply_relation_change(
     new_value: object,
     actor_id: uuid.UUID,
     extra: dict | None = None,
+    *,
+    actor: User | None = None,
 ) -> bool:
     """Sync the surveyed card's relations of one type to the respondent's
     proposed set: create the links they added, delete the ones they removed.
@@ -356,16 +358,36 @@ async def apply_relation_change(
     if not to_add and not to_remove:
         return False
 
+    from app.services.card_read_scope import require_card_readable
+    from app.services.card_write_service import WriteActor, require_relation_organization_admin
+
+    actor = actor or await db.get(User, actor_id)
+    write_actor = (
+        WriteActor.from_user(actor)
+        if actor is not None
+        else WriteActor(user_id=actor_id, display_name="")
+    )
+    added_peers = (
+        (await db.scalars(select(Card).where(Card.id.in_(to_add), Card.status == "ACTIVE"))).all()
+        if to_add
+        else []
+    )
+    changed_peers = {peer.id for peer in added_peers} | to_remove
+    if changed_peers:
+        endpoints = changed_peers | {card.id}
+        if actor is not None:
+            for endpoint in endpoints:
+                await require_card_readable(db, actor, endpoint, mode="module")
+        await require_relation_organization_admin(db, write_actor, endpoints)
+
     touched: set[uuid.UUID] = set()
     event_extra = extra or {"source": "survey_response"}
     source_card: Card | None
     target_card: Card | None
+    peer_card: Card | None
 
-    for peer_id in sorted(to_add):
-        peer_card = await db.get(Card, peer_id)
-        # Only link to active peers; skip stale ids the respondent may carry.
-        if not peer_card or peer_card.status != "ACTIVE":
-            continue
+    for peer_card in sorted(added_peers, key=lambda peer: peer.id):
+        peer_id = peer_card.id
         if rtk == ER_RELATION and await find_relation(db, rtk, card.id, peer_id) is not None:
             continue
         if direction == "outgoing":
@@ -552,6 +574,7 @@ async def apply_response(
     answers still apply.
     """
     from app.services.card_write_service import WriteActor, update_card
+    from app.services.organization_chart import require_organization_admin
 
     field_defs = {f.get("key"): f for f in (survey.fields or []) if isinstance(f, dict)}
     respondent = await db.get(User, resp.user_id)
@@ -570,9 +593,13 @@ async def apply_response(
         if new_value is None:
             continue
 
+        require_organization_admin(actor, card.type)
+
         field_def = field_defs.get(field_key) or {}
         if is_relation_field(field_def):
-            changed |= await apply_relation_change(db, card, field_def, new_value, actor.id, extra)
+            changed |= await apply_relation_change(
+                db, card, field_def, new_value, actor.id, extra, actor=actor
+            )
         elif is_stakeholder_field(field_def):
             if not can_manage_stakeholders:
                 raise SurveyFieldError(

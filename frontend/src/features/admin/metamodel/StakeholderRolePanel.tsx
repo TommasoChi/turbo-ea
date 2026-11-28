@@ -24,6 +24,7 @@ import MaterialSymbol from "@/components/MaterialSymbol";
 import ColorPicker from "@/components/ColorPicker";
 import KeyInput, { coerceKey, isValidKey } from "@/components/KeyInput";
 import { api } from "@/api/client";
+import { useOptionalAuthUser } from "@/hooks/AuthContext";
 import { LOCALE_LABELS } from "@/i18n";
 import { useEnabledLocales } from "@/hooks/useEnabledLocales";
 import type { StakeholderRoleDefinitionFull, MetamodelTranslations } from "@/types";
@@ -124,6 +125,8 @@ export interface StakeholderRolePanelHandle {
 const StakeholderRolePanel = forwardRef<StakeholderRolePanelHandle, StakeholderRolePanelProps>(
   function StakeholderRolePanel({ typeKey, onError }, ref) {
   const { t } = useTranslation(["admin", "common"]);
+  const user = useOptionalAuthUser();
+  const canEditRoles = typeKey !== "Organization" || (user?.impersonated_role ?? user?.role) === "admin";
   const { enabledLocales } = useEnabledLocales();
   const [roles, setRoles] = useState<StakeholderRoleDefinitionFull[]>([]);
   const [permissionsSchema, setPermissionsSchema] = useState<Record<string, string>>({});
@@ -139,6 +142,7 @@ const StakeholderRolePanel = forwardRef<StakeholderRolePanelHandle, StakeholderR
     description: "",
     color: brand.primary as string,
     countsForQuality: true,
+    isPositionRole: false,
     permissions: {} as Record<string, boolean>,
     translations: {} as MetamodelTranslations,
   });
@@ -154,6 +158,7 @@ const StakeholderRolePanel = forwardRef<StakeholderRolePanelHandle, StakeholderR
     description: "",
     color: brand.primary as string,
     countsForQuality: true,
+    isPositionRole: false,
     permissions: {} as Record<string, boolean>,
     translations: {} as MetamodelTranslations,
   });
@@ -231,6 +236,7 @@ const StakeholderRolePanel = forwardRef<StakeholderRolePanelHandle, StakeholderR
   // Callers gate on `createFormValid`: the Create button is disabled while it
   // is false, and `savePendingForm` reports an invalid form before calling.
   const handleCreate = async (): Promise<boolean> => {
+    if (!canEditRoles) return false;
     setCreateSaving(true);
     try {
       await api.post(`/metamodel/types/${typeKey}/stakeholder-roles`, {
@@ -239,6 +245,7 @@ const StakeholderRolePanel = forwardRef<StakeholderRolePanelHandle, StakeholderR
         description: createForm.description || undefined,
         color: createForm.color,
         counts_for_quality: createForm.countsForQuality,
+        ...(typeKey === "Organization" ? { is_position_role: createForm.isPositionRole } : {}),
         permissions: createForm.permissions,
         translations: cleanTranslations(createForm.translations) || undefined,
       });
@@ -249,6 +256,7 @@ const StakeholderRolePanel = forwardRef<StakeholderRolePanelHandle, StakeholderR
         description: "",
         color: brand.primary,
         countsForQuality: true,
+        isPositionRole: false,
         permissions: {},
         translations: {},
       });
@@ -273,6 +281,7 @@ const StakeholderRolePanel = forwardRef<StakeholderRolePanelHandle, StakeholderR
       description: role.description || "",
       color: role.color,
       countsForQuality: role.counts_for_quality,
+      isPositionRole: role.is_position_role ?? false,
       // Carry forward only the keys the permission editor can actually show.
       // A stored key the schema does not know about — the dead ones a pre-024
       // install still carries, say — is invisible here yet used to be resent
@@ -306,6 +315,7 @@ const StakeholderRolePanel = forwardRef<StakeholderRolePanelHandle, StakeholderR
   // a role is being edited) is disabled while it is false, and
   // `savePendingForm` reports an invalid form before calling.
   const handleSaveEdit = async (): Promise<boolean> => {
+    if (!canEditRoles) return false;
     setEditSaving(true);
     setEditError(null);
     try {
@@ -318,6 +328,7 @@ const StakeholderRolePanel = forwardRef<StakeholderRolePanelHandle, StakeholderR
         description: editForm.description.trim() || null,
         color: editForm.color,
         counts_for_quality: editForm.countsForQuality,
+        ...(typeKey === "Organization" ? { is_position_role: editForm.isPositionRole } : {}),
         permissions: editForm.permissions,
         translations: cleanTranslations(editForm.translations) || null,
       });
@@ -337,8 +348,9 @@ const StakeholderRolePanel = forwardRef<StakeholderRolePanelHandle, StakeholderR
   };
 
   useImperativeHandle(ref, () => ({
-    hasPendingForm: () => editRoleKey !== null || createFormDirty,
+    hasPendingForm: () => canEditRoles && (editRoleKey !== null || createFormDirty),
     savePendingForm: async () => {
+      if (!canEditRoles) return true;
       if (editRoleKey !== null) {
         if (!editFormValid) {
           // The form's own Save is disabled in this state; the header Save
@@ -381,7 +393,7 @@ const StakeholderRolePanel = forwardRef<StakeholderRolePanelHandle, StakeholderR
   };
 
   const handleConfirm = async () => {
-    if (!confirm) return;
+    if (!confirm || !canEditRoles) return;
     const { action, role } = confirm;
     setConfirmBusy(true);
     try {
@@ -408,6 +420,7 @@ const StakeholderRolePanel = forwardRef<StakeholderRolePanelHandle, StakeholderR
   };
 
   const handleRestore = async (roleKey: string) => {
+    if (!canEditRoles) return;
     try {
       await api.post(`/metamodel/types/${typeKey}/stakeholder-roles/${roleKey}/restore`);
       await fetchRoles();
@@ -554,7 +567,7 @@ const StakeholderRolePanel = forwardRef<StakeholderRolePanelHandle, StakeholderR
       )}
 
       {displayRoles.map((role) => {
-        const isEditing = editRoleKey === role.key;
+        const isEditing = canEditRoles && editRoleKey === role.key;
         const isExpanded = expandedRole === role.key;
 
         return (
@@ -615,12 +628,12 @@ const StakeholderRolePanel = forwardRef<StakeholderRolePanelHandle, StakeholderR
                     size={18}
                   />
                 </IconButton>
-                {!role.is_archived && (
+                {canEditRoles && !role.is_archived && (
                   <IconButton size="small" onClick={() => startEdit(role)}>
                     <MaterialSymbol icon="edit" size={18} />
                   </IconButton>
                 )}
-                {role.is_archived ? (
+                {canEditRoles && (role.is_archived ? (
                   <Tooltip title={t("common:actions.restore")}>
                     <IconButton size="small" onClick={() => handleRestore(role.key)}>
                       <MaterialSymbol icon="restore" size={18} />
@@ -632,8 +645,8 @@ const StakeholderRolePanel = forwardRef<StakeholderRolePanelHandle, StakeholderR
                       <MaterialSymbol icon="archive" size={18} />
                     </IconButton>
                   </Tooltip>
-                )}
-                <Tooltip title={t("common:actions.delete")}>
+                ))}
+                {canEditRoles && <Tooltip title={t("common:actions.delete")}>
                   <IconButton
                     size="small"
                     color="error"
@@ -641,7 +654,7 @@ const StakeholderRolePanel = forwardRef<StakeholderRolePanelHandle, StakeholderR
                   >
                     <MaterialSymbol icon="delete" size={18} />
                   </IconButton>
-                </Tooltip>
+                </Tooltip>}
               </Box>
 
               {/* Description */}
@@ -718,6 +731,12 @@ const StakeholderRolePanel = forwardRef<StakeholderRolePanelHandle, StakeholderR
                         }
                         sx={{ alignItems: "flex-start", ml: 0 }}
                       />
+                      {typeKey === "Organization" && editForm.key !== SELF_ASSIGNABLE_ROLE_KEY && (
+                        <FormControlLabel
+                          control={<Switch checked={editForm.isPositionRole} onChange={(e) => setEditForm({ ...editForm, isPositionRole: e.target.checked })} />}
+                          label={t("metamodel.stakeholderPanel.positionRole")}
+                        />
+                      )}
                       {renderPermissionEditor(editForm.key, editForm.permissions, (key, val) =>
                         setEditForm({
                           ...editForm,
@@ -784,7 +803,7 @@ const StakeholderRolePanel = forwardRef<StakeholderRolePanelHandle, StakeholderR
       })}
 
       {/* Create role form */}
-      {createOpen ? (
+      {canEditRoles && (createOpen ? (
         <Card variant="outlined" sx={{ mt: 1, mb: 2, borderStyle: "dashed" }}>
           <CardContent sx={{ py: 2, "&:last-child": { pb: 2 } }}>
             <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 1.5 }}>
@@ -867,6 +886,12 @@ const StakeholderRolePanel = forwardRef<StakeholderRolePanelHandle, StakeholderR
                 }
                 sx={{ alignItems: "flex-start", ml: 0 }}
               />
+              {typeKey === "Organization" && createForm.key !== SELF_ASSIGNABLE_ROLE_KEY && (
+                <FormControlLabel
+                  control={<Switch checked={createForm.isPositionRole} onChange={(e) => setCreateForm({ ...createForm, isPositionRole: e.target.checked })} />}
+                  label={t("metamodel.stakeholderPanel.positionRole")}
+                />
+              )}
               {renderPermissionEditor(createForm.key, createForm.permissions, (key, val) =>
                 setCreateForm({
                   ...createForm,
@@ -883,14 +908,15 @@ const StakeholderRolePanel = forwardRef<StakeholderRolePanelHandle, StakeholderR
                     setCreateOpen(false);
                     setCreateKeyTouched(false);
                     setCreateForm({
-        key: "",
-        label: "",
-        description: "",
-        color: brand.primary,
-        countsForQuality: true,
-        permissions: {},
-        translations: {},
-      });
+                      key: "",
+                      label: "",
+                      description: "",
+                      color: brand.primary,
+                      countsForQuality: true,
+                      isPositionRole: false,
+                      permissions: {},
+                      translations: {},
+                    });
                   }}
                 >
                   {t("common:actions.cancel")}
@@ -916,13 +942,13 @@ const StakeholderRolePanel = forwardRef<StakeholderRolePanelHandle, StakeholderR
         >
           {t("metamodel.stakeholderPanel.addRole")}
         </Button>
-      )}
+      ))}
 
       {/* Delete / archive confirmation. `usage === null` is the loading
           sentinel that keeps the destructive button disabled, matching the
           field- and section-delete dialogs in TypeDetailDrawer. */}
       <Dialog
-        open={!!confirm}
+        open={!!confirm && canEditRoles}
         onClose={() => setConfirm(null)}
         maxWidth="xs"
         fullWidth

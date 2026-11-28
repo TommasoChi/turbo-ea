@@ -83,3 +83,5 @@ Workspace Transfer is gated by two dedicated permissions, both granted to admini
 
 - `admin.export_workspace` — export the bundle.
 - `admin.import_workspace` — preview and apply an import.
+
+Only Admin can import changes to the Organization chart, its stakeholder assignments or position roles. Workspace Transfer carries position-role flags and the state of orphaned branches. A bundle without a position-role flag imports that role with the flag off. Importing cannot reconnect a suspended branch for visibility inheritance or change the destination's visibility-cone activation. To resume inheritance for an orphaned branch when cones are available, Admin must explicitly reattach it to a valid active parent in the chart.

@@ -42,6 +42,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any
 
+from fastapi import HTTPException
 from sqlalchemy import exists, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import flag_modified
@@ -60,10 +61,13 @@ from app.services import card_type_categories
 from app.services.bo_relationship_constants import APPLICATION_RELATION
 from app.services.card_costs import recompute_derived
 from app.services.card_write_service import (
+    WriteActor,
     find_relation,
     lock_bo_relation_writes,
+    lock_relation_endpoints,
     orient_er_attributes,
     relation_attributes_for_write,
+    require_relation_organization_admin,
     validate_new_relation_endpoints,
 )
 from app.services.event_bus import event_bus
@@ -90,6 +94,167 @@ async def apply_migration(
     ``migration.stats``. Errors are kept per-pass so the admin can see
     which entity kind failed even when later passes succeed.
     """
+    from app.services.organization_chart import require_organization_admin
+    from app.services.permission_service import effective_role_key
+
+    if effective_role_key(user) != "admin":
+        records = (
+            await db.scalars(
+                select(StagedRecord).where(
+                    StagedRecord.migration_id == migration.id,
+                    StagedRecord.action.not_in(("skip", "conflict")),
+                )
+            )
+        ).all()
+
+        async def resolved_card(source_id: str | None, source_type: str) -> uuid.UUID | None:
+            target = await _identity_lookup(db, source_id, "card", source_type)
+            if target is not None or not source_id:
+                return target
+            return await db.scalar(
+                select(StagedRecord.target_id).where(
+                    StagedRecord.migration_id == migration.id,
+                    StagedRecord.entity_kind == "card",
+                    StagedRecord.source_id == source_id,
+                )
+            )
+
+        async def require_card_write(card_id: uuid.UUID | None) -> None:
+            if card_id is None:
+                return
+            card = await db.get(Card, card_id)
+            if card is not None and card.type == "Organization":
+                from app.services.card_read_scope import require_card_readable
+
+                await require_card_readable(db, user, card_id, mode="module", type_key=card.type)
+                require_organization_admin(user, card.type)
+
+        for staged in records:
+            payload = staged.source_data or {}
+            card_payload = payload.get("payload") or {}
+            if staged.entity_kind == "card" and staged.target_id is not None:
+                await require_card_write(staged.target_id)
+            if staged.entity_kind == "card" and (
+                staged.card_type_key == "Organization" or card_payload.get("type") == "Organization"
+            ):
+                require_organization_admin(user, "Organization")
+            if staged.entity_kind == "card_tag":
+                card_id = await resolved_card(payload.get("entity_id"), staged.source_type)
+                tag_id = await _identity_lookup(
+                    db, payload.get("tag_id"), "tag", staged.source_type
+                )
+                if tag_id is None:
+                    tag_id = await db.scalar(
+                        select(StagedRecord.target_id).where(
+                            StagedRecord.migration_id == migration.id,
+                            StagedRecord.entity_kind == "tag",
+                            StagedRecord.source_id == payload.get("tag_id"),
+                        )
+                    )
+                existing = None
+                if card_id is not None and tag_id is not None:
+                    existing = await db.scalar(
+                        select(CardTag.card_id).where(
+                            CardTag.card_id == card_id,
+                            CardTag.tag_id == tag_id,
+                        )
+                    )
+                pending_tag = False
+                if tag_id is None:
+                    pending_tag = bool(
+                        await db.scalar(
+                            select(StagedRecord.id).where(
+                                StagedRecord.migration_id == migration.id,
+                                StagedRecord.entity_kind == "tag",
+                                StagedRecord.source_id == payload.get("tag_id"),
+                                StagedRecord.action == "create",
+                            )
+                        )
+                    )
+                if card_id is not None and existing is None and (tag_id is not None or pending_tag):
+                    await require_card_write(card_id)
+            if staged.entity_kind == "relation":
+                incoming = payload.get("attributes") or {}
+                if staged.action == "update":
+                    incoming = (
+                        relation_attributes_for_write(
+                            payload.get("tea_type") or "",
+                            import_relation_attributes(payload.get("tea_type") or "", incoming),
+                        )
+                        or {}
+                    )
+                if staged.action == "update" and staged.target_id is not None:
+                    actual_relation = await db.get(Relation, staged.target_id)
+                    if actual_relation is not None and any(
+                        (actual_relation.attributes or {}).get(key) != value
+                        for key, value in incoming.items()
+                    ):
+                        await require_card_write(actual_relation.source_id)
+                        await require_card_write(actual_relation.target_id)
+                source_id = await resolved_card(payload.get("from_entity_id"), staged.source_type)
+                target_id = await resolved_card(payload.get("to_entity_id"), staged.source_type)
+                if staged.action == "create" and ((source_id is None) != (target_id is None)):
+                    unresolved = payload.get(
+                        "from_entity_id" if source_id is None else "to_entity_id"
+                    )
+                    pending_card = await db.scalar(
+                        select(StagedRecord.id).where(
+                            StagedRecord.migration_id == migration.id,
+                            StagedRecord.source_type == staged.source_type,
+                            StagedRecord.entity_kind == "card",
+                            StagedRecord.source_id == unresolved,
+                            StagedRecord.action == "create",
+                        )
+                    )
+                    if pending_card is not None:
+                        await require_card_write(source_id if source_id is not None else target_id)
+                if source_id is not None and target_id is not None:
+                    type_key = payload.get("tea_type")
+                    if type_key and staged.action == "create":
+                        source_id, target_id = await orient_endpoints(
+                            db, type_key, source_id, target_id
+                        )
+                    existing_relation = (
+                        await find_relation(db, type_key, source_id, target_id)
+                        if type_key
+                        else None
+                    )
+                    incoming = payload.get("attributes") or {}
+                    if existing_relation is None or any(
+                        (existing_relation.attributes or {}).get(key) != value
+                        for key, value in incoming.items()
+                    ):
+                        await require_card_write(source_id)
+                        await require_card_write(target_id)
+            if staged.entity_kind == "subscription":
+                card_id = await resolved_card(payload.get("entity_id"), staged.source_type)
+                person_id = await _identity_lookup(
+                    db, payload.get("user_email"), "user", staged.source_type
+                )
+                if card_id is None:
+                    continue
+                if person_id is None:
+                    staged_user = await db.scalar(
+                        select(StagedRecord.id).where(
+                            StagedRecord.migration_id == migration.id,
+                            StagedRecord.entity_kind == "user",
+                            StagedRecord.source_id == payload.get("user_email"),
+                            StagedRecord.action.in_(("create", "skip")),
+                        )
+                    )
+                    if staged_user is not None:
+                        await require_card_write(card_id)
+                    continue
+                role = payload.get("tea_role_key") or "responsible"
+                existing = await db.scalar(
+                    select(Stakeholder.id).where(
+                        Stakeholder.card_id == card_id,
+                        Stakeholder.user_id == person_id,
+                        Stakeholder.role == role,
+                    )
+                )
+                if existing is None:
+                    await require_card_write(card_id)
     counts = {"created": 0, "updated": 0, "skipped": 0, "errors": 0, "conflicts": 0}
     per_pass: dict[str, dict[str, int]] = {}
 
@@ -354,6 +519,9 @@ async def _apply_single_card(
             name=payload["name"],
             description=payload.get("description"),
             parent_id=parent_id,
+            organization_cone_state=("connected" if parent_id else "unconfirmed_root")
+            if payload["type"] == "Organization"
+            else None,
             lifecycle=payload.get("lifecycle") or {},
             attributes=attributes,
             status=payload.get("status") or "ACTIVE",
@@ -404,6 +572,7 @@ async def _apply_single_card(
             "attributes": dict(card.attributes or {}),
             "external_id": card.external_id,
             "parent_id": str(card.parent_id) if card.parent_id else None,
+            "organization_cone_state": card.organization_cone_state,
         }
         merged_attrs = {**(card.attributes or {}), **(payload.get("attributes") or {})}
         locked = await _locked_fields(db, card.type, locked_by_type)
@@ -431,6 +600,11 @@ async def _apply_single_card(
         if payload.get("external_id"):
             card.external_id = payload["external_id"]
         if parent_id is not None:
+            if card.type == "Organization" and parent_id != card.parent_id:
+                from app.services.organization_cones import organization_path_is_orphaned
+
+                if await organization_path_is_orphaned(db, card):
+                    card.organization_cone_state = "orphaned"
             card.parent_id = parent_id
 
         await recompute_derived(db, card)
@@ -442,6 +616,7 @@ async def _apply_single_card(
             "attributes": dict(card.attributes or {}),
             "external_id": card.external_id,
             "parent_id": str(card.parent_id) if card.parent_id else None,
+            "organization_cone_state": card.organization_cone_state,
         }
         changes = {
             field: {"old": before[field], "new": after[field]}
@@ -826,14 +1001,53 @@ async def _apply_relation_pass(
         except Exception as exc:  # noqa: BLE001
             record_error(staged, exc)
 
-    await lock_bo_relation_writes(
-        db,
-        (
-            (type_key, source, target)
-            for staged, type_key, source, target in resolved_rows
-            if staged.action in ("create", "update")
-        ),
-    )
+    update_ids = {
+        staged.target_id
+        for staged, _, _, _ in resolved_rows
+        if staged.action == "update" and staged.target_id is not None
+    }
+    update_endpoints = {}
+    if update_ids:
+        stored = await db.execute(
+            select(Relation.id, Relation.type, Relation.source_id, Relation.target_id).where(
+                Relation.id.in_(update_ids)
+            )
+        )
+        update_endpoints = {
+            row.id: (row.type, row.source_id, row.target_id) for row in stored.all()
+        }
+    prelocked = {
+        (type_key, source, target)
+        for staged, type_key, source, target in resolved_rows
+        if staged.action == "create"
+    }
+    prelocked.update(update_endpoints.values())
+    await lock_bo_relation_writes(db, prelocked)
+
+    async def refresh_relation(relation: Relation) -> Relation | None:
+        expected = update_endpoints.get(
+            relation.id, (relation.type, relation.source_id, relation.target_id)
+        )
+        await lock_relation_endpoints(db, expected[1:])
+        current = await db.scalar(
+            select(Relation)
+            .where(Relation.id == relation.id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        if current is not None and (current.type, current.source_id, current.target_id) != expected:
+            raise ValueError("Relation endpoints changed during import")
+        return current
+
+    async def require_write(source_id: uuid.UUID, target_id: uuid.UUID) -> None:
+        from app.services.card_read_scope import require_card_readable
+
+        await require_card_readable(db, user, source_id, mode="module")
+        await require_card_readable(db, user, target_id, mode="module")
+        await require_relation_organization_admin(
+            db, WriteActor.from_user(user), (source_id, target_id)
+        )
+
     for staged, type_key, src_uuid, tgt_uuid in resolved_rows:
         try:
             # Older staged rows can still carry a source-supplied ownership marker.
@@ -843,15 +1057,22 @@ async def _apply_relation_pass(
             if staged.action in ("create", "update"):
                 attributes = relation_attributes_for_write(type_key, attributes) or {}
             if staged.action == "create":
+                await lock_relation_endpoints(db, (src_uuid, tgt_uuid))
                 present = await find_relation(db, type_key, src_uuid, tgt_uuid)
+                if present is not None and type_key != APPLICATION_RELATION:
+                    present = await refresh_relation(present)
                 if present is not None:
-                    present.attributes = {
+                    merged = {
                         **(present.attributes or {}),
                         **(orient_er_attributes(type_key, present, src_uuid, attributes) or {}),
                     }
+                    if merged != (present.attributes or {}):
+                        await require_write(present.source_id, present.target_id)
+                        present.attributes = merged
                     staged.target_id = present.id
                     counts["updated"] += 1
                 else:
+                    await require_write(src_uuid, tgt_uuid)
                     validate_new_relation_endpoints(type_key, src_uuid, tgt_uuid)
                     rel = Relation(
                         type=type_key,
@@ -866,20 +1087,28 @@ async def _apply_relation_pass(
             elif staged.action == "update":
                 if staged.target_id is None:
                     raise ValueError("update relation has no cached target_id")
-                stmt = select(Relation).where(Relation.id == staged.target_id)
-                if type_key == APPLICATION_RELATION:
-                    stmt = stmt.with_for_update().execution_options(populate_existing=True)
-                existing_rel = (await db.execute(stmt)).scalar_one_or_none()
+                if staged.target_id not in update_endpoints:
+                    raise ValueError("target relation no longer exists")
+                existing_rel = await db.get(Relation, staged.target_id)
+                if existing_rel is not None:
+                    existing_rel = await refresh_relation(existing_rel)
                 if existing_rel is None:
                     raise ValueError("target relation no longer exists")
-                existing_rel.attributes = {
+                merged = {
                     **(existing_rel.attributes or {}),
                     **(orient_er_attributes(type_key, existing_rel, src_uuid, attributes) or {}),
                 }
+                if merged != (existing_rel.attributes or {}):
+                    await require_write(existing_rel.source_id, existing_rel.target_id)
+                    existing_rel.attributes = merged
                 counts["updated"] += 1
             else:  # skip
                 counts["skipped"] += 1
             staged.status = "applied"
+        except HTTPException as exc:
+            if exc.status_code in (403, 404):
+                raise
+            record_error(staged, exc)
         except Exception as exc:  # noqa: BLE001
             record_error(staged, exc)
     await db.flush()

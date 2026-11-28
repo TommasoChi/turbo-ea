@@ -10,6 +10,7 @@ from sqlalchemy.orm import selectinload
 
 from app.api.deps import get_current_user
 from app.database import get_db
+from app.models.card import Card
 from app.models.card_type import CardType
 from app.models.tag import CardTag, Tag, TagGroup
 from app.models.user import User
@@ -206,6 +207,7 @@ async def delete_tag_group(
     group = await db.get(TagGroup, uuid.UUID(group_id))
     if group is None:
         raise HTTPException(status_code=404, detail="Tag group not found")
+    await _require_organization_tag_delete(db, user, group_id=group.id)
     await audit_log.record(
         db,
         action="admin.tag_group.deleted",
@@ -325,6 +327,7 @@ async def delete_tag(
     tag = result.scalar_one_or_none()
     if tag is None:
         raise HTTPException(status_code=404, detail="Tag not found")
+    await _require_organization_tag_delete(db, user, tag_id=tag.id)
     await audit_log.record(
         db,
         action="admin.tag.deleted",
@@ -344,8 +347,39 @@ async def _can_tag_card(db: AsyncSession, user: User, card_uuid: uuid.UUID) -> b
     """May the user tag this card? `tags.manage` globally, OR edit rights on
     the card (`inventory.edit` at the app level, or `card.edit` through a
     stakeholder role)."""
-    await require_card_readable(db, user, card_uuid, mode="module")
+    from app.services.organization_chart import require_organization_admin
+
+    card_type = await require_card_readable(db, user, card_uuid, mode="module")
+    require_organization_admin(user, card_type)
     return await tag_service.can_tag_card(db, user, card_uuid)
+
+
+async def _require_organization_tag_delete(
+    db: AsyncSession,
+    user: User,
+    *,
+    group_id: uuid.UUID | None = None,
+    tag_id: uuid.UUID | None = None,
+) -> None:
+    from app.services.organization_chart import require_organization_admin
+
+    # Freeze both existing links and the set of tags before checking a cascading delete.
+    if group_id is not None:
+        await db.execute(select(TagGroup.id).where(TagGroup.id == group_id).with_for_update())
+        locked_tags = select(Tag.id).where(Tag.tag_group_id == group_id)
+    else:
+        locked_tags = select(Tag.id).where(Tag.id == tag_id)
+    await db.execute(locked_tags.order_by(Tag.id).with_for_update())
+
+    query = (
+        select(Card.id).join(CardTag, CardTag.card_id == Card.id).where(Card.type == "Organization")
+    )
+    if group_id is not None:
+        query = query.join(Tag, Tag.id == CardTag.tag_id).where(Tag.tag_group_id == group_id)
+    else:
+        query = query.where(CardTag.tag_id == tag_id)
+    if await db.scalar(query.limit(1)) is not None:
+        require_organization_admin(user, "Organization")
 
 
 async def _require_can_tag_card(db: AsyncSession, user: User, card_uuid: uuid.UUID) -> None:

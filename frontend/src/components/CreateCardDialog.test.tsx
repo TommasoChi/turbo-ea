@@ -26,6 +26,8 @@ const mockNavigate = vi.fn();
 const authRef = vi.hoisted(() => ({
   user: {
     id: "u1",
+    role: "admin",
+    impersonated_role: null as string | null,
     email: "a@test.com",
     display_name: "Admin",
     permissions: { "*": true } as Record<string, boolean>,
@@ -178,6 +180,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   vendorFieldRef.onProviderSelected = null;
   // Reset to the admin default; the per-type tests override it.
+  authRef.user.role = "admin";
+  authRef.user.impersonated_role = null;
   authRef.user.permissions = { "*": true };
   authRef.user.type_permissions = undefined;
   vi.mocked(useMetamodel).mockReturnValue({
@@ -698,4 +702,64 @@ it("requires a declared DataObject subtype before creating", async () => {
   await user.click(screen.getByRole("combobox", { name: /subtype/i }));
   await user.click(within(screen.getByRole("listbox")).getByRole("option", { name: "Data" }));
   expect(screen.getByRole("button", { name: /^create$/i })).toBeEnabled();
+});
+
+it("offers an optional responsible for an Organization and submits the selected user", async () => {
+  vi.mocked(api.get).mockImplementation((path: string) => Promise.resolve(path === "/users?eligible_for_organization_position=true" ? [{ id: "u2", display_name: "Ada", is_active: true }] : []));
+  onCreate.mockResolvedValue("new-card");
+  vi.mocked(useMetamodel).mockReturnValue({ ...vi.mocked(useMetamodel)(), types: [...MOCK_TYPES, { ...MOCK_TYPES[1], key: "Organization", label: "Organization", translations: { label: { en: "Organization" } } }] });
+  renderDialog({ initialType: "Organization" });
+  await waitFor(() => expect(api.get).toHaveBeenCalledWith(
+    "/users?eligible_for_organization_position=true", expect.objectContaining({ signal: expect.any(AbortSignal) }),
+  ));
+  const user = userEvent.setup();
+  await user.type(screen.getByRole("textbox", { name: /name/i }), "Engineering");
+  await user.click(screen.getByRole("combobox", { name: /responsible/i }));
+  await user.click(await screen.findByText("Ada"));
+  await user.click(screen.getByRole("button", { name: /^create$/i }));
+  await waitFor(() => expect(onCreate).toHaveBeenCalledWith(expect.objectContaining({ position_responsible_user_id: "u2" })));
+});
+
+it("leaves Organization vacant when no responsible is selected", async () => {
+  vi.mocked(api.get).mockResolvedValue([]);
+  vi.mocked(useMetamodel).mockReturnValue({ ...vi.mocked(useMetamodel)(), types: [...MOCK_TYPES, { ...MOCK_TYPES[1], key: "Organization", label: "Organization", translations: { label: { en: "Organization" } } }] });
+  onCreate.mockResolvedValue("new-card");
+  renderDialog({ initialType: "Organization" });
+  const user = userEvent.setup();
+  await user.type(screen.getByRole("textbox", { name: /name/i }), "Engineering");
+  await user.click(screen.getByRole("button", { name: /^create$/i }));
+  await waitFor(() => expect(onCreate).toHaveBeenCalled());
+  expect(onCreate.mock.calls[0][0]).not.toHaveProperty("position_responsible_user_id");
+});
+
+it("does not offer a responsible picker for other types", () => {
+  renderDialog({ initialType: "Objective" });
+  expect(screen.queryByRole("combobox", { name: /responsible/i })).not.toBeInTheDocument();
+});
+
+
+it.each([{ role: "member", impersonated_role: null }, { role: "admin", impersonated_role: "member" }])("hides Organization nomination for effective non-admin", (identity) => {
+  Object.assign(authRef.user, identity);
+  renderDialog({ initialType: "Organization" });
+  expect(screen.queryByRole("combobox", { name: /responsible/i })).not.toBeInTheDocument();
+});
+
+it("clears a nomination when changing away from Organization", async () => {
+  vi.mocked(api.get).mockImplementation((path: string) => Promise.resolve(path === "/users?eligible_for_organization_position=true" ? [{ id: "u2", display_name: "Ada", is_active: true }] : []));
+  vi.mocked(useMetamodel).mockReturnValue({ ...vi.mocked(useMetamodel)(), types: [...MOCK_TYPES, { ...MOCK_TYPES[1], key: "Organization", label: "Organization", translations: { label: { en: "Organization" } } }] });
+  onCreate.mockResolvedValue("new-card");
+  const user = userEvent.setup();
+  renderDialog({ initialType: "Organization" });
+  await user.click(screen.getByRole("combobox", { name: /responsible/i }));
+  await user.click(await screen.findByText("Ada"));
+  await user.click(screen.getByRole("combobox", { name: /^type$/i }));
+  await user.click(screen.getByRole("option", { name: /Objective/ }));
+  expect(screen.queryByRole("combobox", { name: /responsible/i })).not.toBeInTheDocument();
+  await user.click(screen.getByRole("combobox", { name: /^type$/i }));
+  await user.click(screen.getByRole("option", { name: /Organization/ }));
+  expect(screen.getByRole("combobox", { name: /responsible/i })).toHaveValue("");
+  await user.type(screen.getByRole("textbox", { name: /name/i }), "Target");
+  await user.click(screen.getByRole("button", { name: /^create$/i }));
+  await waitFor(() => expect(onCreate).toHaveBeenCalled());
+  expect(onCreate.mock.calls[0][0]).not.toHaveProperty("position_responsible_user_id");
 });

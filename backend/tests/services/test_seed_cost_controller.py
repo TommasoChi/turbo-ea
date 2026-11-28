@@ -98,3 +98,26 @@ async def test_an_admin_edited_description_is_not_overwritten(db):
     await db.flush()
     await db.refresh(row)
     assert row.description == "Written by an admin"
+
+
+async def test_fresh_seed_marks_organization_responsible_and_preserves_opt_out(db):
+    await seed_metamodel(db)
+    await db.flush()
+    result = await db.execute(
+        select(StakeholderRoleDefinition).where(
+            StakeholderRoleDefinition.card_type_key.in_(["Organization", "Application"]),
+            StakeholderRoleDefinition.key.in_(["responsible", "observer"]),
+        )
+    )
+    roles = {(row.card_type_key, row.key): row for row in result.scalars()}
+    responsible = roles[("Organization", "responsible")]
+    assert responsible.is_position_role is True
+    assert roles[("Organization", "observer")].is_position_role is False
+    assert roles[("Application", "responsible")].is_position_role is False
+
+    responsible.is_position_role = False
+    await db.flush()
+    await seed_metamodel(db)
+    await db.flush()
+    await db.refresh(responsible)
+    assert responsible.is_position_role is False

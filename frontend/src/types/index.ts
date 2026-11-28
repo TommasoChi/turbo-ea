@@ -66,6 +66,7 @@ export interface StakeholderRoleDefinitionFull {
   /** Whether holding this role fills the card's data-quality stakeholders slot.
    *  Off for passive roles — the built-in Observer ships with it disabled. */
   counts_for_quality: boolean;
+  is_position_role?: boolean;
   sort_order: number;
   stakeholder_count?: number;
   created_at?: string;
@@ -75,12 +76,21 @@ export interface StakeholderRoleDefinitionFull {
   translations?: MetamodelTranslations;
 }
 
+export interface InheritedStakeholderRole {
+  role_key: string;
+  source_kind: "visible" | "generic";
+  holder?: { id: string; display_name: string };
+  path?: { id: string; name: string }[];
+}
+
 export interface CardEffectivePermissions {
   app_level: Record<string, boolean>;
   stakeholder_roles: string[];
+  inherited_stakeholder_roles?: InheritedStakeholderRole[];
   card_level: Record<string, boolean>;
   effective: {
     can_view: boolean;
+    can_self_observe: boolean;
     can_edit: boolean;
     can_archive: boolean;
     can_delete: boolean;

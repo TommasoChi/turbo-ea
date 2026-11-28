@@ -5,6 +5,12 @@ All notable changes to Turbo EA are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.217.0] - 2026-11-28
+
+### Changed
+
+- Organization cards and their stakeholder roles are read-only for users outside the Admin role. Admins can nominate a Responsible when creating a position and configure its eligible roles. Visibility cones remain off.
+
 ## [2.216.0] - 2026-11-28
 
 ### Added

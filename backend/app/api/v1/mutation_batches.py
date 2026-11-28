@@ -445,6 +445,7 @@ async def _require_rollback_permissions(
         cost_field_keys_from_card_schema,
         keep_stored_cost_values,
     )
+    from app.services.organization_chart import require_organization_admin
     from app.services.tag_service import can_tag_card
 
     card_permissions = {
@@ -480,6 +481,10 @@ async def _require_rollback_permissions(
             except ValueError:
                 raise HTTPException(403, "Cannot authorize rollback operation") from None
             await require_card_readable(db, user, card_id, mode="module")
+            card = await db.get(Card, card_id, populate_existing=True)
+            if card is None:
+                raise HTTPException(404, "Card not found")
+            require_organization_admin(user, card.type)
             if not await can_tag_card(db, user, card_id):
                 raise HTTPException(403, "Cannot authorize rollback operation")
             continue
@@ -489,6 +494,10 @@ async def _require_rollback_permissions(
             except ValueError:
                 raise HTTPException(403, "Cannot authorize rollback operation") from None
             await require_card_readable(db, user, card_id, mode="module")
+            card = await db.get(Card, card_id, populate_existing=True)
+            if card is None:
+                raise HTTPException(404, "Card not found")
+            require_organization_admin(user, card.type)
             app_permission, card_permission = card_permissions[kind]
             await PermissionService.require_permission(
                 db, user, app_permission, card_id, card_permission
@@ -545,6 +554,14 @@ async def _require_rollback_permissions(
                 if relation is not None:
                     await require_card_readable(db, user, relation.source_id, mode="module")
                     await require_card_readable(db, user, relation.target_id, mode="module")
+                    from app.services.card_write_service import (
+                        WriteActor,
+                        require_relation_organization_admin,
+                    )
+
+                    await require_relation_organization_admin(
+                        db, WriteActor.from_user(user), (relation.source_id, relation.target_id)
+                    )
             if kind == "unlink_risk_card":
                 try:
                     card_id = uuid.UUID(str(op.get("card_id")))

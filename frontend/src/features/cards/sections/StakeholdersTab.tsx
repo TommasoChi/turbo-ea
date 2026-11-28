@@ -22,7 +22,7 @@ import { useTypeDescription, useTypeLabel } from "@/hooks/useResolveLabel";
 import { useAuth } from "@/hooks/useAuth";
 import { focusFirstControl, useEditRequest, type EditRequest } from "@/hooks/useEditRequest";
 import { api } from "@/api/client";
-import type { Card, StakeholderRef, StakeholderRoleDef, User } from "@/types";
+import type { Card, StakeholderRef, StakeholderRoleDef, User, InheritedStakeholderRole } from "@/types";
 
 // Loose email check — server-side EmailStr is authoritative; this just decides
 // whether to surface the "Invite this email" sentinel in the dropdown.
@@ -37,12 +37,14 @@ function StakeholdersTab({
   onRefresh,
   canManageStakeholders = true,
   addOn,
+  inheritedRoles = [],
 }: {
   card: Card;
   onRefresh: () => void;
   canManageStakeholders?: boolean;
   /** A data-quality jump: open the add form (for a user who may manage). */
   addOn?: EditRequest;
+  inheritedRoles?: InheritedStakeholderRole[];
 }) {
   const { t } = useTranslation(["cards", "common"]);
   const roleLabel = useTypeLabel();
@@ -283,6 +285,29 @@ function StakeholdersTab({
           </CardContent>
         </MuiCard>
       ))}
+      {inheritedRoles.length > 0 && (
+        <MuiCard sx={{ mb: 2 }}>
+          <CardContent>
+            <Typography variant="subtitle2">{t("stakeholders.inherited")}</Typography>
+            {inheritedRoles.map((entry) => {
+              const role = roles.find((item) => item.key === entry.role_key);
+              return (
+                <Box key={entry.role_key} sx={{ mt: 1 }}>
+                  {role && <Typography variant="body2">{roleLabel(role)}</Typography>}
+                  <Typography variant="body2" color="text.secondary">
+                    {entry.source_kind === "visible" && entry.holder && entry.path
+                      ? t("stakeholders.inheritedVisible", {
+                          holder: entry.holder.display_name,
+                          path: entry.path.map((part) => part.name).join(" → "),
+                        })
+                      : t("stakeholders.inheritedGeneric")}
+                  </Typography>
+                </Box>
+              );
+            })}
+          </CardContent>
+        </MuiCard>
+      )}
       {/* Add stakeholder inline */}
       {addOpen && (
         <MuiCard

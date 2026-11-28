@@ -639,6 +639,11 @@ async def _run(
     sheets: set[str] | None = None,
     commit: bool = True,
 ) -> ApplyResult:
+    if not dry_run:
+        from app.services.permission_service import effective_role_key
+
+        if effective_role_key(user) != "admin":
+            await _run(db, bundle, user, dry_run=True, sheets=sheets, commit=False)
     result = ApplyResult(dry_run=dry_run)
     # Any existing portal can distinguish the two date keys on card, detail,
     # or implicit display paths. Keep both values until that policy is edited.
@@ -726,12 +731,15 @@ async def _run(
         (
             schema.SHEET_CARD_TYPES,
             functools.partial(
-                _apply_card_types, reject_timeline=timeline_conflict, timeline_state=timeline_state
+                _apply_card_types,
+                user=user,
+                reject_timeline=timeline_conflict,
+                timeline_state=timeline_state,
             ),
         ),
         (schema.SHEET_RELATION_TYPES, _apply_relation_types),
         *(
-            (sec.sheet, _make_config_applier(sec))
+            (sec.sheet, _make_config_applier(sec, user))
             for sec in schema.CONFIG_SECTIONS
             if sec.sheet not in _BESPOKE_CONFIG_SHEETS
         ),
@@ -748,8 +756,8 @@ async def _run(
                 user, id_map, timeline_blocked=bool(timeline_conflict), blocked_keys=blocked_keys
             ),
         ),
-        (schema.SHEET_CARD_TAGS, functools.partial(_apply_card_tags, id_map=id_map)),
-        (schema.SHEET_RELATIONS, functools.partial(_apply_relations, id_map=id_map)),
+        (schema.SHEET_CARD_TAGS, functools.partial(_apply_card_tags, id_map=id_map, user=user)),
+        (schema.SHEET_RELATIONS, functools.partial(_apply_relations, id_map=id_map, user=user)),
     ]
 
     try:
@@ -838,7 +846,9 @@ async def _run(
                     f"license cell {name}: not a valid license count, skipped"
                     for name in invalid_license_cells
                 )
-            await apply_entity_section(db, ent, bundle, sr, ent_resolver, email_to_id, remap_ctx)
+            await apply_entity_section(
+                db, ent, bundle, sr, ent_resolver, email_to_id, remap_ctx, actor=user
+            )
         if adr_ids_before is not None:
             await _apply_legacy_decisions(db, bundle, result, adr_ids_before)
 
@@ -874,7 +884,9 @@ async def _run(
             schema.SHEET_CALCULATIONS,
             "CardCosts",
         }:
-            await _finalize_cards(db)
+            from app.services.permission_service import effective_role_key
+
+            await _finalize_cards(db, include_organizations=effective_role_key(user) == "admin")
     finally:
         if root is not None:
             await root.rollback()
@@ -1355,6 +1367,7 @@ async def _apply_card_types(
     sr: SectionResult,
     dry_run: bool,
     *,
+    user: User | None = None,
     reject_timeline: str | None = None,
     timeline_state: dict[str, bool] | None = None,
 ) -> None:
@@ -1389,6 +1402,19 @@ async def _apply_card_types(
             sr.failed += 1
             continue
         current = existing.get(key)
+        if key == "Organization" and "role_permissions" in data:
+            from app.core.permissions import normalize_organization_role_permissions
+            from app.models.role import Role
+            from app.services.organization_chart import require_organization_admin
+
+            role_keys = set((await db.scalars(select(Role.key))).all())
+            data["role_permissions"] = normalize_organization_role_permissions(
+                data["role_permissions"] or {}, role_keys
+            )
+            if current is None or data["role_permissions"] != (current.role_permissions or {}):
+                if user is None:
+                    raise HTTPException(403, "Not enough permissions")
+                require_organization_admin(user, "Organization")
         if key == "Initiative" and "fields_schema" in data and reject_timeline:
             sr.conflict += 1
             sr.errors.append(f"Initiative Timeline schema: {reject_timeline}")
@@ -1575,7 +1601,7 @@ def _predates_edit_costs(bundle: WorkspaceBundle) -> bool:
     )
 
 
-def _make_config_applier(sec: schema.ConfigSection):
+def _make_config_applier(sec: schema.ConfigSection, user: User | None = None):
     async def _apply(db, bundle: WorkspaceBundle, sr: SectionResult, dry_run: bool) -> None:
         existing_rows = (await db.execute(select(sec.model))).scalars().all()
         index: dict[tuple, Any] = {
@@ -1586,6 +1612,20 @@ def _make_config_applier(sec: schema.ConfigSection):
         )
         for row in bundle.rows(sec.sheet):
             data = _coerce(row, sec.columns, sec.json_columns)
+            if sec.model is StakeholderRoleDefinition:
+                from pydantic import TypeAdapter
+
+                value = data.get("is_position_role")
+                try:
+                    data["is_position_role"] = (
+                        False if value is None else TypeAdapter(bool).validate_python(value)
+                    )
+                except ValidationError as exc:
+                    raise HTTPException(422, "Invalid position role flag") from exc
+                if data["is_position_role"] and (
+                    data.get("card_type_key") != "Organization" or data.get("key") == "observer"
+                ):
+                    raise HTTPException(422, "Invalid position role")
             # A bundle exported from an install that predates the permission
             # renames carries keys the validators would reject. This path writes
             # straight onto the model, bypassing Pydantic entirely, so without
@@ -1625,6 +1665,21 @@ def _make_config_applier(sec: schema.ConfigSection):
                 sr.failed += 1
                 continue
             current = index.get(nk)
+            if (
+                sec.model is StakeholderRoleDefinition
+                and data.get("card_type_key") == "Organization"
+            ):
+                changed = current is None or any(
+                    getattr(current, col) != value
+                    for col, value in data.items()
+                    if col not in sec.natural_key
+                )
+                if changed:
+                    from app.services.organization_chart import require_organization_admin
+
+                    if user is None:
+                        raise HTTPException(403, "Not enough permissions")
+                    require_organization_admin(user, "Organization")
             if current is None:
                 obj = sec.model(**{k: v for k, v in data.items()})
                 db.add(obj)
@@ -1634,6 +1689,27 @@ def _make_config_applier(sec: schema.ConfigSection):
                 cols = [c for c in sec.columns if c not in sec.natural_key]
                 _update_if_changed(current, data, cols, sr)
         await db.flush()
+        if sec.model is Role:
+            from app.core.permissions import normalize_organization_role_permissions
+            from app.services.organization_chart import require_organization_admin
+
+            organization = await db.scalar(
+                select(CardType)
+                .where(CardType.key == "Organization")
+                .with_for_update()
+                .execution_options(populate_existing=True)
+            )
+            if organization is not None:
+                role_keys = set((await db.scalars(select(Role.key))).all())
+                matrix = normalize_organization_role_permissions(
+                    organization.role_permissions or {}, role_keys
+                )
+                if matrix != (organization.role_permissions or {}):
+                    if user is None:
+                        raise HTTPException(403, "Not enough permissions")
+                    require_organization_admin(user, "Organization")
+                    organization.role_permissions = matrix
+                    await db.flush()
 
     return _apply
 
@@ -2060,7 +2136,7 @@ def _merge_settings(
 # ---------------------------------------------------------------------------
 
 
-async def _finalize_cards(db) -> None:
+async def _finalize_cards(db, *, include_organizations: bool = True) -> None:
     """Re-run calculated fields and rescore data quality for every active card.
 
     Mirrors the live card routes: calculations run with the same PPM-managed
@@ -2074,7 +2150,10 @@ async def _finalize_cards(db) -> None:
     from app.services.data_quality import calc_data_quality
     from app.services.derived_writes import derived_maintenance
 
-    ids = list((await db.execute(select(Card.id).where(Card.status != "ARCHIVED"))).scalars().all())
+    statement = select(Card.id).where(Card.status != "ARCHIVED")
+    if not include_organizations:
+        statement = statement.where(Card.type != "Organization")
+    ids = list((await db.execute(statement)).scalars().all())
     # Cards the bundle created carry their own `card.created` event; cards the
     # target already had are only being rescored, so this pass must not re-date
     # the whole inventory to the moment of the import.
@@ -2130,6 +2209,35 @@ def _make_cards_applier(
             str(cid): ctype for cid, ctype in (await db.execute(select(Card.id, Card.type))).all()
         }
 
+        async def preserve_orphan(card_id: Any, data: dict[str, Any]) -> bool:
+            if (
+                data.get("type") != "Organization"
+                or data.get("organization_cone_state") != "orphaned"
+            ):
+                return False
+            card = await db.get(Card, uuid.UUID(str(card_id)))
+            if card is None or card.organization_cone_state == "orphaned":
+                return False
+            from app.services.organization_chart import require_organization_admin
+
+            require_organization_admin(user, "Organization")
+            old = card.organization_cone_state
+            card.organization_cone_state = "orphaned"
+            card.updated_by = user.id
+            if not dry_run:
+                await event_bus.publish(
+                    "card.updated",
+                    {
+                        "id": str(card.id),
+                        "changes": {"organization_cone_state": {"old": old, "new": "orphaned"}},
+                    },
+                    db=db,
+                    card_id=card.id,
+                    user_id=user.id,
+                )
+            sr.updated += 1
+            return True
+
         for row in sorted(rows, key=depth):
             data = _coerce(row, exp.CARD_COLUMNS, exp.CARD_JSON)
             type_key = data.get("type")
@@ -2157,13 +2265,15 @@ def _make_cards_applier(
             same = _card_by_source_id(type_by_id, type_key, source_id)
             if same is not None:
                 ids.record(rm.CARDS, source_id, same)
-                sr.skip("already_present")
+                if not await preserve_orphan(same, data):
+                    sr.skip("already_present")
                 continue
             if external_id:
                 hit = await _card_by_external_id(db, type_key, external_id)
                 if hit:
                     ids.record(rm.CARDS, source_id, hit[0])
-                    sr.skip("already_present")
+                    if not await preserve_orphan(hit[0], data):
+                        sr.skip("already_present")
                     continue
             if archived is not None and data.get("status") == "ARCHIVED":
                 gone = await _archived_card_match(
@@ -2171,12 +2281,14 @@ def _make_cards_applier(
                 )
                 if gone is not None:
                     ids.record(rm.CARDS, source_id, gone)
-                    sr.skip("already_present")
+                    if not await preserve_orphan(gone, data):
+                        sr.skip("already_present")
                     continue
             existing = resolver.resolve(type_key, own_ref)
             if existing.status == "resolved":
                 ids.record(rm.CARDS, source_id, existing.card_id)
-                sr.skip("already_present")
+                if not await preserve_orphan(existing.card_id, data):
+                    sr.skip("already_present")
                 continue
             if existing.status == "ambiguous":
                 sr.skip("ambiguous_match")
@@ -2225,6 +2337,19 @@ def _make_cards_applier(
                         sr.conflict += 1
                         sr.errors.append(f"card {name!r}: parent {parent_path!r} not found")
                         continue
+
+            if type_key == "Organization":
+                from app.services.organization_chart import require_organization_admin
+
+                require_organization_admin(user, type_key)
+                state = data.get("organization_cone_state")
+                if state not in (None, "connected", "orphaned", "unconfirmed_root"):
+                    raise HTTPException(422, "Invalid Organization chart state")
+                if state is None:
+                    state = "connected" if resolved_parent else "unconfirmed_root"
+                data["organization_cone_state"] = state
+            elif data.get("organization_cone_state") is not None:
+                raise HTTPException(422, "Chart state is only valid for Organization")
 
             # One savepoint per row, as bulk create does: a row refused after
             # it was added — the depth check reads the flushed card, a value too
@@ -2278,6 +2403,7 @@ def _make_cards_applier(
                     reference=resolved_reference,
                     alias=data.get("alias"),
                     status=data.get("status") or "ACTIVE",
+                    organization_cone_state=data.get("organization_cone_state"),
                     approval_status=data.get("approval_status") or "DRAFT",
                     # The exported channel, verbatim. A pre-157 bundle carries
                     # none: None lets ``ProvenanceMixin`` stamp the importing
@@ -2395,6 +2521,7 @@ async def _apply_card_tags(
     dry_run: bool,
     *,
     id_map: rm.IdMap | None = None,
+    user: User | None = None,
 ) -> None:
     ids = id_map if id_map is not None else rm.IdMap()
     rows = bundle.rows(schema.SHEET_CARD_TAGS)
@@ -2406,6 +2533,10 @@ async def _apply_card_tags(
     existing_links = {
         (ct.card_id, ct.tag_id) for ct in (await db.execute(select(CardTag))).scalars().all()
     }
+    organization_ids = None
+    from app.services.permission_service import effective_role_key
+
+    is_admin = user is not None and effective_role_key(user) == "admin"
     for row in rows:
         ctype = row.get("card_type")
         cref = row.get("card_ref")
@@ -2429,6 +2560,21 @@ async def _apply_card_tags(
         if link in existing_links:
             sr.skip("already_present")
             continue
+        if not is_admin:
+            if organization_ids is None:
+                organization_ids = set(
+                    (await db.scalars(select(Card.id).where(Card.type == "Organization"))).all()
+                )
+            if card_id in organization_ids:
+                from app.services.card_read_scope import require_card_readable
+                from app.services.organization_chart import require_organization_admin
+
+                if user is None:
+                    raise HTTPException(403, "Not enough permissions")
+                await require_card_readable(
+                    db, user, card_id, mode="module", type_key="Organization"
+                )
+                require_organization_admin(user, "Organization")
         db.add(CardTag(card_id=card_id, tag_id=tag.id))
         existing_links.add(link)
         sr.created += 1
@@ -2442,6 +2588,7 @@ async def _apply_relations(
     dry_run: bool,
     *,
     id_map: rm.IdMap | None = None,
+    user: User | None = None,
 ) -> None:
     ids = id_map if id_map is not None else rm.IdMap()
     rows = bundle.rows(schema.SHEET_RELATIONS)
@@ -2471,6 +2618,10 @@ async def _apply_relations(
         (rel.type, rel.source_id, rel.target_id): rel.id
         for rel in (await db.execute(select(Relation))).scalars().all()
     }
+    organization_ids = None
+    from app.services.permission_service import effective_role_key
+
+    is_admin = user is not None and effective_role_key(user) == "admin"
     for row, data, resolved in resolved_rows:
         rtype, source_id, target_id = resolved
         key = (rtype, source_id, target_id)
@@ -2479,6 +2630,23 @@ async def _apply_relations(
             ids.record(rm.RELATIONS, row.get(schema.SOURCE_ID_COLUMN), existing_id)
             sr.skip("already_present")
             continue
+        if not is_admin:
+            if organization_ids is None:
+                organization_ids = set(
+                    (await db.scalars(select(Card.id).where(Card.type == "Organization"))).all()
+                )
+            org_ids = organization_ids & {source_id, target_id}
+            if org_ids:
+                from app.services.card_read_scope import require_card_readable
+                from app.services.organization_chart import require_organization_admin
+
+                if user is None:
+                    raise HTTPException(403, "Not enough permissions")
+                for card_id in org_ids:
+                    await require_card_readable(
+                        db, user, card_id, mode="module", type_key="Organization"
+                    )
+                require_organization_admin(user, "Organization")
         attributes = data.get("attributes") or {}
         values = dict(
             id=uuid.uuid4(),

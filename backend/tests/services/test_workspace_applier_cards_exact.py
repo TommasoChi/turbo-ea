@@ -443,8 +443,8 @@ async def test_reverse_er_restore_maps_to_the_existing_relation(db):
 def finalized(monkeypatch):
     calls = []
 
-    async def fake(db):
-        calls.append(db)
+    async def fake(db, *, include_organizations):
+        calls.append((db, include_organizations))
 
     monkeypatch.setattr(applier, "_finalize_cards", fake)
     return calls
@@ -497,7 +497,7 @@ async def test_a_full_run_walks_every_section_in_dependency_order(db, env, final
         SHEET_BOOKMARK_SHARES,
     ]
     assert result.dry_run is True
-    assert finalized == [db]
+    assert finalized == [(db, True)]
 
 
 async def test_a_selective_run_touches_only_its_sheets(db, env, finalized, invalidated):
@@ -536,7 +536,7 @@ async def test_a_selective_run_touches_only_its_sheets(db, env, finalized, inval
 )
 async def test_any_card_affecting_sheet_triggers_the_final_pass(db, env, finalized, sheet):
     await applier.apply_selected(db, bundle({}), env.user, sheets={sheet}, dry_run=True)
-    assert finalized == [db]
+    assert finalized == [(db, True)]
 
 
 async def test_a_dry_run_leaves_nothing_behind(db, env, finalized, invalidated):

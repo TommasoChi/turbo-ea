@@ -322,11 +322,13 @@ async def record_child_strategy_effects(
     broken: set[uuid.UUID] = set()
     previous_parents: dict[uuid.UUID, uuid.UUID | None] = {}
     previous_labels: dict[uuid.UUID, str | None] = {}
+    previous_cone_states: dict[uuid.UUID, str | None] = {}
     for result in results:
         touched.update(result.disconnected_ids)
         broken.update(result.approval_broken_ids)
         previous_parents.update(result.previous_parent_ids)
         previous_labels.update(result.previous_parent_labels)
+        previous_cone_states.update(result.previous_cone_states)
     touched -= removed_ids
     if not touched:
         return
@@ -350,6 +352,11 @@ async def record_child_strategy_effects(
         # happened, so a card that never had one records no phantom change.
         if child_id in previous_labels:
             changes["parent_label"] = {"old": previous_labels[child_id], "new": None}
+        if child_id in previous_cone_states:
+            changes["organization_cone_state"] = {
+                "old": previous_cone_states[child_id],
+                "new": child.organization_cone_state,
+            }
         if child_id in broken:
             changes["approval_status"] = approval_change_entry()
         await event_bus.publish(

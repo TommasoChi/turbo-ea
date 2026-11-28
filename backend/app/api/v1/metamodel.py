@@ -19,6 +19,7 @@ from app.api.deps import get_current_user
 from app.core.permissions import (
     APP_PERMISSIONS,
     TYPE_SCOPED_APP_PERMISSIONS,
+    normalize_organization_role_permissions,
     validate_type_role_permissions,
 )
 from app.database import get_db
@@ -616,7 +617,11 @@ _TYPE_PERMISSION_ORDER: tuple[str, ...] = (
 
 
 async def _validated_role_permissions(
-    db: AsyncSession, raw: object, *, subtypes: list[dict] | None = None
+    db: AsyncSession,
+    raw: object,
+    *,
+    subtypes: list[dict] | None = None,
+    organization: bool = False,
 ) -> dict:
     """Validate a ``role_permissions`` payload against the live role list.
 
@@ -634,13 +639,23 @@ async def _validated_role_permissions(
         if (perms or {}).get("*"):
             wildcard.add(role_key)
     known_subtype_keys = {s["key"] for s in (subtypes or [])}
+    forced = {}
+    if organization and isinstance(raw, dict):
+        denies = {"inventory.create": False, "inventory.edit": False, "inventory.delete": False}
+        forced = {
+            key: cells
+            for key, cells in raw.items()
+            if key != "admin" and key in wildcard and cells == denies
+        }
+        raw = {key: cells for key, cells in raw.items() if key not in forced}
     try:
-        return validate_type_role_permissions(
+        validated = validate_type_role_permissions(
             raw,
             known_role_keys=known,
             wildcard_role_keys=wildcard,
             known_subtype_keys=known_subtype_keys,
         )
+        return {**validated, **forced}
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
 
@@ -1512,13 +1527,19 @@ async def update_type(
     await PermissionService.require_permission(db, user, "admin.metamodel")
     _validate_color(body)
     _validate_archimate(body)
-    result = await db.execute(select(CardType).where(CardType.key == key))
+    query = select(CardType).where(CardType.key == key)
+    if key == "Organization" and "role_permissions" in body:
+        query = query.with_for_update().execution_options(populate_existing=True)
+    result = await db.execute(query)
     t = result.scalar_one_or_none()
     if not t:
         raise HTTPException(404, "Type not found")
 
     # Prevent removing stakeholder roles that are in use
     if "stakeholder_roles" in body:
+        from app.services.organization_chart import require_organization_admin
+
+        require_organization_admin(user, key)
         old_keys = {r["key"] for r in (t.stakeholder_roles or [])}
         new_keys = {r["key"] for r in (body["stakeholder_roles"] or [])}
         removed = old_keys - new_keys
@@ -1705,8 +1726,13 @@ async def update_type(
     # validated against the live role list, and a wildcard role is refused.
     if "role_permissions" in body:
         t.role_permissions = await _validated_role_permissions(
-            db, body["role_permissions"], subtypes=t.subtypes
+            db, body["role_permissions"], subtypes=t.subtypes, organization=t.key == "Organization"
         )
+        if t.key == "Organization":
+            role_keys = set((await db.execute(select(Role.key))).scalars())
+            t.role_permissions = normalize_organization_role_permissions(
+                t.role_permissions, role_keys
+            )
 
     audit_after = _audit_snapshot(t, audit_fields)
     role_labels = (

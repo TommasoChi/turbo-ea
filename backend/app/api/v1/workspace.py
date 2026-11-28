@@ -32,6 +32,12 @@ from app.database import async_session, get_db
 from app.models.user import User
 from app.models.workspace_transfer import WorkspaceTransfer
 from app.services import audit_log
+from app.services.deferred_authorization import (
+    _authorize_job,
+    _capture_job_authorization,
+    _job_impersonation,
+    _JobAuthorization,
+)
 from app.services.event_bus import request_impersonation
 from app.services.permission_service import PermissionService
 from app.services.workspace_io import (
@@ -219,7 +225,9 @@ async def upload_workspace(
     await db.commit()
     await db.refresh(transfer)
 
-    background_tasks.add_task(_preview_job, str(transfer.id), str(user.id))
+    background_tasks.add_task(
+        _preview_job, str(transfer.id), str(user.id), _capture_job_authorization(user)
+    )
     return _to_out(transfer)
 
 
@@ -286,7 +294,9 @@ async def apply_workspace_transfer(
     )
     await db.commit()
     await db.refresh(transfer)
-    background_tasks.add_task(_apply_job, str(transfer.id), str(user.id))
+    background_tasks.add_task(
+        _apply_job, str(transfer.id), str(user.id), _capture_job_authorization(user)
+    )
     return _to_out(transfer)
 
 
@@ -372,7 +382,11 @@ async def _claim_bundle_path(transfer_id_str: str, user_id_str: str, label: str)
         if transfer.status != expected_status:
             return _Claim(None, transfer_exists=False)
         user = (
-            await db.execute(select(User).where(User.id == uuid.UUID(user_id_str)))
+            await db.execute(
+                select(User)
+                .where(User.id == uuid.UUID(user_id_str))
+                .execution_options(populate_existing=True)
+            )
         ).scalar_one_or_none()
         if user is None or not transfer.storage_path:
             transfer.status = "failed"
@@ -404,10 +418,12 @@ async def _heartbeat(transfer_id_str: str, status: str) -> None:
             logger.exception("workspace transfer heartbeat failed")
 
 
-async def _run_workspace_job(job, transfer_id_str: str, user_id_str: str, status: str) -> None:
+async def _run_workspace_job(
+    job, transfer_id_str: str, user_id_str: str, status: str, context: _JobAuthorization | None
+) -> None:
     heartbeat = asyncio.create_task(_heartbeat(transfer_id_str, status))
     try:
-        await job(transfer_id_str, user_id_str)
+        await job(transfer_id_str, user_id_str, context)
     finally:
         heartbeat.cancel()
         try:
@@ -416,11 +432,15 @@ async def _run_workspace_job(job, transfer_id_str: str, user_id_str: str, status
             pass
 
 
-async def _preview_job(transfer_id_str: str, user_id_str: str) -> None:
-    await _run_workspace_job(_run_preview_job, transfer_id_str, user_id_str, "parsing")
+async def _preview_job(
+    transfer_id_str: str, user_id_str: str, context: _JobAuthorization | None = None
+) -> None:
+    await _run_workspace_job(_run_preview_job, transfer_id_str, user_id_str, "parsing", context)
 
 
-async def _run_preview_job(transfer_id_str: str, user_id_str: str) -> None:
+async def _run_preview_job(
+    transfer_id_str: str, user_id_str: str, context: _JobAuthorization | None = None
+) -> None:
     storage_path = (await _claim_bundle_path(transfer_id_str, user_id_str, "Preview")).path
     if storage_path is None:
         return
@@ -449,10 +469,18 @@ async def _run_preview_job(transfer_id_str: str, user_id_str: str) -> None:
                     )
                 ).scalar_one_or_none()
                 user = (
-                    await db.execute(select(User).where(User.id == uuid.UUID(user_id_str)))
+                    await db.execute(
+                        select(User)
+                        .where(User.id == uuid.UUID(user_id_str))
+                        .execution_options(populate_existing=True)
+                    )
                 ).scalar_one_or_none()
                 if transfer is None or user is None or transfer.status != "parsing":
                     return
+                if not await _authorize_job(db, user, context):
+                    raise HTTPException(
+                        403, "The requesting user is no longer authorized to import workspaces"
+                    )
                 transfer.format_version = bundle.format_version
                 transfer.source_app_version = bundle.manifest.get("app_version")
                 transfer.source_url = bundle.manifest.get("source_url")
@@ -464,7 +492,11 @@ async def _run_preview_job(transfer_id_str: str, user_id_str: str) -> None:
                     )
                     await db.commit()
                     return
-                result = await diff_bundle(db, bundle, user)
+                token = request_impersonation.set(_job_impersonation(user, context))
+                try:
+                    result = await diff_bundle(db, bundle, user)
+                finally:
+                    request_impersonation.reset(token)
                 transfer.diff = result.as_dict()
                 transfer.status = "previewed"
                 transfer.previewed_at = datetime.now(timezone.utc)
@@ -477,11 +509,15 @@ async def _run_preview_job(transfer_id_str: str, user_id_str: str) -> None:
         bundle.close()
 
 
-async def _apply_job(transfer_id_str: str, user_id_str: str) -> None:
-    await _run_workspace_job(_run_apply_job, transfer_id_str, user_id_str, "applying")
+async def _apply_job(
+    transfer_id_str: str, user_id_str: str, context: _JobAuthorization | None = None
+) -> None:
+    await _run_workspace_job(_run_apply_job, transfer_id_str, user_id_str, "applying", context)
 
 
-async def _run_apply_job(transfer_id_str: str, user_id_str: str) -> None:
+async def _run_apply_job(
+    transfer_id_str: str, user_id_str: str, context: _JobAuthorization | None = None
+) -> None:
     claim = await _claim_bundle_path(transfer_id_str, user_id_str, "Apply")
     storage_path = claim.path
     if storage_path is None:
@@ -526,37 +562,26 @@ async def _run_apply_job(transfer_id_str: str, user_id_str: str) -> None:
                     )
                 ).scalar_one_or_none()
                 user = (
-                    await db.execute(select(User).where(User.id == uuid.UUID(user_id_str)))
+                    await db.execute(
+                        select(User)
+                        .where(User.id == uuid.UUID(user_id_str))
+                        .execution_options(populate_existing=True)
+                    )
                 ).scalar_one_or_none()
                 if transfer is None or transfer.status != "applying":
                     return
-                now = datetime.now(timezone.utc)
-                impersonation = request_impersonation.get()
-                can_impersonate = True
-                if user is not None and impersonation and impersonation[0] == str(user.id):
-                    token = request_impersonation.set(None)
-                    try:
-                        can_impersonate = await PermissionService.has_app_permission(
-                            db, user, "admin.impersonate", fresh=True
-                        )
-                    finally:
-                        request_impersonation.reset(token)
-                if (
-                    user is None
-                    or not user.is_active
-                    or (user.access_expires_at is not None and user.access_expires_at < now)
-                    or not can_impersonate
-                    or not await PermissionService.has_app_permission(
-                        db, user, "admin.import_workspace", fresh=True
-                    )
-                ):
+                if user is None or not await _authorize_job(db, user, context):
                     message = "The requesting user is no longer authorized to import workspaces"
                     transfer.status = "failed"
                     transfer.error_message = message
                     await db.commit()
                     completion = ("failure", {"error": message})
                 else:
-                    result = await apply_bundle(db, bundle, user, commit=False)
+                    token = request_impersonation.set(_job_impersonation(user, context))
+                    try:
+                        result = await apply_bundle(db, bundle, user, commit=False)
+                    finally:
+                        request_impersonation.reset(token)
                     transfer.result = result.as_dict()
                     transfer.status = "applied" if result.total_failed == 0 else "failed"
                     transfer.applied_at = datetime.now(timezone.utc)
@@ -606,7 +631,11 @@ async def _record_import_completed(
             )
         ).scalar_one_or_none()
         actor = (
-            await db.execute(select(User).where(User.id == uuid.UUID(user_id_str)))
+            await db.execute(
+                select(User)
+                .where(User.id == uuid.UUID(user_id_str))
+                .execution_options(populate_existing=True)
+            )
         ).scalar_one_or_none()
         await audit_log.record(
             db,

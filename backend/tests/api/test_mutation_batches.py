@@ -438,8 +438,10 @@ async def test_rollback_requires_parent_read_access(monkeypatch):
     from app.api.v1 import mutation_batches as routes
 
     card_id, parent_id = uuid.uuid4(), uuid.uuid4()
-    db = SimpleNamespace(get=AsyncMock(return_value=SimpleNamespace(parent_id=None)))
-    user = SimpleNamespace(id=uuid.uuid4())
+    db = SimpleNamespace(
+        get=AsyncMock(return_value=SimpleNamespace(type="Application", parent_id=None))
+    )
+    user = SimpleNamespace(id=uuid.uuid4(), role="member")
     readable = AsyncMock(side_effect=[None, HTTPException(status_code=404)])
     monkeypatch.setattr(routes, "require_card_readable", readable)
     monkeypatch.setattr(routes.PermissionService, "require_permission", AsyncMock())
@@ -465,7 +467,8 @@ async def test_rollback_tag_operations_use_tag_permission(monkeypatch, operation
     from app.api.v1 import mutation_batches as routes
     from app.services import tag_service
 
-    db, user, card_id = object(), SimpleNamespace(id=uuid.uuid4()), uuid.uuid4()
+    db = SimpleNamespace(get=AsyncMock(return_value=SimpleNamespace(type="Application")))
+    user, card_id = SimpleNamespace(id=uuid.uuid4(), role="member"), uuid.uuid4()
     monkeypatch.setattr(routes, "require_card_readable", AsyncMock())
     permission = AsyncMock(return_value=True)
     monkeypatch.setattr(tag_service, "can_tag_card", permission)
@@ -483,8 +486,8 @@ async def test_rollback_tag_operations_use_tag_permission(monkeypatch, operation
 async def test_rollback_requires_current_card_edit_permission(monkeypatch):
     from app.api.v1 import mutation_batches as routes
 
-    db = object()
-    user = SimpleNamespace(id=uuid.uuid4())
+    db = SimpleNamespace(get=AsyncMock(return_value=SimpleNamespace(type="Application")))
+    user = SimpleNamespace(id=uuid.uuid4(), role="member")
     card_id = uuid.uuid4()
     check = AsyncMock(side_effect=HTTPException(status_code=403))
     monkeypatch.setattr(routes.PermissionService, "require_permission", check)
@@ -773,9 +776,10 @@ async def test_rollback_delete_card_protects_hidden_child(monkeypatch, hidden, e
     from app.api.v1 import mutation_batches as routes
 
     db = SimpleNamespace(
-        scalar=AsyncMock(side_effect=[uuid.uuid4()] if hidden else [None, uuid.uuid4()])
+        scalar=AsyncMock(side_effect=[uuid.uuid4()] if hidden else [None, uuid.uuid4()]),
+        get=AsyncMock(return_value=SimpleNamespace(type="Application")),
     )
-    user = SimpleNamespace(id=uuid.uuid4())
+    user = SimpleNamespace(id=uuid.uuid4(), role="member")
     scope = SimpleNamespace(clause=lambda card, mode: card.type != "Hidden")
     monkeypatch.setattr(routes.CardReadScope, "load", AsyncMock(return_value=scope))
     monkeypatch.setattr(routes, "require_card_readable", AsyncMock())

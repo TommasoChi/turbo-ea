@@ -1,3 +1,4 @@
+import { useOptionalAuthUser } from "@/hooks/AuthContext";
 import { useState, useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import type { KeyboardEvent } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router";
@@ -54,7 +55,7 @@ import {
 import { useGamificationEnabled } from "@/hooks/useGamificationEnabled";
 import OriginChip from "@/components/OriginChip";
 import CardDetailContent from "@/features/cards/CardDetailContent";
-import { DEFAULT_CARD_PERMISSIONS } from "@/features/cards/defaultPermissions";
+import { CLOSED_CARD_PERMISSIONS, DEFAULT_CARD_PERMISSIONS } from "@/features/cards/defaultPermissions";
 import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
 import type {
   Card,
@@ -77,6 +78,9 @@ export default function CardDetail() {
   const stLabel = useSubtypeLabel();
   const relLabel = useRelationLabel();
   const resolveSubtypeLabel = useCardSubtypeLabel();
+  const user = useOptionalAuthUser();
+  const identity = `${user?.id ?? ""}:${user?.role ?? ""}:${user?.impersonated_role ?? ""}`;
+  const organizationAdmin = (user?.impersonated_role ?? user?.role) === "admin";
   const [card, setCard] = useState<Card | null>(null);
   // Browser tab title; falls back to the route's «Card» label while loading,
   // and follows an inline rename without a reload.
@@ -84,7 +88,22 @@ export default function CardDetail() {
   const [initialTab, setInitialTab] = useState<number | string>(0);
   const [initialSubTab, setInitialSubTab] = useState<number | undefined>(undefined);
   const [error, setError] = useState("");
-  const [perms, setPerms] = useState<CardEffectivePermissions["effective"]>(DEFAULT_CARD_PERMISSIONS);
+  const [loadedPermissions, setLoadedPermissions] = useState<{
+    id: string;
+    identity: string;
+    effective: CardEffectivePermissions["effective"];
+    inheritedRoles?: CardEffectivePermissions["inherited_stakeholder_roles"];
+  } | null>(null);
+  const matchingPermissions = loadedPermissions && loadedPermissions.id === id && loadedPermissions.identity === identity
+    ? loadedPermissions.effective
+    : null;
+  const perms = card?.type === "Organization" && !organizationAdmin
+    ? {
+        ...CLOSED_CARD_PERMISSIONS,
+        can_view: matchingPermissions?.can_view ?? true,
+        can_view_costs: matchingPermissions?.can_view_costs ?? false,
+      }
+    : matchingPermissions ?? (card?.type === "Organization" ? CLOSED_CARD_PERMISSIONS : DEFAULT_CARD_PERMISSIONS);
   const [archiveDialogOpen, setArchiveDialogOpen] = useState(false);
   // A data-quality jump from the pill (#1334), tied to the card it was asked
   // on so it never replays on the next card this view shows.
@@ -203,12 +222,18 @@ export default function CardDetail() {
   // Fetch effective permissions for this card
   useEffect(() => {
     if (!id) return;
-    setPerms(DEFAULT_CARD_PERMISSIONS);
+    let current = true;
+    setLoadedPermissions(null);
     api
       .get<CardEffectivePermissions>(`/cards/${id}/my-permissions`)
-      .then((res) => setPerms(res.effective))
-      .catch(() => {}); // keep defaults on error
-  }, [id]);
+      .then((res) => {
+        if (current) setLoadedPermissions({ id, identity, effective: res.effective, inheritedRoles: res.inherited_stakeholder_roles });
+      })
+      .catch(() => {});
+    return () => {
+      current = false;
+    };
+  }, [id, identity]);
 
   // Fetch PPM cost existence for Initiative cards
   useEffect(() => {
@@ -261,20 +286,28 @@ export default function CardDetail() {
       .then((favs) => setIsFavorite(favs.some((f) => f.card_id === id)))
       .catch(() => setIsFavorite(false));
 
-    // Observe state + whether the Observer role exists on this card type.
-    api
-      .get<{ is_observer: boolean; observer_role_available: boolean }>(
-        `/cards/${id}/me/observe`,
-      )
-      .then((r) => {
-        setIsObserver(r.is_observer);
-        setObserverRoleAvailable(r.observer_role_available);
-      })
-      .catch(() => {
-        setIsObserver(false);
-        setObserverRoleAvailable(false);
-      });
   }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const canLoadObserveStatus = Boolean(
+    id && card?.id === id &&
+    (card.type !== "Organization" || (organizationAdmin && matchingPermissions?.can_self_observe)),
+  );
+  useEffect(() => {
+    setIsObserver(false);
+    setObserverRoleAvailable(false);
+    if (!canLoadObserveStatus) return;
+    let current = true;
+    api.get<{ is_observer: boolean; observer_role_available: boolean }>(`/cards/${id}/me/observe`)
+      .then((r) => {
+        if (current) {
+          setIsObserver(r.is_observer);
+          setObserverRoleAvailable(r.observer_role_available);
+        }
+      }).catch(() => {});
+    return () => {
+      current = false;
+    };
+  }, [id, identity, canLoadObserveStatus]);
 
   const toggleFavorite = async () => {
     if (!id || favoriteSaving) return;
@@ -856,7 +889,7 @@ export default function CardDetail() {
                     : t("cards:actions.addToFavorites")}
                 </ListItemText>
               </MenuItem>
-              {(observerRoleAvailable || isObserver) && (
+              {(card.type !== "Organization" || (loadedPermissions && organizationAdmin && loadedPermissions.id === id && loadedPermissions.identity === identity && loadedPermissions.effective.can_self_observe)) && (observerRoleAvailable || isObserver) && (
                 <MenuItem
                   onClick={() => {
                     setActionsMenuAnchor(null);
@@ -955,6 +988,7 @@ export default function CardDetail() {
           key={card.id}
           card={card}
           perms={perms}
+          inheritedRoles={loadedPermissions && loadedPermissions.id === id && loadedPermissions.identity === identity ? loadedPermissions.inheritedRoles : undefined}
           showPpmSummary
           onCardUpdate={setCard}
           onSaveOrigin={reportSaveOrigin}

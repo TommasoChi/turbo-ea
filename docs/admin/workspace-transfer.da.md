@@ -83,3 +83,5 @@ Overførsel af arbejdsområde er bevogtet af to dedikerede tilladelser, begge ti
 
 - `admin.export_workspace` — eksportér bundtet.
 - `admin.import_workspace` — forhåndsvis og anvend en import.
+
+Kun Admin kan importere ændringer til **Organization**-diagrammet, dets interessenttilknytninger eller positionsroller. Workspace Transfer overfører markeringer af positionsroller og status for forældreløse grene. Hvis en bundle ikke indeholder markeringen for en positionsrolle, importeres rollen med markeringen slået fra. En import kan hverken genforbinde en suspenderet gren til synlighedsarv eller ændre aktiveringen af synlighedskegler i destinationen. Når synlighedskegler er tilgængelige, kan Admin genoptage arv for en forældreløs gren ved udtrykkeligt at knytte den til en gyldig aktiv overordnet node i diagrammet.

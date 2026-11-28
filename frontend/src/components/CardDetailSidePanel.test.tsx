@@ -14,6 +14,8 @@ import Popover from "@mui/material/Popover";
 import { MemoryRouter } from "react-router";
 import CardDetailSidePanel from "./CardDetailSidePanel";
 
+const panelIdentity = vi.hoisted(() => ({ id: "u1", role: "admin", impersonated_role: null as string | null }));
+vi.mock("@/hooks/AuthContext", () => ({ useOptionalAuthUser: () => panelIdentity }));
 vi.mock("@/api/client", () => ({
   api: { get: vi.fn(), post: vi.fn(), patch: vi.fn(), delete: vi.fn() },
 }));
@@ -45,7 +47,7 @@ vi.mock("@/features/cards/CardDetailContent", () => ({
     focusTarget,
     perms,
   }: {
-    perms?: { can_manage_stakeholders?: boolean };
+    perms?: { can_manage_stakeholders?: boolean; can_edit?: boolean };
     card: { name: string; data_quality: number };
     onCardUpdate: (c: unknown) => void;
     onSaveOrigin?: (anchor: string) => void;
@@ -61,6 +63,7 @@ vi.mock("@/features/cards/CardDetailContent", () => ({
     <div
       data-testid="card-content"
       data-can-manage-stakeholders={String(perms?.can_manage_stakeholders)}
+      data-can-edit={String(perms?.can_edit)}
       data-focus-anchor={focusTarget ? (focusTarget.target.anchor ?? "") : "none"}
       data-focus-field={focusTarget?.target.fieldKey ?? ""}
       data-focus-nonce={focusTarget ? String(focusTarget.nonce) : "none"}
@@ -161,6 +164,7 @@ const OTHER = { ...CARD, id: "c2", name: "Salesforce" };
 
 beforeEach(() => {
   vi.clearAllMocks();
+  panelIdentity.impersonated_role = null;
   gamification.enabled = false;
   metamodel.type = undefined;
   metamodel.relationTypes = [];
@@ -861,4 +865,25 @@ describe("CardDetailSidePanel — focus (UI SDK 1.37)", () => {
     rerenderWith({ section: "tags" }, "c1");
     expect(nonce()).toBe("1");
   });
+});
+
+
+it("keeps Organization read-only while permissions are pending", async () => {
+  vi.mocked(api.get).mockImplementation((path: string) =>
+    path.endsWith("/my-permissions") ? new Promise(() => {}) : Promise.resolve({ ...CARD, type: "Organization" }),
+  );
+  mount();
+  expect(await screen.findByTestId("card-content")).toHaveAttribute("data-can-edit", "false");
+});
+
+
+it("immediately removes Organization edit after impersonation on the same card", async () => {
+  vi.mocked(api.get).mockImplementation((path: string) => path.endsWith("/my-permissions")
+    ? Promise.resolve({ effective: { can_edit: true, can_manage_stakeholders: true } })
+    : Promise.resolve({ ...CARD, type: "Organization" }));
+  const view = mount();
+  await waitFor(() => expect(screen.getByTestId("card-content")).toHaveAttribute("data-can-edit", "true"));
+  panelIdentity.impersonated_role = "member";
+  view.rerenderWith("c1");
+  expect(screen.getByTestId("card-content")).toHaveAttribute("data-can-edit", "false");
 });

@@ -498,12 +498,44 @@ async def apply_entity_section(
     resolver: CardResolver,
     email_to_id: dict[str, Any],
     remap: RemapContext | None = None,
+    *,
+    actor: Any = None,
 ) -> None:
     """Create rows for a section, preserving PKs and resolving card/user FKs.
 
     A dry run needs nothing of its own here: ``_run`` wraps the whole preview
     in one savepoint and rolls it back.
     """
+
+    organization_ids: set[uuid_mod.UUID] | None = None
+
+    async def require_card_writes(kwargs: dict[str, Any]) -> None:
+        nonlocal organization_ids
+
+        from app.models.card import Card
+        from app.services.card_read_scope import require_card_readable
+        from app.services.organization_chart import require_organization_admin
+        from app.services.permission_service import effective_role_key
+
+        if actor is not None and effective_role_key(actor) == "admin":
+            return
+        ids = {kwargs.get(col) for col in section.card_fk_columns if kwargs.get(col)}
+        if not ids:
+            return
+        if organization_ids is None:
+            organization_ids = set(
+                (await db.execute(sa.select(Card.id).where(Card.type == "Organization")))
+                .scalars()
+                .all()
+            )
+        for card_id in organization_ids.intersection(ids):
+            if actor is None:
+                from fastapi import HTTPException
+
+                raise HTTPException(403, "Not enough permissions")
+            await require_card_readable(db, actor, card_id, mode="module", type_key="Organization")
+            require_organization_admin(actor, "Organization")
+
     rows = bundle.rows(section.sheet)
     if not rows:
         return
@@ -784,6 +816,13 @@ async def apply_entity_section(
             if match is not None:
                 if rewrite is not None and remap is not None:
                     sr.note_references(rewrite(kwargs, remap))
+                if any(
+                    col not in pk_cols and getattr(match, col) != kwargs[col] for col in value_cols
+                ):
+                    await require_card_writes(
+                        {col: getattr(match, col) for col in section.card_fk_columns}
+                    )
+                    await require_card_writes(kwargs)
                 changed = False
                 for col in value_cols:
                     if col not in pk_cols and getattr(match, col) != kwargs[col]:
@@ -798,6 +837,19 @@ async def apply_entity_section(
             if rewrite is not None and remap is not None:
                 original = {c: copy.deepcopy(kwargs.get(c)) for c in section.id_bearing_columns}
                 tally = rewrite(kwargs, remap)
+                will_heal = (
+                    bool(section.id_bearing_columns)
+                    and tally.changed()
+                    and all(
+                        getattr(current, col) == original.get(col)
+                        for col in section.id_bearing_columns
+                    )
+                )
+                if will_heal:
+                    await require_card_writes(
+                        {col: getattr(current, col) for col in section.card_fk_columns}
+                    )
+                    await require_card_writes(kwargs)
                 if heal_row(current, original, kwargs, section.id_bearing_columns, tally):
                     sr.note_references(tally, healed=True)
                     continue
@@ -806,6 +858,7 @@ async def apply_entity_section(
 
         if rewrite is not None and remap is not None:
             sr.note_references(rewrite(kwargs, remap))
+        await require_card_writes(kwargs)
         obj = model(**kwargs)
         db.add(obj)
         existing_by_pk[pk_vals] = obj

@@ -6,6 +6,7 @@ These tests require a PostgreSQL test database and an HTTP test client.
 from __future__ import annotations
 
 import uuid
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
@@ -47,6 +48,51 @@ async def users_env(db):
 
 
 class TestListUsers:
+    async def test_position_nominees_exclude_expired_and_inactive_users(
+        self, client, db, users_env
+    ):
+        now = datetime.now(timezone.utc)
+        expired = await create_user(db, email="expired-position@example.com", role="member")
+        expired.access_expires_at = now - timedelta(days=1)
+        future = await create_user(db, email="future-position@example.com", role="member")
+        future.access_expires_at = now + timedelta(days=1)
+        inactive = await create_user(db, email="inactive-position@example.com", role="member")
+        inactive.is_active = False
+        await db.flush()
+
+        headers = auth_headers(users_env["admin"])
+        response = await client.get(
+            "/api/v1/users?eligible_for_organization_position=true&include_inactive=true",
+            headers=headers,
+        )
+        assert response.status_code == 200
+        emails = {row["email"] for row in response.json()}
+        assert expired.email not in emails
+        assert inactive.email not in emails
+        assert future.email in emails
+        assert users_env["member"].email in emails
+        assert all("access_expires_at" not in row for row in response.json())
+
+        ordinary = await client.get("/api/v1/users", headers=headers)
+        assert ordinary.status_code == 200
+        assert expired.email in {row["email"] for row in ordinary.json()}
+
+    @pytest.mark.parametrize("impersonated", [False, True])
+    async def test_position_nominee_filter_requires_effective_admin(
+        self, client, users_env, impersonated
+    ):
+        from app.core.security import create_access_token
+
+        actor = users_env["admin"] if impersonated else users_env["member"]
+        token = create_access_token(
+            actor.id, actor.role, impersonated_role="member" if impersonated else None
+        )
+        response = await client.get(
+            "/api/v1/users?eligible_for_organization_position=true",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 403
+
     async def test_list_returns_users(self, client, db, users_env):
         admin = users_env["admin"]
         resp = await client.get(

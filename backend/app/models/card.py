@@ -26,6 +26,7 @@ class Card(Base, UUIDMixin, TimestampMixin, ProvenanceMixin):
     # one column on the child row, so its label is too — there is no join table
     # and no `relations` row behind a parent/child link.
     parent_label: Mapped[str | None] = mapped_column(String(100))
+    organization_cone_state: Mapped[str | None] = mapped_column(String(30))
     lifecycle: Mapped[dict | None] = mapped_column(JSONB, default=dict)
     lifecycle_stage: Mapped[str | None] = mapped_column(String(50))
     attributes: Mapped[dict | None] = mapped_column(JSONB, default=dict)

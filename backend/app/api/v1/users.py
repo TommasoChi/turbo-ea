@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import copy
 import uuid
+from datetime import datetime, timezone
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, EmailStr, Field
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
@@ -22,7 +23,7 @@ from app.models.user import (
 )
 from app.services import audit_changes, audit_labels, audit_log
 from app.services.extensions import notification_channels, notification_types
-from app.services.permission_service import PermissionService
+from app.services.permission_service import PermissionService, effective_role_key
 from app.services.sso_service import get_sso_config
 
 router = APIRouter(prefix="/users", tags=["users"])
@@ -194,9 +195,22 @@ async def list_users(
             "list disabled accounts. The Users admin page passes True."
         ),
     ),
+    eligible_for_organization_position: bool = Query(
+        False, description="Return active, unexpired Organization position nominees. Admin only."
+    ),
 ):
     stmt = select(User).order_by(User.display_name)
-    if not include_inactive:
+    if eligible_for_organization_position:
+        if effective_role_key(user) != "admin":
+            raise HTTPException(403, "Not enough permissions")
+        stmt = stmt.where(
+            User.is_active.is_(True),
+            or_(
+                User.access_expires_at.is_(None),
+                User.access_expires_at >= datetime.now(timezone.utc),
+            ),
+        )
+    elif not include_inactive:
         stmt = stmt.where(User.is_active.is_(True))
     result = await db.execute(stmt)
     users = result.scalars().all()

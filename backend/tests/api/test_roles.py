@@ -703,3 +703,23 @@ class TestRoleChanges:
                 {"kind": "permission.granted", "permission": "b.view"},
             ],
         )
+
+
+async def test_new_role_gets_organization_write_denies(client, db):
+    from tests.conftest import create_card_type
+
+    await create_role(db, key="admin", label="Admin", permissions={"*": True})
+    admin = await create_user(db, email="admin@test.com", role="admin")
+    organization = await create_card_type(db, key="Organization", label="Organization")
+    response = await client.post(
+        "/api/v1/roles",
+        headers=auth_headers(admin),
+        json={"key": "new_role", "label": "New role", "permissions": {"inventory.view": True}},
+    )
+    assert response.status_code == 201
+    await db.refresh(organization)
+    assert organization.role_permissions["new_role"] == {
+        "inventory.create": False,
+        "inventory.edit": False,
+        "inventory.delete": False,
+    }

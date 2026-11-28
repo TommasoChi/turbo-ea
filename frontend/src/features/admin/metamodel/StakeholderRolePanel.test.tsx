@@ -11,6 +11,9 @@ import { act, fireEvent, render, screen, waitFor, within } from "@testing-librar
 import userEvent from "@testing-library/user-event";
 import StakeholderRolePanel, { type StakeholderRolePanelHandle } from "./StakeholderRolePanel";
 
+const panelAuth = vi.hoisted(() => ({ role: "admin", impersonated_role: null as string | null }));
+vi.mock("@/hooks/AuthContext", () => ({ useOptionalAuthUser: () => panelAuth }));
+
 const apiMock = vi.hoisted(() => ({
   get: vi.fn(),
   post: vi.fn(),
@@ -97,6 +100,8 @@ function mockApi({
 beforeEach(() => {
   vi.clearAllMocks();
   localesMock.enabled = ["en"];
+  panelAuth.role = "admin";
+  panelAuth.impersonated_role = null;
 });
 
 describe("StakeholderRolePanel — key entry", () => {
@@ -976,4 +981,72 @@ describe("StakeholderRolePanel — the edit form's own Save button", () => {
       expect(screen.queryByRole("button", { name: "Saving..." })).not.toBeInTheDocument(),
     );
   });
+});
+
+describe("Organization position roles", () => {
+  it("offers a position role switch for Organization and sends its value", async () => {
+    mockApi();
+    const user = userEvent.setup();
+    render(<StakeholderRolePanel typeKey="Organization" onError={() => {}} />);
+    await screen.findByText("Typo Role");
+    await user.click(screen.getByRole("button", { name: /add role/i }));
+    await user.type(await screen.findByLabelText(/^Label/), "Manager");
+    await user.click(screen.getByRole("checkbox", { name: /position role/i }));
+    await user.click(screen.getByRole("button", { name: /^create$/i }));
+    await waitFor(() => expect(apiMock.post).toHaveBeenCalledWith(
+      "/metamodel/types/Organization/stakeholder-roles",
+      expect.objectContaining({ is_position_role: true }),
+    ));
+  });
+});
+
+it("does not offer a position role switch outside Organization", async () => {
+  mockApi();
+  render(<StakeholderRolePanel typeKey="Application" onError={() => {}} />);
+  await screen.findByText("Typo Role");
+  await userEvent.click(screen.getByRole("button", { name: /add role/i }));
+  expect(screen.queryByRole("checkbox", { name: /position role/i })).not.toBeInTheDocument();
+});
+
+
+it.each([{ role: "member", impersonated_role: null }, { role: "admin", impersonated_role: "member" }])("makes Organization roles read-only for effective non-admin $role", async (identity) => {
+  Object.assign(panelAuth, identity);
+  mockApi();
+  render(<StakeholderRolePanel typeKey="Organization" onError={() => {}} />);
+  await screen.findByText("Typo Role");
+  expect(screen.queryByRole("button", { name: /add role|edit|archive|delete/i })).not.toBeInTheDocument();
+});
+
+it("retains role editing for a non-admin on Application", async () => {
+  panelAuth.role = "member";
+  mockApi();
+  render(<StakeholderRolePanel typeKey="Application" onError={() => {}} />);
+  await screen.findByText("Typo Role");
+  expect(screen.getByRole("button", { name: /add role/i })).toBeInTheDocument();
+});
+
+it("edits an Organization position role to false", async () => {
+  const roles = [{ ...ROLES[0], is_position_role: true }, ROLES[1]];
+  mockApi({ roles });
+  apiMock.patch.mockResolvedValue({});
+  const user = userEvent.setup();
+  render(<StakeholderRolePanel typeKey="Organization" onError={() => {}} />);
+  await screen.findByText("Responsible");
+  await user.click(screen.getAllByRole("button", { name: /edit/i })[0]);
+  const position = screen.getByRole("checkbox", { name: /position role/i });
+  expect(position).toBeChecked();
+  await user.click(position);
+  await user.click(screen.getByRole("button", { name: /^save$/i }));
+  await waitFor(() => expect(apiMock.patch).toHaveBeenCalledWith(
+    "/metamodel/types/Organization/stakeholder-roles/responsible",
+    expect.objectContaining({ is_position_role: false }),
+  ));
+});
+
+it("excludes Observer from position-role selection", async () => {
+  mockApi({ roles: [{ ...ROLES[0], key: "observer", label: "Observer" }] });
+  render(<StakeholderRolePanel typeKey="Organization" onError={() => {}} />);
+  await screen.findByText("Observer");
+  await userEvent.click(screen.getByRole("button", { name: /edit/i }));
+  expect(screen.queryByRole("checkbox", { name: /position role/i })).not.toBeInTheDocument();
 });

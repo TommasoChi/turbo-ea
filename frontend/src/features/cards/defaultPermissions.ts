@@ -9,6 +9,7 @@ type Effective = CardEffectivePermissions["effective"];
  */
 export const DEFAULT_CARD_PERMISSIONS: Effective = {
   can_view: true,
+  can_self_observe: false,
   can_edit: true,
   can_archive: true,
   can_delete: true,

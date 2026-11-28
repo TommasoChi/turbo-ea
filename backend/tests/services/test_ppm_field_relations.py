@@ -124,7 +124,27 @@ async def test_no_relation_for_unchanged_value_or_unconfigured_relation(db, rela
 
 async def test_creating_a_missing_relation_needs_no_relation_permission(db, relation_env):
     """The cost-write gate on the PPM routes is the permission; the service adds none."""
-    _, initiative, organization, config = relation_env
+    _, initiative, _, _ = relation_env
+    await create_relation_type(
+        db,
+        key="app_supports_initiative",
+        source_type_key="Application",
+        target_type_key="Initiative",
+    )
+    organization = await create_card(db, card_type="Application")
+    config = PmlSectionConfig.model_validate(
+        {
+            "fields": [
+                {
+                    "key": "organization",
+                    "label": "Application",
+                    "kind": "card_reference",
+                    "card_type": "Application",
+                    "relation_type": "app_supports_initiative",
+                }
+            ]
+        }
+    )
     await create_role(db, key="cost-only", permissions={"inventory.view": True})
     user = await create_user(db, email="cost-only@example.test", role="cost-only")
     candidates = await prepare_configured_card_relations(
@@ -318,4 +338,17 @@ async def test_archived_card_cannot_create_a_new_automatic_relation(db, relation
             db, user, initiative, config, {}, {"organization": str(organization.id)}
         )
     assert exc.value.status_code == 404
+    assert (await db.scalars(select(Relation))).all() == []
+
+
+async def test_configured_relation_to_organization_requires_admin(db, relation_env):
+    _, initiative, organization, config = relation_env
+    await create_role(db, key="cost-only", permissions={"inventory.view": True})
+    user = await create_user(db, email="cost-org@example.test", role="cost-only")
+    candidates = await prepare_configured_card_relations(
+        db, user, initiative, config, {}, {"organization": str(organization.id)}
+    )
+    with pytest.raises(HTTPException) as exc:
+        await apply_configured_card_relations(db, user, candidates, [])
+    assert exc.value.status_code == 403
     assert (await db.scalars(select(Relation))).all() == []
