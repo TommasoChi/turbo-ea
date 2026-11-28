@@ -74,6 +74,81 @@ async def app_type(db) -> CardType:
 # ── stakeholder scoping ─────────────────────────────────────────────────────
 
 
+async def test_direct_grant_queries_keep_identity_and_resolve_permissions(db, world):
+    me, other, (card, outside, _) = world["me"], world["other"], world["cards"]
+    await hold(db, card, me, "watcher")
+    await hold(db, card, me, "undefined")
+    await hold(db, outside, other, "owner")
+    await create_card_type(db, key="Provider", label="Provider")
+    provider = await create_card(db, card_type="Provider", name="Other type")
+    await create_stakeholder_role_def(
+        db, card_type_key="Provider", key="watcher", permissions={"card.edit": True}
+    )
+    await create_stakeholder_role_def(
+        db,
+        card_type_key="Application",
+        key="retired",
+        permissions={"card.edit": True},
+        is_archived=True,
+    )
+    await create_stakeholder_role_def(db, card_type_key="Application", key="empty", permissions={})
+    await create_stakeholder_role_def(
+        db, card_type_key="Application", key="false_only", permissions={"card.edit": False}
+    )
+    await hold(db, provider, me, "watcher")
+    await hold(db, card, me, "retired")
+    await hold(db, card, me, "empty")
+    await hold(db, card, me, "false_only")
+
+    raw = await db.execute(PermissionService.direct_stakeholder_roles(me.id))
+    assert set(raw) == {
+        (card.id, "watcher"),
+        (card.id, "undefined"),
+        (card.id, "retired"),
+        (card.id, "empty"),
+        (card.id, "false_only"),
+        (provider.id, "watcher"),
+    }
+    typed = await db.execute(PermissionService.direct_stakeholder_card_roles(me.id))
+    rows = [(cid, type_key, role) for cid, type_key, role in typed]
+    assert set(rows) == {
+        (card.id, "Application", "watcher"),
+        (card.id, "Application", "undefined"),
+        (card.id, "Application", "retired"),
+        (card.id, "Application", "empty"),
+        (card.id, "Application", "false_only"),
+        (provider.id, "Provider", "watcher"),
+    }
+    grants = [grant async for grant in PermissionService.iter_stakeholder_grants(db, rows)]
+    assert len(grants) == 3
+    assert {(cid, role): perms for cid, role, perms in grants} == {
+        (card.id, "watcher"): {"card.view": True},
+        (card.id, "false_only"): {"card.edit": False},
+        (provider.id, "watcher"): {"card.edit": True},
+    }
+    eff = await PermissionService.get_effective_card_permissions(db, me, card.id)
+    assert set(eff["stakeholder_roles"]) == {
+        "watcher",
+        "undefined",
+        "retired",
+        "empty",
+        "false_only",
+    }
+    assert eff["card_level"] == {"card.view": True}
+
+
+async def test_domain_app_grant_skips_stakeholder_query(db, world, monkeypatch):
+    await create_role(db, key="cost_reader", label="Cost reader", permissions={"costs.view": True})
+    user = await create_user(db, email="cost-reader@test.com", role="cost_reader")
+
+    def unexpected_query(_user_id):
+        raise AssertionError("stakeholder query should not be built")
+
+    monkeypatch.setattr(PermissionService, "direct_stakeholder_card_roles", unexpected_query)
+    ids = {card.id for card in world["cards"]}
+    assert await PermissionService.card_ids_with_cost_access(db, user, ids) == ids
+
+
 async def test_a_role_on_another_card_or_held_by_someone_else_does_not_count(db, world):
     me, other, (c0, c1, _) = world["me"], world["other"], world["cards"]
     await hold(db, c1, me, "owner")  # me, but another card

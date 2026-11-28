@@ -18,7 +18,7 @@ from __future__ import annotations
 import uuid
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import String, cast, select
 
 from app.models.card import Card
 from app.models.card_type import CardType
@@ -131,6 +131,41 @@ class TestParityMatrix:
 
 
 class TestFastPath:
+    async def test_stakeholder_reference_and_lazy_role_lookup(self, db, world, monkeypatch):
+        await create_role(db, key="r", label="R", permissions={"inventory.view": True})
+        user = await create_user(db, email="u@t.com", role="r")
+        await _set_cells(db, "Secret", {"r": {"inventory.view": False}})
+        await _hold(db, world["held"], user, "grants")
+        await _hold(db, world["held"], user, "nogrant")
+        original = PermissionService.stakeholder_role_permissions
+        original_query = PermissionService.direct_stakeholder_card_roles
+        seen = []
+
+        async def record(db, type_key, role_key):
+            seen.append(role_key)
+            return await original(db, type_key, role_key)
+
+        monkeypatch.setattr(PermissionService, "stakeholder_role_permissions", record)
+        monkeypatch.setattr(
+            PermissionService,
+            "direct_stakeholder_card_roles",
+            lambda user_id: original_query(user_id).order_by(Stakeholder.role),
+        )
+        scope = await CardReadScope.load(db, user)
+        assert seen == ["grants"]
+        for mode in MODES:
+            ids = set(
+                (
+                    await db.execute(
+                        select(Card.id).where(
+                            Card.id.in_([world["held"].id, world["plain"].id]),
+                            scope.ref_clause(Card.type, cast(Card.id, String), mode=mode),
+                        )
+                    )
+                ).scalars()
+            )
+            assert ids == {world["held"].id}
+
     async def test_wildcard_ignores_stored_cells(self, db, world):
         admin = await create_user(db, email="a@t.com", role="admin")
         await _set_cells(db, "Secret", {"admin": {"inventory.view": False}})
