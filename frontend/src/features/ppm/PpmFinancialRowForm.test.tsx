@@ -143,66 +143,6 @@ describe("PpmFinancialRowForm", () => {
     );
   });
 
-  it("moves an invoice to a legacy unassigned cost item", async () => {
-    const user = userEvent.setup();
-    const invoice = {
-      id: "inv1",
-      initiative_id: "i1",
-      cost_item_id: "c1",
-      invoice_id: "00038",
-      invoice_date: "2026-11-23",
-      amount: "30.11",
-    };
-    const target = { ...data.cost_items[0], id: "c2", description: "Legacy", budget_line_id: null };
-    const rows = { ...data, cost_items: [...data.cost_items, target] };
-    render(
-      <PpmFinancialRowForm
-        initiativeId="i1"
-        data={rows}
-        kind="invoice"
-        mode="move"
-        row={invoice}
-        onClose={vi.fn()}
-        onSaved={vi.fn()}
-      />,
-    );
-    await user.click(screen.getByRole("combobox"));
-    await user.click(screen.getByRole("option", { name: "Legacy" }));
-    await user.click(screen.getByRole("button", { name: /save/i }));
-    await waitFor(() =>
-      expect(mockApi.callsOf("patch", "/ppm/invoices/inv1")[0]?.body).toEqual({
-        cost_item_id: "c2",
-      }),
-    );
-  });
-
-  it("can clear a saved child when moving to a budget without hierarchy", async () => {
-    const user = userEvent.setup();
-    const second = { ...data.budget_lines[0], id: "b2", description: "Destination" };
-    const rows = { ...data, budget_lines: [...data.budget_lines, second] };
-    render(
-      <PpmFinancialRowForm
-        initiativeId="i1"
-        data={rows}
-        kind="cost"
-        mode="move"
-        row={data.cost_items[0]}
-        onClose={vi.fn()}
-        onSaved={vi.fn()}
-      />,
-    );
-    await user.click(screen.getByRole("combobox"));
-    await user.click(screen.getByRole("option", { name: "Destination" }));
-    await user.click(screen.getByRole("button", { name: /use budget provider/i }));
-    await user.click(screen.getByRole("button", { name: /save/i }));
-    await waitFor(() =>
-      expect(mockApi.callsOf("patch", "/ppm/costs/c1")[0]?.body).toEqual({
-        budget_line_id: "b2",
-        provider_child_id: null,
-      }),
-    );
-  });
-
   it("keeps a saved child when hierarchy is disabled on an unrelated edit", async () => {
     const user = userEvent.setup();
     render(
@@ -230,7 +170,7 @@ describe("PpmFinancialRowForm", () => {
       "provider_child_id",
     );
   });
-  it("refreshes the parent after a stale destination while displaying the error", async () => {
+  it("refreshes the parent after a stale 409 on edit while displaying the error", async () => {
     const user = userEvent.setup();
     const onStale = vi.fn();
     mockApi.fail("patch", "/ppm/costs/c1", 409, "Budget Provider changed; retry");
@@ -239,7 +179,7 @@ describe("PpmFinancialRowForm", () => {
         initiativeId="i1"
         data={data}
         kind="cost"
-        mode="move"
+        mode="edit"
         row={data.cost_items[0]}
         onClose={vi.fn()}
         onSaved={vi.fn()}
@@ -262,7 +202,7 @@ describe("PpmFinancialRowForm", () => {
         initiativeId="i1"
         data={data}
         kind="cost"
-        mode="move"
+        mode="edit"
         row={data.cost_items[0]}
         onClose={vi.fn()}
         onSaved={vi.fn()}
@@ -276,42 +216,6 @@ describe("PpmFinancialRowForm", () => {
     );
     expect(screen.getByRole("dialog")).toBeVisible();
     expect(onStale).not.toHaveBeenCalled();
-  });
-  it("discards a chosen child when changing the destination budget", async () => {
-    const user = userEvent.setup();
-    const first = {
-      ...data.budget_lines[0],
-      id: "b2",
-      description: "First destination",
-      provider_child_enabled: true,
-    };
-    const second = { ...data.budget_lines[0], id: "b3", description: "Second destination" };
-    const rows = { ...data, budget_lines: [...data.budget_lines, first, second] };
-    mockApi.on("get", /provider-children/, {
-      items: [{ id: "new-child", name: "Child provider", type: "Provider" }],
-      total: 1,
-    });
-    render(
-      <PpmFinancialRowForm
-        initiativeId="i1"
-        data={rows}
-        kind="cost"
-        mode="move"
-        row={data.cost_items[0]}
-        onClose={vi.fn()}
-        onSaved={vi.fn()}
-      />,
-    );
-    await user.click(screen.getByRole("combobox"));
-    await user.click(screen.getByRole("option", { name: "First destination" }));
-    await user.click(screen.getByLabelText(/^provider$/i));
-    await user.click(await screen.findByRole("option", { name: /child provider/i }));
-    await user.click(screen.getAllByRole("combobox")[0]);
-    await user.click(screen.getByRole("option", { name: "Second destination" }));
-    await user.click(screen.getByRole("button", { name: /save/i }));
-    await waitFor(() =>
-      expect(mockApi.callsOf("patch", "/ppm/costs/c1")[0]?.body).toEqual({ budget_line_id: "b3" }),
-    );
   });
 });
 

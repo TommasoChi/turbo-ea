@@ -61,7 +61,7 @@ The `compliance_findings` table also carries a nullable `risk_id` back-link so f
 
 ### Frontend modules
 
-- `features/grc/risk/RiskMatrix.tsx` — shared heatmap: the GRC 4×4 (clickable) by default, and any custom-axes grid read-only (the PPM 5×5 in `PpmRiskMatrix` / `PpmProjectReport`). A change here is a PPM change too.
+- `features/grc/risk/RiskMatrix.tsx` — shared heatmap: the GRC 4×4 (clickable) by default, and any custom-axes grid read-only (the PPM 5×5 in `PpmRiskMatrix` / `PpmProjectReport`, and `size="compact"` in the PPM Risk Management summary, `PpmRiskSummary`). A change here is a PPM change too.
 - `features/grc/risk/CreateRiskDialog.tsx` — reused for manual create and for promoting compliance findings, including an Owner picker so assignment happens at creation time.
 - `features/grc/risk/RiskRegisterPage.tsx` — register list view (embedded as a tab in GRC at `/grc?tab=risk`).
 - `features/grc/risk/RiskDetailPage.tsx` — full TOGAF layout: Identification → Initial assessment → **Mitigation tasks panel** (replaces the old free-text field) → Residual assessment (with Owner autocomplete, Target date, residual matrix, task-summary chips for context) → Affected cards (M:N) → Status workflow (primary Next step + secondary side actions + stepper) → Audit.

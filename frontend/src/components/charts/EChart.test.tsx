@@ -30,6 +30,7 @@ vi.mock("echarts/components", () => ({
   TooltipComponent: "TooltipComponent",
   LegendComponent: "LegendComponent",
   VisualMapComponent: "VisualMapComponent",
+  TitleComponent: "TitleComponent",
   MarkLineComponent: "MarkLineComponent",
   MarkAreaComponent: "MarkAreaComponent",
   AriaComponent: "AriaComponent",
@@ -90,6 +91,20 @@ describe("EChart", () => {
     expect(onContextMenu).toHaveBeenCalledWith(params);
   });
 
+  it("forwards legendselectchanged to the latest onLegendSelectChanged", () => {
+    const first = vi.fn();
+    const second = vi.fn();
+    const { rerender } = render(<EChart option={{}} onLegendSelectChanged={first} />);
+    const handler = chart.on.mock.calls.find((c) => c[0] === "legendselectchanged")?.[1] as (
+      p: unknown,
+    ) => void;
+    rerender(<EChart option={{}} onLegendSelectChanged={second} />);
+    const params = { name: "open", selected: { open: false, closed: true } };
+    handler(params);
+    expect(first).not.toHaveBeenCalled();
+    expect(second).toHaveBeenCalledWith(params);
+  });
+
   it("leaves the native menu alone without the prop", () => {
     render(<EChart option={{}} />);
     const handler = chart.on.mock.calls.find((c) => c[0] === "contextmenu")?.[1] as (
@@ -105,6 +120,9 @@ describe("EChart", () => {
     const handler = chart.on.mock.calls[0][1];
     unmount();
     expect(chart.off).toHaveBeenCalledWith("click", handler);
+    const legend = chart.on.mock.calls.find((c) => c[0] === "legendselectchanged")?.[1];
+    expect(legend).toBeTypeOf("function");
+    expect(chart.off).toHaveBeenCalledWith("legendselectchanged", legend);
     expect(chart.dispose).toHaveBeenCalledTimes(1);
   });
 
@@ -481,6 +499,7 @@ describe("EChart registration", () => {
       "TooltipComponent",
       "LegendComponent",
       "VisualMapComponent",
+      "TitleComponent",
       "MarkLineComponent",
       "MarkAreaComponent",
       "AriaComponent",

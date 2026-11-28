@@ -81,14 +81,18 @@ Klik på et initiativ for at åbne dets detaljeside med syv faner:
 
 ![PML Initiativ-overblik](../assets/img/da/41_ppm_overview.png)
 
-Overblikket viser et resumé af initiativets sundhed og økonomi:
+Overblikket viser et resumé af initiativets sundhed og økonomi i én kolonne i denne rækkefølge:
 
-- **Sundhedsresumé** — Tidsplan-, omkostnings- og scope-indikatorer fra den seneste statusrapport
-- **Tidslinje** — planlagte og faktiske datoer med to spor på samme kvartalsskala
-- **Budget vs. faktisk** — Kombineret KPI-kort, der viser samlet budget og faktisk forbrug med varians
+- **Beskrivelse** — Vises, når initiativet har en
+- **Tidslinje** — planlagte og faktiske datoer og to spor på samme kvartalsskala, med ringen **Fuldførelse** ved siden af datoerne
+- **Sundhedsoversigt** — Rapportdatoen, indikatorerne for tid, omkostning og omfang og tre tekster (resumé, resultater, næste skridt) fra den seneste statusrapport, afhængigt af synlighedstilladelser. **Administrer** åbner statusrapport-editoren til en ny rapport
+- **Risikostyring** — De aktive risici (åbne og under afbødning): felter, en donut efter scoreinterval, hvis forklaring du klikker på for at skjule eller vise et interval, et diagram efter status og et kompakt varmekort. **Administrer** åbner popup'en **Administrer** på fanen **Risici**
+- **Økonomi** — Budget vs. faktisk for i alt, CapEx og OpEx, med varians; vises for læsere, der må se omkostninger
+
+Knapperne **Administrer** kræver PML-administrationstilladelsen og redigeringsrettigheder på kortet. Sidens tilbagepil, i overskriften og på en telefon, fører tilbage til fanen **Portefølje**.
+
 - **Tal nedefra** — Når initiativet ikke har egne budgetlinjer, viser dets samlede budget, dets budgetbjælker og variansen i stedet budgettet for initiativerne under det: i kursiv, markeret med en ↳-pil, med budgetsporet omridset og et værktøjstip, der fortæller, hvor mange initiativer de dækker. Når det ikke har egne omkostningslinjer, kommer dets realiserede tal nedefra på samme måde, med forbrugsbjælkerne omridset. De to sider afgøres hver for sig, og den første egne linje skifter den side tilbage til initiativets egne tal.
 - **Under dette initiativ** — Når initiativet har initiativer under sig, viser en linje under budgetbjælkerne, hvor mange der er, deres samlede budget og faktiske forbrug samt det tidsrum, deres datoer spænder over. Den vises ved siden af initiativets egne tal og lægges aldrig til dem. Når både budgettet og de realiserede tal allerede kommer nedefra, beholder linjen kun antallet og tidsrummet.
-- **Seneste aktivitet** — Resumé af seneste statusrapport
 
 ### Statusrapporter-fane
 
@@ -106,20 +110,23 @@ Månedlige statusrapporter sporer projektsundhed over tid. Hver rapport indehold
 | **Resultater** | Hvad der blev opnået i denne periode |
 | **Næste skridt** | Planlagte aktiviteter for næste periode |
 
+Hver af de tre tekster er begrænset til 250 tegn. Editoren viser en tæller og afviser mere.
+
 ### Budget og omkostninger-fane
 
 ![PML Budget og omkostninger](../assets/img/da/43_ppm_budget_costs.png)
 
-**Planlagt budget** viser budgetlinjer efter regnskabsår og kategori (CapEx eller OpEx). Fold en budgetlinje ud for at se dens **Omkostningsposter**. Fold en omkostningspost ud for at se **Faktisk faktureret**. Regnskabsårets start følger [Indstillinger](../admin/settings.md#fiscal-year-start).
+**Planlagt budget** viser hver budgetlinje med kolonnerne **Regnskabsår**, **Kategori** (CapEx eller OpEx) og **Leverandør**. Tabellerne ruller sidelæns, når de er bredere end siden. Fold en budgetlinje ud for at se dens **Omkostningsposter**. Fold en omkostningspost ud for at se **Faktisk faktureret**. Regnskabsårets start følger [Indstillinger](../admin/settings.md#fiscal-year-start).
 
 Indtast budget-, omkostnings- og fakturabeløb uden moms. Brug Faktisk faktureret til at registrere allerede udstedte fakturaer.
 
-- Opret en omkostningspost fra budgetlinjen. Under **Omkostninger uden budget** kan du knytte en ældre post til et budget. Du kan flytte poster mellem budgetlinjer i samme initiativ.
-- Registrér fakturadato, dokumentreference og beløb. Dækker en faktura flere omkostningsposter, registrerer du den relevante del under hver post. Du kan flytte en fakturaregistrering til en anden post i samme initiativ.
-- En omkostningspost viser faktisk omkostning, faktureret beløb og rest til fakturering. Resten er faktisk omkostning minus faktureret beløb og kan være negativ. Budgettet summerer sine tilknyttede poster. Delsummer grupperer budgetlinjer efter regnskabsår og kategori. Initiativets fakturerede total omfatter også fakturaer på poster uden budget.
-- Budgettet, de faktiske omkostninger og diagrammerne bruger de registrerede budget- og omkostningsbeløb. Når du registrerer eller flytter en faktura, ændres faktureringstallene, mens budget- og omkostningsbeløbene bevares.
+- Tabellerne for budget, omkostningsposter og fakturaer tilbyder kun oprettelse, redigering og sletning.
+- Opret en omkostningspost fra budgetlinjen. Ældre rækker uden budget står under **Omkostninger uden budget**.
+- Registrér fakturadato, dokumentreference og beløb. Dækker en faktura flere omkostningsposter, registrerer du den relevante del under hver post.
+- En omkostningspost viser faktisk omkostning, faktureret beløb og rest til fakturering. Resten er faktisk omkostning minus faktureret beløb og kan være negativ. Budgettet summerer sine tilknyttede poster. Delsummer grupperer budgetlinjer efter regnskabsår og kategori.
+- Budgettet, de faktiske omkostninger og diagrammerne bruger de registrerede budget- og omkostningsbeløb. Når du registrerer en faktura, ændres faktureringstallene, mens budget- og omkostningsbeløbene bevares.
 
-Hvis administratoren har konfigureret en leverandør på budgettet, arver omkostningsposten den og kan vælge en tilladt direkte underleverandør. Se [Konfigurér budget og omkostninger](../admin/settings.md#pml-budget-costs) for supplerende og beregnede felter.
+Hvis administratoren har konfigureret en leverandør på budgettet, vises den i kolonnen **Leverandør**, og omkostningsposten arver den og kan vælge en tilladt direkte underleverandør. Feltet gentages ikke blandt de supplerende felter. Se [Konfigurér budget og omkostninger](../admin/settings.md#pml-budget-costs) for supplerende og beregnede felter.
 
 Hvis initiativet ikke har egne budget- eller omkostningsposter, kan det pågældende tal komme fra synlige underordnede initiativer. Budget og omkostning vurderes uafhængigt, og afledte rækker viser en streg for tilknyttede omkostninger og fakturering. Budget- og omkostningstotalerne opdaterer `costBudget` og `costActual` på initiativkortet automatisk. Når initiativet har egne omkostningsposter, beregnes felterne automatisk og er skrivebeskyttede på kortet.
 
@@ -279,7 +286,7 @@ Interager med Gantt-diagrammet ved hjælp af:
 
 Den sidste fane viser den fulde kortdetaljevisning, inklusive alle standardsektioner (beskrivelse, livscyklus, egenskaber, relationer, interessenter, kommentarer, historik).
 
-I **Omkostninger og tidslinje** sammenligner overlappende søjler budget og faktiske omkostninger for Total, CapEx og OpEx. Det fakturerede initiativbeløb vises særskilt for brugere med adgang. Tidslinjen viser synlige planlagte og faktiske datoer samt de seneste indikatorer for tid, omkostning og omfang.
+I **Omkostninger og tidslinje** kommer **Tidslinje** først, med **Fuldførelse** ved siden af de tilladte planlagte og faktiske datoer. **Budget** og **Faktiske omkostninger** står side om side med én **Samlet budget**-bjælke, for læsere, der må se omkostninger. **Sundhedsoversigt** og **Risikostyring** følger, som på fanen Overview. Se [Initiativoversigt](card-details.md#initiative-summary-initiative-cards).
 
 ### Initiativrapport
 
@@ -291,9 +298,9 @@ Knappen **Rapport** i initiativets overskrift, ved siden af undertype-chippen (e
 
 | Afsnit | Hvad det viser |
 |--------|----------------|
-| **Oversigt** | Felter for **Samlet budget**, **Samlet realiseret**, **Afvigelse** og **Fuldførelse**; **Sundhedsoversigt** med de tre vurderinger fra den seneste statusrapport i farve og i ord; bjælkerne under **Økonomi** for i alt, CapEx og OpEx; kortet **Tidslinje** med synlige planlagte og faktiske datoer, undertype og initiativstatus; og beskrivelsen. Tal hentet fra de underliggende initiativer er markeret med en note, der forklarer dem |
+| **Oversigt** | Felter for **Samlet budget**, **Samlet realiseret**, **Afvigelse** og **Fuldførelse**; **Sundhedsoversigt** med de tre vurderinger fra den seneste statusrapport i farve og i ord, rapportdatoen og teksterne; bjælkerne under **Økonomi** for i alt, CapEx og OpEx; kortet **Tidslinje** med synlige planlagte og faktiske datoer, undertype og initiativstatus; og beskrivelsen. Tal hentet fra de underliggende initiativer er markeret med en note, der forklarer dem |
 | **Statusrapporter** | Den seneste rapport i sin helhed med dens vurderinger og derefter de tidligere rapporter i en tabel med dato, rapportør og sundhedsvurderinger |
-| **Budget og omkostninger** | Felter for samlet budget, realiseret og afvigelse samt for CapEx og OpEx brugt i forhold til deres budget; diagrammerne **Forbrug over tid** for det regnskabsår, der står i deres chip, og for hele projektet; derefter det udfoldede hierarki **Planlagt budget → Omkostningsposter → Faktisk faktureret** med delsummer pr. regnskabsår og initiativets fakturerede beløb |
+| **Budget og omkostninger** | Felter for samlet budget, realiseret og afvigelse samt for CapEx og OpEx brugt i forhold til deres budget; diagrammerne **Forbrug over tid** for det regnskabsår, der står i deres chip, og for hele projektet; derefter det udfoldede hierarki **Planlagt budget → Omkostningsposter → Faktisk faktureret** med delsummer pr. regnskabsår |
 | **Risikostyring** | Felter for **Risici i alt**, **Åben** og **Høje risici**; **Risikovarmekort** over sandsynlighed mod konsekvens, hvor hver celle er farvet efter scoreinterval og viser, hvor mange risici den rummer, ved siden af en optælling **Efter status**; derefter hver risiko med sin score (og sandsynlighed × konsekvens), status, ejer, fuld beskrivelse og fuld afbødning, højeste score først |
 | **Opgaver og tidsplan** | En tabel over arbejdspakker, hver med sine opgaver under sig, og derefter opgaverne uden arbejdspakke, ved siden af en tidslinje på en kvartalsskala: en bjælke for hver arbejdspakke udfyldt efter dens fuldførelse, en bjælke for hver opgave i dens statusfarve, en rombe for en milepæl (som i Gantt-diagrammet), en prik for et element med kun én dato og en linje for i dag, når den falder inden for intervallet. Hver række viser også sin fremdrift eller status og sin prioritet, og en signaturforklaring forklarer markeringerne |
 

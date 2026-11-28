@@ -296,6 +296,19 @@ Wenn das [GRC-Modul](grc.md) aktiviert ist **und** die Karte mindestens einen ve
 
 Für **Geschäftsprozess**-Karten erscheint ein zusätzlicher **Prozessfluss**-Tab mit einem eingebetteten BPMN-Diagramm-Betrachter/-Editor. Siehe [BPM](bpm.md) für Details zum Prozessflussmanagement.
 
+### Initiativübersicht (Initiativ-Karten) { #initiative-summary-initiative-cards }
+
+![Initiativ-Kartenseite](../assets/img/de/106_initiative_karte_ppm.png)
+
+Auf einer **Initiativ**-Karte ist der Abschnitt **Kosten und Zeitplan** eine Zusammenfassung der Initiative:
+
+- **Zeitachse** steht an erster Stelle, mit den sichtbaren Plan- und Ist-Terminen und dem Ring **Fertigstellung** neben den Terminen.
+- **Budget** und **Ist-Kosten** stehen nebeneinander, gefolgt von einem **Gesamtbudget**-Balken, der beide vergleicht. Der Balken gehört zur Kostenansicht und wird nur Lesern angezeigt, die Kosten sehen dürfen.
+- Die **Gesundheitsübersicht** folgt auf den Abschnitt. Sie zeigt das Berichtsdatum, die Indikatoren **Pünktlich**, **Im Budget** und **Im Umfang** sowie drei Texte aus dem letzten Statusbericht. Jeder Text ist auf 250 Zeichen begrenzt: Der Editor für Statusberichte zeigt einen Zähler und lässt nicht mehr zu.
+- **Risikomanagement** zeigt die aktiven Risiken (offen und in Minderung): Kacheln, einen Donut nach Bewertungsstufe, dessen Legende Sie anklicken, um eine Stufe aus- oder einzublenden, ein Diagramm nach Status und eine kompakte Heatmap.
+
+Die Schaltflächen **Verwalten** der Gesundheitsübersicht und des Risikomanagements erfordern die PML-Verwaltungsberechtigung und Bearbeitungsrechte für die Karte. **Verwalten** bei der Gesundheitsübersicht öffnet den Editor für Statusberichte für einen neuen Bericht; **Verwalten** beim Risikomanagement öffnet das Popup **Verwalten** auf dem Tab **Risiken**.
+
 ## PML-Tab (nur für Initiativ-Karten) { #ppm-tab-initiative-cards-only }
 
 Unter **Kosten und Zeitplan** vergleichen überlagerte Balken Budget und Ist-Kosten für Gesamt, CapEx und OpEx. Der fakturierte Gesamtbetrag der Initiative erscheint separat gemäß Berechtigung. Die Zeitachse zeigt sichtbare Plan- und Ist-Termine und die neuesten Indikatoren zu Zeit, Kosten und Leistungsumfang.

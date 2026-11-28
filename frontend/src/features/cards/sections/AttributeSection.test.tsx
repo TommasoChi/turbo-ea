@@ -527,3 +527,71 @@ describe("AttributeSection — a field of an inactive or unlicensed extension", 
     expect(onSave.mock.calls[0][0]).toEqual({ attributes: { note: "n" } });
   });
 });
+
+describe("AttributeSection — group layout and aside", () => {
+  const groupedFields: SectionDef & { columns?: 1 | 2 } = {
+    section: "Cost & Timeline",
+    columns: 1,
+    fields: [
+      { key: "costBudget", label: "Budget", type: "text", group: "Cost" },
+      { key: "costActual", label: "Actual Cost", type: "text", group: "Cost" },
+      { key: "startDate", label: "Start Date", type: "text", group: "Timeline" },
+    ],
+  };
+  const groupedCard = {
+    ...card,
+    attributes: { costBudget: "100", costActual: "70", startDate: "2026-04-01" },
+  } as unknown as Card;
+
+  it("a side-by-side group puts Budget and Actual Cost in two columns, label above value", () => {
+    const groupLayout = vi.fn((keys: string[]) => (keys.includes("costBudget") ? ("sideBySide" as const) : undefined));
+    render(
+      <AttributeSection section={groupedFields} card={groupedCard} onSave={async () => {}} canEdit={false} groupLayout={groupLayout} />,
+    );
+    expect(groupLayout).toHaveBeenCalledWith(["costBudget", "costActual"]);
+    expect(groupLayout).toHaveBeenCalledWith(["startDate"]);
+    const budgetField = screen.getByText("Budget").parentElement as HTMLElement;
+    const grid = budgetField.parentElement as HTMLElement;
+    expect(getComputedStyle(grid).gridTemplateColumns).toBe("1fr 1fr");
+    expect(grid).toContainElement(screen.getByText("Actual Cost"));
+    expect(budgetField).toContainElement(screen.getByText("100"));
+    // The Timeline group keeps the standard label/value grid.
+    expect(getComputedStyle(screen.getByText("Start Date").parentElement?.parentElement as HTMLElement).gridTemplateColumns).not.toBe("1fr 1fr");
+  });
+
+  it("a group aside renders on the right of the dates, in that group only", () => {
+    const renderGroupAside = vi.fn((keys: string[]) => (keys.includes("startDate") ? <span data-testid="aside">ring</span> : null));
+    render(
+      <AttributeSection section={groupedFields} card={groupedCard} onSave={async () => {}} canEdit={false} renderGroupAside={renderGroupAside} />,
+    );
+    expect(renderGroupAside).toHaveBeenCalledWith(["costBudget", "costActual"]);
+    expect(renderGroupAside).toHaveBeenCalledWith(["startDate"]);
+    const aside = screen.getByTestId("aside");
+    expect(screen.getAllByTestId("aside")).toHaveLength(1);
+    const dates = screen.getByText("Start Date");
+    expect(dates.compareDocumentPosition(aside) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // Beside the fields, not below them: the fields and the aside are two children of one row.
+    const row = aside.closest("[data-group-aside]")?.parentElement as HTMLElement;
+    expect(row).toContainElement(dates);
+    expect(row.children).toHaveLength(2);
+    expect(row.children[0]).toContainElement(dates);
+    expect(row.children[1]).toContainElement(aside);
+  });
+
+  it("edit mode keeps the standard grid and shows neither the layout nor the aside", () => {
+    render(
+      <AttributeSection
+        section={groupedFields}
+        card={groupedCard}
+        onSave={async () => {}}
+        canEdit
+        groupLayout={() => "sideBySide"}
+        renderGroupAside={() => <span data-testid="aside">ring</span>}
+      />,
+    );
+    expect(screen.getAllByTestId("aside")).toHaveLength(2);
+    fireEvent.click(screen.getByRole("button", { name: "edit" }));
+    expect(screen.queryByTestId("aside")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Budget")).toBeInTheDocument();
+  });
+});

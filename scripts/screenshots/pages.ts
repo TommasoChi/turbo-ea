@@ -2120,6 +2120,29 @@ export const DOC_PAGES: PageDef[] = [
     },
   },
 
+  // Initiative card page: Cost & Timeline (Budget and Actual Cost side by side,
+  // Completion by the dates), then Health Summary and Risk Management.
+  {
+    id: "106_initiative_card_ppm",
+    route: "/cards/{{cardId:sampleInitiative}}",
+    waitFor: "[data-testid='card-detail'], [class*='CardDetail'], h5, h4",
+    actions: [
+      { type: "wait", ms: 1500 },
+      { type: "scroll", target: "#card-section-custom-cost-timeline", align: "start" },
+      { type: "wait", ms: 600 },
+    ],
+    filenames: {
+      en: "106_initiative_card_ppm",
+      de: "106_initiative_karte_ppm",
+      fr: "106_initiative_fiche_ppm",
+      es: "106_iniciativa_ficha_ppm",
+      it: "106_iniziativa_scheda_ppm",
+      pt: "106_iniciativa_ficha_ppm",
+      zh: "106_initiative_card_ppm",
+      ru: "106_initsiativa_kartochka_ppm",
+    },
+  },
+
   // ── Admin Settings: Resources (repository-wide file & link management) ──
   // Wait for the AG Grid root rather than a Paper: the grid mounts after the
   // /resources + /resources/stats round-trips, and the stat tiles above it
