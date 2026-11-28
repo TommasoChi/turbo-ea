@@ -155,9 +155,13 @@ test("shows the Provider's name in the Provider cell once a Provider is configur
   } finally {
     try {
       if (costChanged) await json(await request.put(`${settings}/cost_item`, { data: configs.cost_item }));
-      if (budgetChanged) await json(await request.put(`${settings}/budget`, { data: configs.budget }));
     } finally {
-      await scratch.dispose();
+      try {
+        // the budget field is populated until the scratch cards are gone, and the API refuses to drop a populated field
+        await scratch.dispose();
+      } finally {
+        if (budgetChanged) await json(await request.put(`${settings}/budget`, { data: configs.budget }));
+      }
     }
   }
 });
