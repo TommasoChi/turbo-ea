@@ -4,13 +4,17 @@ import { useCurrency } from "@/hooks/useCurrency";
 import { currencySymbolOverride } from "@/lib/currency";
 import type { PmlInitiativeSchedule, PpmFinancials, PpmRisk, PpmStatusReport } from "@/types";
 
+function initiativePath(initiativeId: string | null | undefined, resource: string): string | null {
+  return initiativeId ? "/ppm/initiatives/" + encodeURIComponent(initiativeId) + "/" + resource : null;
+}
+
 function useInitiativeQuery<T extends { initiative_id: string }>(
   initiativeId: string | null | undefined,
   resource: "financials" | "schedule",
   refetchKey?: number,
 ) {
   const query = useApiQuery<T>(
-    initiativeId ? "/ppm/initiatives/" + encodeURIComponent(initiativeId) + "/" + resource : null,
+    initiativePath(initiativeId, resource),
     { keepPreviousData: false, refetchKey },
   );
   // The API answers with the id in lower case, whatever case the address spelled it in.
@@ -30,7 +34,7 @@ export function usePpmSchedule(initiativeId: string | null | undefined, refetchK
 
 export function usePpmCompletion(initiativeId: string | null | undefined, refetchKey?: number) {
   const { data, loading, error } = useApiQuery<{ completion: number; wbs_count: number }>(
-    initiativeId ? "/ppm/initiatives/" + encodeURIComponent(initiativeId) + "/completion" : null,
+    initiativePath(initiativeId, "completion"),
     { keepPreviousData: false, refetchKey },
   );
   return { data, loading, error };
@@ -52,7 +56,7 @@ export function usePpmLatestReport(
   refetchKey?: number,
 ) {
   const { data, loading, error } = useApiQuery<PpmStatusReport[]>(
-    initiativeId ? "/ppm/initiatives/" + encodeURIComponent(initiativeId) + "/reports" : null,
+    initiativePath(initiativeId, "reports"),
     { keepPreviousData: false, refetchKey },
   );
   const latest = useMemo(
@@ -68,7 +72,7 @@ export function usePpmLatestReport(
 
 export function usePpmRisks(initiativeId: string | null | undefined, refetchKey?: number) {
   const { data, loading, error } = useApiQuery<PpmRisk[]>(
-    initiativeId ? "/ppm/initiatives/" + encodeURIComponent(initiativeId) + "/risks" : null,
+    initiativePath(initiativeId, "risks"),
     { keepPreviousData: false, refetchKey },
   );
   return { data: error ? null : (data ?? null), loading, error };

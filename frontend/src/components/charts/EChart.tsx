@@ -79,13 +79,18 @@ export interface EChartClickParams {
   event?: { event?: MouseEvent };
 }
 
+interface LegendSelectChangedParams {
+  name: string;
+  selected: Record<string, boolean>;
+}
+
 interface Props {
   option: EChartsCoreOption;
   onClick?: (params: EChartClickParams) => void;
   /** Right click on a datum; the native context menu is suppressed. */
   onContextMenu?: (params: EChartClickParams) => void;
   /** A legend entry was toggled; `selected` maps every series name to its visibility. */
-  onLegendSelectChanged?: (params: { name: string; selected: Record<string, boolean> }) => void;
+  onLegendSelectChanged?: (params: LegendSelectChangedParams) => void;
   style?: CSSProperties;
   ariaLabel?: string;
   /** Id of the element that names the chart (its visible title). */
@@ -151,7 +156,7 @@ export default function EChart({
     };
     chart.on("contextmenu", handleContext);
     const handleLegend = (params: unknown) =>
-      legendRef.current?.(params as Parameters<NonNullable<Props["onLegendSelectChanged"]>>[0]);
+      legendRef.current?.(params as LegendSelectChangedParams);
     chart.on("legendselectchanged", handleLegend);
 
     let observer: ResizeObserver | null = null;

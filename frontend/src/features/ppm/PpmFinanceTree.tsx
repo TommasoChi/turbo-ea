@@ -133,6 +133,7 @@ export default function PpmFinanceTree({
       .map((key) => config?.fields.find((field) => field.key === key))
       .filter((field): field is NonNullable<typeof field> => !!field);
   };
+  const budgetColumnCount = readOnly ? 9 : 10;
   const customCells = (
     row: FinancialRow,
     kind: "budget" | "cost_item" | "invoice",
@@ -415,7 +416,7 @@ export default function PpmFinanceTree({
                 </TableRow>
                 <TableRow>
                   <TableCell
-                    colSpan={readOnly ? 9 : 10}
+                    colSpan={budgetColumnCount}
                     sx={{ py: 0, borderBottom: 0 }}
                   >
                     <Collapse in={open(budget.id)} unmountOnExit>
@@ -446,7 +447,7 @@ export default function PpmFinanceTree({
             ))}
             {legacy.length > 0 && (
               <TableRow>
-                <TableCell colSpan={readOnly ? 9 : 10}>
+                <TableCell colSpan={budgetColumnCount}>
                   {expand("legacy", t("financeTree.unassigned"))}{" "}
                   <strong>{t("financeTree.unassigned")}</strong>
                 </TableCell>
@@ -455,7 +456,7 @@ export default function PpmFinanceTree({
             {legacy.length > 0 && (
               <TableRow>
                 <TableCell
-                  colSpan={readOnly ? 9 : 10}
+                  colSpan={budgetColumnCount}
                   sx={{ py: 0, borderBottom: 0 }}
                 >
                   <Collapse in={open("legacy")} unmountOnExit>

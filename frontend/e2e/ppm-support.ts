@@ -17,7 +17,7 @@ import {
   type Page,
 } from "@playwright/test";
 
-import { ADMIN, BASE_URL, STORAGE_STATE } from "./fixtures";
+import { BASE_URL, STORAGE_STATE } from "./fixtures";
 
 export async function json<T>(response: APIResponse): Promise<T> {
   expect(
@@ -184,8 +184,6 @@ export async function contextAs(
   return context;
 }
 
-export { ADMIN };
-
 export interface ChartTextHit {
   text: string;
   /** CSS pixels inside the chart's canvas: the middle of the drawn text. */
@@ -249,7 +247,7 @@ export async function lastNumberDrawn(page: Page, title: string): Promise<string
 /** Click the legend entry (or any drawn text) `label` of the chart titled `title`. */
 export async function clickChartText(
   page: Page,
-  chart: ReturnType<Page["locator"]>,
+  chart: Locator,
   title: string,
   label: string,
 ) {
