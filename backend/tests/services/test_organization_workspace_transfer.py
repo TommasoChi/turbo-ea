@@ -453,3 +453,124 @@ async def test_nonadmin_import_cannot_rescore_unrelated_organization(db):
     assert result.total_failed == 0
     await db.refresh(org)
     assert org.data_quality == -1
+
+
+async def test_repair_authorizes_stored_todo_owner_when_bundle_names_another_card(db):
+    from dataclasses import replace
+
+    import pytest
+    from fastapi import HTTPException
+
+    from app.models.todo import Todo
+    from app.services.card_resolver import CardResolver
+    from app.services.workspace_io.applier import SectionResult
+    from app.services.workspace_io.entities import apply_entity_section
+    from app.services.workspace_io.remap import RemapContext, RewriteTally
+    from app.services.workspace_io.sections import ENTITY_SECTIONS
+    from tests.conftest import create_user
+
+    await create_card_type(db, key="Organization")
+    await create_card_type(db, key="Application")
+    actor = await create_user(db, email="stored-owner@example.com", role="member")
+    owner = await create_card(db, card_type="Organization", name="Stored Owner")
+    other = await create_card(db, card_type="Application", name="Bundle Owner")
+    todo = Todo(description="Review", card_id=owner.id, link="/cards/old")
+    db.add(todo)
+    await db.flush()
+    bundle = parse_bundle(await build_bundle(db))
+    row = next(row for row in bundle.rows("Todos") if str(row["id"]) == str(todo.id))
+    row.update(
+        {"card_id__id": str(other.id), "card_id__type": "Application", "card_id__ref": other.name}
+    )
+
+    def rewrite(kwargs, _ctx):
+        kwargs["link"] = "/cards/new"
+        return RewriteTally(counts={"remapped": 1})
+
+    section = replace(next(s for s in ENTITY_SECTIONS if s.sheet == "Todos"), rewrite=rewrite)
+    try:
+        resolver = await CardResolver.load(db, {"Organization", "Application"})
+        with pytest.raises(HTTPException) as exc:
+            await apply_entity_section(
+                db,
+                section,
+                bundle,
+                SectionResult(sheet="Todos"),
+                resolver,
+                {actor.email: actor.id},
+                RemapContext(),
+                actor=actor,
+            )
+        assert exc.value.status_code == 403
+        await db.refresh(todo)
+        assert todo.card_id == owner.id
+        assert todo.link == "/cards/old"
+    finally:
+        bundle.close()
+
+
+async def test_role_import_preserves_view_revocation_from_another_committed_session(test_engine):
+    from uuid import uuid4
+
+    from sqlalchemy import delete, select, update
+    from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+
+    from app.models.card_type import CardType
+    from app.models.role import Role
+    from app.models.user import User
+    from app.services.workspace_io.applier import SectionResult, _make_config_applier
+    from app.services.workspace_io.bundle import WorkspaceBundle
+    from tests.conftest import create_role, create_user
+
+    suffix = uuid4().hex[:10]
+    role_key = "import_" + suffix
+    reader_key = "view_" + suffix
+    sessions = async_sessionmaker(test_engine, class_=AsyncSession, expire_on_commit=False)
+    async with sessions() as writer, sessions() as importer:
+        await create_role(writer, key=reader_key, permissions={"inventory.view": True})
+        organization = await create_card_type(
+            writer,
+            key="Organization",
+            role_permissions={reader_key: {"inventory.view": True}},
+        )
+        actor = await create_user(writer, email=f"role-import-{suffix}@example.com", role="admin")
+        await writer.commit()
+        actor_id = actor.id
+        try:
+            cached = await importer.get(CardType, organization.id)
+            # Keep the importer's identity map stale while a separate editor commits a revocation.
+            await writer.execute(
+                update(CardType)
+                .where(CardType.key == "Organization")
+                .values(role_permissions={reader_key: {"inventory.view": False}})
+            )
+            await writer.commit()
+            assert cached.role_permissions[reader_key]["inventory.view"] is True
+            bundle = WorkspaceBundle(
+                manifest={},
+                sheets={
+                    schema.SHEET_ROLES: [
+                        {"key": role_key, "label": "Imported Role", "permissions": {}},
+                    ]
+                },
+            )
+            section = next(s for s in schema.CONFIG_SECTIONS if s.model is Role)
+            imported_actor = await importer.get(User, actor_id)
+            await _make_config_applier(section, imported_actor)(
+                importer, bundle, SectionResult(sheet=schema.SHEET_ROLES), False
+            )
+            await importer.commit()
+            async with sessions() as verifier:
+                matrix = await verifier.scalar(
+                    select(CardType.role_permissions).where(CardType.key == "Organization")
+                )
+                assert matrix[reader_key]["inventory.view"] is False
+                assert matrix[role_key]["inventory.create"] is False
+                assert matrix[role_key]["inventory.edit"] is False
+                assert matrix[role_key]["inventory.delete"] is False
+        finally:
+            await importer.rollback()
+            await writer.execute(delete(User).where(User.id == actor_id))
+            await writer.execute(delete(CardType).where(CardType.key == "Organization"))
+            await writer.execute(delete(Role).where(Role.key.in_([role_key, reader_key])))
+            await writer.commit()

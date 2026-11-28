@@ -794,7 +794,7 @@ async def create_card(
                 "user_display_name": nominee.display_name,
                 "role": "responsible",
                 "role_label": responsible_role.label,
-                "summary": f"{nominee.display_name or nominee.email} · {responsible_role.label}",
+                "summary": f"{nominee.display_name or 'User'} · {responsible_role.label}",
             },
             db=db,
             card_id=card.id,
@@ -3006,41 +3006,34 @@ async def _ensure_permission_on_each(
     type_by_id: dict[uuid.UUID, str] = {}
     subtype_by_id: dict[uuid.UUID, str | None] = {}
     for row_id, row_type, row_subtype in type_rows.all():
-        require_organization_admin(user, row_type)
         type_by_id[row_id] = row_type
         subtype_by_id[row_id] = row_subtype
     read_scope = await CardReadScope.load(db, user)
     denied: list[str] = []
-    hidden_denied = 0
     for cid in card_ids:
+        type_key = type_by_id.get(cid)
+        if type_key is None or not read_scope.readable(
+            cid, type_key, mode="module", subtype=subtype_by_id.get(cid)
+        ):
+            raise HTTPException(404, "Card not found")
+        require_organization_admin(user, type_key)
         if not await PermissionService.check_permission(
             db,
             user,
             app_perm,
             cid,
             card_perm,
-            card_type_key=type_by_id.get(cid),
+            card_type_key=type_key,
             subtype=subtype_by_id.get(cid),
         ):
-            # Never echo the id of a card the caller cannot see.
-            if read_scope.readable(
-                cid, type_by_id.get(cid), mode="module", subtype=subtype_by_id.get(cid)
-            ):
-                denied.append(str(cid))
-            else:
-                hidden_denied += 1
-            if len(denied) + hidden_denied >= 5:
+            denied.append(str(cid))
+            if len(denied) >= 5:
                 break
-    if denied or hidden_denied:
-        parts = []
-        if denied:
-            parts.append(", ".join(denied))
-        if hidden_denied:
-            parts.append(f"{hidden_denied} card(s) you cannot see")
+    if denied:
         raise HTTPException(
             403,
-            f"Not enough permissions for cards: {'; '.join(parts)}"
-            + (" (and possibly more)" if len(denied) + hidden_denied >= 5 else ""),
+            f"Not enough permissions for cards: {', '.join(denied)}"
+            + (" (and possibly more)" if len(denied) >= 5 else ""),
         )
 
 

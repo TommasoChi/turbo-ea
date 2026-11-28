@@ -1693,7 +1693,12 @@ def _make_config_applier(sec: schema.ConfigSection, user: User | None = None):
             from app.core.permissions import normalize_organization_role_permissions
             from app.services.organization_chart import require_organization_admin
 
-            organization = await db.scalar(select(CardType).where(CardType.key == "Organization"))
+            organization = await db.scalar(
+                select(CardType)
+                .where(CardType.key == "Organization")
+                .with_for_update()
+                .execution_options(populate_existing=True)
+            )
             if organization is not None:
                 role_keys = set((await db.scalars(select(Role.key))).all())
                 matrix = normalize_organization_role_permissions(

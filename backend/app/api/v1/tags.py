@@ -363,6 +363,14 @@ async def _require_organization_tag_delete(
 ) -> None:
     from app.services.organization_chart import require_organization_admin
 
+    # Freeze both existing links and the set of tags before checking a cascading delete.
+    if group_id is not None:
+        await db.execute(select(TagGroup.id).where(TagGroup.id == group_id).with_for_update())
+        locked_tags = select(Tag.id).where(Tag.tag_group_id == group_id)
+    else:
+        locked_tags = select(Tag.id).where(Tag.id == tag_id)
+    await db.execute(locked_tags.order_by(Tag.id).with_for_update())
+
     query = (
         select(Card.id).join(CardTag, CardTag.card_id == Card.id).where(Card.type == "Organization")
     )

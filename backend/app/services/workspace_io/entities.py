@@ -819,6 +819,9 @@ async def apply_entity_section(
                 if any(
                     col not in pk_cols and getattr(match, col) != kwargs[col] for col in value_cols
                 ):
+                    await require_card_writes(
+                        {col: getattr(match, col) for col in section.card_fk_columns}
+                    )
                     await require_card_writes(kwargs)
                 changed = False
                 for col in value_cols:
@@ -843,6 +846,9 @@ async def apply_entity_section(
                     )
                 )
                 if will_heal:
+                    await require_card_writes(
+                        {col: getattr(current, col) for col in section.card_fk_columns}
+                    )
                     await require_card_writes(kwargs)
                 if heal_row(current, original, kwargs, section.id_bearing_columns, tally):
                     sr.note_references(tally, healed=True)
