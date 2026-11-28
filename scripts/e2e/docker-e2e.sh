@@ -139,6 +139,7 @@ run_test() {
         -e CI=1 \
         -e NPM_PINNED="$NPM_PINNED" \
         -e E2E_BASE_URL="http://host.docker.internal:$HOST_PORT_E2E" \
+        -e E2E_HOST_PORT="$HOST_PORT_E2E" \
         -e E2E_PML_DISPOSABLE=1 \
         --add-host=host.docker.internal:host-gateway \
         "$PW_IMAGE" bash -c '
