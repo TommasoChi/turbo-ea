@@ -162,7 +162,7 @@ export default function CardDetailContent({
   const { user } = useAuthContext();
   const { can } = usePermissions(user);
   const [scheduleRevision, setScheduleRevision] = useState(0);
-  const [manageTab, setManageTab] = useState<{ cardId: string; tab: "cost" | "gantt" | "reports" | "risks" } | null>(null);
+  const [manageTab, setManageTab] = useState<{ cardId: string; tab: "cost" | "gantt" | "risks" } | null>(null);
   const showInitiativeSummaries = !boScoped && card.type === "Initiative" && ppmEnabled && can("ppm.view");
   // Costs are managed with the right to edit them, everything else with card edit.
   const canManageCosts = can("ppm.manage") && perms.can_edit_costs;

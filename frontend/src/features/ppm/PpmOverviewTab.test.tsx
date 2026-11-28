@@ -26,6 +26,7 @@ import { mockApi } from "@/test/apiMock";
 import { hookState } from "@/test/hooks";
 import { RAG_COLORS, STATUS_COLORS } from "@/theme/tokens";
 import i18n from "@/i18n";
+import { hasSectionDivider } from "@/test/sectionDivider";
 vi.mock("./StatusReportDialog", () => ({
   default: ({ onSaved, onClose }: { onSaved: () => void; onClose: () => void }) => (
     <div data-testid="report-dialog">
@@ -304,8 +305,8 @@ describe("PpmOverviewTab — health summary", () => {
   /** The dot drawn before a health dimension's label. */
   const dotOf = (label: string) => screen.getByText(label).previousElementSibling as HTMLElement;
 
-  it("hides the cost health when the protected schedule omits it", async () => {
-    render(<PpmOverviewTab card={CARD} latestReport={report({})} costLines={[]} budgetLines={[]} rollup={null} {...ACCESS} />);
+  it("hides the cost health when the report withholds it", async () => {
+    render(<PpmOverviewTab card={CARD} latestReport={report({ cost_health: null })} costLines={[]} budgetLines={[]} rollup={null} {...ACCESS} />);
     await screen.findByText("Start Date");
     const summary = screen.getByText("Health Summary").parentElement!.parentElement!;
     expect(within(summary).queryByText("Cost")).not.toBeInTheDocument();
@@ -313,7 +314,6 @@ describe("PpmOverviewTab — health summary", () => {
   });
 
   it("paints each dimension's dot in the theme's RAG colour", async () => {
-    mockApi.on("get", "/ppm/initiatives/i1/schedule", { initiative_id: "i1", start_date: null, end_date: null, cost_health: "atRisk", plan_derived: false });
     render(
       <PpmOverviewTab card={CARD} latestReport={report({})} costLines={[]} budgetLines={[]} rollup={null} {...ACCESS} />,
     );
@@ -321,6 +321,15 @@ describe("PpmOverviewTab — health summary", () => {
     expect(dotOf("Schedule")).toHaveStyle({ backgroundColor: RAG_COLORS.green });
     expect(dotOf("Cost")).toHaveStyle({ backgroundColor: RAG_COLORS.amber });
     expect(dotOf("Scope")).toHaveStyle({ backgroundColor: RAG_COLORS.red });
+  });
+
+  it("follows the refreshed report's cost health after a save", async () => {
+    const props = { card: CARD, costLines: [], budgetLines: [], rollup: null, ...ACCESS };
+    const { rerender } = render(<PpmOverviewTab {...props} latestReport={report({ cost_health: "atRisk" })} />);
+    await screen.findByText("Cost");
+    expect(dotOf("Cost")).toHaveStyle({ backgroundColor: RAG_COLORS.amber });
+    rerender(<PpmOverviewTab {...props} latestReport={report({ cost_health: "offTrack" })} />);
+    expect(dotOf("Cost")).toHaveStyle({ backgroundColor: RAG_COLORS.red });
   });
 
   it("paints a health value it does not know in the neutral colour", async () => {
@@ -640,7 +649,7 @@ describe("PpmOverviewTab — layout", () => {
       const heading = screen.getByText(name);
       expect(heading).toHaveClass("MuiTypography-subtitle1");
       expect(getComputedStyle(heading).fontWeight).toBe("600");
-      expect(getComputedStyle(heading.parentElement!).borderBottomWidth).not.toBe("1px");
+      expect(hasSectionDivider(heading)).toBe(false);
     }
   });
 

@@ -120,6 +120,36 @@ describe("PpmRiskSummary", () => {
     expect(donut().option.title.text).toBe("0");
   });
 
+  it("keeps both chart options when only an unrelated prop changes, so the charts do not replay", () => {
+    const { rerender } = render(<PpmRiskSummary risks={RISKS} />);
+    const [donutBefore, statusBefore] = [donut().option, chartTitled("Where do the risks stand?").option];
+    rerender(<PpmRiskSummary risks={RISKS} onManage={() => {}} />);
+    expect(donut().option).toBe(donutBefore);
+    expect(chartTitled("Where do the risks stand?").option).toBe(statusBefore);
+  });
+
+  it("builds a new donut option when a legend click changes the selection", () => {
+    render(<PpmRiskSummary risks={RISKS} />);
+    const before = donut().option;
+    hideBands({ High: false });
+    expect(donut().option).not.toBe(before);
+  });
+
+  it("is a region named by its title in every state", () => {
+    const { rerender } = render(<PpmRiskSummary risks={null} />);
+    expect(screen.getByRole("region", { name: "Risk Management" })).toBeInTheDocument();
+    rerender(<PpmRiskSummary risks={[]} />);
+    expect(screen.getByRole("region", { name: "Risk Management" })).toBeInTheDocument();
+    rerender(<PpmRiskSummary risks={RISKS} />);
+    expect(screen.getByRole("region", { name: "Risk Management" })).toHaveTextContent("Total");
+  });
+
+  it("lets the three tiles wrap on a narrow screen", () => {
+    render(<PpmRiskSummary risks={RISKS} />);
+    const row = tile("Total").parentElement!;
+    expect(getComputedStyle(row).flexWrap).toBe("wrap");
+  });
+
   it("the status bars list the five statuses", () => {
     render(<PpmRiskSummary risks={RISKS} />);
     const opt = chartTitled("Where do the risks stand?").option;

@@ -513,7 +513,11 @@ describe("CardDetailContent Initiative summaries", () => {
     initiative({}, true, {}, {}, true, ["startDate", "actualStart", "endDate", "actualEnd"]);
     expect(await screen.findByText("Risk Management")).toBeInTheDocument();
     expect(screen.getByText("Health Summary")).toBeInTheDocument();
-    expect(screen.queryByLabelText("Actual Start")).not.toBeInTheDocument();
+    // The section is open on the cost fields, so the absent dates are really hidden.
+    expect(screen.getAllByText("Actual Cost").length).toBeGreaterThan(0);
+    for (const label of ["Start Date", "Actual Start", "End Date", "Actual End"]) {
+      expect(screen.queryByText(label)).not.toBeInTheDocument();
+    }
   });
 
   it("says so when the status reports cannot be read, instead of claiming there are none", async () => {

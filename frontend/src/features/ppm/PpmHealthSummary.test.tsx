@@ -32,6 +32,26 @@ describe("PpmHealthSummary", () => {
     expect(screen.getByText("Cost")).toBeInTheDocument();
   });
 
+  it("lays the three texts in one wrapping row of equal boxes", () => {
+    render(<PpmHealthSummary report={{ ...base, summary: "S", accomplishments: "A", next_steps: "N" }} />);
+    const boxes = ["Summary", "Accomplishments", "Next Steps"].map(
+      (label) => screen.getByText(label).parentElement!,
+    );
+    const row = boxes[0].parentElement!;
+    expect(boxes.every((box) => box.parentElement === row)).toBe(true);
+    expect(getComputedStyle(row).display).toBe("flex");
+    expect(getComputedStyle(row).flexWrap).toBe("wrap");
+    for (const box of boxes) expect(getComputedStyle(box).flex).toBe(getComputedStyle(boxes[0]).flex);
+    expect(getComputedStyle(boxes[0]).flex).not.toBe("");
+  });
+
+  it("is a region named by its title, with or without a report", () => {
+    const { rerender } = render(<PpmHealthSummary report={base} />);
+    expect(screen.getByRole("region", { name: "Health Summary" })).toHaveTextContent("Schedule");
+    rerender(<PpmHealthSummary report={null} />);
+    expect(screen.getByRole("region", { name: "Health Summary" })).toHaveTextContent("No status reports yet");
+  });
+
   it("shows no date without report_date", () => {
     render(<PpmHealthSummary report={base} />);
     expect(screen.queryByText(/\d{4}-\d{2}-\d{2}/)).not.toBeInTheDocument();

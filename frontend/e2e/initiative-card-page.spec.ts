@@ -66,8 +66,7 @@ const costTimeline = (page: Page) =>
   page.locator(".MuiAccordion-root").filter({ has: page.getByText("Cost & Timeline", { exact: true }) });
 const groupHeading = (section: Locator, name: string) =>
   section.locator(".MuiTypography-subtitle2", { hasText: new RegExp(`^${name}$`) });
-const sectionOf = (page: Page, title: string) =>
-  page.getByText(title, { exact: true }).locator("xpath=../..");
+const sectionOf = (page: Page, title: string) => page.getByRole("region", { name: title, exact: true });
 
 async function openCard(page: Page, id: string): Promise<Locator> {
   await gotoApp(page, `/cards/${id}`);

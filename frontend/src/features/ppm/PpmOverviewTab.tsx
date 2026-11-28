@@ -148,7 +148,7 @@ export default function PpmOverviewTab({
       <Paper sx={{ p: 2.5 }}>
         <PpmHealthSummary
           report={latestReport}
-          costHealth={schedule.data?.cost_health}
+          costHealth={latestReport?.cost_health}
           onManage={canEdit ? () => setDialog("report") : undefined}
         />
       </Paper>

@@ -78,7 +78,7 @@ function renderWithLanding(route: string) {
   });
 }
 
-const backArrow = () => screen.getByText("arrow_back").closest("button")!;
+const backArrow = () => screen.getByRole("button", { name: "Back" });
 
 describe("PpmProjectDetail back arrows", () => {
   it("the header arrow goes to the portfolio tab", async () => {

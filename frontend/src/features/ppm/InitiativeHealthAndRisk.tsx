@@ -1,9 +1,11 @@
 import Alert from "@mui/material/Alert";
 import Box from "@mui/material/Box";
+import Button from "@mui/material/Button";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import PpmHealthSummary from "./PpmHealthSummary";
 import PpmRiskSummary from "./PpmRiskSummary";
+import PpmSectionHeader from "./PpmSectionHeader";
 import StatusReportDialog from "./StatusReportDialog";
 import { usePpmLatestReport, usePpmRisks } from "./usePpmFinancials";
 
@@ -27,7 +29,23 @@ export default function InitiativeHealthAndRisk({ initiativeId, revision, canMan
     <>
       <Box sx={{ mb: 2 }}>
         {reportError ? (
-          <Alert severity="error">{reportError.message || t("common:errors.generic")}</Alert>
+          <>
+            <PpmSectionHeader
+              title={t("healthSummary")}
+              action={
+                canManage && (
+                  <Button
+                    size="small"
+                    aria-label={t("manageSection", { section: t("healthSummary") })}
+                    onClick={() => setEditing(true)}
+                  >
+                    {t("manage")}
+                  </Button>
+                )
+              }
+            />
+            <Alert severity="error">{reportError.message || t("common:errors.generic")}</Alert>
+          </>
         ) : (
           <PpmHealthSummary
             report={report}
@@ -38,7 +56,19 @@ export default function InitiativeHealthAndRisk({ initiativeId, revision, canMan
       </Box>
       <Box sx={{ mb: 2 }}>
         {risksError ? (
-          <Alert severity="error">{risksError.message || t("common:errors.generic")}</Alert>
+          <>
+            <PpmSectionHeader
+              title={t("riskManagement")}
+              action={
+                canManage && (
+                  <Button size="small" aria-label={t("riskSummaryManage")} onClick={onManageRisks}>
+                    {t("manage")}
+                  </Button>
+                )
+              }
+            />
+            <Alert severity="error">{risksError.message || t("common:errors.generic")}</Alert>
+          </>
         ) : (
           <PpmRiskSummary risks={risks} onManage={canManage ? onManageRisks : undefined} />
         )}

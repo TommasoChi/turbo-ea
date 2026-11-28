@@ -28,7 +28,8 @@ screenshots of failures are in `frontend/test-results/` (both git-ignored).
 | Compose project | `tea-e2e` (`docker compose -p tea-e2e` only) |
 | Images | `turboea-e2e-{db,backend,frontend,nginx,mcp-server}:local`, built with `docker build --target` |
 | Ports | `127.0.0.1:18930` (HTTP), `127.0.0.1:18444` (TLS); `E2E_HOST_PORT` / `E2E_TLS_PORT` override |
-| Secrets, `SEED_DEMO=true`, public URL | `e2e.env`, passed with `--env-file`; the repository `.env` is never read |
+| Secrets, `SEED_DEMO=true` | `e2e.env`, passed with `--env-file`; the repository `.env` is never read |
+| Allowed origins, public and MCP URLs | derived from `E2E_HOST_PORT` by the script, so a port override stays consistent |
 | Test runner | `mcr.microsoft.com/playwright:v<version of @playwright/test>-noble`, `frontend/` mounted, `node_modules` in the volume `tea-e2e-nm` |
 
 It does not touch your instance (`turbo-ea-aruba-*`, `:8920`), the VAPT stack (`:8930`), the test

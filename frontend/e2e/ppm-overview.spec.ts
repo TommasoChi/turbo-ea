@@ -288,7 +288,7 @@ test("shows Financials: three KPIs and the Total, CapEx and OpEx bars", async ({
 
 test("goes back to the portfolio tab with the back arrow", async ({ page }) => {
   await openOverview(page, shared.id);
-  await page.getByRole("button").filter({ hasText: "arrow_back" }).first().click();
+  await page.getByRole("button", { name: t("common:actions.back"), exact: true }).click();
   await expect(page).toHaveURL(/\/ppm\?tab=portfolio$/);
 });
 
@@ -308,9 +308,10 @@ test("shows a reader the sections but no Manage buttons", async ({ browser, requ
         }),
       ).toHaveCount(0);
       const perms = await context.request.get(`/api/v1/cards/${shared.id}/my-permissions`);
-      const { can_view_costs } = (await perms.json()) as { can_view_costs: boolean };
-      // The Financials panel follows the card's cost visibility: absent, never zeroed.
-      await expect(heading(page, t("ppm:financials"))).toHaveCount(can_view_costs ? 1 : 0);
+      const { effective } = (await perms.json()) as { effective: { can_view_costs: boolean } };
+      // Only admins hold costs.view among the built-in roles: the viewer's panel is absent, never zeroed.
+      expect(effective.can_view_costs, "the viewer has no cost visibility").toBe(false);
+      await expect(heading(page, t("ppm:financials"))).toHaveCount(0);
     } finally {
       await context.close();
     }

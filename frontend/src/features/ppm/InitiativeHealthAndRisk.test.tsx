@@ -54,6 +54,29 @@ describe("InitiativeHealthAndRisk", () => {
     expect(await screen.findByText("No risks yet")).toBeInTheDocument();
   });
 
+  it("keeps the section headers and Manage buttons above a failed read", async () => {
+    mockApi.fail("get", BASE + "/reports", 500);
+    mockApi.fail("get", BASE + "/risks", 500);
+    const onManageRisks = vi.fn();
+    renderIt({ canManage: true, onManageRisks });
+    expect(await screen.findAllByRole("alert")).toHaveLength(2);
+    expect(screen.getByText("Health Summary")).toBeInTheDocument();
+    expect(screen.getByText("Risk Management")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /manage risks/i }));
+    expect(onManageRisks).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole("button", { name: /manage health summary/i }));
+    expect(await screen.findByRole("dialog", { name: "report editor" })).toBeInTheDocument();
+  });
+
+  it("offers no Manage button above a failed read without canManage", async () => {
+    mockApi.fail("get", BASE + "/reports", 500);
+    mockApi.fail("get", BASE + "/risks", 500);
+    renderIt({ canManage: false });
+    expect(await screen.findAllByRole("alert")).toHaveLength(2);
+    expect(screen.getByText("Health Summary")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /manage/i })).not.toBeInTheDocument();
+  });
+
   it("shows the error instead of loading risks forever", async () => {
     mockApi.fail("get", BASE + "/risks", 500);
     renderIt();

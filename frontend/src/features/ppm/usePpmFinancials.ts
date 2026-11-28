@@ -40,17 +40,6 @@ export function usePpmCompletion(initiativeId: string | null | undefined, refetc
   return { data, loading, error };
 }
 
-// The portfolio's "latest": report_date, then created_at, then id, all descending.
-function isNewerReport(a: PpmStatusReport, b: PpmStatusReport): boolean {
-  return (
-    a.report_date !== b.report_date
-      ? a.report_date > b.report_date
-      : a.created_at !== b.created_at
-        ? a.created_at > b.created_at
-        : a.id > b.id
-  );
-}
-
 export function usePpmLatestReport(
   initiativeId: string | null | undefined,
   refetchKey?: number,
@@ -59,15 +48,8 @@ export function usePpmLatestReport(
     initiativePath(initiativeId, "reports"),
     { keepPreviousData: false, refetchKey },
   );
-  const latest = useMemo(
-    () =>
-      data?.reduce<PpmStatusReport | null>(
-        (best, r) => (!best || isNewerReport(r, best) ? r : best),
-        null,
-      ) ?? null,
-    [data],
-  );
-  return { data: error ? null : latest, loading, error };
+  // The API lists reports newest first.
+  return { data: error ? null : (data?.[0] ?? null), loading, error };
 }
 
 export function usePpmRisks(initiativeId: string | null | undefined, refetchKey?: number) {

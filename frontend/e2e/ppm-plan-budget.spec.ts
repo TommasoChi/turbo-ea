@@ -56,7 +56,9 @@ const costRow = (page: Page, name: string) =>
     .filter({ has: page.getByRole("button", { name: t("ppm:financeTree.editCost", { name }) }) });
 const expandBudget = (page: Page, name: string) =>
   tree(page).getByRole("button", { name: t("ppm:financeTree.expand", { name }) }).click();
-const amountOf = (n: number) => new RegExp(String(n).replace(/(\d)(?=(\d{3})+$)/, "$1[,. \\u00a0]?"));
+// Not glued to another digit or separator: 2000 must not match "12,000".
+const amountOf = (n: number) =>
+  new RegExp("(?<![\\d.,])" + String(n).replace(/(\d)(?=(\d{3})+$)/, "$1[,. \\u00a0]?") + "(?!\\d)");
 
 async function openPlan(page: Page, id: string) {
   await gotoApp(page, `/ppm/${id}?tab=cost`);
@@ -151,9 +153,12 @@ test("shows the Provider's name in the Provider cell once a Provider is configur
     await expect(cells(budgetRow(page, "Hosted")).nth(3)).toHaveText("E2E Plan Provider");
     await expect(tree(page).getByText("E2E Provider", { exact: true })).toHaveCount(0);
   } finally {
-    if (costChanged) await request.put(`${settings}/cost_item`, { data: configs.cost_item });
-    if (budgetChanged) await request.put(`${settings}/budget`, { data: configs.budget });
-    await scratch.dispose();
+    try {
+      if (costChanged) await json(await request.put(`${settings}/cost_item`, { data: configs.cost_item }));
+      if (budgetChanged) await json(await request.put(`${settings}/budget`, { data: configs.budget }));
+    } finally {
+      await scratch.dispose();
+    }
   }
 });
 
@@ -255,9 +260,10 @@ test("offers a reader no Add Budget Line and no row actions", async ({ browser, 
       await gotoApp(page, `/ppm/${shared.id}?tab=cost`);
       await expect(page.getByRole("tab").first()).toBeVisible();
       const perms = await context.request.get(`/api/v1/cards/${shared.id}/my-permissions`);
-      const { can_view_costs } = (await perms.json()) as { can_view_costs: boolean };
-      // With cost visibility the table is there, read-only; without it the whole tab is absent.
-      await expect(tree(page)).toHaveCount(can_view_costs ? 1 : 0);
+      const { effective } = (await perms.json()) as { effective: { can_view_costs: boolean } };
+      // Only admins hold costs.view among the built-in roles: the viewer must not see the tab.
+      expect(effective.can_view_costs, "the viewer has no cost visibility").toBe(false);
+      await expect(tree(page)).toHaveCount(0);
       await expect(page.getByRole("button", { name: t("ppm:addBudgetLine") })).toHaveCount(0);
       await expect(page.getByRole("button", { name: /^(Edit|Delete) budget /i })).toHaveCount(0);
     } finally {

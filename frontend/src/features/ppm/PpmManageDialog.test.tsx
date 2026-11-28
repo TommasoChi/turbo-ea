@@ -13,7 +13,6 @@ const stub = (name: string) => ({
 });
 vi.mock("./PpmCostTab", () => stub("cost"));
 vi.mock("./PpmGanttTab", () => stub("gantt"));
-vi.mock("./PpmReportsTab", () => stub("reports"));
 vi.mock("./PpmRiskTab", () => ({
   default: (p: {
     initiativeId: string;
@@ -36,7 +35,6 @@ const CARD = { id: "i1", type: "Initiative", name: "ERP" } as unknown as Card;
 beforeEach(() => {
   mockApi.reset();
   mockApi.on("get", "/ppm/initiatives/i1/rollup", null);
-  mockApi.on("get", "/ppm/initiatives/i1/reports", []);
   mockApi.on("get", "/ppm/initiatives/i1/risks", [{ id: "r1" }, { id: "r2" }]);
 });
 
@@ -44,7 +42,6 @@ describe("PpmManageDialog", () => {
   it.each([
     ["cost", "cost"],
     ["gantt", "gantt"],
-    ["reports", "reports"],
   ] as const)("hands the %s tab canEdit", async (tab, id) => {
     render(<PpmManageDialog card={CARD} tab={tab} onClose={vi.fn()} onChanged={vi.fn()} />);
     expect(await screen.findByTestId(id)).toHaveTextContent("true");
@@ -54,7 +51,6 @@ describe("PpmManageDialog", () => {
     render(<PpmManageDialog card={CARD} tab="risks" onClose={vi.fn()} onChanged={vi.fn()} />);
     expect(await screen.findByTestId("risks")).toHaveTextContent("i1|r1,r2|true|ERP");
     expect(screen.getByRole("heading", { name: "Risk Management" })).toBeInTheDocument();
-    expect(mockApi.callsOf("get", "/ppm/initiatives/i1/reports")).toHaveLength(0);
     expect(mockApi.callsOf("get", "/ppm/initiatives/i1/rollup")).toHaveLength(0);
   });
 

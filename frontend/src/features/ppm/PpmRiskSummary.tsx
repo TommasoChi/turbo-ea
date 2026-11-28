@@ -42,6 +42,7 @@ export default function PpmRiskSummary({
   const { t } = useTranslation("ppm");
   const theme = useTheme();
   const chartTheme = useEChartsTheme();
+  const titleId = useId();
   const exposureId = useId();
   const statusId = useId();
   const heatMapId = useId();
@@ -58,9 +59,75 @@ export default function PpmRiskSummary({
     };
   }, [risks]);
 
+  // Memoised: EChart applies an option with notMerge, so a new object replays the animation.
+  const donutOption = useMemo(() => {
+    if (!model) return null;
+    const ctx = { theme: chartTheme, isRtl: chartTheme.isRtl };
+    const bandNames = RISK_SCORE_BANDS.map((b) => scoreBandLabel(b, t));
+    const visibleTotal = RISK_SCORE_BANDS.reduce(
+      (sum, b) => sum + (selected[scoreBandLabel(b, t)] === false ? 0 : model.bands[b]),
+      0,
+    );
+
+    return {
+      tooltip: tooltip(ctx, { trigger: "item" }),
+      legend: legend(ctx, bandNames, { selected }),
+      title: {
+        text: String(visibleTotal),
+        left: "center",
+        top: "center",
+        textStyle: { color: chartTheme.textPrimary, fontSize: 24, fontFamily: chartTheme.fontFamily },
+      },
+      series: [
+        {
+          type: "pie",
+          radius: ["50%", "72%"],
+          center: ["50%", "45%"],
+          label: { show: false },
+          data: RISK_SCORE_BANDS.map((b) => ({
+            name: scoreBandLabel(b, t),
+            value: model.bands[b],
+            itemStyle: { color: bandColor(b) },
+          })),
+        },
+      ],
+    };
+  }, [model, selected, t, chartTheme]);
+
+  const statusOption = useMemo(() => {
+    if (!model) return null;
+    const ctx = { theme: chartTheme, isRtl: chartTheme.isRtl };
+    const statusNames = model.statuses.map((s) => riskStatusLabel(s.status, t));
+    return {
+      tooltip: tooltip(ctx, { trigger: "axis", axisPointer: { type: "shadow" } }),
+      grid: { left: 8, right: 24, top: 8, bottom: 8, containLabel: true },
+      xAxis: { type: "value", minInterval: 1, splitLine: { lineStyle: { color: chartTheme.divider } } },
+      yAxis: {
+        type: "category",
+        inverse: true,
+        data: statusNames,
+        axisLabel: { color: chartTheme.textPrimary },
+      },
+      series: [
+        {
+          type: "bar",
+          barMaxWidth: 20,
+          label: { show: true, position: "right", color: chartTheme.textPrimary },
+          data: model.statuses.map((s) => ({
+            value: s.count,
+            itemStyle: {
+              color: paletteColor(theme.palette, riskStatusPaletteColor(s.status)),
+            },
+          })),
+        },
+      ],
+    };
+  }, [model, t, theme, chartTheme]);
+
   const header = (
     <PpmSectionHeader
       title={t("riskManagement")}
+      titleId={titleId}
       action={
         onManage && (
           <Button size="small" aria-label={t("riskSummaryManage")} onClick={onManage}>
@@ -71,9 +138,9 @@ export default function PpmRiskSummary({
     />
   );
 
-  if (!risks || !model) {
+  if (!risks || !model || !donutOption || !statusOption) {
     return (
-      <Box>
+      <Box component="section" aria-labelledby={titleId}>
         {header}
         <Typography color="text.secondary">{t("riskSummaryLoading")}</Typography>
       </Box>
@@ -81,69 +148,12 @@ export default function PpmRiskSummary({
   }
   if (risks.length === 0) {
     return (
-      <Box>
+      <Box component="section" aria-labelledby={titleId}>
         {header}
         <Typography color="text.secondary">{t("noRisks")}</Typography>
       </Box>
     );
   }
-
-  const ctx = { theme: chartTheme, isRtl: chartTheme.isRtl };
-  const bandNames = RISK_SCORE_BANDS.map((b) => scoreBandLabel(b, t));
-  const visibleTotal = RISK_SCORE_BANDS.reduce(
-    (sum, b) => sum + (selected[scoreBandLabel(b, t)] === false ? 0 : model.bands[b]),
-    0,
-  );
-
-  const donutOption = {
-    tooltip: tooltip(ctx, { trigger: "item" }),
-    legend: legend(ctx, bandNames, { selected }),
-    title: {
-      text: String(visibleTotal),
-      left: "center",
-      top: "center",
-      textStyle: { color: chartTheme.textPrimary, fontSize: 24, fontFamily: chartTheme.fontFamily },
-    },
-    series: [
-      {
-        type: "pie",
-        radius: ["50%", "72%"],
-        center: ["50%", "45%"],
-        label: { show: false },
-        data: RISK_SCORE_BANDS.map((b) => ({
-          name: scoreBandLabel(b, t),
-          value: model.bands[b],
-          itemStyle: { color: bandColor(b) },
-        })),
-      },
-    ],
-  };
-
-  const statusNames = model.statuses.map((s) => riskStatusLabel(s.status, t));
-  const statusOption = {
-    tooltip: tooltip(ctx, { trigger: "axis", axisPointer: { type: "shadow" } }),
-    grid: { left: 8, right: 24, top: 8, bottom: 8, containLabel: true },
-    xAxis: { type: "value", minInterval: 1, splitLine: { lineStyle: { color: chartTheme.divider } } },
-    yAxis: {
-      type: "category",
-      inverse: true,
-      data: statusNames,
-      axisLabel: { color: chartTheme.textPrimary },
-    },
-    series: [
-      {
-        type: "bar",
-        barMaxWidth: 20,
-        label: { show: true, position: "right", color: chartTheme.textPrimary },
-        data: model.statuses.map((s) => ({
-          value: s.count,
-          itemStyle: {
-            color: paletteColor(theme.palette, riskStatusPaletteColor(s.status)),
-          },
-        })),
-      },
-    ],
-  };
 
   const tiles: [string, number][] = [
     [t("riskSummaryTotal"), model.summary.total],
@@ -152,9 +162,9 @@ export default function PpmRiskSummary({
   ];
 
   return (
-    <Box>
+    <Box component="section" aria-labelledby={titleId}>
       {header}
-      <Stack direction="row" spacing={2} sx={{ mb: 2 }}>
+      <Stack direction="row" spacing={2} useFlexGap flexWrap="wrap" sx={{ mb: 2 }}>
         {tiles.map(([label, value]) => (
           <Paper key={label} variant="outlined" sx={{ px: 2, py: 1, minWidth: 96 }}>
             <Typography variant="caption" color="text.secondary" component="div">

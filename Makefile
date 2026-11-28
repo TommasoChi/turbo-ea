@@ -63,7 +63,7 @@ e2e: ## Run the browser smoke suite against a backend on :8000 (start it with SE
 	cd frontend && npx playwright test
 
 e2e-stack: ## Build this tree, start an isolated demo stack (tea-e2e, :18930) and run the PPM browser specs in docker, then remove it (ARGS="e2e/x.spec.ts" to pick specs)
-	scripts/e2e/docker-e2e.sh all $(ARGS)
+	bash scripts/e2e/docker-e2e.sh all $(ARGS)
 
 e2e-coverage: ## Run the browser smoke suite with V8 coverage and write frontend/coverage-e2e/lcov.info (backend on :8000 as for e2e)
 	rm -rf frontend/.e2e-coverage frontend/coverage-e2e

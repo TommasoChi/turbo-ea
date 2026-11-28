@@ -47,6 +47,9 @@ docker info >/dev/null 2>&1 || { echo "Docker is not running"; exit 1; }
 
 stack() {
     HOST_PORT="127.0.0.1:$HOST_PORT_E2E" TLS_HOST_PORT="127.0.0.1:$TLS_PORT_E2E" \
+        ALLOWED_ORIGINS="http://host.docker.internal:$HOST_PORT_E2E,http://localhost:$HOST_PORT_E2E" \
+        TURBO_EA_PUBLIC_URL="http://host.docker.internal:$HOST_PORT_E2E" \
+        MCP_PUBLIC_URL="http://host.docker.internal:$HOST_PORT_E2E/mcp" \
         docker compose -p "$PROJECT" --env-file "$HOST_REPO/scripts/e2e/e2e.env" \
         -f "$HOST_REPO/docker-compose.yml" -f "$HOST_REPO/scripts/e2e/docker-compose.e2e.yml" "$@"
 }

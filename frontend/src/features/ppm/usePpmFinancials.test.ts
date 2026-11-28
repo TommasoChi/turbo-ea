@@ -64,12 +64,12 @@ describe("financial amounts", () => {
 });
 
 describe("usePpmLatestReport", () => {
-  it("returns the most recent report and ignores a previous initiative's answer", async () => {
+  it("returns the first report, the server's newest, and ignores a previous initiative's answer", async () => {
     get
       .mockResolvedValueOnce([
-        { id: "a", report_date: "2026-01-01" },
         { id: "b", report_date: "2026-03-01" },
         { id: "c", report_date: "2026-02-01" },
+        { id: "a", report_date: "2026-01-01" },
       ])
       .mockResolvedValueOnce([]);
     const { result, rerender } = renderHook(({ id }) => usePpmLatestReport(id), {
@@ -83,18 +83,13 @@ describe("usePpmLatestReport", () => {
     expect(result.current.data).toBeNull();
   });
 
-  it("orders same-date reports by created_at, then id, newest first", async () => {
-    const r = (id: string, created_at: string) => ({ id, report_date: "2026-03-01", created_at });
+  it("trusts the server's order instead of re-sorting", async () => {
     get.mockResolvedValueOnce([
-      r("a", "2026-03-01T08:00:00"),
-      r("b", "2026-03-01T09:00:00"),
-      r("z", "2026-03-01T07:00:00"),
+      { id: "first", report_date: "2026-01-01" },
+      { id: "second", report_date: "2026-03-01" },
     ]);
-    const first = renderHook(() => usePpmLatestReport("i1"));
-    await waitFor(() => expect(first.result.current.data?.id).toBe("b"));
-    get.mockResolvedValueOnce([r("a", "2026-03-01T08:00:00"), r("c", "2026-03-01T08:00:00")]);
-    const second = renderHook(() => usePpmLatestReport("i1"));
-    await waitFor(() => expect(second.result.current.data?.id).toBe("c"));
+    const { result } = renderHook(() => usePpmLatestReport("i1"));
+    await waitFor(() => expect(result.current.data?.id).toBe("first"));
   });
 
   it("reloads when refetchKey changes", async () => {

@@ -1,3 +1,4 @@
+import { useId } from "react";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import Typography from "@mui/material/Typography";
@@ -20,15 +21,17 @@ interface Props {
 export default function PpmHealthSummary({ report, costHealth, onManage }: Props) {
   const { t } = useTranslation("ppm");
   const { formatDate } = useDateFormat();
+  const titleId = useId();
   const texts = [
     ["summary", report?.summary],
     ["accomplishments", report?.accomplishments],
     ["nextSteps", report?.next_steps],
   ] as const;
   return (
-    <>
+    <Box component="section" aria-labelledby={titleId}>
       <PpmSectionHeader
         title={t("healthSummary")}
+        titleId={titleId}
         action={
           onManage && (
             <Button
@@ -57,18 +60,20 @@ export default function PpmHealthSummary({ report, costHealth, onManage }: Props
               {formatDate(report.report_date)}
             </Typography>
           )}
-          {texts.map(([key, text]) => (
-            <Box key={key} mt={1}>
-              <Typography variant="caption" color="text.secondary">
-                {t(key)}
-              </Typography>
-              <Typography variant="body2" sx={{ whiteSpace: "pre-wrap" }}>
-                {text ? <LinkifiedText text={text} /> : "—"}
-              </Typography>
-            </Box>
-          ))}
+          <Box display="flex" flexWrap="wrap" columnGap={3}>
+            {texts.map(([key, text]) => (
+              <Box key={key} mt={1} sx={{ flex: "1 1 200px", minWidth: 0 }}>
+                <Typography variant="caption" color="text.secondary">
+                  {t(key)}
+                </Typography>
+                <Typography variant="body2" sx={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>
+                  {text ? <LinkifiedText text={text} /> : "—"}
+                </Typography>
+              </Box>
+            ))}
+          </Box>
         </>
       )}
-    </>
+    </Box>
   );
 }
