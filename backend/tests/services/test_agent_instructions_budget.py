@@ -114,6 +114,13 @@ def test_translator_agent_runs_on_haiku_without_claude_md():
     assert meta.get("omitClaudeMd") == "true"
 
 
+def test_translator_agent_leaves_git_to_the_caller():
+    # It runs without CLAUDE.md, so its own body must carry the git rule.
+    assert "you never commit, push, tag, label or touch GitHub" in _AGENT.read_text(
+        encoding="utf-8"
+    )
+
+
 def test_translate_skill_forks_the_translator():
     meta = _frontmatter(_SKILL)
     assert meta.get("name") == "translate"
