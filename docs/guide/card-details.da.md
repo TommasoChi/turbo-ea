@@ -291,6 +291,19 @@ Når [GRC-modulet](grc.md) er aktiveret **og** kortet har mindst ét linket comp
 
 For **Business Process**-kort vises en yderligere **Process Flow**-fane med en indlejret BPMN-diagram-viewer/-editor. Se [BPM](bpm.md) for detaljer om procesflow-styring.
 
+### Initiativoversigt (Initiative-kort) { #initiative-summary-initiative-cards }
+
+![Initiative-kortside](../assets/img/da/106_initiative_card_ppm.png)
+
+På et **Initiative**-kort er sektionen **Omkostninger og tidslinje** en oversigt over initiativet:
+
+- **Tidslinje** kommer først, med de tilladte planlagte og faktiske datoer og ringen **Fuldførelse** ved siden af datoerne.
+- **Budget** og **Faktiske omkostninger** står side om side, efterfulgt af én **Samlet budget**-bjælke, der sammenligner dem. Bjælken er en del af omkostningsvisningen og vises kun for læsere, der må se omkostninger.
+- **Sundhedsoversigt** følger efter sektionen. Den viser rapportdatoen, indikatorerne **Til tiden**, **På budget** og **Inden for omfang** samt tre tekster fra den seneste statusrapport. Hver tekst er begrænset til 250 tegn: statusrapport-editoren viser en tæller og afviser mere.
+- **Risikostyring** viser de aktive risici (åbne og under afbødning): felter, en donut efter scoreinterval, hvis forklaring du klikker på for at skjule eller vise et interval, et diagram efter status og et kompakt varmekort.
+
+Knapperne **Administrer** i Sundhedsoversigt og Risikostyring kræver PML-administrationstilladelsen og redigeringsrettigheder på kortet. **Administrer** i Sundhedsoversigt åbner statusrapport-editoren til en ny rapport; **Administrer** i Risikostyring åbner popup'en **Administrer** på fanen **Risici**.
+
 ## PML-fane (kun Initiative-kort) { #ppm-tab-initiative-cards-only }
 
 I **Omkostninger og tidslinje** sammenligner overlappende søjler budget og faktiske omkostninger for Total, CapEx og OpEx. Det fakturerede initiativbeløb vises særskilt for brugere med adgang. Tidslinjen viser synlige planlagte og faktiske datoer samt de seneste indikatorer for tid, omkostning og omfang.

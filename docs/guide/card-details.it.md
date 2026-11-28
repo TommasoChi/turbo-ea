@@ -294,6 +294,19 @@ Quando il [modulo GRC](grc.md) è abilitato **e** la card ha almeno una rilevazi
 
 Per le card **Business Process**, appare una scheda aggiuntiva **Flusso di processo** con un visualizzatore/editor di diagrammi BPMN integrato. Vedi [BPM](bpm.md) per i dettagli sulla gestione dei flussi di processo.
 
+### Riepilogo dell'iniziativa (card Iniziativa) { #initiative-summary-initiative-cards }
+
+![Pagina della card Iniziativa](../assets/img/it/106_iniziativa_scheda_ppm.png)
+
+In una card **Iniziativa** la sezione **Costi e tempistica** è un riepilogo dell'iniziativa:
+
+- La **Cronologia** viene per prima, con le date pianificate ed effettive consentite e l'anello **Completamento** accanto alle date.
+- **Budget** e **Costo effettivo** sono affiancati, seguiti da una barra **Budget totale** che li confronta. La barra fa parte della vista dei costi, quindi è mostrata solo ai lettori che possono vedere i costi.
+- Il **Riepilogo salute** segue la sezione. Mostra la data del report, gli indicatori **In tempo**, **Nel budget** e **Nell'ambito** e tre testi dell'ultimo report di stato. Ogni testo è limitato a 250 caratteri: l'editor del report di stato mostra un contatore e non ne accetta di più.
+- **Gestione dei rischi** mostra i rischi attivi (aperti e in mitigazione): riquadri, una ciambella per fascia di punteggio la cui legenda si clicca per nascondere o mostrare una fascia, un grafico per stato e una mappa di calore compatta.
+
+I pulsanti **Gestisci** del Riepilogo salute e della Gestione dei rischi richiedono il permesso di gestione PML e i diritti di modifica sulla card. **Gestisci** sul Riepilogo salute apre l'editor del report di stato per un nuovo report; **Gestisci** sulla Gestione dei rischi apre il popup **Gestisci** nella scheda **Rischi**.
+
 ## Scheda PML (solo card Iniziativa) { #ppm-tab-initiative-cards-only }
 
 In **Costi e tempistica**, i grafici sovrapposti confrontano budget e costo effettivo per totale, CapEx e OpEx. Il totale del fatturato dell'iniziativa è visibile separatamente secondo i permessi. La timeline presenta le date pianificate ed effettive visibili e gli indicatori di tempo, costo e ambito.

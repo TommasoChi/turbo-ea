@@ -79,13 +79,18 @@ Haga clic en cualquier iniciativa para abrir su página de detalle con siete pes
 
 ![Pestaña de visión general de la iniciativa](../assets/img/es/41_ppm_resumen.png)
 
-La visión general muestra un resumen de la salud y finanzas de la iniciativa:
+La visión general muestra un resumen de la salud y finanzas de la iniciativa, en una columna en este orden:
 
-- **Resumen de salud** — Indicadores de cronograma, costo y alcance del último informe de estado
-- **Presupuesto vs. Real** — Tarjeta de KPI combinada mostrando presupuesto total y gasto real con variación
+- **Descripción** — Se muestra cuando la iniciativa la tiene
+- **Línea de tiempo** — Fechas planificadas y reales y dos pistas en la misma escala trimestral, con el anillo de **Finalización** junto a las fechas
+- **Resumen de salud** — La fecha del informe, los indicadores de plazo, coste y alcance y tres textos (resumen, logros, próximos pasos) del último informe de estado, según los permisos de visibilidad. **Gestionar** abre el editor de informes de estado para un informe nuevo
+- **Gestión de riesgos** — Los riesgos activos (abiertos y en mitigación): mosaicos, un anillo por franja de puntuación cuya leyenda se pulsa para ocultar o mostrar una franja, un gráfico por estado y un mapa de calor compacto. **Gestionar** abre la ventana **Gestionar** en su pestaña **Riesgos**
+- **Finanzas** — Presupuesto vs. real para Total, CapEx y OpEx, con variación; se muestra a los lectores que pueden ver costes
+
+Los botones **Gestionar** requieren el permiso de gestión de PML y derechos de edición sobre la ficha. La flecha de retroceso de la página, en la cabecera y en un teléfono, vuelve a la pestaña **Portafolio**.
+
 - **Cifras de abajo** — Cuando la iniciativa no tiene líneas de presupuesto propias, su presupuesto total, sus barras de presupuesto y la variación muestran en su lugar el presupuesto de las iniciativas que tiene por debajo: en cursiva, marcados con una flecha ↳, con la pista del presupuesto de contorno y una información sobre herramientas que indica cuántas iniciativas abarcan. Cuando no tiene líneas de coste propias, su gasto real procede de abajo del mismo modo, con las barras de gasto de contorno. Ambos lados se deciden por separado, y registrar una primera línea propia devuelve ese lado a las cifras propias de la iniciativa.
 - **Por debajo de esta iniciativa** — Cuando la iniciativa tiene iniciativas por debajo, una línea bajo las barras de presupuesto indica cuántas son, su presupuesto y su gasto real sumados y el periodo que abarcan sus fechas. Se muestra junto a las cifras propias de la iniciativa y nunca se suma a ellas. Cuando el presupuesto y el gasto real ya proceden ambos de abajo, la línea conserva solo el número y el periodo de las fechas.
-- **Actividad reciente** — Resumen del último informe de estado
 
 ### Pestaña de informes de estado
 
@@ -103,20 +108,23 @@ Los informes de estado mensuales rastrean la salud del proyecto a lo largo del t
 | **Logros** | Lo que se logró en este período |
 | **Próximos pasos** | Actividades planificadas para el próximo período |
 
+Cada uno de los tres textos está limitado a 250 caracteres. El editor muestra un contador y no admite más.
+
 ### Pestaña de presupuesto y costos
 
 ![Pestaña de presupuesto y costos](../assets/img/es/43_ppm_presupuesto_costes.png)
 
-**Presupuesto planificado** muestra las líneas por ejercicio fiscal y categoría (CapEx u OpEx). Despliegue una línea para ver sus **Partidas de coste** y una partida para ver la **Facturación real**. El ejercicio empieza en el mes indicado en [Configuración](../admin/settings.md#inicio-del-año-fiscal).
+**Presupuesto planificado** muestra cada línea con las columnas **Año fiscal**, **Categoría** (CapEx u OpEx) y **Proveedor**. Las tablas se desplazan lateralmente cuando son más anchas que la página. Despliegue una línea para ver sus **Partidas de coste** y una partida para ver la **Facturación real**. El ejercicio empieza en el mes indicado en [Configuración](../admin/settings.md#inicio-del-año-fiscal).
 
 Introduzca los importes de presupuesto, costes y facturas sin IVA. La facturación real sirve para registrar facturas ya emitidas.
 
-- Añada una partida desde su línea presupuestaria. Las partidas antiguas se pueden asignar desde **Costes sin presupuesto**. Puede mover una partida entre líneas de la misma iniciativa.
-- Registre la fecha, la referencia y el importe de la factura. Si una factura cubre varias partidas, anote la parte correspondiente en cada una. Puede mover el registro a otra partida de la misma iniciativa.
-- La partida muestra el coste real, el importe facturado y el pendiente. El pendiente es el coste real menos lo facturado y puede ser negativo. El presupuesto suma las partidas asociadas y muestra subtotales por ejercicio y categoría. El total facturado de la iniciativa incluye las facturas de partidas sin presupuesto.
-- El presupuesto, el coste real y los gráficos se basan en los importes de presupuesto y costes registrados. Registrar o mover una factura solo cambia las cifras de facturación.
+- Las tablas de presupuesto, partidas de coste y facturas solo ofrecen crear, editar y eliminar.
+- Añada una partida desde su línea presupuestaria. Las filas antiguas sin presupuesto aparecen en **Costes sin presupuesto**.
+- Registre la fecha, la referencia y el importe de la factura. Si una factura cubre varias partidas, anote la parte correspondiente en cada una.
+- La partida muestra el coste real, el importe facturado y el pendiente. El pendiente es el coste real menos lo facturado y puede ser negativo. El presupuesto suma las partidas asociadas y muestra subtotales por ejercicio y categoría.
+- El presupuesto, el coste real y los gráficos se basan en los importes de presupuesto y costes registrados. Registrar una factura solo cambia las cifras de facturación.
 
-Las partidas heredan el proveedor configurado en el presupuesto y pueden seleccionar un proveedor hijo directo permitido. Consulte [Configurar presupuesto y costes](../admin/settings.md#pml-budget-costs) para añadir campos y cálculos.
+Si hay un proveedor configurado en el presupuesto, aparece en la columna **Proveedor** y las partidas lo heredan y pueden seleccionar un proveedor hijo directo permitido. El campo no se repite entre los campos adicionales. Consulte [Configurar presupuesto y costes](../admin/settings.md#pml-budget-costs) para añadir campos y cálculos.
 
 Si una iniciativa no tiene líneas de presupuesto o partidas propias, la cifra correspondiente puede proceder de iniciativas descendientes visibles. Presupuesto y costes se determinan por separado. Las filas derivadas muestran un guion para costes vinculados y facturación. Los totales actualizan `costBudget` y `costActual` en la tarjeta de iniciativa. Si hay partidas PML, esos campos son de solo lectura.
 
@@ -266,7 +274,7 @@ Interactúa con el diagrama de Gantt:
 
 La última pestaña muestra la vista completa de detalle de la tarjeta, incluyendo todas las secciones estándar.
 
-En **Costes y cronograma**, las barras superpuestas comparan presupuesto y coste real para Total, CapEx y OpEx. El total facturado de la iniciativa aparece por separado según los permisos. El cronograma presenta fechas planificadas y reales visibles, y los últimos indicadores de plazo, coste y alcance.
+En **Costes y cronograma**, la **Línea de tiempo** va primero, con la **Finalización** junto a las fechas planificadas y reales permitidas. **Presupuesto** y **Coste real** van lado a lado con una barra de **Presupuesto total**, para los lectores que pueden ver costes. El **Resumen de salud** y la **Gestión de riesgos** siguen, como en la pestaña de visión general. Consulte [Resumen de la iniciativa](card-details.md#initiative-summary-initiative-cards).
 
 ### Informe de la iniciativa
 
@@ -278,9 +286,9 @@ El botón **Informe** en la cabecera de la iniciativa, junto al chip del subtipo
 
 | Sección | Qué muestra |
 |---------|-------------|
-| **Resumen** | Mosaicos de **Presupuesto total**, **Real total**, **Variación** y **Finalización**; el **Resumen de salud** con las tres valoraciones del último informe de estado, en color y en palabras; las barras de **Finanzas** para Total, CapEx y OpEx; el recuadro **Línea de tiempo** con las fechas planificadas y reales visibles, el subtipo y el estado de la iniciativa; y la descripción. Las cifras tomadas de las iniciativas subordinadas van marcadas, con una nota que las explica |
+| **Resumen** | Mosaicos de **Presupuesto total**, **Real total**, **Variación** y **Finalización**; el **Resumen de salud** con las tres valoraciones del último informe de estado, en color y en palabras, su fecha de informe y sus textos; las barras de **Finanzas** para Total, CapEx y OpEx; el recuadro **Línea de tiempo** con las fechas planificadas y reales visibles, el subtipo y el estado de la iniciativa; y la descripción. Las cifras tomadas de las iniciativas subordinadas van marcadas, con una nota que las explica |
 | **Informes de estado** | El último informe completo, con sus valoraciones, y después los informes anteriores en una tabla con la fecha, el autor y las valoraciones de salud |
-| **Presupuesto y costes** | Mosaicos del presupuesto total, el real y la variación, y del CapEx y OpEx gastados frente a su presupuesto; los gráficos de **Gasto a lo largo del tiempo** para el ejercicio fiscal indicado en su chip y para el proyecto completo; Jerarquía desplegada **Presupuesto planificado → Partidas de coste → Facturación real**, subtotales por ejercicio y total facturado de la iniciativa |
+| **Presupuesto y costes** | Mosaicos del presupuesto total, el real y la variación, y del CapEx y OpEx gastados frente a su presupuesto; los gráficos de **Gasto a lo largo del tiempo** para el ejercicio fiscal indicado en su chip y para el proyecto completo; Jerarquía desplegada **Presupuesto planificado → Partidas de coste → Facturación real**, subtotales por ejercicio |
 | **Gestión de riesgos** | Mosaicos de **Total de riesgos**, **Abierto** y **Riesgos altos**; el **Mapa de calor de riesgos** de probabilidad frente a impacto, con cada celda coloreada por franja de puntuación y mostrando cuántos riesgos contiene, junto a un recuento **Por estado**; después, cada riesgo con su puntuación (y probabilidad × impacto), su estado, su responsable, su descripción completa y su mitigación completa, con la puntuación más alta primero |
 | **Tareas y cronograma** | Una tabla de paquetes de trabajo, cada uno con sus tareas debajo, y a continuación las tareas sin paquete de trabajo, junto a una línea de tiempo en escala trimestral: una barra para cada paquete de trabajo, rellena según su avance, una barra para cada tarea en el color de su estado, un rombo para un hito (como en el diagrama de Gantt), un punto para un elemento con una sola fecha y una línea para hoy cuando cae dentro del intervalo. Cada fila muestra además su progreso o estado y su prioridad, y una leyenda explica las marcas |
 

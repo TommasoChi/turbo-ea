@@ -294,6 +294,19 @@ Quand le [module GRC](grc.md) est activé **et** que la fiche a au moins un cons
 
 Pour les fiches **Processus Métier**, un onglet supplémentaire **Flux de processus** apparaît avec un visualiseur/éditeur de diagramme BPMN intégré. Voir [BPM](bpm.md) pour les détails sur la gestion des flux de processus.
 
+### Résumé de l'initiative (fiches Initiative) { #initiative-summary-initiative-cards }
+
+![Page de la fiche Initiative](../assets/img/fr/106_initiative_fiche_ppm.png)
+
+Sur une fiche **Initiative**, la section **Coûts et calendrier** est un résumé de l'initiative :
+
+- La **Chronologie** vient en premier, avec les dates prévisionnelles et réelles autorisées et l'anneau **Achèvement** à côté des dates.
+- **Budget** et **Coût réel** sont côte à côte, suivis d'une barre **Budget total** qui les compare. La barre fait partie de la vue des coûts : elle n'est affichée qu'aux lecteurs autorisés à voir les coûts.
+- Le **Résumé de santé** suit la section. Il montre la date du rapport, les indicateurs **Dans les délais**, **Dans le budget** et **Dans le périmètre**, ainsi que trois textes du dernier rapport de statut. Chaque texte est limité à 250 caractères : l'éditeur de rapport de statut affiche un compteur et refuse davantage.
+- La **Gestion des risques** montre les risques actifs (ouverts et en cours d'atténuation) : des tuiles, un anneau par tranche de score dont vous cliquez sur la légende pour masquer ou afficher une tranche, un graphique par statut et une carte thermique compacte.
+
+Les boutons **Gérer** du Résumé de santé et de la Gestion des risques nécessitent la permission de gestion PML et les droits de modification sur la fiche. **Gérer** sur le Résumé de santé ouvre l'éditeur de rapport de statut pour un nouveau rapport ; **Gérer** sur la Gestion des risques ouvre la fenêtre **Gérer** sur son onglet **Risques**.
+
 ## Onglet PML (fiches Initiative uniquement) { #ppm-tab-initiative-cards-only }
 
 Dans **Coûts et calendrier**, les barres superposées comparent budget et coûts réels pour le total, le CapEx et l'OpEx. Le facturé total de l'initiative est affiché séparément selon les droits. La chronologie présente les dates prévisionnelles et réelles visibles ainsi que les indicateurs de délai, de coût et de périmètre.

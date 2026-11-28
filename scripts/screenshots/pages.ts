@@ -232,10 +232,6 @@ const TAB_PPM_STATUS_REPORTS = tabSelector(...i18nLabels("ppm:statusReports"));
 const TAB_PPM_RISK = tabSelector(...i18nLabels("ppm:riskManagement"));
 const TAB_PPM_TASKS = tabSelector(...i18nLabels("ppm:tasks"));
 const TAB_PPM_GANTT = tabSelector(...i18nLabels("ppm:gantt"));
-// Section heading of the Risk Management block on the Initiative card page.
-const HEADING_PPM_RISK = i18nLabels("ppm:riskManagement")
-  .map((l) => `.MuiTypography-subtitle1:has-text("${hasTextArg(l)}")`)
-  .join(", ");
 const BTN_CREATE = i18nLabels("common:actions.create", "nav:create")
   .map((l) => `button:has-text("${hasTextArg(l)}")`)
   .join(", ");
@@ -2132,7 +2128,7 @@ export const DOC_PAGES: PageDef[] = [
     waitFor: "[data-testid='card-detail'], [class*='CardDetail'], h5, h4",
     actions: [
       { type: "wait", ms: 1500 },
-      { type: "scroll", target: HEADING_PPM_RISK, align: "start" },
+      { type: "scroll", target: "#card-section-custom-cost-timeline", align: "start" },
       { type: "wait", ms: 600 },
     ],
     filenames: {
