@@ -341,7 +341,11 @@ async def list_reports(
     result = await db.execute(
         select(PpmStatusReport)
         .where(PpmStatusReport.initiative_id == initiative_id)
-        .order_by(PpmStatusReport.report_date.desc())
+        .order_by(
+            PpmStatusReport.report_date.desc(),
+            PpmStatusReport.created_at.desc(),
+            PpmStatusReport.id.desc(),
+        )
     )
     reports = result.scalars().all()
     can_view_costs = await PermissionService.can_view_costs(db, user, uuid.UUID(initiative_id))

@@ -9,7 +9,7 @@ edge cases (404s, empty states).
 from __future__ import annotations
 
 import uuid
-from datetime import date
+from datetime import UTC, date, datetime
 
 import pytest
 
@@ -125,6 +125,40 @@ class TestStatusReports:
             headers=auth_headers(ppm_env["admin"]),
         )
         assert len(list_resp.json()) == 0
+
+    async def test_list_orders_same_day_reports_newest_created_first(self, client, db, ppm_env):
+        init = ppm_env["initiative"]
+        older = await create_status_report(
+            db, initiative_id=init.id, report_date=date(2026, 3, 1), summary="older"
+        )
+        older.created_at = datetime(2026, 3, 1, 8, 0, tzinfo=UTC)
+        newer = await create_status_report(
+            db, initiative_id=init.id, report_date=date(2026, 3, 1), summary="newer"
+        )
+        newer.created_at = datetime(2026, 3, 1, 9, 0, tzinfo=UTC)
+        await db.flush()
+
+        resp = await client.get(
+            f"{BASE}/initiatives/{init.id}/reports", headers=auth_headers(ppm_env["admin"])
+        )
+        assert [r["summary"] for r in resp.json()] == ["newer", "older"]
+
+    async def test_list_orders_by_report_date_before_creation_time(self, client, db, ppm_env):
+        init = ppm_env["initiative"]
+        late_date = await create_status_report(
+            db, initiative_id=init.id, report_date=date(2026, 3, 2), summary="late date"
+        )
+        late_date.created_at = datetime(2026, 3, 1, 8, 0, tzinfo=UTC)
+        early_date = await create_status_report(
+            db, initiative_id=init.id, report_date=date(2026, 3, 1), summary="early date"
+        )
+        early_date.created_at = datetime(2026, 3, 5, 8, 0, tzinfo=UTC)
+        await db.flush()
+
+        resp = await client.get(
+            f"{BASE}/initiatives/{init.id}/reports", headers=auth_headers(ppm_env["admin"])
+        )
+        assert [r["summary"] for r in resp.json()] == ["late date", "early date"]
 
     async def test_viewer_can_list_reports(self, client, ppm_env):
         init_id = str(ppm_env["initiative"].id)
