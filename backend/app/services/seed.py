@@ -7035,6 +7035,15 @@ async def seed_metamodel(db: AsyncSession) -> None:
     # visible to the FK constraint on stakeholder_role_definitions.
     await db.flush()
 
+    from app.core.permissions import normalize_organization_role_permissions
+
+    organization = await db.scalar(select(CardType).where(CardType.key == "Organization"))
+    if organization is not None:
+        role_keys = set((await db.execute(select(Role.key))).scalars())
+        organization.role_permissions = normalize_organization_role_permissions(
+            organization.role_permissions or {}, role_keys
+        )
+
     existing_srd_result = await db.execute(select(StakeholderRoleDefinition))
     existing_srd_map = {(s.card_type_key, s.key): s for s in existing_srd_result.scalars().all()}
 
@@ -7077,6 +7086,7 @@ async def seed_metamodel(db: AsyncSession) -> None:
                     permissions=permissions,
                     sort_order=idx,
                     counts_for_quality=sr.get("counts_for_quality", True),
+                    is_position_role=(type_key == "Organization" and sr_key == "responsible"),
                     translations=_nonblank_translations(sr.get("translations")),
                 )
             )

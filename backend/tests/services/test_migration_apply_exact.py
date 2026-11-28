@@ -2014,3 +2014,300 @@ async def test_a_create_gates_its_attributes_against_an_empty_stored_dict(
     await ap._apply_single_card(db, staged, env.admin)
     # A new card has nothing stored: the gate compares against an empty dict.
     assert calls == [({}, {"score": 3, "k": 1}, {"score": "Score"})]
+
+
+async def test_migration_move_retains_inherited_orphan_suspension(db, env, published):
+    await create_card_type(db, key="Organization", label="Organization", has_hierarchy=True)
+    orphan = await create_card(db, card_type="Organization", name="Orphan")
+    orphan.organization_cone_state = "orphaned"
+    child = await create_card(db, card_type="Organization", name="Child", parent_id=orphan.id)
+    child.organization_cone_state = "connected"
+    destination = await create_card(db, card_type="Organization", name="Destination")
+    destination.organization_cone_state = "connected"
+    await stage(db, env, "card", "P", action="skip", target_id=destination.id)
+    await stage(
+        db,
+        env,
+        "card",
+        "C",
+        action="update",
+        target_id=child.id,
+        card_type_key="Organization",
+        data={"payload": {"name": "Child"}},
+        parent_source_id="P",
+    )
+    counts = await ap._apply_card_pass(db, env.m, env.admin)
+    assert counts["updated"] == 1
+    assert child.parent_id == destination.id
+    assert child.organization_cone_state == "orphaned"
+    assert published[0]["data"]["changes"]["organization_cone_state"] == {
+        "old": "connected",
+        "new": "orphaned",
+    }
+
+
+async def test_nonadmin_platform_import_cannot_tag_organization(db, env):
+    from fastapi import HTTPException
+
+    from tests.conftest import create_tag, create_tag_group
+
+    await create_card_type(db, key="Organization", label="Organization")
+    member = await create_user(db, email="tag-migration-member@example.com", role="member")
+    card = await create_card(db, card_type="Organization", name="Position")
+    group = await create_tag_group(db, name="Group")
+    tag = await create_tag(db, group=group, name="Tag")
+    await identity(db, "org", card.id)
+    await identity(db, "tag", tag.id, kind="tag")
+    await stage(db, env, "card_tag", "link", data={"entity_id": "org", "tag_id": "tag"})
+    with pytest.raises(HTTPException) as exc:
+        await ap.apply_migration(db, env.m, member)
+    assert exc.value.status_code == 403
+    assert await db.scalar(select(CardTag.card_id).where(CardTag.card_id == card.id)) is None
+
+
+async def test_nonadmin_platform_import_cannot_relate_organization(db, env):
+    from fastapi import HTTPException
+
+    await create_card_type(db, key="Organization", label="Organization")
+    await create_relation_type(
+        db, key="org_app", source_type_key="Organization", target_type_key="Application"
+    )
+    member = await create_user(db, email="relation-migration-member@example.com", role="member")
+    org = await create_card(db, card_type="Organization", name="Position")
+    app = await create_card(db, card_type="Application", name="App")
+    await identity(db, "org", org.id)
+    await identity(db, "app", app.id)
+    await stage(
+        db,
+        env,
+        "relation",
+        "edge",
+        data={
+            "from_entity_id": "org",
+            "to_entity_id": "app",
+            "tea_type": "org_app",
+        },
+    )
+    with pytest.raises(HTTPException) as exc:
+        await ap.apply_migration(db, env.m, member)
+    assert exc.value.status_code == 403
+    assert await db.scalar(select(Relation.id).where(Relation.type == "org_app")) is None
+
+
+async def test_platform_card_update_checks_resolved_target_type(db, env):
+    from fastapi import HTTPException
+
+    await create_card_type(db, key="Organization", label="Organization")
+    member = await create_user(db, email="forged-type-member@example.com", role="member")
+    org = await create_card(db, card_type="Organization", name="Position")
+    await stage(
+        db,
+        env,
+        "card",
+        "forged",
+        action="update",
+        target_id=org.id,
+        card_type_key="Application",
+        data={"payload": {"type": "Application", "name": "Changed"}},
+    )
+    with pytest.raises(HTTPException) as exc:
+        await ap.apply_migration(db, env.m, member)
+    assert exc.value.status_code == 403
+    await db.refresh(org)
+    assert org.name == "Position"
+
+
+async def test_platform_import_guards_assignment_to_newly_staged_user(db, env):
+    from fastapi import HTTPException
+
+    await create_card_type(db, key="Organization", label="Organization")
+    member = await create_user(db, email="staged-user-member@example.com", role="member")
+    org = await create_card(db, card_type="Organization", name="Position")
+    await identity(db, "org", org.id)
+    await stage(db, env, "user", "new@example.com", data={"email": "new@example.com"})
+    await stage(
+        db,
+        env,
+        "subscription",
+        "sub",
+        data={
+            "entity_id": "org",
+            "user_email": "new@example.com",
+            "tea_role_key": "responsible",
+        },
+    )
+    with pytest.raises(HTTPException) as exc:
+        await ap.apply_migration(db, env.m, member)
+    assert exc.value.status_code == 403
+    assert await db.scalar(select(Stakeholder.id).where(Stakeholder.card_id == org.id)) is None
+
+
+async def test_platform_relation_to_pending_application_checks_existing_organization(db, env):
+    from fastapi import HTTPException
+
+    await create_card_type(db, key="Organization")
+    await create_relation_type(
+        db, key="org_app", source_type_key="Organization", target_type_key="Application"
+    )
+    member = await create_user(db, email="pending-card-member@example.com", role="member")
+    organization = await create_card(db, card_type="Organization", name="Existing Org")
+    await identity(db, "org", organization.id)
+    await stage(
+        db,
+        env,
+        "card",
+        "new-app",
+        card_type_key="Application",
+        data={"payload": {"type": "Application", "name": "Pending App"}},
+    )
+    await stage(
+        db,
+        env,
+        "relation",
+        "pending-edge",
+        data={"from_entity_id": "org", "to_entity_id": "new-app", "tea_type": "org_app"},
+    )
+    with pytest.raises(HTTPException) as exc:
+        await ap.apply_migration(db, env.m, member)
+    assert exc.value.status_code == 403
+    assert await db.scalar(select(Relation.id).where(Relation.type == "org_app")) is None
+    assert await db.scalar(select(Card.id).where(Card.name == "Pending App")) is None
+
+
+async def test_platform_relation_update_checks_actual_stored_endpoints(db, env):
+    from fastapi import HTTPException
+
+    await create_card_type(db, key="Organization")
+    await create_relation_type(
+        db, key="org_app", source_type_key="Organization", target_type_key="Application"
+    )
+    member = await create_user(db, email="stored-relation-member@example.com", role="member")
+    organization = await create_card(db, card_type="Organization", name="Existing Org")
+    app = await create_card(db, card_type="Application", name="App")
+    other = await create_card(db, card_type="Application", name="Other")
+    rel = await create_relation(db, type_key="org_app", source_id=organization.id, target_id=app.id)
+    await identity(db, "from", other.id)
+    await identity(db, "to", app.id)
+    await stage(
+        db,
+        env,
+        "relation",
+        "cached-edge",
+        action="update",
+        target_id=rel.id,
+        data={
+            "from_entity_id": "from",
+            "to_entity_id": "to",
+            "tea_type": "org_app",
+            "attributes": {"note": "changed"},
+        },
+    )
+    with pytest.raises(HTTPException) as exc:
+        await ap.apply_migration(db, env.m, member)
+    assert exc.value.status_code == 403
+    await db.refresh(rel)
+    assert not rel.attributes
+
+
+async def test_relation_pass_rechecks_organization_after_preflight_noop(db, env, monkeypatch):
+    from fastapi import HTTPException
+
+    await create_card_type(db, key="Organization")
+    await create_relation_type(
+        db, key="org_app", source_type_key="Organization", target_type_key="Application"
+    )
+    member = await create_user(db, email="relation-boundary@example.com", role="member")
+    org = await create_card(db, card_type="Organization", name="Org")
+    app = await create_card(db, card_type="Application", name="App")
+    rel = await create_relation(
+        db, type_key="org_app", source_id=org.id, target_id=app.id, attributes={"note": "same"}
+    )
+    await identity(db, "org", org.id)
+    await identity(db, "app", app.id)
+    await stage(
+        db,
+        env,
+        "relation",
+        "edge",
+        action="update",
+        target_id=rel.id,
+        data={
+            "from_entity_id": "org",
+            "to_entity_id": "app",
+            "tea_type": "org_app",
+            "attributes": {"note": "same"},
+        },
+    )
+
+    async def change_after_preflight(session, migration, actor):
+        rel.attributes = {"note": "intervening"}
+        await session.flush()
+        return zero()
+
+    monkeypatch.setattr(ap, "_apply_user_pass", change_after_preflight)
+    with pytest.raises(HTTPException) as exc:
+        await ap.apply_migration(db, env.m, member)
+    assert exc.value.status_code == 403
+    await db.refresh(rel)
+    assert rel.attributes == {"note": "intervening"}
+
+
+@pytest.mark.parametrize("staged_target_matches", [False, True])
+async def test_relation_update_prelocks_actual_bo_targets_once_in_order(
+    db, env, ends, business_object, staged_target_matches
+):
+    objects = [
+        await create_card(
+            db,
+            card_type=BO_TYPE,
+            name=f"Object {number}",
+        )
+        for number in (1, 2, 3)
+    ]
+    objects.sort(key=lambda obj: int.from_bytes(obj.id.bytes[:8], "big", signed=True))
+    expected_keys = [(int.from_bytes(obj.id.bytes[:8], "big", signed=True),) for obj in objects[:2]]
+    for index, obj in enumerate(objects):
+        await identity(db, f"object-{index}", obj.id)
+    relations = [
+        await create_relation(
+            db,
+            type_key=APPLICATION_RELATION,
+            source_id=ends.app.id,
+            target_id=obj.id,
+            attributes={"crudRead": False},
+        )
+        for obj in objects[:2]
+    ]
+    for index in (1, 0):
+        await stage(
+            db,
+            env,
+            "relation",
+            f"stored-{index}",
+            action="update",
+            target_id=relations[index].id,
+            data={
+                "tea_type": APPLICATION_RELATION,
+                "from_entity_id": "other",
+                "to_entity_id": f"object-{index if staged_target_matches else 2}",
+                "attributes": {"crudRead": True},
+            },
+        )
+    statements = []
+    connection = (await db.connection()).sync_connection
+
+    def record(_conn, _cursor, sql, parameters, _context, _executemany):
+        if "pg_advisory_xact_lock" in sql:
+            statements.append(parameters)
+
+    event.listen(connection, "before_cursor_execute", record)
+    try:
+        result = await ap._apply_relation_pass(db, env.m, env.admin)
+    finally:
+        event.remove(connection, "before_cursor_execute", record)
+    assert result == zero(updated=2)
+    assert statements == expected_keys
+    for relation in relations:
+        await db.refresh(relation)
+        assert relation.source_id == ends.app.id
+        assert relation.attributes == {"crudRead": True}

@@ -95,6 +95,7 @@ interface Props {
   card: Card;
   boScoped?: boolean;
   perms: CardEffectivePermissions["effective"];
+  inheritedRoles?: CardEffectivePermissions["inherited_stakeholder_roles"];
   onCardUpdate: (card: Card) => void;
   /** Show BPM tabs (Process Flow, Assessments) for BusinessProcess cards (default true) */
   showBpmTabs?: boolean;
@@ -135,6 +136,7 @@ export default function CardDetailContent({
   card,
   boScoped = false,
   perms,
+  inheritedRoles,
   onCardUpdate,
   showBpmTabs = true,
   showPpmTab = true,
@@ -863,6 +865,7 @@ export default function CardDetailContent({
               <StakeholdersTab
                 card={card}
                 onRefresh={refreshFrom(tabAnchor("stakeholders"))}
+                inheritedRoles={inheritedRoles}
                 canManageStakeholders={perms.can_manage_stakeholders}
                 addOn={addRequest ?? undefined}
               />

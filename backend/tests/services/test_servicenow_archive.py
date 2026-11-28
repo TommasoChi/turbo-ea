@@ -11,6 +11,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 
 import pytest
+from fastapi import HTTPException
 from sqlalchemy import select
 
 from app.models.card import Card
@@ -50,6 +51,24 @@ class _Mapping:
 
 
 class TestServiceNowArchiveStampsRetention:
+    async def test_unattended_sync_cannot_archive_organization(self, db):
+        await create_card_type(db, key="Organization", label="Organization")
+        card = await create_card(db, card_type="Organization", name="Position")
+        engine = SyncEngine(db, client=None)
+
+        with pytest.raises(HTTPException) as exc:
+            await engine._apply_delete(_staged(card.id), _Mapping())
+        assert exc.value.status_code == 403
+        assert card.status == "ACTIVE"
+
+    async def test_admin_sync_can_archive_organization(self, db):
+        await create_card_type(db, key="Organization", label="Organization")
+        card = await create_card(db, card_type="Organization", name="Position")
+        engine = SyncEngine(db, client=None, effective_role="admin")
+
+        await engine._apply_delete(_staged(card.id), _Mapping())
+        assert card.status == "ARCHIVED"
+
     async def test_archive_sets_archived_at(self, db, env):
         engine = SyncEngine(db, client=None)
         card = env["card"]
@@ -99,3 +118,37 @@ class TestServiceNowArchiveStampsRetention:
         await db.flush()
 
         assert env["card"].archived_at == original
+
+
+async def test_servicenow_archiving_position_suspends_children(db):
+    await create_card_type(db, key="Organization", has_hierarchy=True)
+    parent = await create_card(db, card_type="Organization", name="Sync parent")
+    child = await create_card(db, card_type="Organization", name="Sync child", parent_id=parent.id)
+    parent.organization_cone_state = child.organization_cone_state = "connected"
+    await db.flush()
+    engine = SyncEngine(db, client=None, effective_role="admin")
+    await engine._apply_delete(_staged(parent.id), _Mapping())
+    assert parent.status == "ARCHIVED"
+    assert child.organization_cone_state == "orphaned"
+
+
+async def test_servicenow_created_organization_root_requires_confirmation(db):
+    from app.models.servicenow import SnowConnection, SnowMapping
+
+    await create_card_type(db, key="Organization", has_hierarchy=True)
+    connection = SnowConnection(
+        name="Chart sync", instance_url="https://example.invalid", credentials={}
+    )
+    db.add(connection)
+    await db.flush()
+    mapping = SnowMapping(
+        connection_id=connection.id, card_type_key="Organization", snow_table="org"
+    )
+    db.add(mapping)
+    await db.flush()
+    staged = _staged(None, sys_id="org-created")
+    engine = SyncEngine(db, client=None, effective_role="admin")
+    await engine._apply_create(staged, mapping, [])
+    card = await db.get(Card, staged.card_id)
+    assert card.parent_id is None
+    assert card.organization_cone_state == "unconfirmed_root"

@@ -333,7 +333,11 @@ class TestApplyJob:
         monkeypatch.setattr(workspace_api, "apply_bundle", capture_apply)
         token = request_impersonation.set((str(owner.id), "impersonated_importer"))
         try:
-            await workspace_api._apply_job(transfer_id, str(owner.id))
+            await workspace_api._apply_job(
+                transfer_id,
+                str(owner.id),
+                workspace_api._JobAuthorization(str(owner.id), "impersonated_importer", True),
+            )
         finally:
             request_impersonation.reset(token)
 
@@ -593,3 +597,26 @@ class TestAudit:
         [row] = await _audit_rows(db, "admin.workspace.import.discarded")
         assert row.target_id == transfer_id
         assert row.details == {"context": {"status": "previewed"}}
+
+
+async def test_queued_apply_without_frozen_context_cannot_import_organization(
+    client, db, env, monkeypatch
+):
+    from sqlalchemy import delete
+
+    from app.models.card import Card
+
+    await create_card_type(db, key="Organization", label="Organization")
+    await create_card(db, card_type="Organization", name="Queued Org", user_id=env["admin"].id)
+    await db.commit()
+    bundle = await build_bundle(db)
+    await db.execute(delete(Card).where(Card.name == "Queued Org"))
+    await db.commit()
+    monkeypatch.setattr(workspace_api, "_preview_job", _noop)
+    transfer_id = (await _upload(client, env["admin"], bundle)).json()["id"]
+    transfer = await _row(db, transfer_id)
+    transfer.status = "applying"
+    await db.commit()
+    await workspace_api._apply_job(transfer_id, str(env["admin"].id))
+    assert (await _row(db, transfer_id)).status == "failed"
+    assert await db.scalar(select(Card.id).where(Card.name == "Queued Org")) is None

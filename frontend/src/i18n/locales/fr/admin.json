@@ -495,6 +495,7 @@
   "metamodel.stakeholderPanel.noRoles": "Aucun rôle de partie prenante défini.",
   "metamodel.stakeholderPanel.noActiveRoles": "Aucun rôle de partie prenante actif. Créez-en un ci-dessous.",
   "metamodel.stakeholderPanel.archived": "Archivé",
+  "metamodel.stakeholderPanel.positionRole": "Rôle de poste",
   "metamodel.stakeholderPanel.countsForQuality": "Compte pour la qualité des données",
   "metamodel.stakeholderPanel.countsForQualityHelp": "Désactivé pour les rôles passifs : observer une fiche ne doit pas valoir responsabilité.",
   "metamodel.stakeholderPanel.notCounted": "Non comptabilisé",

@@ -4759,6 +4759,18 @@
             ],
             "title": "Parent Label"
           },
+          "position_responsible_user_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Position Responsible User Id"
+          },
           "strict_attributes": {
             "default": false,
             "title": "Strict Attributes",
@@ -4912,6 +4924,62 @@
           "page_size"
         ],
         "title": "CardListResponse",
+        "type": "object"
+      },
+      "CardPermissionsResponse": {
+        "properties": {
+          "app_level": {
+            "additionalProperties": {
+              "type": "boolean"
+            },
+            "title": "App Level",
+            "type": "object"
+          },
+          "card_level": {
+            "additionalProperties": {
+              "type": "boolean"
+            },
+            "title": "Card Level",
+            "type": "object"
+          },
+          "effective": {
+            "$ref": "#/components/schemas/EffectiveCardPermissions"
+          },
+          "inherited_stakeholder_roles": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/InheritedStakeholderRole"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Inherited Stakeholder Roles"
+          },
+          "stakeholder_roles": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Stakeholder Roles",
+            "type": "array"
+          },
+          "type_overrides": {
+            "additionalProperties": true,
+            "title": "Type Overrides",
+            "type": "object"
+          }
+        },
+        "required": [
+          "app_level",
+          "stakeholder_roles",
+          "card_level",
+          "type_overrides",
+          "effective"
+        ],
+        "title": "CardPermissionsResponse",
         "type": "object"
       },
       "CardQueryMatchCard": {
@@ -5988,6 +6056,11 @@
               }
             ],
             "title": "Parent Label"
+          },
+          "reattach_organization_branch": {
+            "default": false,
+            "title": "Reattach Organization Branch",
+            "type": "boolean"
           },
           "status": {
             "anyOf": [
@@ -8394,6 +8467,114 @@
         "title": "DuplicateClusterOut",
         "type": "object"
       },
+      "EffectiveCardPermissions": {
+        "properties": {
+          "can_approval_status": {
+            "title": "Can Approval Status",
+            "type": "boolean"
+          },
+          "can_archive": {
+            "title": "Can Archive",
+            "type": "boolean"
+          },
+          "can_bpm_approve": {
+            "title": "Can Bpm Approve",
+            "type": "boolean"
+          },
+          "can_bpm_edit": {
+            "title": "Can Bpm Edit",
+            "type": "boolean"
+          },
+          "can_bpm_manage_drafts": {
+            "title": "Can Bpm Manage Drafts",
+            "type": "boolean"
+          },
+          "can_bpm_withdraw": {
+            "title": "Can Bpm Withdraw",
+            "type": "boolean"
+          },
+          "can_create_comments": {
+            "title": "Can Create Comments",
+            "type": "boolean"
+          },
+          "can_delete": {
+            "title": "Can Delete",
+            "type": "boolean"
+          },
+          "can_edit": {
+            "title": "Can Edit",
+            "type": "boolean"
+          },
+          "can_edit_costs": {
+            "title": "Can Edit Costs",
+            "type": "boolean"
+          },
+          "can_manage_adr_links": {
+            "title": "Can Manage Adr Links",
+            "type": "boolean"
+          },
+          "can_manage_comments": {
+            "title": "Can Manage Comments",
+            "type": "boolean"
+          },
+          "can_manage_diagram_links": {
+            "title": "Can Manage Diagram Links",
+            "type": "boolean"
+          },
+          "can_manage_documents": {
+            "title": "Can Manage Documents",
+            "type": "boolean"
+          },
+          "can_manage_relations": {
+            "title": "Can Manage Relations",
+            "type": "boolean"
+          },
+          "can_manage_stakeholders": {
+            "title": "Can Manage Stakeholders",
+            "type": "boolean"
+          },
+          "can_self_observe": {
+            "title": "Can Self Observe",
+            "type": "boolean"
+          },
+          "can_view": {
+            "title": "Can View",
+            "type": "boolean"
+          },
+          "can_view_costs": {
+            "title": "Can View Costs",
+            "type": "boolean"
+          },
+          "can_view_licenses": {
+            "title": "Can View Licenses",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "can_view",
+          "can_edit",
+          "can_archive",
+          "can_delete",
+          "can_approval_status",
+          "can_manage_stakeholders",
+          "can_manage_relations",
+          "can_manage_documents",
+          "can_manage_comments",
+          "can_create_comments",
+          "can_bpm_edit",
+          "can_bpm_manage_drafts",
+          "can_bpm_approve",
+          "can_bpm_withdraw",
+          "can_manage_adr_links",
+          "can_manage_diagram_links",
+          "can_view_costs",
+          "can_view_licenses",
+          "can_edit_costs",
+          "can_self_observe"
+        ],
+        "title": "EffectiveCardPermissions",
+        "type": "object"
+      },
       "ElementUpdate": {
         "description": "Update EA cross-references on an extracted BPMN element.",
         "properties": {
@@ -10414,6 +10595,90 @@
           "skipped"
         ],
         "title": "ImportResultOut",
+        "type": "object"
+      },
+      "InheritedPermissionHolder": {
+        "properties": {
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "display_name"
+        ],
+        "title": "InheritedPermissionHolder",
+        "type": "object"
+      },
+      "InheritedPermissionPosition": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "InheritedPermissionPosition",
+        "type": "object"
+      },
+      "InheritedStakeholderRole": {
+        "properties": {
+          "holder": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/InheritedPermissionHolder"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "path": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/InheritedPermissionPosition"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Path"
+          },
+          "role_key": {
+            "title": "Role Key",
+            "type": "string"
+          },
+          "source_kind": {
+            "enum": [
+              "visible",
+              "generic"
+            ],
+            "title": "Source Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "role_key",
+          "source_kind"
+        ],
+        "title": "InheritedStakeholderRole",
         "type": "object"
       },
       "InstanceOut": {
@@ -21697,6 +21962,11 @@
             ],
             "title": "Description"
           },
+          "is_position_role": {
+            "default": false,
+            "title": "Is Position Role",
+            "type": "boolean"
+          },
           "key": {
             "maxLength": 50,
             "minLength": 3,
@@ -21765,6 +22035,17 @@
               }
             ],
             "title": "Description"
+          },
+          "is_position_role": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Position Role"
           },
           "key": {
             "anyOf": [
@@ -34721,7 +35002,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/CardPermissionsResponse"
+                }
               }
             },
             "description": "Successful Response"
@@ -56863,6 +57146,18 @@
               "default": false,
               "description": "Include disabled (is_active=False) users in the result. Default False so owner / assignee / stakeholder pickers don't list disabled accounts. The Users admin page passes True.",
               "title": "Include Inactive",
+              "type": "boolean"
+            }
+          },
+          {
+            "description": "Return active, unexpired Organization position nominees. Admin only.",
+            "in": "query",
+            "name": "eligible_for_organization_position",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Return active, unexpired Organization position nominees. Admin only.",
+              "title": "Eligible For Organization Position",
               "type": "boolean"
             }
           }

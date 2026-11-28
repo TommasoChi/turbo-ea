@@ -27,7 +27,7 @@ from app.models.servicenow import (
 )
 from app.models.user import User
 from app.services import audit_labels, audit_log
-from app.services.permission_service import PermissionService
+from app.services.permission_service import PermissionService, effective_role_key
 from app.services.servicenow_service import (
     ServiceNowClient,
     SyncEngine,
@@ -993,7 +993,7 @@ async def trigger_pull_sync(
     sync_failed = False
     run = None
     try:
-        engine = SyncEngine(db, client)
+        engine = SyncEngine(db, client, effective_role=effective_role_key(user))
         run = await engine.pull_sync(
             mapping,
             mapping.field_mappings,
@@ -1086,7 +1086,7 @@ async def trigger_push_sync(
     sync_failed = False
     run = None
     try:
-        engine = SyncEngine(db, client)
+        engine = SyncEngine(db, client, effective_role=effective_role_key(user))
         run = await engine.push_sync(
             mapping,
             mapping.field_mappings,
@@ -1261,7 +1261,7 @@ async def apply_staged_records(
     apply_failed = False
     applied: dict[str, int] = {}
     try:
-        engine = SyncEngine(db, client)
+        engine = SyncEngine(db, client, effective_role=effective_role_key(user))
         applied = await engine._apply_staged(run)
         await audit_log.record(
             db,

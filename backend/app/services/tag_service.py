@@ -276,6 +276,11 @@ async def apply_card_tag_operations(
         if read_scope.readable(cid, card.type, subtype=card.subtype, mode="inventory")
     }
 
+    from app.services.organization_chart import require_organization_admin
+
+    for visible_card in visible.values():
+        require_organization_admin(user, visible_card.type)
+
     denied = [str(cid) for cid, card in visible.items() if not await can_tag_card(db, user, cid)]
     if denied:
         raise HTTPException(

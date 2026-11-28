@@ -221,6 +221,7 @@ CONFIG_SECTIONS: tuple[ConfigSection, ...] = (
             "permissions",
             "is_archived",
             "counts_for_quality",
+            "is_position_role",
             "sort_order",
             "translations",
         ),

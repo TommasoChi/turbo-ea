@@ -16,6 +16,7 @@ from fastapi import HTTPException
 
 from app.services import card_write_service as svc
 from app.services.card_write_service import WriteActor
+from app.services.event_bus import request_impersonation
 from tests.conftest import (
     create_budget_line,
     create_card,
@@ -62,8 +63,21 @@ def test_the_constants():
 
 async def test_an_actor_from_a_user_carries_its_id_and_name(db):
     user = await create_user(db, email="w@test.com", display_name="Wendy")
-    assert WriteActor.from_user(user) == WriteActor(user_id=user.id, display_name="Wendy")
+    assert WriteActor.from_user(user) == WriteActor(
+        user_id=user.id, display_name="Wendy", effective_role="admin"
+    )
     assert WriteActor.from_user(user).ext_key is None
+
+
+async def test_an_actor_keeps_user_identity_with_the_impersonated_role(db):
+    user = await create_user(db, email="impersonator@test.com", display_name="Wendy")
+    token = request_impersonation.set((str(user.id), "member"))
+    try:
+        assert WriteActor.from_user(user) == WriteActor(
+            user_id=user.id, display_name="Wendy", effective_role="member"
+        )
+    finally:
+        request_impersonation.reset(token)
 
 
 def test_an_extension_stamp_is_a_copy_and_a_user_gets_the_payload_back():

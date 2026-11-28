@@ -22,7 +22,7 @@ La parte superior de la ficha muestra:
 Al crear un **Objeto de datos**, elija uno de los subtipos configurados para ese tipo de ficha. Puede hacer la misma elección al crear un objeto de datos desde la jerarquía, un predecesor o un sucesor, una celda de relaciones del inventario o un elemento de ArchiMate.
 
 Cuando un administrador activa el [modo TurboRPG](../admin/settings.md#turborpg-calidad-de-datos-gamificada) (calidad de datos gamificada), cada guardado que aumenta la puntuación se celebra como si se ganara vida en un videojuego: un **+X%** brillante sale de la sección que acaba de guardar, vuela hasta la puntuación y la golpea: el anillo destella y resplandece, su relleno crece hasta la nueva puntuación y la cifra va contando hacia arriba. Una vez que se desplaza más allá de la cabecera, una fina barra de puntuación anclada bajo la barra superior mantiene la puntuación a la vista y la mejora aterriza en ella. Haga clic en la puntuación de la barra —el chip con el chevrón— para abrir el mismo desglose que el anillo. Alcanzar la franja verde (80%) y el 100% son hitos con una breve lluvia de confeti. Borrar o eliminar datos reproduce el inverso atenuado: un **−X%** rojo sale de la puntuación de vuelta a la sección, y la barra se vacía y cuenta hacia atrás, sin destello ni confeti. Con la reducción de movimiento activada en su sistema operativo no vuela nada; en su lugar ve un **+X%** o **−X%** estático.
-- **Menú de acciones** — Archivar, eliminar y acciones de aprobación. También incluye una acción de un clic **Observar esta ficha** (cuando el tipo de ficha define un rol Observador), para que cualquier usuario con permiso de lectura pueda seguir la ficha sin pasar por la pestaña de Partes interesadas.
+- **Menú de acciones** — Archivar, eliminar y acciones de aprobación. También incluye **Observar esta ficha** cuando el tipo de ficha define un rol de Observador. En las fichas Organization, solo Admin puede usarlo.
 
 ### Logotipo personalizado
 
@@ -249,6 +249,9 @@ Las partes interesadas son personas con un **rol** específico en esta ficha. Lo
 - **Roles personalizados** — Roles adicionales definidos por su administrador
 
 Las asignaciones de partes interesadas afectan los **permisos**: los permisos efectivos de un usuario en una ficha son la combinación de su rol a nivel de aplicación y cualquier rol de parte interesada que tenga en esa ficha.
+
+Solo Admin puede modificar las fichas de Organization y sus asignaciones de partes interesadas. Al crear un puesto de Organization, Admin puede seleccionar un **Responsable** o dejarlo vacante para asignarlo más adelante. Los demás usuarios con acceso de lectura pueden ver la ficha y sus asignaciones.
+
 
 Cuando un rol tiene un **color** definido en el metamodelo, su grupo se marca con él, de modo que puede distinguir un propietario de un observador de un vistazo.
 

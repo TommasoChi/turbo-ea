@@ -624,6 +624,20 @@ def type_cell_decision(
     return None
 
 
+def normalize_organization_role_permissions(matrix: dict, role_keys: set[str]) -> dict:
+    """Persist Organization write denies for every non-admin application role."""
+    result = {key: dict(cells) for key, cells in (matrix or {}).items()}
+    for key in role_keys - {"admin"}:
+        cells = result.setdefault(key, {})
+        cells.update(
+            {
+                permission: False
+                for permission in ("inventory.create", "inventory.edit", "inventory.delete")
+            }
+        )
+    return result
+
+
 def validate_type_role_permissions(
     raw: object,
     *,

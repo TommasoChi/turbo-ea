@@ -125,6 +125,7 @@ CARD_COLUMNS = (
     "alias",
     "approval_status",
     "status",
+    "organization_cone_state",
     "lifecycle",
     "lifecycle_stage",
     "attributes",

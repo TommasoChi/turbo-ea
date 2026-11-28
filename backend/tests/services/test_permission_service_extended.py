@@ -868,7 +868,10 @@ async def flag_env(db):
 
 
 def only(*flags: str) -> dict:
-    return {flag: flag in flags for flag in [*ALL_FLAGS, "can_edit_costs"]}
+    return {
+        **{flag: flag in flags for flag in [*ALL_FLAGS, "can_edit_costs"]},
+        "can_self_observe": "can_view" in flags,
+    }
 
 
 class TestEffectiveFlagsOneGrantAtATime:

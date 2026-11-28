@@ -82,10 +82,14 @@ class WriteActor:
     user_id: uuid.UUID | None
     display_name: str
     ext_key: str | None = None
+    effective_role: str | None = None
 
     @classmethod
     def from_user(cls, user) -> WriteActor:
-        return cls(user_id=user.id, display_name=user.display_name)
+        from app.services.permission_service import effective_role_key
+
+        role = effective_role_key(user) if hasattr(user, "role") else None
+        return cls(user_id=user.id, display_name=user.display_name, effective_role=role)
 
 
 def _stamp_ext(actor: WriteActor, data: dict) -> dict:
@@ -835,6 +839,9 @@ async def create_card(
     number its cards with one global scan per prefix instead of one per
     card; without it the reference is allocated exactly as before.
     """
+    from app.services.organization_chart import require_organization_admin_role
+
+    require_organization_admin_role(actor.effective_role, type_key)
     card_type_row = (
         await db.execute(select(CardType).where(CardType.key == type_key))
     ).scalar_one_or_none()
@@ -861,6 +868,7 @@ async def create_card(
         description=description,
         parent_id=parent_id,
         parent_label=parent_label if parent_id is not None else None,
+        organization_cone_state="connected" if type_key == "Organization" else None,
         lifecycle=lifecycle or {},
         attributes=attributes or {},
         external_id=external_id,
@@ -938,6 +946,9 @@ async def update_card(
     has committed. The ``card_updated`` rows and the approval-broken rows both
     land in the same list, told apart by ``notif_type``.
     """
+    from app.services.organization_chart import require_organization_admin_role
+
+    require_organization_admin_role(actor.effective_role, card.type)
     # The human-readable reference is write-once & immutable — never editable via
     # update (defensive: CardUpdate no longer carries it, but drop any stray).
     updates = dict(updates)
@@ -1005,6 +1016,24 @@ async def update_card(
         await _validate_select_attributes(
             db, card.type, updates["attributes"] or {}, dict(card.attributes or {})
         )
+
+    reattach = updates.pop("reattach_organization_branch", False)
+    if reattach:
+        if card.type != "Organization" or not updates.get("parent_id"):
+            raise HTTPException(400, "Reattachment requires an Organization parent")
+        from app.services.organization_cones import valid_organization_positions
+
+        parent_id = uuid.UUID(updates["parent_id"])
+        await _check_parent_not_descendant(db, {card.id}, parent_id)
+        valid = valid_organization_positions()
+        if not await db.scalar(select(valid.c.id).where(valid.c.id == parent_id)):
+            raise HTTPException(400, "Reattachment requires a valid active Organization parent")
+        updates["organization_cone_state"] = "connected"
+    elif card.type == "Organization" and "parent_id" in updates:
+        from app.services.organization_cones import organization_path_is_orphaned
+
+        if await organization_path_is_orphaned(db, card):
+            updates["organization_cone_state"] = "orphaned"
 
     # Guard: cycle + hierarchy depth limit before applying parent change
     if "parent_id" in updates:
@@ -1273,6 +1302,10 @@ async def archive_card_set(
     # bumped and may lose its approval, and both facts are owed an event and a
     # notification (`card_approval.record_child_strategy_effects`, below).
     child_results: list[card_lifecycle.ChildStrategyResult] = []
+    if child_strategy in (None, "cascade"):
+        await card_lifecycle.suspend_organization_children(
+            db, primary, direct_children, actor.user_id, dry_run=dry_run
+        )
     if direct_children and (child_strategy == "disconnect" or child_strategy == "reparent"):
         child_results.append(
             await card_lifecycle.apply_child_strategy(db, primary, child_strategy, actor.user_id)
@@ -1548,6 +1581,21 @@ async def lock_relation_for_write(db: AsyncSession, rel: Relation) -> Relation |
     )
 
 
+async def require_relation_organization_admin(
+    db: AsyncSession, actor: WriteActor, card_ids: Iterable[uuid.UUID]
+) -> None:
+    """Apply the chart write boundary to both relation endpoints."""
+    from app.services.organization_chart import require_organization_admin_role
+
+    if actor.effective_role == "admin":
+        return
+    organization = await db.scalar(
+        select(Card.id).where(Card.id.in_(set(card_ids)), Card.type == "Organization").limit(1)
+    )
+    if organization is not None:
+        require_organization_admin_role(actor.effective_role, "Organization")
+
+
 async def delete_relation(db: AsyncSession, actor_id: uuid.UUID, rel: Relation) -> None:
     """Delete a relation and publish both endpoint events in the current transaction."""
     source_card = await db.get(Card, rel.source_id)
@@ -1668,6 +1716,7 @@ async def upsert_relation(
     endpoints = {source_id, target_id}
     if await lock_relation_endpoints(db, endpoints) != endpoints:
         raise HTTPException(404, "Card not found")
+    await require_relation_organization_admin(db, actor, endpoints)
     rel = await find_relation(db, type_key, source_id, target_id)
     if rel is not None and create_only:
         return rel, True, []

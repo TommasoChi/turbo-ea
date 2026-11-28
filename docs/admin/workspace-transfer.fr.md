@@ -83,3 +83,5 @@ Le transfert de workspace est gardé par deux permissions dédiées, toutes deux
 
 - `admin.export_workspace` — exporter le bundle.
 - `admin.import_workspace` — prévisualiser et appliquer un import.
+
+Seul Admin peut importer des modifications de l’organigramme **Organization**, de ses affectations de parties prenantes ou de ses rôles de poste. Workspace Transfer transporte les indicateurs de rôle de poste et l’état des branches orphelines. Si un rôle du bundle ne contient pas cet indicateur, il est importé avec l’indicateur désactivé. Un import ne peut ni reconnecter une branche suspendue pour l’héritage de visibilité ni modifier l’activation des cônes de visibilité dans la destination. Lorsque les cônes seront disponibles, Admin peut reprendre l’héritage d’une branche orpheline en la rattachant explicitement à un parent actif valide de l’organigramme.

@@ -22,7 +22,7 @@ Der obere Bereich der Karte zeigt:
 Wenn Sie ein **Datenobjekt** erstellen, wählen Sie einen der für diesen Kartentyp konfigurierten Untertypen aus. Diese Auswahl steht auch zur Verfügung, wenn Sie ein Datenobjekt aus der Hierarchie, über einen Vorgänger oder Nachfolger, aus einer Beziehungszelle im Inventar oder über ein ArchiMate-Element erstellen.
 
 Wenn ein Administrator den [TurboRPG-Modus](../admin/settings.md#turborpg-gamifizierte-datenqualität) (gamifizierte Datenqualität) aktiviert, wird jedes Speichern, das den Wert erhöht, wie ein Lebenspunkte-Gewinn in einem Spiel gefeiert: Ein leuchtendes **+X%** verlässt den gerade gespeicherten Abschnitt, fliegt zum Wert und trifft ihn – der Ring blitzt und leuchtet auf, seine Füllung wächst auf den neuen Wert, und die Zahl zählt hoch. Sobald Sie am Kopfbereich vorbeigescrollt haben, hält eine unter der oberen Leiste angeheftete schmale Wertungsleiste den Wert im Blick, und der Zuwachs landet stattdessen dort. Klicken Sie auf den Wert der Leiste – den Chip mit dem Pfeil –, um dieselbe Aufschlüsselung wie beim Ring zu öffnen. Das Erreichen des grünen Bereichs (80%) und von 100% sind Meilensteine mit einem kurzen Konfettiregen. Das Leeren oder Entfernen von Daten spielt die abgeschwächte Umkehrung ab: Ein rotes **−X%** fliegt vom Wert zurück zum Abschnitt, und die Leiste leert sich und zählt herunter, ohne Aufblitzen und Konfetti. Ist in Ihrem Betriebssystem reduzierte Bewegung aktiviert, fliegt nichts; Sie sehen stattdessen ein statisches **+X%** oder **−X%**.
-- **Aktionsmenü** — Archivieren, Löschen und Genehmigungsaktionen. Enthält außerdem eine Ein-Klick-Aktion **Diese Karte beobachten** (sofern der Kartentyp eine Beobachter-Rolle definiert), mit der jeder Benutzer mit Leserechten der Karte folgen kann, ohne den Stakeholder-Tab zu öffnen.
+- **Aktionsmenü** — Archivierungs-, Lösch- und Freigabeaktionen. Enthält außerdem **Diese Karte beobachten**, wenn der Kartentyp eine Observer-Rolle definiert. Bei Organization-Karten kann dies nur Admin verwenden.
 
 ### Eigenes Logo
 
@@ -249,6 +249,10 @@ Stakeholder sind Personen mit einer bestimmten **Rolle** auf dieser Karte. Die v
 - **Benutzerdefinierte Rollen** — Zusätzliche Rollen, wie von Ihrem Administrator definiert
 
 Stakeholder-Zuweisungen beeinflussen **Berechtigungen**: Die effektiven Berechtigungen eines Benutzers auf einer Karte sind die Kombination aus seiner anwendungsweiten Rolle und allen Stakeholder-Rollen, die er auf dieser Karte innehat.
+
+Nur Admin kann Organization-Karten und ihre Stakeholder-Zuweisungen ändern. Beim Erstellen einer Organization-Position kann Admin einen **Verantwortlichen** auswählen oder die Position bis zur späteren Zuweisung unbesetzt lassen. Andere Benutzer mit Leserecht können die Karte und ihre Zuweisungen sehen.
+
+
 
 Wenn für eine Rolle im Metamodell eine **Farbe** festgelegt ist, wird ihre Gruppe damit gekennzeichnet, sodass Sie einen Eigentümer auf einen Blick von einem Beobachter unterscheiden können.
 

@@ -22,7 +22,7 @@ Le haut de la fiche affiche :
 Lorsque vous créez un **Objet de données**, choisissez l’un des sous-types configurés pour ce type de fiche. Le même choix est proposé lorsque vous créez un objet de données depuis la hiérarchie, un prédécesseur ou un successeur, une cellule de relation dans l’inventaire ou un élément ArchiMate.
 
 Lorsqu'un administrateur active le [mode TurboRPG](../admin/settings.md#turborpg-qualité-des-données-gamifiée) (qualité des données gamifiée), chaque enregistrement qui augmente le score est célébré comme un gain de vie dans un jeu : un **+X%** lumineux quitte la section que vous venez d'enregistrer, file vers le score et le frappe – l'anneau s'illumine et rayonne, son remplissage grandit jusqu'au nouveau score et le chiffre s'incrémente. Dès que vous dépassez l'en-tête, une fine barre de score épinglée sous la barre supérieure garde le score en vue et le gain s'y pose à la place. Cliquez sur le score de la barre — la pastille avec le chevron — pour ouvrir le même détail que celui de l'anneau. L'entrée dans la zone verte (80%) et l'atteinte de 100% sont des paliers avec une courte pluie de confettis. Effacer ou supprimer des données joue l'inverse atténué : un **−X%** rouge quitte le score et retourne vers la section, et la barre se vide et décompte, sans éclat ni confettis. Si la réduction des animations est activée dans votre système d'exploitation, rien ne s'envole ; vous voyez à la place un **+X%** ou **−X%** statique.
-- **Menu d'actions** -- Archiver, supprimer et actions d'approbation. Contient aussi une option en un clic **Observer cette fiche** (lorsque le type de fiche définit un rôle Observateur) qui permet à tout utilisateur disposant d'un accès en lecture de suivre la fiche sans passer par l'onglet Parties prenantes.
+- **Menu Actions** — Actions d’archivage, de suppression et d’approbation. Inclut aussi **Observer cette fiche** lorsque le type de fiche définit un rôle Observateur. Sur les fiches Organization, seul Admin peut l’utiliser.
 
 ### Logo personnalisé
 
@@ -247,6 +247,10 @@ Les parties prenantes sont des personnes ayant un **rôle** spécifique sur cett
 - **Rôles personnalisés** -- Rôles supplémentaires définis par votre administrateur
 
 Les affectations de parties prenantes affectent les **permissions** : les permissions effectives d'un utilisateur sur une fiche sont la combinaison de son rôle au niveau de l'application et de tous les rôles de parties prenantes qu'il détient sur cette fiche.
+
+Seul Admin peut modifier les fiches Organization et leurs affectations de parties prenantes. Lors de la création d’un poste Organization, Admin peut choisir un **Responsable** ou laisser le poste vacant pour l’attribuer plus tard. Les autres utilisateurs disposant d’un accès en lecture peuvent consulter la fiche et ses affectations.
+
+
 
 Lorsqu'une **couleur** est définie pour un rôle dans le métamodèle, son groupe en est marqué, ce qui permet de distinguer un propriétaire d'un observateur d'un coup d'œil.
 

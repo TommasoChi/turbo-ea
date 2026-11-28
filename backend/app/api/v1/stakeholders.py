@@ -22,6 +22,7 @@ from app.schemas.common import (
 from app.services.card_read_scope import require_card_readable
 from app.services.data_quality import rescore_cards
 from app.services.event_bus import event_bus
+from app.services.organization_chart import require_organization_admin
 from app.services.permission_service import PermissionService
 from app.services.stakeholder_service import role_labels as _role_labels
 from app.services.stakeholder_service import roles_for_type as _roles_for_type
@@ -126,14 +127,12 @@ async def create_stakeholder(
     user: User = Depends(get_current_user),
 ):
     card_uuid = uuid.UUID(card_id)
+    card_type_key = await require_card_readable(db, user, card_uuid, mode="module")
+    require_organization_admin(user, card_type_key)
     if not await PermissionService.check_permission(
         db, user, "stakeholders.manage", card_uuid, "card.manage_stakeholders"
     ):
         raise HTTPException(403, "Not enough permissions")
-    card_result = await db.execute(select(Card.type).where(Card.id == card_uuid))
-    card_type_key = card_result.scalar_one_or_none()
-    if not card_type_key:
-        raise HTTPException(404, "Card not found")
 
     roles = await _roles_for_type(db, card_type_key)
     valid_keys = {r["key"] for r in roles}
@@ -213,6 +212,8 @@ async def update_stakeholder(
     stakeholder = result.scalar_one_or_none()
     if not stakeholder:
         raise HTTPException(404, "Stakeholder not found")
+    card_type_key = await require_card_readable(db, user, stakeholder.card_id, mode="module")
+    require_organization_admin(user, card_type_key)
     if not await PermissionService.check_permission(
         db, user, "stakeholders.manage", stakeholder.card_id, "card.manage_stakeholders"
     ):
@@ -306,6 +307,11 @@ async def bulk_stakeholders(
     if card_ids:
         rows = await db.execute(select(Card.id, Card.type).where(Card.id.in_(card_ids)))
         card_type_by_id = {row[0]: row[1] for row in rows.all()}
+
+    for card_uuid, type_key in card_type_by_id.items():
+        if type_key == "Organization":
+            await require_card_readable(db, user, card_uuid, mode="module", type_key=type_key)
+            require_organization_admin(user, type_key)
 
     users_by_id: dict[uuid.UUID, User] = {}
     users_by_email: dict[str, User] = {}
@@ -511,14 +517,12 @@ async def get_my_observe_status(
     "Observe this card" toggle on the card detail page.
     """
     card_uuid = uuid.UUID(card_id)
+    card_type_key = await require_card_readable(db, user, card_uuid, mode="module")
+    require_organization_admin(user, card_type_key)
     if not await PermissionService.check_permission(
         db, user, "inventory.view", card_uuid, "card.view"
     ):
         raise HTTPException(403, "Not enough permissions")
-    card_result = await db.execute(select(Card.type).where(Card.id == card_uuid))
-    card_type_key = card_result.scalar_one_or_none()
-    if not card_type_key:
-        raise HTTPException(404, "Card not found")
 
     roles = await _roles_for_type(db, card_type_key)
     observer_role_available = any(r["key"] == "observer" for r in roles)
@@ -554,14 +558,12 @@ async def add_me_as_observer(
     Idempotent: a second call returns the existing row.
     """
     card_uuid = uuid.UUID(card_id)
+    card_type_key = await require_card_readable(db, user, card_uuid, mode="module")
+    require_organization_admin(user, card_type_key)
     if not await PermissionService.check_permission(
         db, user, "inventory.view", card_uuid, "card.view"
     ):
         raise HTTPException(403, "Not enough permissions")
-    card_result = await db.execute(select(Card.type).where(Card.id == card_uuid))
-    card_type_key = card_result.scalar_one_or_none()
-    if not card_type_key:
-        raise HTTPException(404, "Card not found")
 
     roles = await _roles_for_type(db, card_type_key)
     if not any(r["key"] == "observer" for r in roles):
@@ -647,14 +649,12 @@ async def remove_me_as_observer(
     must always be removable.
     """
     card_uuid = uuid.UUID(card_id)
+    card_type_key = await require_card_readable(db, user, card_uuid, mode="module")
+    require_organization_admin(user, card_type_key)
     if not await PermissionService.check_permission(
         db, user, "inventory.view", card_uuid, "card.view"
     ):
         raise HTTPException(403, "Not enough permissions")
-    card_result = await db.execute(select(Card.type).where(Card.id == card_uuid))
-    card_type_key = card_result.scalar_one_or_none()
-    if not card_type_key:
-        raise HTTPException(404, "Card not found")
 
     result = await db.execute(
         select(Stakeholder)
@@ -707,6 +707,8 @@ async def delete_stakeholder(
     stakeholder = result.scalar_one_or_none()
     if not stakeholder:
         raise HTTPException(404, "Stakeholder not found")
+    card_type_key = await require_card_readable(db, user, stakeholder.card_id, mode="module")
+    require_organization_admin(user, card_type_key)
     if not await PermissionService.check_permission(
         db, user, "stakeholders.manage", stakeholder.card_id, "card.manage_stakeholders"
     ):

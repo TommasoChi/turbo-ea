@@ -22,7 +22,7 @@ A parte superior do card mostra:
 Ao criar um **Objeto de dados**, escolha um dos subtipos configurados para esse tipo de card. Pode fazer a mesma escolha ao criar um Objeto de dados a partir da hierarquia, de um predecessor ou sucessor, de uma célula de relação do inventário ou de um elemento ArchiMate.
 
 Quando um administrador ativa o [modo TurboRPG](../admin/settings.md#turborpg-qualidade-dos-dados-gamificada) (qualidade dos dados gamificada), cada gravação que aumenta a pontuação é celebrada como um ganho de vida num jogo: um **+X%** luminoso sai da secção que acabou de gravar, voa até à pontuação e atinge-a — o anel pisca e brilha, o seu preenchimento aumenta até à nova pontuação e o número vai subindo. Assim que se desloca para além do cabeçalho, uma fina barra de pontuação fixada sob a barra superior mantém a pontuação à vista e o ganho aterra nela. Clique na pontuação da barra — o chip com o chevron — para abrir o mesmo detalhe do anel. Atingir a faixa verde (80%) e atingir 100% são marcos com uma breve chuva de confete. Limpar ou remover dados reproduz o inverso atenuado: um **−X%** vermelho sai da pontuação de volta para a secção, e a barra esvazia-se e conta em sentido inverso, sem clarão nem confete. Com a redução de movimento ativada no sistema operativo, nada voa; vê, em vez disso, um **+X%** ou **−X%** estático.
-- **Menu de ações** — Arquivar, excluir e ações de aprovação. Também inclui uma ação de um clique **Observar este cartão** (quando o tipo de card define um papel de Observador), permitindo que qualquer usuário com permissão de leitura siga o card sem precisar abrir a aba Partes interessadas.
+- **Menu de ações** — Arquivar, excluir e ações de aprovação. Também inclui **Observar este cartão** quando o tipo de card define um papel de Observador. Nos cards Organization, só Admin pode utilizar esta ação.
 
 ### Logótipo personalizado
 
@@ -246,6 +246,9 @@ Partes interessadas são pessoas com um **papel** específico neste card. Os pap
 - **Papéis personalizados** — Papéis adicionais conforme definido pelo seu administrador
 
 Atribuições de partes interessadas afetam **permissões**: as permissões efetivas de um usuário em um card são a combinação do seu papel em nível de aplicação e quaisquer papéis de parte interessada que ele possua naquele card.
+
+Só Admin pode alterar os cards Organization e as respetivas atribuições de partes interessadas. Ao criar uma posição Organization, Admin pode selecionar um **Responsável** ou deixá-la vaga para atribuição posterior. Os restantes utilizadores com acesso de leitura podem ver o card e as respetivas atribuições.
+
 
 Quando um papel tem uma **cor** definida no metamodelo, o seu grupo é marcado com ela, permitindo distinguir um proprietário de um observador num relance.
 

@@ -23,7 +23,7 @@ When you create a **Data Object**, choose one of the subtypes configured for tha
 
 When an administrator turns on [TurboRPG](../admin/settings.md#turborpg-gamified-data-quality) mode (gamified data quality), every save that raises the score is celebrated like gaining health in a game: a glowing **+X%** leaves the section you just saved, flies to the score and hits it — the ring flashes and glows, its fill grows to the new score and the figure counts up. Once you scroll past the header, a slim score bar pinned under the top bar keeps the score in view and the gain lands on it instead. Click the bar's score — the chip with the chevron — to open the same breakdown as the ring. Reaching the green band (80%) and reaching 100% are milestones with a short burst of confetti. Clearing or removing data plays the toned-down reverse: a red **−X%** flies off the score back to the section, and the bar drains and counts down, with no flash or confetti. With reduced motion turned on in your operating system nothing flies; you see a static **+X%** or **−X%** instead.
 
-- **Actions menu** — Archive, delete, and approval actions. Also includes a one-click **Observe this card** toggle (when the card type defines an Observer role) so any user with view access can follow the card without going through the Stakeholders tab.
+- **Actions menu** — Archive, delete, and approval actions. Also includes a one-click **Observe this card** toggle when the card type defines an Observer role. On Organization cards, only Admin can use it.
 
 ### Custom Logo
 
@@ -246,6 +246,8 @@ Stakeholders are people with a specific **role** on this card. The available rol
 - **Custom roles** — Additional roles as defined by your administrator
 
 Stakeholder assignments affect **permissions**: a user's effective permissions on a card are the combination of their app-level role and any stakeholder roles they hold on that card.
+
+Only Admin can change Organization cards and their stakeholder assignments. When creating an Organization position, Admin can select a **Responsible** or leave the position vacant for later assignment. Other users with read access can view the card and its assignments.
 
 Where a role has a **colour** set in the metamodel, its group is marked with it, so you can pick out an owner from an observer at a glance.
 

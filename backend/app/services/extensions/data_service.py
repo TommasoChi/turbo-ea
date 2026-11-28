@@ -165,6 +165,7 @@ class ActingPerson:
 
     id: uuid.UUID
     display_name: str
+    effective_role: str
 
 
 # Task-local like the batch scope: a route serving one person and a job
@@ -226,7 +227,11 @@ def _validated_person(user: Any) -> ActingPerson:
         )
     if not user.is_active:
         raise ExtensionDataError(f"User {user.id} is deactivated; no write can be made for them")
-    return ActingPerson(id=user.id, display_name=user.display_name)
+    from app.services.permission_service import effective_role_key
+
+    return ActingPerson(
+        id=user.id, display_name=user.display_name, effective_role=effective_role_key(user)
+    )
 
 
 def count_write_in_active_batch() -> None:
@@ -874,9 +879,18 @@ class ExtensionData:
             # SDK 1.19 — made for a signed-in person: they are the author,
             # and ext_key keeps the extension on the event (data["ext"]).
             return WriteActor(
-                user_id=person.id, display_name=person.display_name, ext_key=self._key
+                user_id=person.id,
+                display_name=person.display_name,
+                ext_key=self._key,
+                effective_role=person.effective_role,
             )
         return WriteActor(user_id=None, display_name=display, ext_key=self._key)
+
+    def _require_organization_admin(self, card_type: str) -> None:
+        from app.services.organization_chart import require_organization_admin_role
+
+        person = acting_person()
+        require_organization_admin_role(person.effective_role if person else None, card_type)
 
     def _require_writes_enabled(self) -> None:
         _require_writes_enabled()
@@ -1085,6 +1099,7 @@ class ExtensionData:
             card = (await db.execute(select(Card).where(Card.id == cid))).scalar_one_or_none()
             if card is None:
                 raise ExtensionDataError(f"Card {card_id} not found")
+            self._require_organization_admin(card.type)
             if card.status == "ARCHIVED":
                 raise ExtensionDataError(f"Card {card_id} is already archived")
             direct_children = await card_lifecycle.direct_children(db, card.id)
@@ -1104,6 +1119,10 @@ class ExtensionData:
                 related_card_ids=[],
                 cascade_all_related=False,
             )
+            if full:
+                types = await db.scalars(select(Card.type).where(Card.id.in_(full)))
+                for card_type in types:
+                    self._require_organization_admin(card_type)
             await card_write_service.archive_card_set(
                 db,
                 self._actor(),
@@ -1178,6 +1197,7 @@ class ExtensionData:
             card = (await db.execute(select(Card).where(Card.id == cid))).scalar_one_or_none()
             if card is None:
                 raise ExtensionDataError(f"Card {card_id} not found")
+            self._require_organization_admin(card.type)
             if card.status == "ARCHIVED":
                 raise ExtensionDataError(f"Card {card_id} is archived")
             try:
@@ -1212,6 +1232,7 @@ class ExtensionData:
             card = (await db.execute(select(Card).where(Card.id == cid))).scalar_one_or_none()
             if card is None:
                 raise ExtensionDataError(f"Card {card_id} not found")
+            self._require_organization_admin(card.type)
             if card.status == "ARCHIVED":
                 raise ExtensionDataError(f"Card {card_id} is archived")
             user = (await db.execute(select(User).where(User.id == uid))).scalar_one_or_none()
@@ -1256,6 +1277,8 @@ class ExtensionData:
             if row is None:
                 return False
             card = (await db.execute(select(Card).where(Card.id == cid))).scalar_one_or_none()
+            if card is not None:
+                self._require_organization_admin(card.type)
             user = (await db.execute(select(User).where(User.id == uid))).scalar_one_or_none()
             roles = await stakeholder_service.roles_for_type(db, card.type) if card else []
             labels = stakeholder_service.role_labels(roles)

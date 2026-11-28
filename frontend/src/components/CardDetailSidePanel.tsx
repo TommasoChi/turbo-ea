@@ -30,7 +30,7 @@ import { GainFlight } from "@/features/cards/gamification/GainFlight";
 import { useSaveOrigin, useScoreGain } from "@/features/cards/gamification/useScoreGain";
 import { useGamificationEnabled } from "@/hooks/useGamificationEnabled";
 import CardDetailContent from "@/features/cards/CardDetailContent";
-import { DEFAULT_CARD_PERMISSIONS } from "@/features/cards/defaultPermissions";
+import { CLOSED_CARD_PERMISSIONS, DEFAULT_CARD_PERMISSIONS } from "@/features/cards/defaultPermissions";
 import { cardFocusKey, resolveCardFocus } from "@/features/cards/cardFocus";
 import type { DataQualityJumpTarget } from "@/features/cards/dataQualityJump";
 import type {
@@ -106,6 +106,8 @@ export default function CardDetailSidePanel({
   const { t } = useTranslation("common");
   const { t: reportT } = useTranslation("reports");
   const user = useOptionalAuthUser();
+  const identity = `${user?.id ?? ""}:${user?.role ?? ""}:${user?.impersonated_role ?? ""}`;
+  const organizationAdmin = (user?.impersonated_role ?? user?.role) === "admin";
   const { getType, relationTypes } = useMetamodel();
   const typeLabel = useTypeLabel();
   const resolveSubtypeLabel = useCardSubtypeLabel();
@@ -145,8 +147,22 @@ export default function CardDetailSidePanel({
   const card = loadedCard?.id === shownId ? loadedCard : null;
   const [saveVersion, setSaveVersion] = useState(0);
   const [error, setError] = useState("");
-  const [perms, setPerms] =
-    useState<CardEffectivePermissions["effective"]>(DEFAULT_CARD_PERMISSIONS);
+  const [loadedPermissions, setLoadedPermissions] = useState<{
+    id: string;
+    identity: string;
+    effective: CardEffectivePermissions["effective"];
+    inheritedRoles?: CardEffectivePermissions["inherited_stakeholder_roles"];
+  } | null>(null);
+  const matchingPermissions = loadedPermissions && loadedPermissions.id === shownId && loadedPermissions.identity === identity
+    ? loadedPermissions.effective
+    : null;
+  const perms = card?.type === "Organization" && !organizationAdmin
+    ? {
+        ...CLOSED_CARD_PERMISSIONS,
+        can_view: matchingPermissions?.can_view ?? true,
+        can_view_costs: matchingPermissions?.can_view_costs ?? false,
+      }
+    : matchingPermissions ?? (card?.type === "Organization" ? CLOSED_CARD_PERMISSIONS : DEFAULT_CARD_PERMISSIONS);
   // Gamified data quality: the panel's header is already sticky, so the pill
   // plays the gain (the orb flies to it from the saved section) and no
   // separate score bar is needed.
@@ -206,7 +222,7 @@ export default function CardDetailSidePanel({
     setCard(null);
     if (!shownId) return;
     setError("");
-    setPerms(DEFAULT_CARD_PERMISSIONS);
+    setLoadedPermissions(null);
     setAiResponse(null);
     setAiError("");
     setAiLoading(false);
@@ -223,7 +239,7 @@ export default function CardDetailSidePanel({
         );
         if (!isCurrent()) return;
         setCard(detail.card);
-        setPerms(detail.permissions);
+        setLoadedPermissions({ id: shownId, identity, effective: detail.permissions });
         setError("");
       } catch (e) {
         if (!isCurrent()) return;
@@ -236,11 +252,11 @@ export default function CardDetailSidePanel({
           .then((value) => { if (isCurrent()) setCard(value); })
           .catch((e) => { if (isCurrent()) setError(e.message); }),
         api.get<CardEffectivePermissions>(`/cards/${shownId}/my-permissions`)
-          .then((res) => { if (isCurrent()) setPerms(res.effective); })
+          .then((res) => { if (isCurrent()) setLoadedPermissions({ id: shownId, identity, effective: res.effective, inheritedRoles: res.inherited_stakeholder_roles }); })
           .catch(() => {}),
       ]);
     }
-  }, [shownId, boScoped, refreshKey, saveVersion]);
+  }, [shownId, boScoped, refreshKey, saveVersion, identity]);
 
   const typeConfig = card ? getType(card.type) : null;
 
@@ -453,6 +469,7 @@ export default function CardDetailSidePanel({
             key={card.id}
             card={card}
             perms={perms}
+            inheritedRoles={loadedPermissions && loadedPermissions.id === shownId && loadedPermissions.identity === identity ? loadedPermissions.inheritedRoles : undefined}
             onCardUpdate={(updated) => {
               if (updated.id === shownIdRef.current) {
                 if (boScoped) setSaveVersion((version) => version + 1);

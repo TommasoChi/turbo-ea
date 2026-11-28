@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Routes, Route } from "react-router";
 import CardDetail from "./CardDetail";
@@ -78,8 +78,9 @@ vi.mock("@/features/bpm/ProcessAssessmentPanel", () => ({
   default: () => <div data-testid="assessment-panel" />,
 }));
 
+const cardAuth = vi.hoisted(() => ({ id: "user-1", role: "admin", impersonated_role: null as string | null }));
 vi.mock("@/hooks/AuthContext", () => ({
-  useOptionalAuthUser: () => null,
+  useOptionalAuthUser: () => cardAuth,
   useAuthContext: () => ({
     user: {
       id: "user-1",
@@ -182,6 +183,8 @@ const mockPerms = {
 beforeEach(() => {
   vi.clearAllMocks();
   gamification.enabled = false;
+  cardAuth.role = "admin";
+  cardAuth.impersonated_role = null;
 
   vi.mocked(useMetamodel).mockReturnValue({
     types: [APPLICATION_TYPE, BUSINESS_PROCESS_TYPE],
@@ -1066,4 +1069,77 @@ describe("CardDetail — gamified data quality sticky bar", () => {
     expect(pill).toHaveAttribute("data-animate", "false");
     expect(screen.queryByTestId("sticky-score-bar")).not.toBeInTheDocument();
   });
+});
+
+describe("Organization observe permissions", () => {
+  it("does not request observe status while permissions are unknown", async () => {
+    vi.mocked(api.get).mockImplementation((path: string) => {
+      if (path.includes("/my-permissions")) return new Promise(() => {});
+      if (path === "/cards/card-1") return Promise.resolve({ ...mockCard, type: "Organization" });
+      return Promise.resolve([]);
+    });
+    renderCardDetail();
+    await screen.findByText("My Application");
+    expect(vi.mocked(api.get).mock.calls.some(([path]) => String(path).includes("/me/observe"))).toBe(false);
+  });
+});
+
+it.each([false, true])("requests Organization observe status only when capability is %s", async (allowed) => {
+  vi.mocked(api.get).mockImplementation((path: string) => {
+    if (path.includes("/my-permissions")) return Promise.resolve({ ...mockPerms, effective: { ...mockPerms.effective, can_self_observe: allowed } });
+    if (path === "/cards/card-1") return Promise.resolve({ ...mockCard, type: "Organization" });
+    if (path.endsWith("/me/observe")) return Promise.resolve({ is_observer: false, observer_role_available: true });
+    return Promise.resolve([]);
+  });
+  renderCardDetail();
+  await screen.findByText("My Application");
+  await waitFor(() => expect(vi.mocked(api.get).mock.calls.some(([path]) => String(path).endsWith("/me/observe"))).toBe(allowed));
+  if (allowed) {
+    await userEvent.click(screen.getByRole("button", { name: "More actions" }));
+    expect(await screen.findByText(/observe this card/i)).toBeInTheDocument();
+  }
+});
+
+
+it("immediately hides Organization edit after impersonating a non-admin on the same card", async () => {
+  vi.mocked(api.get).mockImplementation((path: string) => {
+    if (path.includes("/my-permissions")) return Promise.resolve({ ...mockPerms, effective: { ...mockPerms.effective, can_self_observe: true } });
+    if (path === "/cards/card-1") return Promise.resolve({ ...mockCard, type: "Organization" });
+    return Promise.resolve([]);
+  });
+  const view = renderCardDetail();
+  expect(await screen.findByRole("button", { name: "Edit" })).toBeInTheDocument();
+  cardAuth.impersonated_role = "member";
+  view.rerender(<MemoryRouter initialEntries={["/cards/card-1"]}><Routes><Route path="/cards/:id" element={<CardDetail />} /></Routes></MemoryRouter>);
+  expect(screen.queryByRole("button", { name: "Edit" })).not.toBeInTheDocument();
+});
+
+it("keeps Application observe status when permissions arrive after the card", async () => {
+  let resolvePermissions!: (value: typeof mockPerms) => void;
+  const permissions = new Promise<typeof mockPerms>((resolve) => {
+    resolvePermissions = resolve;
+  });
+  vi.mocked(api.get).mockImplementation((path: string) => {
+    if (path.includes("/my-permissions")) return permissions;
+    if (path === "/cards/card-1") return Promise.resolve(mockCard);
+    if (path.endsWith("/me/observe")) {
+      return Promise.resolve({ is_observer: true, observer_role_available: true });
+    }
+    return Promise.resolve([]);
+  });
+  renderCardDetail();
+  await screen.findByText("My Application");
+  await waitFor(() => expect(
+    vi.mocked(api.get).mock.calls.filter(([path]) => String(path).endsWith("/me/observe")),
+  ).toHaveLength(1));
+
+  await act(async () => {
+    resolvePermissions(mockPerms);
+  });
+
+  expect(
+    vi.mocked(api.get).mock.calls.filter(([path]) => String(path).endsWith("/me/observe")),
+  ).toHaveLength(1);
+  await userEvent.click(screen.getByRole("button", { name: "More actions" }));
+  expect(await screen.findByText(/stop observing/i)).toBeInTheDocument();
 });

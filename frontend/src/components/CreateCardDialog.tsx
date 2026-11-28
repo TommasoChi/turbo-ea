@@ -10,6 +10,7 @@ import DialogContent from "@mui/material/DialogContent";
 import DialogActions from "@mui/material/DialogActions";
 import Button from "@mui/material/Button";
 import TextField from "@mui/material/TextField";
+import Autocomplete from "@mui/material/Autocomplete";
 import MenuItem from "@mui/material/MenuItem";
 import Select from "@mui/material/Select";
 import FormControl from "@mui/material/FormControl";
@@ -41,6 +42,7 @@ import {
 } from "@/hooks/useResolveLabel";
 import { useAiStatus, aiSuggestEnabledFor } from "@/hooks/useAiStatus";
 import { useAbortableEffect, useLatestRequest } from "@/hooks/useLatestRequest";
+import { useApiQuery } from "@/hooks/useApiQuery";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { api, ApiError } from "@/api/client";
 import { readableTextColor } from "@/lib/color";
@@ -51,6 +53,7 @@ import type {
   AiSuggestResponse,
   TagGroup,
   SiblingNameConflictDetail,
+  User,
 } from "@/types";
 import { useTheme, alpha } from "@mui/material/styles";
 import { STATUS_COLORS } from "@/theme/tokens";
@@ -66,6 +69,7 @@ interface Props {
     name: string;
     description?: string;
     parent_id?: string;
+    position_responsible_user_id?: string;
     attributes?: Record<string, unknown>;
     lifecycle?: Record<string, string>;
   }) => Promise<string>;
@@ -93,6 +97,7 @@ export default function CreateCardDialog({
   const { t } = useTranslation(["cards", "common"]);
   const { types, relationTypes } = useMetamodel();
   const { user } = useAuthContext();
+  const canNominate = (user?.impersonated_role ?? user?.role) === "admin";
   const typeLabel = useTypeLabel();
   const fieldLabel = useFieldLabel();
   const optLabel = useOptionLabel();
@@ -119,6 +124,12 @@ export default function CreateCardDialog({
    *  submit button is gated on the *selected* type, not just on the list. */
   const typeAllowed = hasTypePermission(user, "inventory.create", selectedType || null);
   const [subtype, setSubtype] = useState(initialType ? initialSubtype || "" : "");
+  const [responsible, setResponsible] = useState<User | null>(null);
+  const { data: users = [] } = useApiQuery<User[]>(
+    open && selectedType === "Organization" && canNominate
+      ? "/users?eligible_for_organization_position=true"
+      : null,
+  );
   const [parentCard, setParentCard] = useState<CardOption | null>(null);
   const [name, setName] = useState("");
   // Field-level error for the Name input — populated when the backend
@@ -250,6 +261,7 @@ export default function CreateCardDialog({
     const presetsApply = Boolean(selectedType) && selectedType === initialType;
     setSubtype(presetsApply ? initialSubtype || "" : "");
     setParentCard(null);
+    setResponsible(null);
     setAttributes(presetsApply ? { ...(initialAttributesRef.current || {}) } : {});
     setError("");
     setEolProduct("");
@@ -294,6 +306,7 @@ export default function CreateCardDialog({
       setSelectedType(initialType || "");
       setSubtype(initialType ? initialSubtype || "" : "");
       setParentCard(null);
+      setResponsible(null);
       setName("");
       setNameConflict(null);
       setDescription("");
@@ -436,6 +449,7 @@ export default function CreateCardDialog({
         name: name.trim(),
         description: description.trim() || undefined,
         parent_id: parentCard?.id || undefined,
+        ...(selectedType === "Organization" && canNominate && responsible ? { position_responsible_user_id: responsible.id } : {}),
         attributes:
           Object.keys(finalAttrs).length > 0 ? finalAttrs : undefined,
       });
@@ -796,6 +810,18 @@ export default function CreateCardDialog({
             onChange={setParentCard}
             enabled={hasHierarchy && !!selectedType}
             label={t("common:labels.parent")}
+          />
+        )}
+
+        {selectedType === "Organization" && canNominate && (
+          <Autocomplete
+            options={users.filter((person) => person.is_active)}
+            value={responsible}
+            onChange={(_, person) => setResponsible(person)}
+            getOptionLabel={(person) => person.display_name}
+            isOptionEqualToValue={(a, b) => a.id === b.id}
+            renderInput={(params) => <TextField {...params} label={t("create.positionResponsible")} />}
+            sx={{ mb: 2 }}
           />
         )}
 

@@ -3111,3 +3111,43 @@ class TestAuditHelpers:
         assert len(items) == 201
         assert items[0] == {"kind": "subtype.added", "label": "S0"}
         assert items[-1] == {"kind": "more", "count": 5}
+
+
+async def test_organization_matrix_forces_non_admin_write_denies(client, db, metamodel_env):
+    await create_role(db, key="member", label="Member", permissions={"inventory.view": True})
+    organization = await create_card_type(db, key="Organization", label="Organization")
+    response = await client.patch(
+        "/api/v1/metamodel/types/Organization",
+        headers=auth_headers(metamodel_env["admin"]),
+        json={"role_permissions": {"member": {"inventory.view": True, "inventory.edit": True}}},
+    )
+    assert response.status_code == 200
+    await db.refresh(organization)
+    assert organization.role_permissions["member"] == {
+        "inventory.view": True,
+        "inventory.create": False,
+        "inventory.edit": False,
+        "inventory.delete": False,
+    }
+    assert "admin" not in organization.role_permissions
+
+
+async def test_organization_matrix_round_trips_forced_custom_wildcard_denies(
+    client, db, metamodel_env
+):
+    await create_role(db, key="custom_wildcard", label="Custom", permissions={"*": True})
+    denies = {"inventory.create": False, "inventory.edit": False, "inventory.delete": False}
+    await create_card_type(db, key="Organization", role_permissions={"custom_wildcard": denies})
+    response = await client.patch(
+        "/api/v1/metamodel/types/Organization",
+        headers=auth_headers(metamodel_env["admin"]),
+        json={"role_permissions": {"custom_wildcard": denies}},
+    )
+    assert response.status_code == 200
+    assert response.json()["role_permissions"]["custom_wildcard"] == denies
+    rejected = await client.patch(
+        "/api/v1/metamodel/types/Organization",
+        headers=auth_headers(metamodel_env["admin"]),
+        json={"role_permissions": {"custom_wildcard": {"inventory.view": True}}},
+    )
+    assert rejected.status_code == 400

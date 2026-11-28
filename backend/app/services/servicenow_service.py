@@ -24,9 +24,14 @@ from app.models.servicenow import (
     SnowSyncRun,
 )
 from app.services.card_costs import recompute_derived
-from app.services.card_lifecycle import archive_cards_in_place
+from app.services.card_lifecycle import (
+    archive_cards_in_place,
+    direct_children,
+    suspend_organization_children,
+)
 from app.services.event_bus import event_bus
 from app.services.extensions import field_gate
+from app.services.organization_chart import require_organization_admin_role
 
 logger = logging.getLogger(__name__)
 
@@ -402,9 +407,12 @@ def _bump(run: SnowSyncRun, key: str, by: int = 1) -> None:
 class SyncEngine:
     """Orchestrates pull/push sync between ServiceNow and Turbo EA."""
 
-    def __init__(self, db: AsyncSession, client: ServiceNowClient):
+    def __init__(
+        self, db: AsyncSession, client: ServiceNowClient, *, effective_role: str | None = None
+    ):
         self.db = db
         self.client = client
+        self.effective_role = effective_role
         # Read-only extension fields per card type, resolved once per engine
         # (one engine serves one sync request) rather than once per record.
         self._locked_by_type: dict[str, dict[str, str]] = {}
@@ -860,6 +868,7 @@ class SyncEngine:
         actor_id: uuid.UUID | None = None,
     ) -> None:
         """Create a new card from a staged record."""
+        require_organization_admin_role(self.effective_role, mapping.card_type_key)
         transformed = FieldTransformer.apply_mappings(
             staged.snow_data or {}, field_mappings, "snow_to_turbo"
         )
@@ -891,6 +900,9 @@ class SyncEngine:
             attributes=attributes,
             status="ACTIVE",
             approval_status="DRAFT",
+            organization_cone_state=(
+                "unconfirmed_root" if mapping.card_type_key == "Organization" else None
+            ),
         )
         self.db.add(card)
         await self.db.flush()
@@ -949,6 +961,7 @@ class SyncEngine:
         if not diff:
             await self._touch_identity(staged)
             return False
+        require_organization_admin_role(self.effective_role, card.type)
         before_attrs = dict(card.attributes or {})
         if card.type == "Initiative":
             from app.services.ppm_timeline import validate_actual_date_pair
@@ -1022,6 +1035,7 @@ class SyncEngine:
         card = result.scalar_one_or_none()
         if not card or card.status == "ARCHIVED":
             return
+        require_organization_admin_role(self.effective_role, card.type)
 
         # Archive through the shared helper rather than flipping `status` by
         # hand: the purge loop selects on `archived_at IS NOT NULL`
@@ -1029,6 +1043,10 @@ class SyncEngine:
         # retention and is kept forever. `archive_cards_in_place` sets status,
         # `archived_at` and `updated_by` the same way every other archive path
         # does.
+        if card.type == "Organization":
+            await suspend_organization_children(
+                self.db, card, await direct_children(self.db, card.id), actor_id
+            )
         archive_cards_in_place([card], actor_id)
 
         # Remove from identity map

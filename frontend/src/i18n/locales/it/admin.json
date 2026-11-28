@@ -495,6 +495,7 @@
   "metamodel.stakeholderPanel.noRoles": "Nessun ruolo stakeholder definito.",
   "metamodel.stakeholderPanel.noActiveRoles": "Nessun ruolo stakeholder attivo. Ne crei uno qui sotto.",
   "metamodel.stakeholderPanel.archived": "Archiviato",
+  "metamodel.stakeholderPanel.positionRole": "Ruolo di posizione",
   "metamodel.stakeholderPanel.countsForQuality": "Conta per la qualità dei dati",
   "metamodel.stakeholderPanel.countsForQualityHelp": "Disattivato per i ruoli passivi: osservare una scheda non deve valere come responsabilità.",
   "metamodel.stakeholderPanel.notCounted": "Non conteggiato",

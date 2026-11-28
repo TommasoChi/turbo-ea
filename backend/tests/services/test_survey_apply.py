@@ -9,6 +9,7 @@ import uuid
 from types import SimpleNamespace
 
 import pytest
+from fastapi import HTTPException
 from sqlalchemy import select
 
 from app.models.event import Event
@@ -27,6 +28,25 @@ from tests.conftest import (
     create_stakeholder_role_def,
     create_user,
 )
+
+
+async def test_member_cannot_apply_stakeholder_answer_to_organization(db):
+    await create_card_type(db, key="Organization", label="Organization")
+    actor = await create_user(db, role="member")
+    card = await create_card(db, card_type="Organization", name="Position")
+    await create_stakeholder_role_def(db, card_type_key="Organization", key="owner", label="Owner")
+    survey = SimpleNamespace(
+        id=uuid.uuid4(),
+        name="Survey",
+        fields=[{"key": "owners", "kind": "stakeholder", "role": "owner"}],
+    )
+    response = SimpleNamespace(
+        id=uuid.uuid4(), user_id=actor.id, responses={"owners": {"new_value": [str(actor.id)]}}
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        await sa.apply_response(db, survey, response, card, actor, can_edit_costs=False)
+    assert exc.value.status_code == 403
 
 
 class TestFieldKinds:

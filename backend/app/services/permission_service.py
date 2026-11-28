@@ -291,7 +291,22 @@ class PermissionService:
         async for _, _, perms in PermissionService.iter_stakeholder_grants(db, rows):
             if perms.get(permission):
                 return True
-        return False
+
+        from app.services.organization_cones import (
+            inherited_stakeholder_grants,
+            organization_cones_enabled,
+        )
+
+        if not await organization_cones_enabled(db):
+            return False
+        inherited = await db.execute(inherited_stakeholder_grants(user.id, {card_id}))
+        if not any((perms or {}).get(permission) for _, _, perms, _, _ in inherited):
+            return False
+        if permission == "card.view":
+            return True
+        from app.services.card_read_scope import is_card_readable
+
+        return await is_card_readable(db, user, card_id, mode="inventory", type_key=type_key)
 
     @staticmethod
     async def stakeholder_role_permissions(
@@ -514,6 +529,24 @@ class PermissionService:
         async for card_id, _, perms in PermissionService.iter_stakeholder_grants(db, rows):
             if perms.get(card_permission):
                 allowed.add(card_id)
+        from app.services.organization_cones import (
+            inherited_stakeholder_grants,
+            organization_cones_enabled,
+        )
+
+        if await organization_cones_enabled(db):
+            inherited = (await db.execute(inherited_stakeholder_grants(user.id, pending))).all()
+            inherited_ids = {
+                cid for cid, _, perms, _, _ in inherited if (perms or {}).get(card_permission)
+            }
+            inherited_read = {
+                cid for cid, _, perms, _, _ in inherited if (perms or {}).get("card.view")
+            }
+            from app.services.card_read_scope import CardReadScope
+
+            scope = await CardReadScope.load(db, user, include_subtype_denials=True)
+            readable = await scope.readable_card_ids(db, inherited_ids, mode="inventory")
+            allowed.update(inherited_ids & (readable | inherited_read))
         return allowed
 
     @staticmethod
@@ -598,6 +631,78 @@ class PermissionService:
                     if v:
                         card_level[k] = True
 
+        inherited_roles = None
+        from app.services.organization_cones import (
+            inherited_stakeholder_grants,
+            organization_cones_enabled,
+        )
+
+        if type_key and await organization_cones_enabled(db):
+            grant_rows = (await db.execute(inherited_stakeholder_grants(user.id, {card_id}))).all()
+            inherited = [(role, perms, holder, path) for _, role, perms, holder, path in grant_rows]
+            from app.services.card_read_scope import CardReadScope, is_card_readable
+
+            readable = await is_card_readable(
+                db, user, card_id, mode="inventory", type_key=type_key
+            )
+            for _, perms, _, _ in inherited:
+                for key, value in (perms or {}).items():
+                    if value and (key == "card.view" or readable):
+                        card_level[key] = True
+            scope = await CardReadScope.load(db, user, include_subtype_denials=True)
+            path_ids = {position for _, _, _, path in inherited for position in path}
+            visible_ids = await scope.readable_card_ids(db, path_ids, mode="inventory")
+            positions = (
+                {
+                    position.id: position.name
+                    for position in (
+                        await db.scalars(select(Card).where(Card.id.in_(visible_ids)))
+                    ).all()
+                }
+                if visible_ids
+                else {}
+            )
+            holders = (
+                {
+                    holder.id: holder.display_name
+                    for holder in (
+                        await db.scalars(
+                            select(User).where(
+                                User.id.in_({holder_id for _, _, holder_id, _ in inherited})
+                            )
+                        )
+                    ).all()
+                }
+                if inherited
+                else {}
+            )
+            inherited_roles = []
+            for role_key in sorted({role for role, _, _, _ in inherited}):
+                choices = sorted(
+                    (
+                        (holder_id, tuple(path))
+                        for role, _, holder_id, path in inherited
+                        if role == role_key
+                        and holder_id in holders
+                        and all(position in positions for position in path)
+                    ),
+                    key=lambda item: (str(item[0]), tuple(map(str, item[1]))),
+                )
+                if choices:
+                    holder_id, path = choices[0]
+                    inherited_roles.append(
+                        {
+                            "role_key": role_key,
+                            "source_kind": "visible",
+                            "holder": {"id": holder_id, "display_name": holders[holder_id]},
+                            "path": [
+                                {"id": position, "name": positions[position]} for position in path
+                            ],
+                        }
+                    )
+                else:
+                    inherited_roles.append({"role_key": role_key, "source_kind": "generic"})
+
         # Compute effective permissions (union of app-level and card-level)
         is_admin = bool(app_perms.get("*"))
 
@@ -670,6 +775,19 @@ class PermissionService:
             "can_edit_costs": await PermissionService.can_edit_costs(db, user, card_id),
         }
 
+        organization_write = type_key != "Organization" or effective_role_key(user) == "admin"
+        effective["can_self_observe"] = organization_write and effective["can_view"]
+        if not organization_write:
+            for key in (
+                "can_edit",
+                "can_archive",
+                "can_delete",
+                "can_manage_stakeholders",
+                "can_approval_status",
+                "can_manage_relations",
+            ):
+                effective[key] = False
+
         return {
             "app_level": {k: v for k, v in app_perms.items() if k != "*"}
             if not is_admin
@@ -678,6 +796,11 @@ class PermissionService:
             "card_level": card_level,
             "type_overrides": role_overrides,
             "effective": effective,
+            **(
+                {"inherited_stakeholder_roles": inherited_roles}
+                if inherited_roles is not None
+                else {}
+            ),
         }
 
     @staticmethod

@@ -495,6 +495,7 @@
   "metamodel.stakeholderPanel.noRoles": "No stakeholder roles defined.",
   "metamodel.stakeholderPanel.noActiveRoles": "No active stakeholder roles. Create one below.",
   "metamodel.stakeholderPanel.archived": "Archived",
+  "metamodel.stakeholderPanel.positionRole": "Position role",
   "metamodel.stakeholderPanel.countsForQuality": "Counts toward data quality",
   "metamodel.stakeholderPanel.countsForQualityHelp": "Off for passive roles: watching a card should not count as owning it.",
   "metamodel.stakeholderPanel.notCounted": "Not counted",

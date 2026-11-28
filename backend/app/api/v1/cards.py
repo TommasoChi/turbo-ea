@@ -3,7 +3,7 @@ from __future__ import annotations
 import csv
 import io
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Literal
 
 from fastapi import APIRouter, BackgroundTasks, Body, Depends, HTTPException, Query
@@ -48,6 +48,7 @@ from app.schemas.card import (
     CardDeleteRequest,
     CardDeleteResponse,
     CardListResponse,
+    CardPermissionsResponse,
     CardQueryMatchesRequest,
     CardQueryMatchesResponse,
     CardRefCandidate,
@@ -145,6 +146,7 @@ from app.services.document_event_scope import document_event_read_filters
 from app.services.event_bus import event_bus
 from app.services.extensions import field_gate
 from app.services.lifecycle import lifecycle_rank
+from app.services.organization_chart import require_organization_admin
 from app.services.permission_service import PermissionService
 
 router = APIRouter(prefix="/cards", tags=["cards"])
@@ -729,6 +731,31 @@ async def create_card(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
+    require_organization_admin(user, body.type)
+    nominee = None
+    responsible_role = None
+    if body.type != "Organization" and "position_responsible_user_id" in body.model_fields_set:
+        raise HTTPException(422, "Responsible nomination is only valid for Organization")
+    if body.position_responsible_user_id is not None:
+        nominee = await db.get(User, body.position_responsible_user_id)
+        if (
+            nominee is None
+            or not nominee.is_active
+            or (
+                nominee.access_expires_at is not None
+                and nominee.access_expires_at < datetime.now(timezone.utc)
+            )
+        ):
+            raise HTTPException(422, "Responsible user is not eligible")
+        responsible_role = await db.scalar(
+            select(StakeholderRoleDefinition).where(
+                StakeholderRoleDefinition.card_type_key == "Organization",
+                StakeholderRoleDefinition.key == "responsible",
+                StakeholderRoleDefinition.is_archived.is_(False),
+            )
+        )
+        if responsible_role is None:
+            raise HTTPException(422, "Responsible role is unavailable")
     # Per-card-type overrides apply here: the role's global `inventory.create`
     # can be denied for this type, or granted where the role lacks it.
     await PermissionService.require_permission(
@@ -755,6 +782,25 @@ async def create_card(
         alias=body.alias,
         strict_attributes=body.strict_attributes,
     )
+    if nominee is not None and responsible_role is not None:
+        stakeholder = Stakeholder(card_id=card.id, user_id=nominee.id, role="responsible")
+        db.add(stakeholder)
+        await db.flush()
+        await event_bus.publish(
+            "stakeholder.added",
+            {
+                "stakeholder_id": str(stakeholder.id),
+                "user_id": str(nominee.id),
+                "user_display_name": nominee.display_name,
+                "role": "responsible",
+                "role_label": responsible_role.label,
+                "summary": f"{nominee.display_name or nominee.email} · {responsible_role.label}",
+            },
+            db=db,
+            card_id=card.id,
+            user_id=user.id,
+        )
+        card.data_quality = await calc_data_quality(db, card)
     await db.commit()
     result = await db.execute(
         select(Card)
@@ -814,6 +860,8 @@ async def bulk_create_cards(
     succeeded rows in the same batch. Permission: `inventory.create`.
     """
     rows = list(body.cards)
+    for row in rows:
+        require_organization_admin(user, row.type)
 
     # A batch may span card types (and subtypes), and `inventory.create` is
     # overridable per type/subtype — so the check runs once per *distinct*
@@ -1904,6 +1952,10 @@ async def bulk_update(
     uuids = [uuid.UUID(i) for i in body.ids]
     result = await db.execute(select(Card).where(Card.id.in_(uuids)))
     sheets = list(result.scalars().all())
+    for card in sheets:
+        if card.type == "Organization":
+            await require_card_readable(db, user, card.id, mode="module", type_key=card.type)
+            require_organization_admin(user, card.type)
 
     # Per-card-type overrides reach bulk edit asymmetrically, on purpose: a
     # type that *denies* `inventory.edit` for this role blocks bulk edits of
@@ -2340,7 +2392,16 @@ async def bulk_archive_cards(
         db, user, full_affected, app_perm="inventory.archive", card_perm="card.archive"
     )
 
+    child_parents = list(related_set)
+    if body.child_strategy in ("disconnect", "reparent"):
+        child_parents.extend(primary_id_set)
+    await _guard_organization_children(db, user, child_parents)
     child_results: list[card_lifecycle.ChildStrategyResult] = []
+    if body.child_strategy in (None, "cascade"):
+        for p in primaries:
+            if p.type == "Organization":
+                children = await card_lifecycle.direct_children(db, p.id)
+                await card_lifecycle.suspend_organization_children(db, p, children, user.id)
     if body.child_strategy in ("disconnect", "reparent"):
         for p in primaries:
             child_results.append(
@@ -2512,6 +2573,10 @@ async def bulk_delete_cards(
     detach_strategy: card_lifecycle.ChildStrategy | None = (
         "disconnect" if body.child_strategy is None else body.child_strategy
     )
+    child_parents = list(related_set)
+    if detach_strategy in ("disconnect", "reparent"):
+        child_parents.extend(primary_id_set)
+    await _guard_organization_children(db, user, child_parents)
     child_results: list[card_lifecycle.ChildStrategyResult] = []
     if detach_strategy in ("disconnect", "reparent"):
         for p in primaries:
@@ -2705,6 +2770,8 @@ async def update_card(
     user: User = Depends(get_current_user),
 ):
     card_uuid = parse_uuid(card_id)
+    card_type_key = await require_card_readable(db, user, card_uuid, mode="module")
+    require_organization_admin(user, card_type_key)
     if not await PermissionService.check_permission(
         db, user, "inventory.edit", card_uuid, "card.edit"
     ):
@@ -2738,7 +2805,9 @@ async def update_card(
     strict_attrs = updates.pop("strict_attributes", False)
 
     new_parent = updates.get("parent_id")
-    if new_parent and str(new_parent) != str(card.parent_id):
+    if new_parent and (
+        str(new_parent) != str(card.parent_id) or updates.get("reattach_organization_branch")
+    ):
         # A parent hidden from the caller does not exist for them.
         await require_card_readable(db, user, uuid.UUID(str(new_parent)), mode="module")
 
@@ -2909,6 +2978,16 @@ async def _resolve_archive_delete_set(
     )
 
 
+async def _guard_organization_children(
+    db: AsyncSession, user: User, parent_ids: list[uuid.UUID]
+) -> None:
+    if not parent_ids:
+        return
+    child_types = await db.scalars(select(Card.type).where(Card.parent_id.in_(parent_ids)))
+    for type_key in child_types:
+        require_organization_admin(user, type_key)
+
+
 async def _ensure_permission_on_each(
     db: AsyncSession,
     user: User,
@@ -2927,6 +3006,7 @@ async def _ensure_permission_on_each(
     type_by_id: dict[uuid.UUID, str] = {}
     subtype_by_id: dict[uuid.UUID, str | None] = {}
     for row_id, row_type, row_subtype in type_rows.all():
+        require_organization_admin(user, row_type)
         type_by_id[row_id] = row_type
         subtype_by_id[row_id] = row_subtype
     read_scope = await CardReadScope.load(db, user)
@@ -2987,6 +3067,8 @@ async def archive_card(
     Permission check runs against every affected card; first denial aborts.
     """
     card_uuid = parse_uuid(card_id)
+    card_type_key = await require_card_readable(db, user, card_uuid, mode="module")
+    require_organization_admin(user, card_type_key)
     if not await PermissionService.check_permission(
         db, user, "inventory.archive", card_uuid, "card.archive"
     ):
@@ -3019,6 +3101,11 @@ async def archive_card(
         app_perm="inventory.archive",
         card_perm="card.archive",
     )
+
+    child_parents = list(related_card_ids)
+    if body.child_strategy in ("disconnect", "reparent"):
+        child_parents.append(primary.id)
+    await _guard_organization_children(db, user, child_parents)
 
     _, affected_children_ids, affected_related_card_ids = await card_write_service.archive_card_set(
         db,
@@ -3101,6 +3188,8 @@ async def restore_card(
     `card.restored` event is emitted per card actually flipped.
     """
     card_uuid = parse_uuid(card_id)
+    card_type_key = await require_card_readable(db, user, card_uuid, mode="module")
+    require_organization_admin(user, card_type_key)
     if not await PermissionService.check_permission(
         db, user, "inventory.archive", card_uuid, "card.archive"
     ):
@@ -3194,6 +3283,8 @@ async def delete_card(
     None. Archived children need no decision: they are detached, not deleted.
     """
     card_uuid = parse_uuid(card_id)
+    card_type_key = await require_card_readable(db, user, card_uuid, mode="module")
+    require_organization_admin(user, card_type_key)
     if not await PermissionService.check_permission(
         db, user, "inventory.delete", card_uuid, "card.delete"
     ):
@@ -3236,6 +3327,10 @@ async def delete_card(
     detach_strategy: card_lifecycle.ChildStrategy | None = (
         "disconnect" if body.child_strategy is None else body.child_strategy
     )
+    child_parents = list(related_card_ids)
+    if detach_strategy in ("disconnect", "reparent"):
+        child_parents.append(primary.id)
+    await _guard_organization_children(db, user, child_parents)
     child_results: list[card_lifecycle.ChildStrategyResult] = []
     if direct_children and detach_strategy in ("disconnect", "reparent"):
         child_results.append(
@@ -3345,8 +3440,11 @@ async def fix_hierarchy_names(
             Card.status == "ACTIVE",
         )
     )
+    cards = result.scalars().all()
+    for card in cards:
+        require_organization_admin(user, card.type)
     fixed: list[dict] = []
-    for card in result.scalars().all():
+    for card in cards:
         leaf_name = card.name.rsplit(" / ", 1)[-1]
         if leaf_name != card.name:
             fixed.append({"id": str(card.id), "old_name": card.name, "new_name": leaf_name})
@@ -3416,6 +3514,8 @@ async def update_approval_status(
     user: User = Depends(get_current_user),
 ):
     card_uuid = parse_uuid(card_id)
+    card_type_key = await require_card_readable(db, user, card_uuid, mode="module")
+    require_organization_admin(user, card_type_key)
     if not await PermissionService.check_permission(
         db, user, "inventory.approval_status", card_uuid, "card.approval_status"
     ):
@@ -3495,7 +3595,11 @@ async def update_approval_status(
     return {"approval_status": card.approval_status}
 
 
-@router.get("/{card_id}/my-permissions")
+@router.get(
+    "/{card_id}/my-permissions",
+    response_model=CardPermissionsResponse,
+    response_model_exclude_none=True,
+)
 async def my_permissions(
     card_id: str,
     db: AsyncSession = Depends(get_db),

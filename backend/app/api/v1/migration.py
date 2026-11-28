@@ -67,6 +67,13 @@ from app.models.card_type import CardType
 from app.models.migration import Migration, StagedRecord
 from app.models.user import User
 from app.services import audit_log
+from app.services.deferred_authorization import (
+    _authorize_job,
+    _capture_job_authorization,
+    _job_impersonation,
+    _JobAuthorization,
+)
+from app.services.event_bus import request_impersonation
 from app.services.migration.apply import apply_migration
 from app.services.migration.export_snapshot import build_export_snapshot
 from app.services.migration.registry import SOURCES, get_source
@@ -820,7 +827,7 @@ async def apply_migration_endpoint(
     # (``MissingGreenlet``).
     await db.refresh(m)
 
-    background_tasks.add_task(_apply_job, str(m.id), str(user.id))
+    background_tasks.add_task(_apply_job, str(m.id), str(user.id), _capture_job_authorization(user))
     return _migration_to_out(m)
 
 
@@ -1014,7 +1021,9 @@ async def _parse_and_stage_job(migration_id_str: str) -> None:
             await _record_migration_failure(migration_id, exc)
 
 
-async def _apply_job(migration_id_str: str, user_id_str: str) -> None:
+async def _apply_job(
+    migration_id_str: str, user_id_str: str, context: _JobAuthorization | None = None
+) -> None:
     """Apply the staged records in dependency order."""
     async with async_session() as db:
         try:
@@ -1026,7 +1035,11 @@ async def _apply_job(migration_id_str: str, user_id_str: str) -> None:
             if m is None:
                 return
             user = (
-                await db.execute(select(User).where(User.id == uuid.UUID(user_id_str)))
+                await db.execute(
+                    select(User)
+                    .where(User.id == uuid.UUID(user_id_str))
+                    .execution_options(populate_existing=True)
+                )
             ).scalar_one_or_none()
             if user is None:
                 m.status = "failed"
@@ -1034,7 +1047,16 @@ async def _apply_job(migration_id_str: str, user_id_str: str) -> None:
                 await db.commit()
                 return
 
-            counts = await apply_migration(db, m, user)
+            if not await _authorize_job(db, user, context, "admin.migrate"):
+                m.status = "failed"
+                m.error_message = "Apply user is no longer authorized"
+                await db.commit()
+                return
+            token = request_impersonation.set(_job_impersonation(user, context))
+            try:
+                counts = await apply_migration(db, m, user)
+            finally:
+                request_impersonation.reset(token)
             m.stats = {**(m.stats or {}), "apply": counts}
             m.status = "applied" if counts["errors"] == 0 else "failed"
             m.applied_at = datetime.now(timezone.utc)

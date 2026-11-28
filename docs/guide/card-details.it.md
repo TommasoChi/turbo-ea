@@ -22,7 +22,7 @@ La parte superiore della card mostra:
 Quando create un **Oggetto dati**, scegliete uno dei sottotipi configurati per quel tipo di card. La scelta è disponibile anche quando create un Oggetto dati dalla gerarchia, da un predecessore o successore, da una cella di relazione dell’inventario o da un elemento ArchiMate.
 
 Quando un amministratore attiva la [modalità TurboRPG](../admin/settings.md#turborpg-qualità-dei-dati-gamificata) (qualità dei dati gamificata), ogni salvataggio che aumenta il punteggio viene celebrato come un guadagno di salute in un gioco: un **+X%** luminoso lascia la sezione appena salvata, vola fino al punteggio e lo colpisce — l'anello lampeggia e si illumina, il suo riempimento cresce fino al nuovo punteggio e il numero conta in crescendo. Una volta scorsa l'intestazione, una sottile barra del punteggio fissata sotto la barra superiore mantiene il punteggio in vista e il guadagno atterra su di essa. Fate clic sul punteggio della barra — il chip con il chevron — per aprire lo stesso dettaglio dell'anello. Il raggiungimento della fascia verde (80%) e del 100% sono traguardi con una breve pioggia di coriandoli. Cancellare o rimuovere dati riproduce l'inverso attenuato: un **−X%** rosso vola via dal punteggio tornando alla sezione, e la barra si svuota e conta alla rovescia, senza lampi né coriandoli. Con la riduzione del movimento attiva nel sistema operativo nulla vola; vedete invece un **+X%** o **−X%** statico.
-- **Menu azioni** — Archiviazione, eliminazione e azioni di approvazione. Include anche un'azione con un clic **Osserva questa scheda** (quando il tipo di scheda definisce un ruolo Osservatore) che consente a qualsiasi utente con permessi di lettura di seguire la scheda senza passare dalla scheda Stakeholder.
+- **Menu azioni** — Archiviazione, eliminazione e azioni di approvazione. Include anche **Osserva questa scheda** quando il tipo di scheda definisce un ruolo Osservatore. Nelle schede Organization può usarlo solo Admin.
 
 ### Logo personalizzato
 
@@ -247,6 +247,9 @@ Gli stakeholder sono persone con un **ruolo** specifico su questa card. I ruoli 
 - **Ruoli personalizzati** — Ruoli aggiuntivi definiti dal vostro amministratore
 
 Le assegnazioni degli stakeholder influenzano i **permessi**: i permessi effettivi di un utente su una card sono la combinazione del suo ruolo a livello di applicazione e di qualsiasi ruolo di stakeholder che detiene su quella card.
+
+Solo Admin può modificare le schede Organization e le relative assegnazioni di stakeholder. Quando crea una posizione Organization, Admin può selezionare un **Responsabile** o lasciarla vacante per assegnarlo in seguito. Gli altri utenti con accesso in lettura possono vedere la scheda e le sue assegnazioni.
+
 
 Quando un ruolo ha un **colore** impostato nel metamodello, il suo gruppo ne viene contrassegnato, così da distinguere a colpo d'occhio un proprietario da un osservatore.
 

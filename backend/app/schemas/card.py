@@ -63,6 +63,7 @@ def normalize_parent_id(value: str | None) -> str | None:
 
 
 class CardCreate(BaseModel):
+    position_responsible_user_id: uuid.UUID | None = None
     type: str
     subtype: str | None = None
     name: str
@@ -132,6 +133,7 @@ class CardUpdateFields(BaseModel):
 
 
 class CardUpdate(CardUpdateFields):
+    reattach_organization_branch: bool = False
     lifecycle_stage: str | None = Field(None, max_length=50)
 
 
@@ -642,3 +644,52 @@ class CardQueryMatchesResponse(BaseModel):
             "with none is absent."
         )
     )
+
+
+class EffectiveCardPermissions(BaseModel):
+    can_view: bool
+    can_edit: bool
+    can_archive: bool
+    can_delete: bool
+    can_approval_status: bool
+    can_manage_stakeholders: bool
+    can_manage_relations: bool
+    can_manage_documents: bool
+    can_manage_comments: bool
+    can_create_comments: bool
+    can_bpm_edit: bool
+    can_bpm_manage_drafts: bool
+    can_bpm_approve: bool
+    can_bpm_withdraw: bool
+    can_manage_adr_links: bool
+    can_manage_diagram_links: bool
+    can_view_costs: bool
+    can_view_licenses: bool
+    can_edit_costs: bool
+    can_self_observe: bool
+
+
+class InheritedPermissionHolder(BaseModel):
+    id: uuid.UUID
+    display_name: str
+
+
+class InheritedPermissionPosition(BaseModel):
+    id: uuid.UUID
+    name: str
+
+
+class InheritedStakeholderRole(BaseModel):
+    role_key: str
+    source_kind: Literal["visible", "generic"]
+    holder: InheritedPermissionHolder | None = None
+    path: list[InheritedPermissionPosition] | None = None
+
+
+class CardPermissionsResponse(BaseModel):
+    app_level: dict[str, bool]
+    stakeholder_roles: list[str]
+    card_level: dict[str, bool]
+    type_overrides: dict[str, Any]
+    effective: EffectiveCardPermissions
+    inherited_stakeholder_roles: list[InheritedStakeholderRole] | None = None

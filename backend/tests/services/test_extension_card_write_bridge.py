@@ -25,7 +25,14 @@ from app.services.extensions.data_service import ExtensionData
 from app.services.extensions.license import Entitlement, LicenseDocument
 from app.services.extensions.registry import ExtensionInfo, extension_registry
 from app.services.extensions.sdk import ExtensionDataError, ExtensionPermissionError
-from tests.conftest import create_card, create_card_type, create_relation, create_relation_type
+from tests.conftest import (
+    create_card,
+    create_card_type,
+    create_relation,
+    create_relation_type,
+    create_role,
+    create_user,
+)
 
 NOW = datetime.now(timezone.utc)
 KEY = "sample-connector"
@@ -101,6 +108,26 @@ async def env(db):
 
 async def _batches(db) -> list[MutationBatch]:
     return list((await db.execute(select(MutationBatch))).scalars().all())
+
+
+async def test_unattended_extension_cannot_archive_organization(db, env):
+    load_registry(grants=["core.cards.write"])
+    await create_card_type(db, key="Organization", label="Organization")
+    card = await create_card(db, card_type="Organization", name="Position")
+    with pytest.raises(ExtensionDataError):
+        await ExtensionData(KEY).archive_card(str(card.id))
+    assert card.status == "ACTIVE"
+
+
+async def test_admin_extension_can_archive_organization(db, env):
+    load_registry(grants=["core.cards.write"])
+    await create_role(db, key="admin")
+    admin = await create_user(db, role="admin")
+    await create_card_type(db, key="Organization", label="Organization")
+    card = await create_card(db, card_type="Organization", name="Position")
+    with bridge_mod.on_behalf_of(admin):
+        await ExtensionData(KEY).archive_card(str(card.id))
+    assert card.status == "ARCHIVED"
 
 
 async def _inbound(db) -> MutationBatch:
@@ -613,3 +640,18 @@ class TestRefusalText:
 )
 def test_http_detail_text(detail, text):
     assert bridge_mod.http_detail_text(detail) == text
+
+
+async def test_extension_bridge_cannot_relate_organization(db, env):
+    load_registry(grants=["core.cards.write"])
+    await create_card_type(db, key="Organization", label="Organization")
+    await create_relation_type(
+        db, key="org_app", source_type_key="Organization", target_type_key="Application"
+    )
+    org = await create_card(db, card_type="Organization", name="Position")
+    app = await create_card(db, card_type="Application", name="App")
+    with pytest.raises(ExtensionDataError):
+        await ExtensionData(KEY).upsert_relation(
+            type="org_app", source_id=str(org.id), target_id=str(app.id)
+        )
+    assert await db.scalar(select(Relation.id).where(Relation.type == "org_app")) is None

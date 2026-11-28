@@ -690,3 +690,20 @@ class TestAudit:
         resp = await client.post(f"{BASE}/{staged.id}/apply", headers=auth_headers(env["viewer"]))
         assert resp.status_code == 403
         assert await _audit_rows(db) == []
+
+
+async def test_queued_migration_rejects_deactivated_actor(db, env, staged, monkeypatch):
+    actor_id = env["admin"].id
+    migration_id = staged.id
+    env["admin"].is_active = False
+    await db.commit()
+    called = False
+
+    async def capture(*args, **kwargs):
+        nonlocal called
+        called = True
+        return {"errors": 0, "conflicts": 0}
+
+    monkeypatch.setattr(migration_api, "apply_migration", capture)
+    await migration_api._apply_job(str(migration_id), str(actor_id))
+    assert called is False

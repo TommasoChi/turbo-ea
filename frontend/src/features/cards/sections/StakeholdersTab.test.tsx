@@ -389,3 +389,20 @@ describe("StakeholdersTab — role descriptions", () => {
     expect(roleInput).toHaveValue("Contract Owner");
   });
 });
+
+it("shows inherited role explanations without assignment actions", async () => {
+  authRef.user = null;
+  render(<StakeholdersTab card={card} onRefresh={() => {}} canManageStakeholders={false} inheritedRoles={[
+    { role_key: "responsible", source_kind: "visible", holder: { id: "u1", display_name: "Alice Wonder" }, path: [{ id: "p1", name: "Engineering" }] },
+    { role_key: "observer", source_kind: "generic" },
+  ]} />);
+  expect(await screen.findByText(/Alice Wonder.*Engineering/)).toBeInTheDocument();
+  expect(screen.getByText(/source is not visible/i)).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: /add stakeholder/i })).not.toBeInTheDocument();
+});
+
+it("does not display an inherited section for an empty response", async () => {
+  render(<StakeholdersTab card={card} onRefresh={() => {}} inheritedRoles={[]} />);
+  await screen.findByText("Responsible");
+  expect(screen.queryByText("Inherited access")).not.toBeInTheDocument();
+});
