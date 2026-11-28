@@ -42,7 +42,8 @@ screenshots of failures are in `frontend/test-results/` (both git-ignored).
   `tea-e2e` nginx container to publish exactly `127.0.0.1:<port>`; a port that merely answers
   `/api/health` is refused.
 - **Specs** (`isDisposableTarget`, `frontend/scripts/disposable-target.ts`, called by
-  `requireDisposableStack()`): an allowlist. A set `E2E_BASE_URL` is accepted only on the stack's own
+  `requireDisposableStack()`): an allowlist. A set `E2E_BASE_URL` is accepted only on a loopback host
+  (`localhost`, `127.0.0.1`, `host.docker.internal`) and on the stack's own
   port, `E2E_HOST_PORT` (default 18930; it must be a valid, non-reserved port, and the script passes
   it into the Playwright container), and only with `E2E_PML_DISPOSABLE=1`. Any other port, and a URL
   with no explicit port (80/443), is refused even with the flag. With `E2E_BASE_URL` unset the suite

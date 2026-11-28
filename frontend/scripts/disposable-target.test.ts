@@ -67,6 +67,20 @@ describe("isDisposableTarget", () => {
     expect(isDisposableTarget({ E2E_PML_DISPOSABLE: "1" }).ok).toBe(true);
   });
 
+  it.each(["https://staging.internal:18930", "http://192.168.1.10:18930", "http://localhost.evil.com:18930"])(
+    "refuses the stack's port on a non-loopback host %s",
+    (url) => {
+      expect(isDisposableTarget({ E2E_BASE_URL: url, E2E_PML_DISPOSABLE: "1" }).ok).toBe(false);
+    },
+  );
+
+  it.each(["http://127.0.0.1:18930", "http://host.docker.internal:18930", "http://localhost:18930", "http://LOCALHOST:18930"])(
+    "accepts the loopback host %s on the stack's port",
+    (url) => {
+      expect(isDisposableTarget({ E2E_BASE_URL: url, E2E_PML_DISPOSABLE: "1" }).ok).toBe(true);
+    },
+  );
+
   it("allows the e2e stack's port with the flag", () => {
     expect(isDisposableTarget({ E2E_BASE_URL: "http://host.docker.internal:18930", E2E_PML_DISPOSABLE: "1" }).ok).toBe(true);
     expect(isDisposableTarget({ E2E_BASE_URL: "http://localhost:18930", E2E_PML_DISPOSABLE: "1" }).ok).toBe(true);

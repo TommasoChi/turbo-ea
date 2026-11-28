@@ -8,6 +8,9 @@ const DEFAULT_E2E_PORT = 18930;
 /** Mirrors FORBIDDEN_PORTS in scripts/e2e/docker-e2e.sh: other instances and the dev servers. */
 const RESERVED_PORTS = new Set([8920, 8930, 5433, 9443, 9444, 18920, 18443, 8000, 8001, 4173, 5173]);
 
+/** The stack is reached as localhost from the host and as host.docker.internal from the Playwright container. */
+const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "host.docker.internal"]);
+
 /** The one port the e2e stack may listen on, or null when E2E_HOST_PORT is not a usable one. */
 function stackPort(raw: string | undefined): number | null {
   if (raw === undefined) return DEFAULT_E2E_PORT;
@@ -33,10 +36,14 @@ export function isDisposableTarget(env: Record<string, string | undefined>): Dis
         };
   }
   let port: string;
+  let hostname: string;
   try {
-    port = new URL(baseUrl).port;
+    ({ port, hostname } = new URL(baseUrl));
   } catch {
     return { ok: false, reason: `E2E_BASE_URL "${baseUrl}" is not a URL.` };
+  }
+  if (!LOOPBACK_HOSTS.has(hostname)) {
+    return { ok: false, reason: `Host "${hostname}" is not the local e2e stack: refusing to write there.` };
   }
   const allowed = stackPort(env.E2E_HOST_PORT);
   if (allowed === null) {
