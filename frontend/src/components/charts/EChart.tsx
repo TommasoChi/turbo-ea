@@ -25,6 +25,7 @@ import {
   LegendComponent,
   MarkAreaComponent,
   MarkLineComponent,
+  TitleComponent,
   TooltipComponent,
   VisualMapComponent,
 } from "echarts/components";
@@ -45,6 +46,8 @@ echarts.use([
   TooltipComponent,
   LegendComponent,
   VisualMapComponent,
+  // The donut total drawn in the middle of the PPM Risk Management chart (`title.text`).
+  TitleComponent,
   // Draws the PPM cost charts' dotted budget reference lines (a `markLine` on
   // the first line series, `features/ppm/cumulativeChartOption.ts`).
   MarkLineComponent,

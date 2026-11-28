@@ -227,8 +227,8 @@ test("tracks invoices through the budget hierarchy, Initiative, portfolio and pr
     await expect(supportRow).toContainText(/-.*500/);
 
     await gotoApp(page, "/ppm/" + card.id + "?tab=details");
-    await expect(page.getByText(t("ppm:financials"), { exact: true })).toBeVisible();
-    await expect(page.getByText(/6[,.]500/).first()).toBeVisible();
+    // The card page keeps one Total bar; the invoiced totals live in the Plan Budget and the report.
+    await expect(page.getByText(t("ppm:budgetBarTotal"), { exact: true })).toBeVisible();
     const actualStart = /15 May 2026|2026-05-15|05\/15\/2026/;
     const actualEnd = /10 Nov 2026|2026-11-10|11\/10\/2026/;
     for (const date of [actualStart, actualEnd]) {
@@ -296,8 +296,6 @@ if (legacyId) {
       .getByRole("button", { name: t("ppm:financeTree.expand", { name: "Legacy 300" }) })
       .click();
     await expect(page.getByText("LEGACY-00003", { exact: true })).toBeVisible();
-    await gotoApp(page, "/ppm/" + legacyId + "?tab=details");
-    await expect(page.getByText(/6[,.]800/).first()).toBeVisible();
     await gotoApp(page, "/ppm/" + legacyId + "/report");
     await expect(page.getByText("LEGACY-00003", { exact: true })).toBeVisible();
     await expect(page.getByText(/6[,.]800/).first()).toBeVisible();
