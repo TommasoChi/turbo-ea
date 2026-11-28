@@ -17,6 +17,7 @@ import {
   type Page,
 } from "@playwright/test";
 
+import { isDisposableTarget } from "../scripts/disposable-target";
 import { BASE_URL, STORAGE_STATE } from "./fixtures";
 
 export async function json<T>(response: APIResponse): Promise<T> {
@@ -29,10 +30,8 @@ export async function json<T>(response: APIResponse): Promise<T> {
 
 /** The suite writes data: only an isolated stack may run it. */
 export function requireDisposableStack(): void {
-  expect(
-    !process.env.E2E_BASE_URL || process.env.E2E_PML_DISPOSABLE === "1",
-    "Set E2E_PML_DISPOSABLE=1 only for an isolated demo stack.",
-  ).toBe(true);
+  const { ok, reason } = isDisposableTarget(process.env);
+  expect(ok, reason).toBe(true);
 }
 
 export const apiBase = (initiativeId: string) => `/api/v1/ppm/initiatives/${initiativeId}`;

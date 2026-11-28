@@ -3,6 +3,7 @@ import type { APIRequestContext, APIResponse, Page } from "@playwright/test";
 
 import { expect, gotoApp, test } from "./fixtures";
 import { t } from "./i18n";
+import { requireDisposableStack } from "./ppm-support";
 
 async function json<T>(response: APIResponse): Promise<T> {
   expect(response.ok(), "API " + response.url() + ": " + (await response.text())).toBeTruthy();
@@ -40,10 +41,7 @@ test("tracks invoices through the budget hierarchy, Initiative, portfolio and pr
   page,
   request,
 }) => {
-  expect(
-    !process.env.E2E_BASE_URL || process.env.E2E_PML_DISPOSABLE === "1",
-    "Set E2E_PML_DISPOSABLE=1 only for an isolated demo stack.",
-  ).toBe(true);
+  requireDisposableStack();
   const name = "PML E2E " + randomUUID();
   const settings = "/api/v1/settings/pml/financial-fields";
   const configs = await json<

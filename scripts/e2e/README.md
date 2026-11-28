@@ -27,10 +27,27 @@ screenshots of failures are in `frontend/test-results/` (both git-ignored).
 |------|-------|
 | Compose project | `tea-e2e` (`docker compose -p tea-e2e` only) |
 | Images | `turboea-e2e-{db,backend,frontend,nginx,mcp-server}:local`, built with `docker build --target` |
-| Ports | `127.0.0.1:18930` (HTTP), `127.0.0.1:18444` (TLS); `E2E_HOST_PORT` / `E2E_TLS_PORT` override |
+| Ports | `127.0.0.1:18930` (HTTP), `127.0.0.1:18444` (TLS); `E2E_HOST_PORT` / `E2E_TLS_PORT` override, validated (below) |
 | Secrets, `SEED_DEMO=true` | `e2e.env`, passed with `--env-file`; the repository `.env` is never read |
 | Allowed origins, public and MCP URLs | derived from `E2E_HOST_PORT` by the script, so a port override stays consistent |
-| Test runner | `mcr.microsoft.com/playwright:v<version of @playwright/test>-noble`, `frontend/` mounted, `node_modules` in the volume `tea-e2e-nm` |
+| Environment | compose runs under `env -u` for every variable the compose files interpolate (derived by grep) and `COMPOSE_*`, so an exported `SMTP_*`, `AI_PROVIDER_URL`, `NVD_API_KEY`, `TURBO_EA_PROXY_AUTH_*` or `TURBO_EA_TAG` never reaches the stack: compose prefers an exported variable to `--env-file` |
+| Test runner | `mcr.microsoft.com/playwright:v1.63.0-noble` pinned by digest (`PW_PINNED_IMAGE`), npm pinned to `11.19.0` (`NPM_PINNED`), `frontend/` mounted, `node_modules` in the volume `tea-e2e-nm` |
+
+## Guards
+
+- **Ports**: `E2E_HOST_PORT` and `E2E_TLS_PORT` must be numbers from 1024 to 65535, differ from each
+  other and not be one of `8920 8930 5433 9443 9444 18920 18443 8000 8001 4173`. The script exits
+  before any docker or curl call. `test` also requires the `tea-e2e` nginx container to publish
+  exactly `127.0.0.1:<port>`; a port that merely answers `/api/health` is refused.
+- **Specs** (`isDisposableTarget`, `frontend/scripts/disposable-target.ts`, called by
+  `requireDisposableStack()`): a base URL on port 8920, 8930 or 18920 is always refused, flag or not;
+  any other `E2E_BASE_URL` needs `E2E_PML_DISPOSABLE=1`; with `E2E_BASE_URL` unset the suite runs
+  only under `CI` (the CI job: `vite preview` and a throwaway seeded database) or with the flag.
+  `pml-financials.spec.ts` uses the same guard.
+- **Pins**: bumping `@playwright/test` makes the script stop until `PW_PINNED_VERSION`,
+  `PW_PINNED_IMAGE` (`docker image inspect --format '{{index .RepoDigests 0}}' <tag>` after a pull)
+  and `NPM_PINNED` (`npx -y npm@11 --version` inside the image) are updated. `E2E_PW_IMAGE` still
+  overrides the image and prints a warning.
 
 It does not touch your instance (`turbo-ea-aruba-*`, `:8920`), the VAPT stack (`:8930`), the test
 database (`:5433`) or the docs stack (`tea-docs`, `:18920`). The demo admin is `admin@turboea.demo`
@@ -53,7 +70,7 @@ Keep each at 10 or more when you change that page.
 
 ## Troubleshooting
 
-- **`the stack is not up`**: run `up` first; `test` only checks `/api/health` on the port.
+- **`the stack is not up`**: run `up` first; `test` needs the `tea-e2e` nginx container publishing the port, and `/api/health` answering.
 - **A first test times out on a cold start**: the specs warm the page in `beforeAll` (`warmUp`); a
   cold first load took 25 s against 5 to 10 s afterwards.
 - **A donut's centre total or legend cannot be read from the DOM**: ECharts draws it in a canvas.
